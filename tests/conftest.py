@@ -187,3 +187,49 @@ def fixtures_dir():
 def golden_dir():
     """Path to tests/golden/, for tests that read committed expected-output snapshots."""
     return pathlib.Path(__file__).parent / "golden"
+
+
+@pytest.fixture
+def isolated_core_cache(tmp_path, monkeypatch):
+    """
+    Redirects extractium.core.cache's cache-path constants to a per-test
+    tmp_path, so tests exercising the real (non-reference) cache/fetch
+    modules never write into the real repository tree. Mirrors
+    isolated_cache, but targets the real extractium.core.cache module
+    object -- extractium.core.fetch reaches these constants via a
+    qualified `cache.<NAME>` attribute lookup, so patching them here is
+    visible to fetch's functions too. Returns the tmp cache directory path.
+    """
+    from extractium.core import cache
+
+    cache_dir = tmp_path / ".kb_cache"
+    monkeypatch.setattr(cache, "CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(cache, "CACHE_META_PATH", str(cache_dir / "meta.json"))
+    monkeypatch.setattr(cache, "CACHE_PAGES_DIR", str(cache_dir / "pages"))
+    return cache_dir
+
+
+@pytest.fixture
+def fake_embed_chunks_core():
+    """
+    Deterministic stand-in for extractium.core.embed.embed_chunks (which
+    loads a live SentenceTransformer -- never run in tests). Identical
+    construction to fake_embed_chunks, but sized off
+    extractium.core.embed.DIMS instead of the reference module's DIMS --
+    the two are equal (384), so golden snapshots pinned against one apply
+    to the other unchanged.
+    """
+    from extractium.core.embed import DIMS
+
+    def _embed(chunks):
+        dims = DIMS
+        vecs = np.zeros((len(chunks), dims), dtype=np.float32)
+        for i, c in enumerate(chunks):
+            key = c["x"]
+            seed = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16)
+            rng = np.random.default_rng(seed)
+            v = rng.normal(size=dims).astype(np.float32)
+            vecs[i] = v / np.linalg.norm(v)
+        return vecs.astype(np.float32)
+
+    return _embed
