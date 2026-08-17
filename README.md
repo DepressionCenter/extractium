@@ -1,9 +1,9 @@
 <!--
-This file is part of < PROJECT NAME >
+This file is part of Extractium™
 README.md
-Author(s): First Last; First Last; First Last; First Last.
-Created: 2026-01-01
-Last Modified: 2026-01-01
+Author(s): Gabriel Mongefranco
+Created: 2026-08-16
+Last Modified: 2026-08-16
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -22,67 +22,59 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 ![Eisenberg Family Depression Center](https://code.depressioncenter.org/images/EFDCLogo_375w.png "depressioncenter.org")
 
-# < Repository Title >
+# Extractium™
 
 ## Description
-< Program/Library name > is a < program/library/collection of scripts > for < description of what it does and what problem it solves >.
+Extractium is a lean knowledge-base compiler. It crawls an organization's public sources (TeamDynamix client portal KB, GitHub org, YouTube channel, generic websites, local files), normalizes everything into one set of parent/child text chunks with embeddings and BM25 postings, then serializes that single chunk set into multiple output formats (a "compendium") suitable for static hosting on GitHub Pages.
+<!-- ![Preview Image](images/Repo-preview.png) -->
 
-![Preview Image](images/Repo-preview.png)
-
-< List of key features, or a few sentences about what makes this project unique >.
+It is the crawling/indexing engine extracted from FieldStationAI's build-kb-index.py, generalized behind a config file and a plugin registry so any research center or organization can produce its own compendium.
 
 
 ## Quick Start Guide
-+ < Short compile/run instructions, without too much detail >
-
++ Coming soon!
 
 
 ## Documentation
 + The full documentation is available at: https://michmed.org/efdc-kb
-+ __OR__ Detailed setup and usage instructions are available at: [ article_title ](https://link).
-
 
 
 
 ## Additional Resources
-+ < Links to study website, related projects, etc. >
++ FieldStationAI™: https://github.com/DepressionCenter/FieldStationAI
++ [Mobile Technologies Core](https://depressioncenter.org/mobiletech) — the group that develops and maintains Field Station AI.
++ [EFDC Knowledge Base](https://michmed.org/efdc-kb) — documentation site referenced above and used as source content for the app's optional knowledge-base feature.
+
 
 
 
 ## About the Team
-< 1-2 paragraphs about your department, core, lab, study team, class or project. This is your marketing space! >
+The [Mobile Technologies Core](https://depressioncenter.org/mobiletech) provides investigators across the University of Michigan the support and guidance needed to utilize mobile technologies and digital mental health measures in their studies. Experienced faculty and staff offer hands-on consultative services to researchers throughout the University – regardless of specialty or research focus.
 
-Learn more at: < link to dept/lab/project website >
+Learn more at: [https://depressioncenter.org/mobiletech](https://depressioncenter.org/mobiletech).
+
 
 
 
 ## Contact
 To get in touch, contact the individual developers in the check-in history.
 
-If you need assistance identifying a contact person, email the project maintainers at: < dept/lab/mcommunity group email address >.
+If you need assistance identifying a contact person, email the EFDC's Mobile Technologies Core at: efdc-mobiletech@umich.edu.
 
 
 
 ## Credits
 ### Authors:
 + [Gabriel Mongefranco](https://gabriel.mongefranco.com) [(@gabrielmongefranco)](https://github.com/gabrielmongefranco)
-+ Name [ @githubusername ]( link to github profile or website )
-+ Name [ @githubusername ]( link to github profile or website )
-+ [ Name ]( link to profile or website ) [ @githubusername ]( link to github profile )
-+ [ Name ]( link to profile or website ) [ @githubusername ]( link to github profile )
+
 
 ### Contributors:
 + [Eisenberg Family Depression Center](https://depressioncenter.org) [(@DepressionCenter)](https://github.com/DepressionCenter)
-+ Name [ @githubusername ]( link to github profile or website )
-+ Name [ @githubusername ]( link to github profile or website )
-+ [ Name ]( link to profile or website ) [ @githubusername ]( link to github profile )
-+ [ Name ]( link to profile or website ) [ @githubusername ]( link to github profile )
 
 
 
-#### This work is based in part on the following projects, libraries and/or studies:
-+ None
-+ __OR__ < Library_or_project_name > : < what_it_does.  How_it_is_used_in_this_project. > < link >
+### This work is based in part on the following projects, libraries and/or studies:
++ FieldStationAI™ : A research platform for mobile and digital mental health studies. Used as the original source of the crawling/indexing engine that was extracted into this project. https://github.com/DepressionCenter/FieldStationAI
 
 
 
@@ -113,13 +105,8 @@ Free Documentation License". If not, see <https://www.gnu.org/licenses/fdl-1.3-s
 If you find this repository, code or paper useful for your research, please cite it.
 
 #### Citation Example:
->_Last, first; Last, First; Last, First (2026). < Project Name >. University of Michigan. Software. https://github.com/DepressionCenter/< Project URL >_  
+>_Mongefranco, Gabriel (2026). Extractium™. University of Michigan. Software. https://github.com/DepressionCenter/extractium_  
 ​​​​​​​     _DOI: [< DOI # e.g. 10.6084/m9.figshare.xxxxxx.v1 >](https://doi.org/...)_
-
-#### __OPTIONAL__ Release History and DOI #:
-* 2026-01-01: v1.0. [< DOI # e.g. 10.6084/m9.figshare.xxxxxx.v1 >](https://doi.org/...)
-* 2026-06-30: v1.5. [< DOI # e.g. 10.6084/m9.figshare.xxxxxx.v1_5 >](https://doi.org/...)
-* 2026-12-01: v2.0. [< DOI # e.g. 10.6084/m9.figshare.xxxxxx.v2 >](https://doi.org/...)
 
 
 ----
