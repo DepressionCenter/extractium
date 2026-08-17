@@ -1,0 +1,5 @@
+This is a synthetic plain-text fixture for characterization testing.
+It has no Markdown headings, so it should become a single chunk after
+markdown_text_to_soup wraps it in a <pre> tag and split_into_parents
+finds no h2/h3 elements to split on. No real project content -- this is
+fabricated placeholder text only.

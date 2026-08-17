@@ -1,0 +1,79 @@
+# This file is part of Extractium™
+# pyproject.toml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-08-17
+# Notes: See README file for documentation and full license information.
+# Summary: Build/packaging configuration for the extractium PyPI package
+# (single package; runtime deps, dev/parquet/duckdb extras, console script,
+# pytest configuration).
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "extractium"
+version = "0.1.0"
+description = "Lean knowledge-base compiler: crawls organizational sources and builds a portable, static, multi-format knowledge index (compendium) any LLM can consume."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Gabriel Mongefranco" }]
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Runtime dependencies are declared here, not installed at import time via a
+# pip-install shim (as the reference script's _ensure() helper did) -- an
+# unpinned "pip install X" at import time is a supply-chain risk for a tool
+# distributed to other organizations. See
+# tests/reference/build_kb_index_reference.py for the frozen original this
+# replaces. Every version bound below was confirmed to exist on PyPI at the
+# time this file was written (2026-08-17).
+dependencies = [
+    "requests>=2.31.0,<3.0.0",
+    "beautifulsoup4>=4.12.0,<5.0.0",
+    "sentence-transformers>=3.0.0,<6.0.0",
+    # Not capped tightly to a specific minor: pip already resolves the
+    # highest numpy release compatible with BOTH this range and the
+    # running interpreter (numpy publishes accurate requires-python
+    # metadata per release), so a Python 3.10 install lands on numpy 2.2.x
+    # and a newer interpreter lands on a newer numpy automatically.
+    "numpy>=1.26.0,<3.0.0",
+    "Markdown>=3.6,<4.0.0",
+    # Not used by the current engine; declared now because config.yaml
+    # support (a later step in the extraction plan) will need it.
+    "PyYAML>=6.0.1,<7.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0,<10.0.0", "pytest-cov>=5.0.0,<8.0.0"]
+# Future output formats (see docs/extractium-spec.md section 4); no packages
+# needed until those adapters are built.
+parquet = []
+duckdb = []
+
+[project.scripts]
+extractium = "extractium.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["extractium*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

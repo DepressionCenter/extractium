@@ -52,3 +52,10 @@ CHATGPT.md
 *.cache
 __pycache__/
 .venv/
+
+# Ignore Extractium build/test artifacts
+.kb_cache/
+dist/
+build/
+*.egg-info/
+.pytest_cache/

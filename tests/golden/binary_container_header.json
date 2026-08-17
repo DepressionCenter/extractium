@@ -1,0 +1,76 @@
+{
+  "_license": "This file is part of Field Station AI. Copyright © 2026 The Regents of the University of Michigan. This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.",
+  "v": 2,
+  "model": "Xenova/bge-small-en-v1.5",
+  "dims": 384,
+  "sourceCount": 1,
+  "site": "Test Site",
+  "parents": [
+    {
+      "t": "Doc -- Section One",
+      "x": "content one text",
+      "u": "https://example.org/a",
+      "host": "example.org",
+      "kind": "page",
+      "weight": 1.0
+    },
+    {
+      "t": "Doc -- Section Two",
+      "x": "content two text",
+      "u": "https://example.org/a",
+      "host": "example.org",
+      "kind": "page",
+      "weight": 1.0
+    }
+  ],
+  "chunks": [
+    {
+      "t": "Doc -- Section One",
+      "x": "content one text",
+      "u": "https://example.org/a",
+      "host": "example.org",
+      "kind": "page",
+      "weight": 1.0,
+      "pid": 0
+    },
+    {
+      "t": "Doc -- Section Two",
+      "x": "content two text",
+      "u": "https://example.org/a",
+      "host": "example.org",
+      "kind": "page",
+      "weight": 1.0,
+      "pid": 1
+    }
+  ],
+  "bm25": {
+    "k": 1.2,
+    "b": 0.75,
+    "d": 0.5,
+    "avgDocLen": 6.0,
+    "docLen": [6, 6],
+    "df": {
+      "doc": 2,
+      "section": 2,
+      "one": 1,
+      "content": 2,
+      "text": 2,
+      "two": 1
+    },
+    "postings": {
+      "doc": [[0, 1], [1, 1]],
+      "section": [[0, 1], [1, 1]],
+      "one": [[0, 2]],
+      "content": [[0, 1], [1, 1]],
+      "text": [[0, 1], [1, 1]],
+      "two": [[1, 2]]
+    }
+  },
+  "calibration": {
+    "mean": 0.04905955493450165,
+    "std": 0.0,
+    "sampleSize": 2
+  },
+  "vecsQ": "i8",
+  "vecsScale": 127
+}

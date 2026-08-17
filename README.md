@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-08-16
+Last Modified: 2026-08-17
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -32,7 +32,10 @@ It is the crawling/indexing engine extracted from FieldStationAI's build-kb-inde
 
 
 ## Quick Start Guide
-+ Coming soon!
+```bash
+pip install -e ".[dev]"
+```
+The `extractium` command is not yet functional (package-skeleton stage — see [docs/extractium-spec.md](docs/extractium-spec.md) for the roadmap).
 
 
 ## Documentation

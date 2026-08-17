@@ -1,0 +1,18 @@
+<!--
+Synthetic generic (non-TDX, non-git-host) page fixture for extractium's
+characterization test suite. Pins the "surprising behavior" finding that
+TDX_CONTENT_SELECTORS (which includes a bare "main" selector) is actually
+the fallback extractor for ANY page that isn't a recognized TDX or git
+host, not a TDX-specific selector list despite its name.
+-->
+<html>
+<head><title>Welcome</title></head>
+<body>
+<main>
+  <h2>About</h2>
+  <p>Synthetic generic-site content used to test the TDX_CONTENT_SELECTORS
+  fallback branch of extract_content. No real organizational content --
+  fabricated placeholder text only.</p>
+</main>
+</body>
+</html>

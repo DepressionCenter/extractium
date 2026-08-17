@@ -1,0 +1,19 @@
+<!--
+Synthetic page fixture with no h2/h3 headings, for extractium's
+characterization test suite. Exercises split_into_parents' no-headings
+branch (whole page treated as one parent chunk).
+-->
+<html>
+<head><title>Plain Page</title></head>
+<body>
+<main>
+  <p>Synthetic page with no h2 or h3 headings at all, so split_into_parents
+  should fall through to its else branch and treat the whole page as a
+  single parent chunk under the bare page title, provided the total text
+  length clears CHUNK_MIN_CHARS.</p>
+  <p>A second paragraph adds more placeholder filler text so the combined
+  length comfortably exceeds the sixty-character minimum chunk size
+  threshold used by the reference script's chunker.</p>
+</main>
+</body>
+</html>
