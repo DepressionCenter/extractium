@@ -25,10 +25,12 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 # Extractium™
 
 ## Description
-Extractium is a lean knowledge-base compiler. It crawls an organization's public sources (TeamDynamix client portal KB, GitHub org, YouTube channel, generic websites, local files), normalizes everything into one set of parent/child text chunks with embeddings and BM25 postings, then serializes that single chunk set into multiple output formats (a "compendium") suitable for static hosting on GitHub Pages.
+Extractium™ turns scattered public documentation into one searchable knowledge base. Point it at sources such as TeamDynamix, GitHub, YouTube, websites, and local files, and it gathers and organizes the content for use in a website, search tool, or AI assistant.
 <!-- ![Preview Image](images/Repo-preview.png) -->
 
-It is the crawling/indexing engine extracted from FieldStationAI's build-kb-index.py, generalized behind a config file and a plugin registry so any research center or organization can produce its own compendium.
+Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and can publish multiple output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in Field Station AI™ and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
+
+Project status: this repository is currently at the package-skeleton stage, and the command-line interface is not yet functional. See the technical specification for the implementation roadmap.
 
 
 ## Quick Start Guide
