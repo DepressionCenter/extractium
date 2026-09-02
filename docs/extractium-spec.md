@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-08-16
+Last Modified: 2026-09-02
 Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -152,7 +152,7 @@ OKF **ingestion** (reading compendia produced by other OKF tools as a source) is
 | Whisper transcription fallback | Future | For videos with no captions. External/optional plugin. |
 | OKF bundles from other tools | Future | Maybe. |
 
-Explicitly out: Excel extraction, OAuth cloud-drive connectors (users sync to a local folder), SQL connectors (contrib plugin territory), MCP as a core concern.
+Explicitly out: Excel extraction, OAuth cloud-drive connectors (users sync to a local folder), SQL connectors (contrib plugin territory), MCP as a core-engine concern (MCP servers ship as thin examples over the client libraries; see section 8.2).
 
 ---
 
@@ -183,11 +183,46 @@ Local sources risk publishing confidential content to the web. Guardrail:
 |---|---|---|
 | JavaScript | Core | Extracted from FieldStationAI `index.html` (container parse, int8 dequant, BM25 + cosine + RRF fusion, calibration threshold). FieldStationAI becomes the reference consumer. |
 | Python | Core | Same hybrid search, mirrors the JS client. |
-| Go | Next | Ships with the Go CLI (`search`, `serve`; `serve mcp` subcommand if a real use case exists, otherwise MCP is dropped). |
+| Go | Next | Ships with the Go CLI (`search`, `serve`, `serve mcp`). MCP use case is confirmed; see section 8.2. |
 | PowerShell | Next | IT/admin lane; no one else ships a PS vector-search client. |
 | Lua | Future | |
 | R | Future | Corpus analysis + hybrid search; CRAN later. Deferred, not dropped. |
 | Julia | Future | |
+
+### 8.1 Access tiers (consuming a compendium)
+
+The compendium on GitHub Pages is the single source of truth; every access
+method is a thin layer over it. Tiers, cheapest and most universal first:
+
+| Tier | Method | Search quality | Hosting cost | Phase |
+|---|---|---|---|---|
+| 0 | Static compendium (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | LLM-dependent (no ranking) | None (GitHub Pages) | Core |
+| 1 | Local MCP server via `npx` (wraps the JS client; index downloaded + cached on user's machine) | Full hybrid: vector + BM25 + RRF | None (user's compute) | Next |
+| 2 | Remote stateless MCP (Streamable HTTP, JSON responses, BM25-only) on Cloudflare Workers free tier and/or TDX iPaaS | BM25 only (no server-side embedding) | None / existing infra | Next |
+| 3 | Platform wrappers (GPT, Gemini Gem, Copilot Studio agent): system prompt + Tier 0 URLs | LLM-dependent | None | Next |
+
+Tier 1 is the only tier with semantic search, because query embedding runs on
+the consumer's machine. Tier 2 stays BM25-only by design: the compendium
+already ships postings, document lengths, and df stats, so a remote server
+needs no ML runtime. `SKILLS.md` documents all tiers for AI agents.
+
+### 8.2 MCP servers (examples, not core)
+
+MCP servers live under `examples/mcp/`, never in the engine. Two reference
+implementations:
+
+- `examples/mcp/local-node/` - published as an npm package; runs on the
+  user's machine (`npx`), fetches and caches the container from the
+  compendium URL, exposes a `search_kb` tool via the JS client's hybrid
+  search.
+- `examples/mcp/stateless-remote/` - single-endpoint stateless Streamable
+  HTTP server (POSTed JSON-RPC in, `application/json` out; no
+  `Mcp-Session-Id`; `notifications/initialized` returns 202/empty).
+  BM25-only. Deploy targets: Cloudflare Workers (free tier) and TDX iPaaS
+  Node custom tasks. Same search code, two hosts.
+
+Platform wrapper prompts (Tier 3) live under `examples/wrappers/` as plain
+text system prompts pointing at the compendium URLs.
 
 ---
 
@@ -222,7 +257,11 @@ extractium/
 ├── plugins/                     # user drop-in plugin dir (documented, ships empty)
 ├── docs/                        # this spec, plugin dev guide, consumer guide (4 audiences)
 ├── examples/
-│   └── config.example.yaml
+│   ├── config.example.yaml
+│   ├── mcp/
+│   │   ├── local-node/          # npm-published local MCP server (npx), wraps JS client
+│   │   └── stateless-remote/    # stateless Streamable HTTP MCP, BM25-only (Workers / TDX iPaaS)
+│   └── wrappers/                # GPT / Gemini Gem / Copilot Studio system prompts
 ├── .github/workflows/build-kb.yml   # template workflow for adopters
 ├── .gitlab-ci.yml               # maintainer CI
 ├── run.bat / run.sh             # admin-assistant double-click entry points
@@ -243,6 +282,6 @@ Documentation targets four audiences: end users building an index, core develope
 | Phase | Contents |
 |---|---|
 | **1 - Core (MVP)** | Extract engine from `build-kb-index.py` with no behavior change; conditional-GET cache fix; stable IDs; config.yaml; plugin registry; sources: web/tdx/github/youtube-captions/local (+ guardrail); adapters: container/okf/llmstxt/sqlite; PHI lint; JS + Python clients; run scripts; CI templates; docs. |
-| **2 - Next** | Go CLI + Go client (`search`, `serve`; MCP subcommand or drop); PowerShell client; GitHub code AST source plugin; gzip container flag. |
+| **2 - Next** | Go CLI + Go client (`search`, `serve`, `serve mcp`); PowerShell client; GitHub code AST source plugin; gzip container flag; MCP example servers (local npm + stateless remote for Cloudflare Workers / TDX iPaaS); platform wrapper prompts (GPT, Gem, Copilot). |
 | **3 - Future** | Enrichment layer (local LLM); Whisper fallback; Lua/R/Julia clients; Parquet/DuckDB extras; OKF ingestion from other tools; git-URL plugin loading with trust gates. |
 | **Never** | JSONL+i8 output; Excel extraction; cloud-drive OAuth connectors; heavyweight framework dependencies; cloud-LLM enrichment. |
