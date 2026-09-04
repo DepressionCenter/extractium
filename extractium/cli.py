@@ -7,6 +7,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,9 +33,11 @@ def main():
     """
     Entry point for the `extractium` console script.
 
-    TODO: parse `--config config.yaml` and run the build pipeline (source
-    plugins -> core engine -> adapter plugins) once the config schema
-    (step 4 of the extraction plan) and the plugin registry (step 6) exist.
+    TODO: parse `--config config.yaml` into a Config
+    (extractium.config.load_config, with the command-line arguments passed
+    as its overrides) and run the build pipeline: source plugins -> core
+    engine -> adapter plugins. Still missing: the plugin registry
+    (extractium.core.registry) and the crawl/build steps themselves.
     """
     print("Extractium is not yet implemented -- package skeleton only (see docs/extractium-spec.md).")
 

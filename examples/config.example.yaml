@@ -1,0 +1,101 @@
+# This file is part of Extractium™
+# examples/config.example.yaml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-04
+# Last Modified: 2026-09-04
+# Summary: Example Extractium build configuration. Copy it next to your own
+# project as config.yaml, change the seed URL, and delete anything you do
+# not need -- every setting except seed_url has a working default.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# ---------------------------------------------------------------------------
+# Required
+# ---------------------------------------------------------------------------
+
+# The page the crawl starts from. Must begin with http:// or https://.
+# Every other setting is optional.
+seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
+
+
+# ---------------------------------------------------------------------------
+# Optional -- the values shown are the defaults. Uncomment to change one.
+# ---------------------------------------------------------------------------
+
+# Where to write the index file. A relative path is resolved from the
+# folder you run the build in.
+#out_path: "dist/kb-index.json"
+
+# The most pages one build may visit. This is a safety net: if an include
+# pattern is broader than you meant, the crawl still stops here.
+#max_pages: 10000
+
+# Seconds to wait between requests, so the crawl stays polite to the site
+# it is reading. Use 0 for no wait.
+#delay_seconds: 0.5
+
+
+# ---------------------------------------------------------------------------
+# URL patterns
+#
+# All three lists hold regular expressions. Each one is matched against the
+# whole URL, and upper and lower case are treated the same.
+#
+# Leave a list out to keep the built-in default. Write an empty list ([])
+# to switch the default off completely.
+# ---------------------------------------------------------------------------
+
+# Pages the crawl is allowed to visit. A URL must match at least one entry.
+#
+# The default is an empty list, which means "work it out from the seed URL":
+#   - A TeamDynamix URL keeps the crawl inside that portal's
+#     /TDClient/<number>/<name>/ folder.
+#   - Any other URL keeps the crawl on the same site (scheme and host).
+#
+# Add entries only when you want more than that, such as a second site.
+#include_patterns:
+#  - '/TDClient/000/ExampleOrg/'         # this portal's knowledge base
+#  - 'example\.org/research-services/'   # one folder of a second site
+#  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
+
+# Pages the crawl must not fetch at all. Checked after include_patterns, so
+# an entry here always wins.
+#
+# The default skips search forms, logins, print views, tag pages, code-host
+# housekeeping pages (issues, commits, settings, and so on), and files that
+# are not readable text (images, archives, office documents, source code).
+#crawl_exclude_patterns:
+#  - '/Search[/?$]'
+#  - '/Login[/?$]'
+
+# Pages the crawl may visit and follow links from, but whose own content
+# stays out of the index. Use this for menu and category pages: they point
+# at real articles but say nothing themselves.
+#
+# The default is the crawl exclusion list plus category and folder listings.
+#index_exclude_patterns:
+#  - '/Category/'
+#  - '/tree/'
+
+
+# ---------------------------------------------------------------------------
+# Writing patterns safely
+#
+#  - Wrap every pattern in single quotes. YAML then keeps the text exactly
+#    as you typed it, so a backslash stays a single backslash.
+#  - A dot matches any character until you escape it: 'example\.edu'.
+#  - Keep patterns simple. A very complicated pattern can make matching slow
+#    on long URLs.
+#  - Try a change with a small max_pages first, then raise it.
+# ---------------------------------------------------------------------------
