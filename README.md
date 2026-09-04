@@ -30,21 +30,23 @@ Extractium™ turns scattered public documentation into one searchable knowledge
 
 Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and can publish multiple output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in Field Station AI™ and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
 
-Project status: this repository is currently at the package-skeleton stage, and the command-line interface is not yet functional. See the technical specification for the implementation roadmap.
+Project status: this repository is currently at the package-skeleton stage, and the command-line interface is not yet functional. See the implementation plan in `docs/` for the order of work.
 
 
 ## Quick Start Guide
 ```bash
 pip install -e ".[dev]"
 ```
-The `extractium` command is not yet functional (package-skeleton stage — see [docs/extractium-spec.md](docs/extractium-spec.md) for the roadmap).
+The `extractium` command is not yet functional (package-skeleton stage — see [docs/implementation-plan.md](docs/implementation-plan.md) for the order of work).
 
 
 ## Documentation
 + The full documentation is available at: https://michmed.org/efdc-kb
 + Technical pages live in [docs/](docs/README.md):
   + [Configuration reference](docs/configuration.md) — every setting in `config.yaml`.
-  + [Specification](docs/extractium-spec.md) — architecture, outputs, and roadmap.
+  + [Specification](docs/extractium-spec.md) — architecture, plugin kinds, outputs, and sources.
+  + [Container format](docs/container-format.md) — the index file every client reads.
+  + [Implementation plan](docs/implementation-plan.md) — the phased order of work.
 
 
 

@@ -1,13 +1,16 @@
 """
-Summary: Built-in source plugins package (web, tdx, github, youtube, local).
-Each registers through the same plugin registry an external source plugin
-would use, per docs/extractium-spec.md section 2.
+Summary: Built-in source and site-handler plugins package. Sources (web,
+local, github_api, youtube) produce documents; site handlers (generic,
+tdx, github) extract content from the pages the web source visits. Each
+registers through the same plugin registry an external plugin would use,
+per docs/extractium-spec.md section 2.
 
 This file is part of Extractium™
 extractium/sources/__init__.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 

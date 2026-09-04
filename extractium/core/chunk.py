@@ -28,7 +28,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-04"
 
 import html
 import re
@@ -80,6 +80,12 @@ STRIP_TAGS = [
 
 
 ### Title And Content Extraction ###
+
+# TODO: the host-specific branches in this section (TeamDynamix selectors
+# and title prefixes, Git-host wiki/release/blob handling, the "kind"
+# facet) belong to site-handler plugins that the web source consults per
+# URL, leaving only the generic fallback here. See extractium.sources.tdx
+# and extractium.sources.github for where each branch goes.
 
 def normalise_page_title(title, url=None):
     """Strips a TeamDynamix "Article - "/"Question Detail - " prefix, if present, for TDX URLs."""
@@ -358,12 +364,15 @@ def build_parent_and_child_chunks(title, node, url):
     Returns:
         tuple[list[dict], list[dict]]: (parents, children).
 
-    TODO: parents and children need stable ids that survive a rebuild --
-    sha1 of the normalized URL, a NUL separator, and the parent's heading
-    path, truncated to 16 characters, with each child's id derived from
-    its parent's id plus an ordinal (docs/extractium-spec.md section 3).
-    The positional `pid` stays alongside them as the in-memory link
-    between the two lists.
+    TODO: parents need stable ids that survive a rebuild: the first 16 hex
+    characters of sha1(normalized URL + NUL + heading + NUL + ordinal),
+    where the ordinal counts parents on the same page that share a
+    heading. The ordinal is required because a long section is cut into
+    several parents with one heading, and those must not collide. A
+    child's id is derived, never stored: parent id, a hyphen, and the
+    child's ordinal within its parent. The positional `pid` stays as the
+    in-memory link between the two lists (docs/extractium-spec.md
+    section 3, docs/container-format.md).
     """
     parents = split_into_parents(title, node, url)
     children = []

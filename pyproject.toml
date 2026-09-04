@@ -2,6 +2,7 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
+# Last Modified: 2026-09-04
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
 # (single package; runtime deps, dev/parquet/duckdb extras, console script,
@@ -57,8 +58,7 @@ dependencies = [
     # and a newer interpreter lands on a newer numpy automatically.
     "numpy>=1.26.0,<3.0.0",
     "Markdown>=3.6,<4.0.0",
-    # Not used by the current engine; declared now because config.yaml
-    # support (a later step in the extraction plan) will need it.
+    # Reads config.yaml (extractium.config.load_config, via yaml.safe_load).
     "PyYAML>=6.0.1,<7.0.0",
 ]
 

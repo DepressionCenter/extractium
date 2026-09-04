@@ -1,13 +1,15 @@
 """
-Summary: Built-in adapter plugins package (container, okf, llmstxt,
-sqlite_out). Each is a pure function over (parents, children, meta) -> dist/,
-per docs/extractium-spec.md section 2.
+Summary: Built-in adapter plugins package (container, llmstxt, sqlite_out,
+okf). Each is a pure function from a Compendium to files under the output
+directory, per docs/extractium-spec.md section 2, and each drops local
+parents unless its output opted in.
 
 This file is part of Extractium™
 extractium/adapters/__init__.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 

@@ -10,6 +10,7 @@ tests/test_content_extraction.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -158,10 +159,9 @@ def test_generic_page_uses_tdx_content_selectors_fallback(reference, fixtures_di
     It is really the generic/fallback extractor for any non-git,
     non-teamdynamix page, including one that has nothing to do with TDX.
 
-    TODO: the constant's name is misleading; consider renaming it to
-    something like GENERIC_CONTENT_SELECTORS when this logic is moved into
-    extractium/core/ (step 3+) -- not renamed here, since step 3 must diff
-    clean against this frozen reference.
+    The ported copy in extractium/core/chunk.py names this constant
+    GENERIC_CONTENT_SELECTORS. The reference keeps the misleading name
+    because it is a frozen snapshot that is never edited.
     """
     soup = _soup_from_fixture(fixtures_dir, "generic_page_with_main.html")
     url = "https://example.org/about"

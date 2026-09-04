@@ -51,9 +51,13 @@ from extractium.core import fetch
 # Where the binary-container index is written. A relative path resolves
 # against the working directory the build runs from, so one config file
 # works the same on a laptop and on a CI runner.
-# TODO: the OKF, llms.txt, and SQLite adapters each write their own
-# artifact and will need their own output settings (or one output
-# directory shared by every adapter) once those adapters exist.
+# TODO: this single-file setting becomes an out_dir shared by every
+# adapter, with an outputs: list naming each adapter and its options, and
+# a sources: list replaces the top-level seed_url so one build can cover
+# several sources. The KB-portal and code-host exclude patterns below
+# move to the tdx and github site handlers, which contribute them when
+# enabled; only the asset-extension patterns stay here. Target schema:
+# docs/extractium-spec.md section 12.
 DEFAULT_OUT_PATH = "dist/kb-index.json"
 
 # Safety ceiling for one crawl, so an over-broad include pattern cannot

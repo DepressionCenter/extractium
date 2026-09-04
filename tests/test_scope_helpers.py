@@ -2,16 +2,16 @@
 Summary: Characterization tests pinning the current behavior of
 build-kb-index.py's URL scope/normalization helpers: derive_auto_prefix,
 compile_patterns, get_origin, is_git_host_url, is_git_blob_text_url,
-to_git_raw_url, normalise, and in_scope. These tests exist to prove step 3
-of the extraction plan (moving this logic into extractium/core/) is
-behavior-preserving -- they assert current behavior, not "correct"
-behavior.
+to_git_raw_url, normalise, and in_scope. These tests exist to prove that
+moving this logic into extractium/core/ preserved behavior -- they assert
+current behavior, not "correct" behavior.
 
 This file is part of Extractium™
 tests/test_scope_helpers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 

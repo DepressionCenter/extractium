@@ -1,8 +1,9 @@
 """
 Summary: Core engine package (not pluggable): fetch, cache, chunk, embed,
-bm25, dedup, calibration, phi_lint, and the source/adapter registry. See
-docs/extractium-spec.md section 2 for the architecture this package
-implements.
+bm25, dedup, calibration, phi_lint, the plugin registry for sources, site
+handlers, and adapters, the Document and Compendium models, and the build
+step that composes them. See docs/extractium-spec.md section 2 for the
+architecture this package implements.
 
 This file is part of Extractium™
 extractium/core/__init__.py
@@ -31,8 +32,9 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
 # TODO: nothing here composes the core's parts into a finished index. A
-# build step is needed that embeds the children, drops near-duplicates,
-# remaps parents, builds the BM25 postings, computes calibration
-# statistics, and returns (parents, children, meta) for an adapter to
-# serialize. embed, dedup, bm25, and calibration all exist as modules
-# already; no code calls them in order.
+# build step is needed that chunks the documents, assigns stable ids,
+# embeds the children, drops near-duplicates, remaps parents, builds the
+# BM25 postings, computes calibration statistics, and returns one
+# Compendium record for the adapters to serialize. embed, dedup, bm25,
+# and calibration all exist as modules already; no code calls them in
+# order.

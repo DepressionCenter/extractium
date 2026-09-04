@@ -41,7 +41,11 @@ settings = load_config("config.yaml")
 print(settings.seed_url, settings.max_pages)
 ```
 
-The crawl scope rules these settings feed (`in_scope`, `derive_auto_prefix`) already live in [extractium/core/fetch.py](../extractium/core/fetch.py). See [the specification](extractium-spec.md) for the rest of the plan.
+The crawl scope rules these settings feed (`in_scope`, `derive_auto_prefix`) already live in [extractium/core/fetch.py](../extractium/core/fetch.py). See [the specification](extractium-spec.md) for the rest of the design.
+
+### Planned change
+
+The file will grow from one seed URL to a list of sources and a list of outputs, so one build can cover a knowledge base, a code host, and later a local folder. The target layout is in [the specification, section 12](extractium-spec.md), and the change is Phase 1 of the [implementation plan](implementation-plan.md). Until it lands, this page is correct as written.
 
 
 ## Where the file goes

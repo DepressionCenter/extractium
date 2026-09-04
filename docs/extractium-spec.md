@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-02
+Last Modified: 2026-09-04
 Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -20,268 +20,408 @@ You should have received a copy of the GNU General Public License along
 with this program. If not, see <https://www.gnu.org/licenses/>.
 
 -->
-# Extractium™ - High-Level Specification
 
-> Extractium™ builds a compendium: a portable, static, multi-format knowledge index any LLM can consume.
+# Extractium™
 
-- Status: Draft v0.1
-- License: GPL-3.0-or-later (all dependencies must be GPLv3-compatible)
-- Home: DepressionCenter GitHub organization (new repo, initialized from EFDC-Repo-Template)
-- Companion: FieldStationAI consumes the JS client library as the reference implementation
+## High-Level Specification
 
----
+[← Back to README](../README.md)
+
+
+## Summary
+
+This page is the intended design of Extractium™: what the tool is for, how its parts fit together, what it reads, what it writes, and what it will never do. It is written for developers and plugin authors. For what is built today, read [Architecture and Current State](architecture.md). For the order in which the design gets built, read the [implementation plan](implementation-plan.md).
+
+- Status: Draft v0.2 (2026-09-04). Supersedes v0.1 (2026-08-16); section 14 lists the changes.
+- License: GPL-3.0-or-later for code; all dependencies must be compatible with it.
+- Home: the DepressionCenter GitHub organization.
+
+Where this page and the architecture page disagree, this page says what is intended and that page says what exists.
+
 
 ## 1. Overview
 
-Extractium is a lean knowledge-base compiler. It crawls an organization's public sources (TeamDynamix client portal KB, GitHub org, YouTube channel, generic websites, local files), normalizes everything into one set of parent/child text chunks with embeddings and BM25 postings, then serializes that single chunk set into multiple output formats (a "compendium") suitable for static hosting on GitHub Pages.
+Extractium is a lean knowledge-base compiler. It crawls an organization's public sources, normalizes everything into one set of parent and child text chunks with embeddings and BM25 statistics, then serializes that one result into several output formats. The set of outputs is called a *compendium*. It is meant for static hosting, such as GitHub Pages, with no server behind it.
 
-It is the crawling/indexing engine extracted from FieldStationAI's `build-kb-index.py`, generalized behind a config file and a plugin registry so any research center or organization can produce its own compendium.
+It is the crawling and indexing engine extracted from Field Station AI's `build-kb-index.py`, generalized behind a configuration file and a plugin registry so any research center or organization can build its own compendium. Field Station AI keeps its own bundled index; moving it onto the Extractium client library is a later task in that repository.
 
-### Design priorities (in order)
+### Design priorities, in order
 
-1. **Lightweight** - runs on GitHub Actions free runners and modest laptops; safe for low-resource consumers like WebLLM browser clients.
-2. **Ultra fast** - one crawl, one embedding pass, N cheap serializations; aggressive caching so unchanged sources are never re-fetched.
-3. **Friendly and easy** - an admin assistant can double-click a script and commit the output. Minimal required configuration; sane defaults for everything.
-4. Then: security, accessibility, good software engineering.
+1. **Lightweight.** Runs on GitHub Actions free runners and on modest laptops. Safe for low-resource consumers such as browser-based language models.
+2. **Fast.** One crawl, one embedding pass, then cheap serializations. Unchanged pages are never fetched twice.
+3. **Friendly.** A non-developer can press one button in GitHub or double-click one script. Only one setting is required; everything else has a working default.
+4. Then security, accessibility, and engineering quality.
 
 ### Non-goals
 
-- No live server, database, or API required at any point. Output is flat files.
-- No heavyweight RAG frameworks (LangChain, LlamaIndex, OpenRAG, Docker stacks).
-- No cloud LLM calls during builds (PHI safety, offline-first).
-- Not a documentation generator; code indexing extracts the API surface, never raw code bodies.
+- No live server, database, or API is required at any point. Output is flat files.
+- No heavyweight retrieval frameworks (LangChain, LlamaIndex, container stacks).
+- No cloud language-model calls during a build. Builds work offline and never send content out.
+- Not a documentation generator. Code sources will describe a repository's API surface, never raw code bodies.
+- Not a general web archiver. A crawl stays inside its configured scope and honors `robots.txt`.
 
----
 
 ## 2. Architecture
 
 ```
-config.yaml (per org)
+config.yaml (one per organization)
         |
         v
-+---------------------------------------------------------------+
-| SOURCE PLUGINS (registry)                                     |
-|   built-in: web, tdx, github, youtube-captions, local         |
-|   external: plugins/ drop-in dir (same protocol)              |
-+---------------------------------------------------------------+
++-------------------------------------------------------------+
+| REGISTRY  resolves plugins: plugins/ dir > entry points >    |
+|           built-ins                                          |
++-------------------------------------------------------------+
         |
         v
-+---------------------------------------------------------------+
-| CORE ENGINE (not pluggable)                                   |
-|   fetch + conditional-GET cache (.kb_cache/)                  |
-|   extract -> parent/child chunking (small-to-big)             |
-|   embed (bge-small-en-v1.5, int8 quantized)                   |
-|   near-dup collapse, BM25 postings, calibration stats         |
-|   PHI lint (heuristic, flag-only, never certifies absence)    |
-+---------------------------------------------------------------+
++-------------------------------------------------------------+
+| SOURCES (plugins)  produce Documents                         |
+|   web (core crawler) -> consults SITE HANDLERS per URL:      |
+|       generic (core) | tdx | github        (on by default)   |
+|   local | github_api | youtube                               |
++-------------------------------------------------------------+
         |
         v
-+---------------------------------------------------------------+
-| ADAPTER PLUGINS (registry)                                    |
-|   built-in: container, okf, llmstxt, sqlite                   |
-|   pure functions over (parents, children, meta) -> dist/      |
-+---------------------------------------------------------------+
++-------------------------------------------------------------+
+| CORE ENGINE (not pluggable)                                  |
+|   fetch + conditional-GET cache (.kb_cache/)                 |
+|   chunk -> parents and children, stable ids                  |
+|   embed (bge-small-en-v1.5, int8), near-duplicate collapse,  |
+|   BM25 statistics, calibration, PHI lint                     |
+|   build -> one Compendium                                    |
++-------------------------------------------------------------+
         |
         v
-dist/  ->  commit to GitHub Pages (or any static host)
++-------------------------------------------------------------+
+| ADAPTERS (plugins)  serialize the Compendium                 |
+|   container (v3) | llmstxt | sqlite | okf                    |
++-------------------------------------------------------------+
+        |
+        v
+out_dir/  ->  commit to GitHub Pages, or any static host
 ```
 
-Key invariants:
+In words: the configuration file names the sources and outputs. The registry finds the matching plugins. Each source produces documents; the web source asks its site handlers how to read each page it visits. The core engine turns all documents into one scored compendium, once. Each adapter then writes that compendium in its own format into the output folder, which is published as static files.
 
-- One crawl and one embedding pass per build. Adapters never re-fetch or re-embed.
-- URL fetching, caching, chunking, embedding, and BM25 are **core**. Everything else is a plugin.
-- Built-in sources and adapters register through the exact same registry an external plugin would use; they are plugins that happen to ship in the box and serve as reference implementations.
+### Key invariants
 
-### Plugin protocol (duck-typed)
+- One crawl and one embedding pass per build. Adapters never fetch a URL or run a model.
+- Fetching, caching, chunking, embedding, BM25, calibration, and the build step are **core**. Everything else is a plugin.
+- Built-in plugins register through the same mechanism an external plugin uses. They are plugins that happen to ship in the box, and they serve as the reference implementations.
 
-- Source plugin: module exposing `register()` returning a class with `name`, `__init__(config)`, `fetch()` (yields documents), `etag()` (cache hint).
-- Adapter plugin: `name`, `write(parents, children, meta, out_dir)`.
-- Resolution order: local `plugins/` dir > entry points > built-ins. (Git-URL plugin loading and trust gates are deferred; the protocol must not preclude them.)
+### 2.1 Plugin kinds
 
----
+Three kinds, each a small duck-typed protocol.
+
+**Source.** Enumerates and fetches documents.
+
+| Member | Meaning |
+|---|---|
+| `name` | Registry key and the `type:` value in `config.yaml`. |
+| `__init__(options)` | Receives the validated options for its entry in `sources:`. |
+| `fetch(session, cache, progress)` | Yields `Document` records. Takes the HTTP session and a progress callback from the caller; never constructs a session or prints. |
+
+**Site handler.** Takes part in the web crawl for URLs it recognizes. Not a crawler: link discovery stays in the web source.
+
+| Member | Meaning |
+|---|---|
+| `name` | Registry key and the value used in `site_handlers:`. |
+| `matches(url)` | True when this handler reads the page. Handlers are consulted in registration order; `generic` is always last. |
+| `fetch_url(url)` | The URL to actually request (for example, a GitHub blob page rewritten to its raw file). |
+| `expects_html` | Whether the response is HTML to parse or plain text to wrap. |
+| `extract(soup, url)` | Returns the title, the content node, and the categories list, or nothing when the page holds no indexable content and is only a link-discovery hop. |
+| `source_type`, `content_type(url)` | Metadata values recorded on every parent. See section 3.4. |
+| `default_crawl_exclude_patterns`, `default_index_exclude_patterns` | Patterns the handler adds to the crawl when it is enabled. |
+
+**Adapter.** Writes one output format.
+
+| Member | Meaning |
+|---|---|
+| `name` | Registry key and the `type:` value in `outputs:`. |
+| `write(compendium, out_dir, options)` | Writes files under `out_dir`. A shared base drops local parents unless `options.include_local` is true (section 7). |
+
+### 2.2 Registry and resolution order
+
+The registry resolves each kind in this order, first match wins:
+
+1. Modules in the operator's `plugins/` directory that expose `register()`.
+2. Installed packages that declare entry points in the groups `extractium.sources`, `extractium.site_handlers`, and `extractium.adapters`.
+3. Built-ins, which are declared through those same entry-point groups in this package.
+
+Loading a module from `plugins/` executes code the operator placed there. It is the same trust level as `config.yaml`, and it is documented rather than sandboxed. Loading plugins from git URLs, with trust gates, is future work; the protocol must not prevent it.
+
+### 2.3 Why site handlers instead of three crawlers
+
+The original script crawls TeamDynamix, GitHub, and ordinary pages with one loop, because the crawl is one graph: a knowledge-base article links to a repository README, and the same queue must follow that link. Splitting the loop into three source plugins would either duplicate it or break the graph. So host-specific knowledge lives in site handlers that the one crawler consults, and each handler ships enabled and can be switched off.
+
 
 ## 3. Data model
 
-### Chunks
+### 3.1 Documents
 
-- **Parents**: full sections (context units). **Children**: small overlapping windows (search units, embedded). Children reference parents by `pid`.
-- **Stable IDs** (required in v1): `id = sha1(normalized_source_url + "\x00" + parent_heading_path)[:16]` on parents; children derive `id` from parent id + ordinal. IDs must survive rebuilds when content is unchanged.
+A source yields `Document` records: the source URL, a title, the content (a parsed HTML node or plain text), `source_type`, `content_type`, `categories`, and `local`. The core engine never sees a source's fetch details.
 
-### Per-parent metadata
+### 3.2 Parents and children
 
-- `source_type`: `kb` | `github` | `youtube` | `web` | `local`
-- `content_type`: `article` | `readme` | `video_transcript` | `page` | ...
-- `categories`: hierarchical, from source-native structure (TDX breadcrumbs, repo paths)
-- `local`: boolean; true for local-filesystem sources (see section 6)
-- Enrichment-ready nullable fields, reserved now, populated by a deferred enrichment phase: `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`. Adapters serialize them when present and skip them when null.
+- **Parents** are full sections: one per `h2`/`h3` heading, cut at a maximum length. They are the context unit shown to a language model and the unit of citation.
+- **Children** are small overlapping windows of a parent: the search unit that is embedded and matched. A child references its parent by position (`pid`) and, in the container, by character offsets into the parent's text.
 
-### Embeddings
+Searching children and returning parents is "small-to-big" retrieval: precise matches, enough context to answer.
 
-- Model: `BAAI/bge-small-en-v1.5` (browser id `Xenova/bge-small-en-v1.5`), 384 dims, int8 quantized by default.
-- The asymmetric retrieval convention is part of the format contract and must be recorded in every output's metadata: queries are prefixed with `Represent this sentence for searching relevant passages: ` (trailing space included); indexed passages get no prefix. Symmetric comparisons use no prefix on either side. A model-id check alone does not catch a prefix-convention change.
+### 3.3 Stable identifiers
 
----
+A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url + NUL + heading + NUL + ordinal)`, where the ordinal counts parents on the same page that share a heading. The ordinal exists because a long section is cut into several parents with one heading. A child's id is derived, never stored: parent id, a hyphen, and the child's ordinal within its parent. Ids survive a rebuild when the page URL and heading are unchanged.
 
-## 4. Output formats (the compendium)
+### 3.4 Per-parent metadata
 
-| Format | File(s) | Phase | Notes |
+| Field | Values |
+|---|---|
+| `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local` |
+| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript` |
+| `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
+| `local` | `true` for local-filesystem sources (section 7). |
+| `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
+| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: reserved, null until the deferred enrichment pass exists (section 10). Adapters write them when present and skip them when null. |
+
+### 3.5 Embeddings
+
+- Model: `BAAI/bge-small-en-v1.5` (browser id `Xenova/bge-small-en-v1.5`), 384 dimensions, int8 quantized by default.
+- The asymmetric retrieval convention is part of the format: a query is prefixed with `Represent this sentence for searching relevant passages: ` (trailing space included); indexed passages get no prefix. Every output records the prefix, because a model-id check alone does not catch a prefix change.
+
+
+## 4. Output formats
+
+| Format | Files | Plan phase | Notes |
 |---|---|---|---|
-| Binary container | `kb-index.json` (name configurable) | Core | Flagship. 4-byte LE uint32 header length + minified JSON header + raw int8/float32 vector bytes. Single-file import; proven in FieldStationAI/WebLLM. `.json` extension kept for static-host friendliness. |
-| OKF bundle | `okf/` dir (`index.md`, `log.md`, `concepts/*.md`) + `compendium.okf.zip` | Core | Google Open Knowledge Format (v0.2 spec); YAML frontmatter per concept; the LLM-native output. |
-| llms.txt | `llms.txt`, `llms-full.txt` | Core | Root manifest + full concatenation for web-crawling LLMs. |
-| SQLite | `compendium.sqlite` | Core | Python stdlib `sqlite3`, zero new deps. For non-web apps. Tables: parents, chunks, bm25_postings, vectors (BLOB). |
-| gzip container variant | `--gzip` flag | Next | For self-hosted cases; browsers decode via native `DecompressionStream`. Not a format change. |
-| Parquet | optional extra | Future | `[parquet]` install extra only. |
-| DuckDB | optional extra | Future | `[duckdb]` install extra only. |
-| JSONL + i8 pair | - | Never | No real ecosystem behind it; the container covers the use case. |
+| Binary container, version 3 | `kb-index.json` (name configurable) | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
+| llms.txt | `llms.txt`, `llms-full.txt` | 3 | Root manifest and full concatenation for web-browsing language models. |
+| SQLite | `compendium.sqlite` | 6 | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
+| OKF bundle | directory with `index.md`, `log.md`, one Markdown file per page | 7 | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. OKF defines no archive packaging, so none is written. |
+| gzip container | `--gzip` flag | later | Same format, compressed; browsers decode with `DecompressionStream`. |
+| Parquet, DuckDB | install extras | future | `[parquet]` and `[duckdb]` extras only. |
+| JSONL plus separate vector file | none | never | No ecosystem behind it; the container covers the case. |
 
-OKF **ingestion** (reading compendia produced by other OKF tools as a source) is a possible future phase.
+Reading OKF bundles produced by other tools, as a source, is possible future work.
 
----
 
-## 5. Sources
+## 5. Sources and site handlers
 
-| Source | Phase | Notes |
+| Kind | Name | Plan phase | Notes |
+|---|---|---|---|
+| Source | `web` | 2 | Core crawler. Scope: same origin plus a prefix, or explicit include patterns. Consults site handlers per URL. |
+| Site handler | `generic` | 2 | Core fallback: common content selectors, boilerplate stripping. |
+| Site handler | `tdx` | 2 | TeamDynamix portals: content selectors, title prefix stripping, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
+| Site handler | `github` | 2 | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns. |
+| Source | `local` | 6 | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
+| Source | `github_api` | 7 | Organization enumeration through the REST API; README and Markdown through raw URLs; uses `GITHUB_TOKEN` when present. |
+| Source | `youtube` | 9 | Captions only. Explicit video ids need no key; playlists and channels are listed through the YouTube Data API with `YOUTUBE_API_KEY` from the environment. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and cached; a CI run reuses the cache. Parents deep-link to a timestamp. |
+| Source | GitHub code structure | future | AST-based module overviews (signatures, docstrings, purpose). Never raw code bodies. No language model. |
+| Source | Speech-to-text fallback | future | For videos without captions. External, optional plugin. |
+| Source | OKF bundles from other tools | future | Maybe. |
+
+Explicitly out: spreadsheet extraction, OAuth connectors to cloud drives (users sync to a local folder instead), SQL connectors (contributed plugins), and MCP as a core concern (servers are thin examples over the client libraries; section 9.3).
+
+
+## 6. Crawler etiquette
+
+The crawler identifies itself and respects the sites it reads.
+
+- `user_agent` defaults to `Extractium/<version> (+https://github.com/DepressionCenter/extractium)`. The original script sent a browser User-Agent; a tool distributed to other organizations does not.
+- `respect_robots_txt` defaults to true, using the standard library's parser. It can be switched off for a site the operator owns.
+- `delay_seconds` (default 0.5) paces requests; `max_pages` (default 10,000) is a safety ceiling.
+- Whether the TeamDynamix portal serves article HTML to the truthful User-Agent is checked before the crawler ships (implementation plan, Phase 2). If it does not, the `tdx` handler documents the override and the example configuration shows it.
+
+
+## 7. Local files and confidentiality
+
+A local folder can hold content that must never be published. The rules:
+
+- Every parent from a local source carries `local: true`, and its URL is `local:` followed by the path relative to the source folder. Absolute paths never reach an output.
+- **Every adapter drops local parents by default.** An output opts in with `include_local: true` on its `outputs:` entry, and the command line prints a notice naming each output that includes local content. The default is safe because publishing is the normal use of every output, including the container.
+- The PHI lint runs on local content by default (`phi_lint: local`), can run on everything (`all`), or be switched off. It is heuristic and flag-only: it reports likely matches for a person to review and must never claim absence. The phrase "no PHI" is forbidden in its output; zero matches are reported as "0 pattern matches (this does not confirm absence of PHI)". The report is written to the working directory, never to the output folder.
+
+
+## 8. Cache
+
+- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), and `youtube/` (transcripts). `embeddings/` and `enrichment/` are reserved for delta builds.
+- Revalidation uses conditional GET (`If-None-Match`, `If-Modified-Since`, honoring 304), not HEAD probing: several servers omit validators on HEAD.
+- A content SHA-256 is stored per page so a future delta build can skip unchanged chunks.
+- On GitHub Actions, `.kb_cache/` persists between runs through the cache action, keyed on a hash of the configuration file.
+
+
+## 9. Clients and access
+
+### 9.1 Client libraries
+
+| Language | Plan phase | Notes |
 |---|---|---|
-| Generic web crawl | Core | Scope rules: same-origin + prefix; TDX-aware prefix isolation (`/TDClient/<n>/`). |
-| TDX client portal | Core | Content selectors, title normalization, breadcrumb categories. |
-| GitHub org | Core | readme/md/txt via raw URLs (current behavior). |
-| YouTube captions | Core | `youtube-transcript-api` (MIT). Captions only; near-zero compute. |
-| Local filesystem | Core | With web-output guardrail (section 6). |
-| GitHub code (AST) | Next | AST-based structure extraction: Python `ast` stdlib, tree-sitter (MIT) if multi-language. One "module overview" parent per significant directory (signatures + docstrings + purpose). Never raw code bodies. No LLM. |
-| Whisper transcription fallback | Future | For videos with no captions. External/optional plugin. |
-| OKF bundles from other tools | Future | Maybe. |
+| JavaScript | 4 | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, calibration threshold, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
+| Python | 4 | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
+| Others | contributed | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). None is scheduled. |
 
-Explicitly out: Excel extraction, OAuth cloud-drive connectors (users sync to a local folder), SQL connectors (contrib plugin territory), MCP as a core-engine concern (MCP servers ship as thin examples over the client libraries; see section 8.2).
+### 9.2 Access tiers
 
----
+The compendium on a static host is the single source of truth; every access method is a thin layer over it.
 
-## 6. Local files and confidentiality
-
-Local sources risk publishing confidential content to the web. Guardrail:
-
-- Chunks from local sources carry `local: true`.
-- Web-facing adapters (llms.txt, OKF) **exclude** local chunks by default.
-- Container and SQLite (private-consumption formats) include them.
-- Single override flag: `--include-local-in-web`.
-- PHI lint always runs on local content. The linter may flag likely PHI and must never claim absence ("no PHI detected" wording is forbidden).
-
----
-
-## 7. Cache
-
-- `.kb_cache/` with layers: `pages/` (fetched text), `meta.json` (validators), and reserved `embeddings/` + `enrichment/` for delta builds.
-- Revalidation via **conditional GET** (`If-None-Match` / `If-Modified-Since`, honoring 304), not HEAD probing.
-- Content sha256 stored per page to enable future delta chunk/embed skipping.
-- On CI, `.kb_cache/` persists between runs via `actions/cache` keyed on a config hash.
-
----
-
-## 8. Client libraries
-
-| Language | Phase | Notes |
-|---|---|---|
-| JavaScript | Core | Extracted from FieldStationAI `index.html` (container parse, int8 dequant, BM25 + cosine + RRF fusion, calibration threshold). FieldStationAI becomes the reference consumer. |
-| Python | Core | Same hybrid search, mirrors the JS client. |
-| Go | Next | Ships with the Go CLI (`search`, `serve`, `serve mcp`). MCP use case is confirmed; see section 8.2. |
-| PowerShell | Next | IT/admin lane; no one else ships a PS vector-search client. |
-| Lua | Future | |
-| R | Future | Corpus analysis + hybrid search; CRAN later. Deferred, not dropped. |
-| Julia | Future | |
-
-### 8.1 Access tiers (consuming a compendium)
-
-The compendium on GitHub Pages is the single source of truth; every access
-method is a thin layer over it. Tiers, cheapest and most universal first:
-
-| Tier | Method | Search quality | Hosting cost | Phase |
+| Tier | Method | Search quality | Hosting cost | Plan phase |
 |---|---|---|---|---|
-| 0 | Static compendium (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | LLM-dependent (no ranking) | None (GitHub Pages) | Core |
-| 1 | Local MCP server via `npx` (wraps the JS client; index downloaded + cached on user's machine) | Full hybrid: vector + BM25 + RRF | None (user's compute) | Next |
-| 2 | Remote stateless MCP (Streamable HTTP, JSON responses, BM25-only) on Cloudflare Workers free tier and/or TDX iPaaS | BM25 only (no server-side embedding) | None / existing infra | Next |
-| 3 | Platform wrappers (GPT, Gemini Gem, Copilot Studio agent): system prompt + Tier 0 URLs | LLM-dependent | None | Next |
+| 0 | Static files (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | Model-dependent; no ranking | None | 3 |
+| 1 | Local MCP server on the user's machine (Node via `npx`, or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | 8 |
+| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | 10 |
+| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | 10 |
 
-Tier 1 is the only tier with semantic search, because query embedding runs on
-the consumer's machine. Tier 2 stays BM25-only by design: the compendium
-already ships postings, document lengths, and df stats, so a remote server
-needs no ML runtime. `SKILLS.md` documents all tiers for AI agents.
+Tier 2 detail, from the hosts' published limits: a Cloudflare Worker on the free plan has 10 milliseconds of CPU per request and a 3 MB script limit, so it cannot parse a multi-megabyte JSON header on every call; the example imports the SQLite output into D1 and answers BM25 queries from it, with optional query embedding through Workers AI, which serves the same `bge-small-en-v1.5` model. A Val Town HTTP val has 4 GiB of memory and a one-minute wall-clock limit on the free plan, so it can hold the whole container in memory after fetching it from the published URL.
 
-### 8.2 MCP servers (examples, not core)
+### 9.3 MCP servers are examples, not core
 
-MCP servers live under `examples/mcp/`, never in the engine. Two reference
-implementations:
+They live under `examples/mcp/`: `local-node/` and `local-python/` (Tier 1), `valtown/` and `cloudflare/` (Tier 2). Each is a small program over a client library and the published compendium. Hosted assistant prompts (Tier 3) live under `examples/wrappers/` as plain text. `SKILLS.md` at the repository root tells AI agents how to use every tier.
 
-- `examples/mcp/local-node/` - published as an npm package; runs on the
-  user's machine (`npx`), fetches and caches the container from the
-  compendium URL, exposes a `search_kb` tool via the JS client's hybrid
-  search.
-- `examples/mcp/stateless-remote/` - single-endpoint stateless Streamable
-  HTTP server (POSTed JSON-RPC in, `application/json` out; no
-  `Mcp-Session-Id`; `notifications/initialized` returns 202/empty).
-  BM25-only. Deploy targets: Cloudflare Workers (free tier) and TDX iPaaS
-  Node custom tasks. Same search code, two hosts.
 
-Platform wrapper prompts (Tier 3) live under `examples/wrappers/` as plain
-text system prompts pointing at the compendium URLs.
+## 10. Enrichment (deferred; schema-ready now)
 
----
+- A local language model only (small instruct model), GPU-gated, delta-only, parent-only. No API calls, ever.
+- Populates the reserved nullable fields (section 3.4) through the `.kb_cache/enrichment/` layer.
+- Keyword extraction without a language model (YAKE plus embedding-similarity keywords) may ship earlier as a separate step.
 
-## 9. Enrichment (deferred; schema-ready now)
 
-- Local LLM only (small instruct model), GPU-gated, delta-only, parent-only. No API calls ever.
-- Populates the reserved nullable fields (`summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`) via the `.kb_cache/enrichment/` layer.
-- Keyword extraction that ships now, without an LLM: YAKE (MIT, tiny) + embedding-similarity keywords.
+## 11. Operations
 
----
+- Refresh cadence: weekly. The GitHub Actions template runs on a schedule and on a "Run workflow" button press. Publishing uses only the official GitHub Pages actions.
+- Local run: `run.bat` or `run.sh` creates a virtual environment, installs pinned dependencies from a committed lock file, builds, and prints what to commit. This is the primary path for sources a cloud runner cannot reach (local folders, YouTube).
+- Data and configuration are kept apart from the tool. The tool repository holds the engine. Each organization keeps a small data repository with its `config.yaml`, its transcript cache when it uses YouTube, and the published output folder. A template for that repository ships under `examples/data-repo/`.
 
-## 10. Operations
 
-- Refresh cadence: monthly, manual. GitHub Actions template with `schedule` cron + `workflow_dispatch` (the "click a button" run). GitLab CI file maintained in parallel.
-- Double-click entry point for non-technical users: a wrapper script (`run.bat` / `run.sh`) that installs deps if needed, builds, and prints "commit the dist/ folder" instructions.
-- Data/config separation: the tool repo holds the engine; each organization keeps a small data repo with its `config.yaml` and the published `dist/` on GitHub Pages.
+## 12. Configuration file (target schema)
 
----
+The loader in the repository today accepts a single `seed_url` form, documented in the [configuration reference](configuration.md). The target schema below replaces it in Phase 1 of the implementation plan. Unknown keys stop the build in both forms.
 
-## 11. Repository structure
+Minimal file:
+
+```yaml
+sources:
+  - type: web
+    seed_url: https://example.edu/TDClient/000/ExampleOrg/Home/
+```
+
+Every setting:
+
+```yaml
+name: Example Org Knowledge Base   # default: title of the first crawled page
+out_dir: dist                       # every adapter writes under here
+cache_dir: .kb_cache
+delay_seconds: 0.5
+max_pages: 10000
+user_agent: Extractium/0.1 (+https://github.com/DepressionCenter/extractium)
+respect_robots_txt: true
+phi_lint: local                     # local | all | off
+
+sources:
+  - type: web
+    seed_url: https://example.edu/TDClient/000/ExampleOrg/Home/
+    include_patterns: []            # empty = scope from the seed URL
+    crawl_exclude_patterns: []      # omit = handler defaults + asset extensions
+    index_exclude_patterns: []
+    site_handlers: [tdx, github]    # omit = all installed; [] = generic only
+  - type: local
+    path: ./internal-docs
+    include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
+  - type: github_api
+    org: example-org                # uses GITHUB_TOKEN from the environment when set
+  - type: youtube
+    channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # needs YOUTUBE_API_KEY in the environment
+    playlist_ids: []
+    video_ids: []
+    languages: [en]
+
+outputs:                            # omit = container + llmstxt
+  - type: container
+    file: kb-index.json
+    include_local: false
+  - type: llmstxt
+  - type: sqlite
+    file: compendium.sqlite
+    include_local: true
+  - type: okf
+```
+
+Keys and API tokens never go in this file. They are read from the environment.
+
+
+## 13. Repository structure (target)
 
 ```
 extractium/
 ├── extractium/                  # Python package (the engine)
-│   ├── core/                    # fetch, cache, chunk, embed, bm25, dedup, calibration, phi_lint, registry
-│   ├── sources/                 # built-in source plugins: web.py, tdx.py, github.py, youtube.py, local.py
-│   ├── adapters/                # built-in adapters: container.py, okf.py, llmstxt.py, sqlite_out.py
+│   ├── core/                    # fetch, cache, chunk, embed, bm25, dedup, calibration,
+│   │                            # phi_lint, registry, models, build
+│   ├── sources/                 # web (core crawler); site handlers generic, tdx, github;
+│   │                            # sources local, github_api, youtube
+│   ├── adapters/                # container, llmstxt, sqlite_out, okf
+│   ├── search.py                # Python client
 │   └── cli.py                   # extractium build --config config.yaml
 ├── clients/
-│   ├── js/                      # reference JS client library (from FieldStationAI)
-│   └── python/                  # Python client library
-├── plugins/                     # user drop-in plugin dir (documented, ships empty)
-├── docs/                        # this spec, plugin dev guide, consumer guide (4 audiences)
+│   └── js/                      # extractium-client.js and its tests
+├── plugins/                     # operator drop-in plugin dir (ships empty)
+├── docs/                        # specification, architecture, configuration, container
+│                                # format, implementation plan, how-to pages
 ├── examples/
 │   ├── config.example.yaml
-│   ├── mcp/
-│   │   ├── local-node/          # npm-published local MCP server (npx), wraps JS client
-│   │   └── stateless-remote/    # stateless Streamable HTTP MCP, BM25-only (Workers / TDX iPaaS)
-│   └── wrappers/                # GPT / Gemini Gem / Copilot Studio system prompts
-├── .github/workflows/build-kb.yml   # template workflow for adopters
-├── .gitlab-ci.yml               # maintainer CI
-├── run.bat / run.sh             # admin-assistant double-click entry points
-├── AGENTS.md                    # EFDC template conventions carried forward
+│   ├── data-repo/               # template for an organization's data repository
+│   ├── mcp/                     # local-node, local-python, valtown, cloudflare
+│   └── wrappers/                # hosted-assistant system prompts
+├── tests/                       # pytest suite, fixtures, golden files, frozen reference script
+├── .github/workflows/build-compendium.yml   # template workflow for adopters
+├── run.bat / run.sh             # double-click entry points
+├── requirements-lock.txt        # pinned dependencies
 ├── SKILLS.md                    # guidance for AI agents consuming a compendium
-├── README.md
-├── LICENSE                      # GPL-3.0-or-later
-├── NOTICE
-└── pyproject.toml               # single-repo PyPI package; extras: [parquet], [duckdb], [dev]
+├── AGENTS.md, README.md, LICENSE, NOTICE, pyproject.toml
 ```
 
-Documentation targets four audiences: end users building an index, core developers, plugin developers, and AI agents consuming a compendium.
+Documentation serves four audiences: people building an index, core developers, plugin developers, and AI agents consuming a compendium.
 
----
 
-## 12. Roadmap
+## 14. Changes from v0.1
 
-| Phase | Contents |
-|---|---|
-| **1 - Core (MVP)** | Extract engine from `build-kb-index.py` with no behavior change; conditional-GET cache fix; stable IDs; config.yaml; plugin registry; sources: web/tdx/github/youtube-captions/local (+ guardrail); adapters: container/okf/llmstxt/sqlite; PHI lint; JS + Python clients; run scripts; CI templates; docs. |
-| **2 - Next** | Go CLI + Go client (`search`, `serve`, `serve mcp`); PowerShell client; GitHub code AST source plugin; gzip container flag; MCP example servers (local npm + stateless remote for Cloudflare Workers / TDX iPaaS); platform wrapper prompts (GPT, Gem, Copilot). |
-| **3 - Future** | Enrichment layer (local LLM); Whisper fallback; Lua/R/Julia clients; Parquet/DuckDB extras; OKF ingestion from other tools; git-URL plugin loading with trust gates. |
-| **Never** | JSONL+i8 output; Excel extraction; cloud-drive OAuth connectors; heavyweight framework dependencies; cloud-LLM enrichment. |
+- Site handlers replace the separate `tdx` and `github` source plugins; one web crawler is core, and the handlers are on-by-default plugins (section 2).
+- Three plugin kinds and a stated resolution order (section 2.1, 2.2).
+- Stable identifiers include an ordinal so split sections do not collide (section 3.3).
+- The container is version 3 from the start; children carry offsets, not text. No version 2 output (section 4, [container format](container-format.md)).
+- Every adapter excludes local content unless the output opts in; the earlier rule let the container include it (section 7).
+- The OKF adapter writes a directory only; OKF defines no `.zip` packaging (section 4).
+- Crawler etiquette: a truthful User-Agent and `robots.txt` by default (section 6).
+- YouTube: enumeration through the Data API or explicit lists; transcripts fetched locally and cached because cloud runners are blocked (section 5).
+- Remote MCP examples account for Cloudflare's CPU limit and use Workers AI for optional hybrid search (section 9.2).
+- Clients: JavaScript and Python are the only scheduled clients (section 9.1).
+- Refresh cadence is weekly, with the local run as the primary path (section 11).
+- A `sources:` and `outputs:` configuration schema (section 12).
+- The roadmap moved to the implementation plan (section 15).
+
+
+## 15. Roadmap
+
+The order of work, sized in phases of about one week, is in the [implementation plan](implementation-plan.md). The plan is the authority on sequence; this page is the authority on design.
+
+
+## Conclusion
+
+You now know what Extractium is meant to become: one crawler with pluggable site handlers, one build step, several cheap outputs, and thin clients over a static file. Build in the order the implementation plan gives, and keep this page and the architecture page in agreement with the code.
+
+
+## Additional Resources
+
+* [Extractium™ README](../README.md) — project overview and quick start.
+* [Architecture and Current State](architecture.md) — what exists in the repository today.
+* [Implementation plan](implementation-plan.md) — the phased order of work.
+* [Container format](container-format.md) — the flagship output, byte by byte.
+* [Configuration reference](configuration.md) — the settings file as it exists now.
+* [Field Station AI](https://github.com/DepressionCenter/FieldStationAI) — the project the engine was extracted from.
+* [Open Knowledge Format specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md) — the OKF v0.2 format the OKF adapter writes.
+* [llms.txt proposal](https://llmstxt.org/) — the convention the llms.txt adapter follows.
+* [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/) — the constraints behind the Tier 2 design.
+* [Val Town limits](https://www.val.town/limits) — the same, for the Val Town example.
+
+
+[← Back to README](../README.md)
+
+----
+
+Copyright © 2026 The Regents of the University of Michigan

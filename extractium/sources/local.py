@@ -1,14 +1,17 @@
 """
-Summary: Will hold the local-filesystem source plugin, including the
-web-output confidentiality guardrail (chunks carry local: true; web-facing
-adapters exclude them by default) per docs/extractium-spec.md section 6.
-Built in step 6 of the extraction plan.
+Summary: Will hold the local-filesystem source plugin: reads Markdown,
+plain-text, and HTML files under a configured folder and yields one
+Document per file with local set to true. Every parent from this source
+is excluded from every output unless that output opts in with
+include_local, and the PHI lint runs over its content by default. See
+docs/extractium-spec.md section 7.
 
 This file is part of Extractium™
 extractium/sources/local.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -28,3 +31,12 @@ __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
+
+# TODO: implement the source protocol (see extractium.core.registry).
+# Rules that shape it:
+#   - Document URLs are "local:" plus the path relative to the configured
+#     folder, so an absolute path never reaches an output file.
+#   - include_globs default to **/*.md, **/*.txt, and **/*.html. PDF and
+#     Office formats need new dependencies and are not read.
+#   - The exclusion of local parents from outputs is enforced in the
+#     adapter base, not here, so no adapter can forget it.

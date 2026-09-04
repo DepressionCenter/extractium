@@ -1,7 +1,8 @@
 """
-Summary: Will hold the binary-container adapter (kb-index.json: 4-byte LE
-header length + minified JSON header + raw int8/float32 vector bytes), the
-flagship output format per docs/extractium-spec.md section 4.
+Summary: Will hold the binary-container adapter that writes the version 3
+container (kb-index.json: 4-byte little-endian header length, minified
+JSON header, raw int8 or float32 vector bytes), the flagship output format
+specified byte by byte in docs/container-format.md.
 
 This file is part of Extractium™
 extractium/adapters/container.py
@@ -29,8 +30,11 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
-# TODO: serialize a container from data that is already embedded and
-# scored. This adapter takes (parents, children, meta) and writes bytes;
-# it must never fetch a URL or run the embedding model, because one crawl
-# and one embedding pass feed every output format
-# (docs/extractium-spec.md section 2).
+# TODO: serialize the version 3 container from a Compendium that is
+# already embedded and scored. Children are columnar (pid, plus start and
+# end offsets in UTF-16 code units) and carry no text; parents carry the
+# stable id, source_type, content_type, categories, and local flag; the
+# header records the embedding model, dimensions, query prefix, and
+# quantization scale. This adapter never fetches a URL or runs the
+# embedding model, because one crawl and one embedding pass feed every
+# output format (docs/extractium-spec.md section 2).

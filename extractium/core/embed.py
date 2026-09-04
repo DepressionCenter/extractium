@@ -7,7 +7,7 @@ extractium/core/embed.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,6 +29,10 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
 import numpy as np
+
+# TODO: import sentence_transformers inside embed_chunks instead of here.
+# A module-level import pulls torch into every consumer of this package,
+# including the search client and the adapters, which never embed.
 from sentence_transformers import SentenceTransformer
 
 ### Constants ###

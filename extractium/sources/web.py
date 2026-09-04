@@ -1,7 +1,9 @@
 """
-Summary: Will hold the generic web-crawl source plugin: the queue-driven
-crawl loop and the same-origin/prefix scope rules described in
-docs/extractium-spec.md section 5.
+Summary: Will hold the web-crawl source, the one crawler in Extractium:
+the queue-driven crawl loop and the same-origin/prefix scope rules
+described in docs/extractium-spec.md section 5. Host-specific reading of
+pages is delegated to site-handler plugins (generic, tdx, github), so
+this module never branches on a host name.
 
 This file is part of Extractium™
 extractium/sources/web.py
@@ -31,12 +33,18 @@ __date__ = "2026-08-17"
 
 # TODO: port the crawl loop that walks a seed URL's site -- work queue,
 # visited set, link discovery filtered through
-# extractium.core.fetch.in_scope, per-page chunking -- and yields the
-# documents it finds. Two properties it needs that the original
-# single-file script did not have:
+# extractium.core.fetch.in_scope -- as a source whose fetch() yields
+# Document records. Properties it needs that the original single-file
+# script did not have:
 #   - Take the HTTP session as a parameter. A crawl that constructs its
 #     own session can only be tested by monkeypatching the requests
 #     module, which reaches past the code under test.
 #   - Report progress through a callback supplied by the caller instead
 #     of print(), so a library consumer, a CI log, and a double-click run
 #     can each present it differently.
+#   - Ask the enabled site handlers, in registration order with generic
+#     last, which one reads each URL: the handler supplies the URL to
+#     request, whether to expect HTML, the title, the content node, and
+#     the categories. Chunking of the returned content stays in core.
+#   - Send the configured User-Agent and honor robots.txt when
+#     respect_robots_txt is on.

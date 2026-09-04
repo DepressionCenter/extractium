@@ -9,7 +9,7 @@ extractium/core/fetch.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -49,6 +49,11 @@ from extractium.core import cache
 
 ### Constants ###
 
+# TODO: replace the fixed browser User-Agent below with a configurable
+# value defaulting to a truthful "Extractium/<version> (+repository URL)",
+# and honor robots.txt (urllib.robotparser) unless respect_robots_txt is
+# switched off. Some sites serve different HTML to a non-browser agent;
+# the TeamDynamix site handler documents any override it needs.
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -220,6 +225,10 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
 
 
 ### Fetch ###
+
+# TODO: the two print calls in fetch() report to stdout only. A progress
+# callback supplied by the caller replaces them, so a library consumer, a
+# CI log, and a double-click run can each present progress their own way.
 
 def _flush_cache_meta_periodically(session, cache_meta):
     """

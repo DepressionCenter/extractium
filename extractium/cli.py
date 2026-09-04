@@ -33,11 +33,14 @@ def main():
     """
     Entry point for the `extractium` console script.
 
-    TODO: parse `--config config.yaml` into a Config
-    (extractium.config.load_config, with the command-line arguments passed
-    as its overrides) and run the build pipeline: source plugins -> core
-    engine -> adapter plugins. Still missing: the plugin registry
-    (extractium.core.registry) and the crawl/build steps themselves.
+    TODO: parse `build --config config.yaml` (plus --out-dir, --max-pages,
+    and --float32-vecs as overrides passed to
+    extractium.config.load_config), resolve sources, site handlers, and
+    adapters through extractium.core.registry, run each source, hand the
+    documents to the build step in extractium.core, and call each
+    adapter. Progress goes to stderr through a callback. The summary at
+    the end names every output file and any output that includes local
+    content. A failed step exits non-zero with a message naming the step.
     """
     print("Extractium is not yet implemented -- package skeleton only (see docs/extractium-spec.md).")
 

@@ -1,13 +1,16 @@
 """
-Summary: Will hold the llms.txt / llms-full.txt adapter (root manifest +
-full concatenation for web-crawling LLMs), per docs/extractium-spec.md
-section 4. Built in step 6 of the extraction plan.
+Summary: Will hold the llms.txt adapter: llms.txt (an H1 title, a summary
+blockquote, and H2 sections per source listing each page as a Markdown
+link) and llms-full.txt (every parent's heading, URL, and text in one
+file), the two files web-browsing language models look for at a site
+root. See docs/extractium-spec.md section 4.
 
 This file is part of Extractium™
 extractium/adapters/llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -27,3 +30,8 @@ __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
+
+# TODO: implement write(compendium, out_dir, options). Group parents by
+# source URL so each page appears once in llms.txt; write parents in
+# crawl order to llms-full.txt. Local parents are dropped unless the
+# output opted in, as for every adapter.

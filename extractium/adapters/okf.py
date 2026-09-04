@@ -1,14 +1,17 @@
 """
-Summary: Will hold the Google Open Knowledge Format (OKF v0.2) bundle
-adapter (index.md, log.md, concepts/*.md + compendium.okf.zip), the
-LLM-native output per docs/extractium-spec.md section 4. Built in step 6
-of the extraction plan.
+Summary: Will hold the Open Knowledge Format (OKF v0.2) adapter: one
+Markdown file per source page with YAML front matter (type, title,
+description, resource, tags, generated, sources), plus the reserved
+index.md listing and log.md history. OKF defines no archive packaging, so
+this adapter writes a directory only. See docs/extractium-spec.md
+section 4.
 
 This file is part of Extractium™
 extractium/adapters/okf.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -28,3 +31,8 @@ __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
+
+# TODO: implement write(compendium, out_dir, options). Group parents by
+# source URL into one concept file each; "type" is the only front-matter
+# field OKF requires, the rest are recommended. Local parents are dropped
+# unless the output opted in, as for every adapter.
