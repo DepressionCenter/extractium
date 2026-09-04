@@ -9,7 +9,7 @@ extractium/core/chunk.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -357,6 +357,13 @@ def build_parent_and_child_chunks(title, node, url):
 
     Returns:
         tuple[list[dict], list[dict]]: (parents, children).
+
+    TODO: parents and children need stable ids that survive a rebuild --
+    sha1 of the normalized URL, a NUL separator, and the parent's heading
+    path, truncated to 16 characters, with each child's id derived from
+    its parent's id plus an ordinal (docs/extractium-spec.md section 3).
+    The positional `pid` stays alongside them as the in-memory link
+    between the two lists.
     """
     parents = split_into_parents(title, node, url)
     children = []

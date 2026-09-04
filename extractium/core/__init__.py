@@ -9,6 +9,7 @@ extractium/core/__init__.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -28,3 +29,10 @@ __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
+
+# TODO: nothing here composes the core's parts into a finished index. A
+# build step is needed that embeds the children, drops near-duplicates,
+# remaps parents, builds the BM25 postings, computes calibration
+# statistics, and returns (parents, children, meta) for an adapter to
+# serialize. embed, dedup, bm25, and calibration all exist as modules
+# already; no code calls them in order.

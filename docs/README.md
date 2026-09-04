@@ -28,6 +28,8 @@ This folder holds the written documentation for Extractium™. Each page below c
 
 ## Pages
 
+* [Architecture and Current State](architecture.md) — what is built, what is a placeholder,
+  and the design decisions still open.
 * [Configuration Reference](configuration.md) — every setting in `config.yaml`, its default, and how the URL patterns work.
 * [Extractium™ Specification](extractium-spec.md) — architecture, data model, output formats, sources, and roadmap.
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
