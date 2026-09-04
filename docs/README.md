@@ -35,6 +35,7 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
+* [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session, phase or not; your request goes on the last line.
 
 Pages are added as the tool grows. The specification lists what is planned but not yet built.
 
