@@ -43,13 +43,14 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 
 | Part | File | State |
 |---|---|---|
-| Settings | `extractium/config.py` | Working, for the single-seed form. Loads and checks `config.yaml`. See the [configuration reference](configuration.md). |
+| Settings | `extractium/config.py` | Working. Loads and checks `config.yaml`: global settings, a `sources` list, and an `outputs` list, with per-type checks for the built-in types. See the [configuration reference](configuration.md). |
 | Fetch and cache | `extractium/core/fetch.py`, `core/cache.py` | Working. Conditional GET, on-disk page cache, URL scope rules. |
 | Chunking | `extractium/core/chunk.py` | Working. Content extraction, parent sections, child windows. Host-specific branches still live here. |
 | Scoring | `extractium/core/embed.py`, `dedup.py`, `bm25.py`, `calibration.py` | Working, each on its own. Nothing runs them in order yet. |
 | Crawl loop | — | Not ported. Still only in the frozen reference script. |
 | Build step | — | Not written. |
-| Plugin registry | `extractium/core/registry.py` | Placeholder file. |
+| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. No built-in plugin exists yet, so the entry-point groups in `pyproject.toml` are empty. |
+| Data models | `extractium/core/models.py` | Working. `Document`, `Extraction`, `Parent`, `Children`, `Compendium`, and the three plugin protocols. |
 | PHI check | `extractium/core/phi_lint.py` | Placeholder file. |
 | Sources and site handlers | `extractium/sources/*.py` | Placeholder files. |
 | Adapters | `extractium/adapters/*.py` | Placeholder files. |
@@ -58,7 +59,7 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 176 tests as of 2026-09-04.
+The test suite passes: 275 tests as of 2026-09-04.
 
 
 ## Settled design decisions
@@ -114,9 +115,9 @@ Specification: sections 2.1 to 2.3.
 
 ### 5. The configuration file lists sources and outputs
 
-Today's loader accepts one `seed_url` and a handful of crawl settings.
+The first loader accepted one `seed_url` and a handful of crawl settings.
 
-**Decision:** the file becomes a `sources:` list and an `outputs:` list plus global settings, before any code beyond the loader depends on the old shape.
+**Decision:** the file is a `sources:` list and an `outputs:` list plus global settings, changed before any code beyond the loader depended on the old shape.
 
 **Why:** a second source type or a second output cannot be expressed in the flat form. Changing it now costs one module and its tests; changing it later costs every caller.
 
@@ -158,7 +159,7 @@ Specification: section 6.
 
 ## Conclusion
 
-The core modules work, the settings layer works for one source, and the wiring between them does not exist yet. The next block of work is the configuration schema, the registry, and the data models, then the crawl loop and site handlers, then the build step and the first two adapters. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
+The core modules work, the settings layer, the registry, and the data models are in place, and the wiring between them does not exist yet. The next block of work is the crawl loop and site handlers, then the build step and the first two adapters. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
 
 
 ## Additional Resources

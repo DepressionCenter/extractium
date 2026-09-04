@@ -5,7 +5,7 @@
 # Last Modified: 2026-09-04
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
-# not need -- every setting except seed_url has a working default.
+# not need -- every setting except the sources list has a working default.
 # Notes: See README file for documentation and full license information.
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -21,21 +21,102 @@
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
 # ---------------------------------------------------------------------------
-# Required
+# Required: the sources list
+#
+# Each entry names a source type and its options. One web source with a
+# seed URL is enough to start. Keys and API tokens never go in this file;
+# sources that need one read it from the environment.
 # ---------------------------------------------------------------------------
 
-# The page the crawl starts from. Must begin with http:// or https://.
-# Every other setting is optional.
-seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
+sources:
+  # The web crawler. It starts at seed_url, stays within that site (or
+  # the TeamDynamix portal the URL belongs to), and asks the installed
+  # site handlers how to read each page it visits.
+  - type: web
+    seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
+
+    # Pages the crawl is allowed to visit. A URL must match at least one
+    # entry. The default is an empty list, which means "work it out from
+    # the seed URL". Add entries only to reach more, such as a second site.
+    #include_patterns:
+    #  - '/TDClient/000/ExampleOrg/'         # this portal's knowledge base
+    #  - 'example\.org/research-services/'   # one folder of a second site
+    #  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
+
+    # Pages the crawl must not fetch at all. Checked after include_patterns,
+    # so an entry here always wins. The default skips search forms, logins,
+    # print views, tag pages, code-host housekeeping pages, and files that
+    # are not readable text. Write an empty list ([]) to switch it off.
+    #crawl_exclude_patterns:
+    #  - '/Search[/?$]'
+    #  - '/Login[/?$]'
+
+    # Pages the crawl may visit and follow links from, but whose own content
+    # stays out of the index. Use this for menu and category pages.
+    #index_exclude_patterns:
+    #  - '/Category/'
+    #  - '/tree/'
+
+    # Which site handlers take part in this crawl. Leave it out to use every
+    # installed handler (tdx and github ship enabled). Write an empty list
+    # ([]) to read every page with the generic handler only.
+    #site_handlers: [tdx, github]
+
+  # A folder of Markdown, text, and HTML files on this machine. Content from
+  # a local source stays out of every output unless that output sets
+  # include_local: true (see the outputs list).
+  #- type: local
+  #  path: ./internal-docs
+  #  include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
+
+  # Every repository of a GitHub organization, listed through the API.
+  # Uses GITHUB_TOKEN from the environment when it is set.
+  #- type: github_api
+  #  org: example-org
+
+  # Captions from a YouTube channel, playlists, or single videos. Listing a
+  # channel or playlist needs YOUTUBE_API_KEY in the environment.
+  #- type: youtube
+  #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
+  #  playlist_ids: []
+  #  video_ids: []
+  #  languages: [en]
 
 
 # ---------------------------------------------------------------------------
-# Optional -- the values shown are the defaults. Uncomment to change one.
+# Optional: the outputs list
+#
+# Leave it out to write the two defaults shown here: the container file
+# and the llms.txt pair. Every output is written under out_dir.
 # ---------------------------------------------------------------------------
 
-# Where to write the index file. A relative path is resolved from the
-# folder you run the build in.
-#out_path: "dist/kb-index.json"
+#outputs:
+#  - type: container
+#    file: kb-index.json
+#    include_local: false      # true lets local-source content into this file
+#  - type: llmstxt
+#  - type: sqlite
+#    file: compendium.sqlite
+#    include_local: true
+#  - type: okf
+
+
+# ---------------------------------------------------------------------------
+# Optional global settings -- the values shown are the defaults.
+# Uncomment a line to change it.
+# ---------------------------------------------------------------------------
+
+# Display name of the knowledge base. Defaults to the title of the first
+# page crawled.
+#name: "Example Org Knowledge Base"
+
+# Folder every output is written under. A relative path is resolved from
+# the folder you run the build in.
+#out_dir: dist
+
+# Folder for fetched pages between builds, so a rerun only downloads what
+# changed.
+#cache_dir: .kb_cache
 
 # The most pages one build may visit. This is a safety net: if an include
 # pattern is broader than you meant, the crawl still stops here.
@@ -45,48 +126,17 @@ seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 # it is reading. Use 0 for no wait.
 #delay_seconds: 0.5
 
+# How the crawler introduces itself to each site. The default names the
+# tool and its repository.
+#user_agent: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
 
-# ---------------------------------------------------------------------------
-# URL patterns
-#
-# All three lists hold regular expressions. Each one is matched against the
-# whole URL, and upper and lower case are treated the same.
-#
-# Leave a list out to keep the built-in default. Write an empty list ([])
-# to switch the default off completely.
-# ---------------------------------------------------------------------------
+# Whether to honor each site's robots.txt. Switch it off only for a site
+# you own.
+#respect_robots_txt: true
 
-# Pages the crawl is allowed to visit. A URL must match at least one entry.
-#
-# The default is an empty list, which means "work it out from the seed URL":
-#   - A TeamDynamix URL keeps the crawl inside that portal's
-#     /TDClient/<number>/<name>/ folder.
-#   - Any other URL keeps the crawl on the same site (scheme and host).
-#
-# Add entries only when you want more than that, such as a second site.
-#include_patterns:
-#  - '/TDClient/000/ExampleOrg/'         # this portal's knowledge base
-#  - 'example\.org/research-services/'   # one folder of a second site
-#  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
-
-# Pages the crawl must not fetch at all. Checked after include_patterns, so
-# an entry here always wins.
-#
-# The default skips search forms, logins, print views, tag pages, code-host
-# housekeeping pages (issues, commits, settings, and so on), and files that
-# are not readable text (images, archives, office documents, source code).
-#crawl_exclude_patterns:
-#  - '/Search[/?$]'
-#  - '/Login[/?$]'
-
-# Pages the crawl may visit and follow links from, but whose own content
-# stays out of the index. Use this for menu and category pages: they point
-# at real articles but say nothing themselves.
-#
-# The default is the crawl exclusion list plus category and folder listings.
-#index_exclude_patterns:
-#  - '/Category/'
-#  - '/tree/'
+# Which content the PHI (protected health information) check scans:
+# local (local sources only), all, or off.
+#phi_lint: local
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,58 @@
+# This file is part of Extractium™
+# .github/workflows/runner-reachability.yml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-04
+# Last Modified: 2026-09-04
+# Summary: Throwaway check of whether a GitHub Actions runner can reach the
+# TeamDynamix knowledge-base portal, github.com, and raw.githubusercontent.com
+# with the crawler's truthful User-Agent. Logs one status line per URL and
+# never fails the job. Run it by hand from the Actions tab, record the result
+# in docs/extractium-spec.md, then delete this file.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+name: Runner reachability check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reachability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      USER_AGENT: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
+    steps:
+      - name: Request each URL and log its status code
+        shell: bash
+        run: |
+          set -u
+          urls=(
+            "https://teamdynamix.umich.edu/TDClient/210/DepressionCenter/Home/"
+            "https://github.com/DepressionCenter"
+            "https://raw.githubusercontent.com/DepressionCenter/FieldStationAI/main/README.md"
+          )
+          for url in "${urls[@]}"; do
+            # -o /dev/null discards the body; -w prints only the facts we
+            # need. A network failure prints 000 instead of stopping the loop.
+            result=$(curl --silent --show-error --location --max-time 30 \
+              --user-agent "$USER_AGENT" \
+              --output /dev/null \
+              --write-out "status=%{http_code} final_url=%{url_effective} bytes=%{size_download} type=%{content_type}" \
+              "$url" 2>&1 || true)
+            echo "$url -> $result"
+          done

@@ -41,6 +41,13 @@ EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 EMBED_MODEL_BROWSER_ID = "Xenova/bge-small-en-v1.5"
 DIMS = 384
 
+# The model was trained for asymmetric retrieval: a query is prefixed with
+# this instruction (trailing space included) and indexed passages get no
+# prefix. Both are recorded in every output, because a model-id check
+# alone would not catch a prefix change.
+QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
+PASSAGE_PREFIX = ""
+
 # int8 vector quantization. Vectors are L2-normalized, so every component
 # already lies in roughly [-1, 1] -- round(v * INT8_SCALE) loses negligible
 # precision at 384 dims and needs no per-vector calibration. Reversed by

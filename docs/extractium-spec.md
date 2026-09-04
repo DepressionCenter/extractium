@@ -127,7 +127,7 @@ Three kinds, each a small duck-typed protocol.
 | `name` | Registry key and the value used in `site_handlers:`. |
 | `matches(url)` | True when this handler reads the page. Handlers are consulted in registration order; `generic` is always last. |
 | `fetch_url(url)` | The URL to actually request (for example, a GitHub blob page rewritten to its raw file). |
-| `expects_html` | Whether the response is HTML to parse or plain text to wrap. |
+| `expects_html(url)` | Whether the response for that URL is HTML to parse or plain text to wrap. Decided per URL because one host serves both kinds of page. |
 | `extract(soup, url)` | Returns the title, the content node, and the categories list, or nothing when the page holds no indexable content and is only a link-discovery hop. |
 | `source_type`, `content_type(url)` | Metadata values recorded on every parent. See section 3.4. |
 | `default_crawl_exclude_patterns`, `default_index_exclude_patterns` | Patterns the handler adds to the crawl when it is enabled. |
@@ -292,7 +292,7 @@ They live under `examples/mcp/`: `local-node/` and `local-python/` (Tier 1), `va
 
 ## 12. Configuration file (target schema)
 
-The loader in the repository today accepts a single `seed_url` form, documented in the [configuration reference](configuration.md). The target schema below replaces it in Phase 1 of the implementation plan. Unknown keys stop the build in both forms.
+The loader in `extractium/config.py` reads this schema; the [configuration reference](configuration.md) documents every setting. Unknown keys stop the build, at the top level and inside each built-in source or output entry.
 
 Minimal file:
 

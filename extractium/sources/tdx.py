@@ -34,7 +34,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
-# TODO: implement the site-handler protocol (see extractium.core.registry)
+# TODO: implement the site-handler protocol (see extractium.core.models)
 # for TeamDynamix portals. The selector, title, and kind logic that moves
 # here lives today in extractium.core.chunk (extract_content, get_title,
 # normalise_page_title, chunk_kind); the portal exclude patterns live in

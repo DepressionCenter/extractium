@@ -32,7 +32,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
-# TODO: implement the source protocol (see extractium.core.registry).
+# TODO: implement the source protocol (see extractium.core.models).
 # Rules that shape it:
 #   - Document URLs are "local:" plus the path relative to the configured
 #     folder, so an absolute path never reaches an output file.

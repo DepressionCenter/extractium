@@ -72,6 +72,17 @@ duckdb = []
 [project.scripts]
 extractium = "extractium.cli:main"
 
+# Plugin entry-point groups. A built-in source, site handler, or adapter
+# is declared here, under the same group an external package would use,
+# so extractium.core.registry resolves both through one path. An
+# operator's plugins/ folder and other installed packages shadow entries
+# of the same name (docs/extractium-spec.md section 2.2).
+[project.entry-points."extractium.sources"]
+
+[project.entry-points."extractium.site_handlers"]
+
+[project.entry-points."extractium.adapters"]
+
 [tool.setuptools.packages.find]
 include = ["extractium*"]
 
