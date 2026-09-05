@@ -42,14 +42,9 @@ from urllib.parse import urlparse
 
 import yaml
 
-from extractium import __version__
-
-# Imported for BINARY_EXTENSIONS / SOURCE_EXTENSIONS, from which the
-# default exclude patterns below are derived. Deriving them here, instead
-# of retyping the extension list, keeps the crawl-scope asset check in
-# extractium.core.fetch and these operator-visible exclude lists from
-# drifting apart.
-from extractium.core import fetch
+# The default User-Agent is owned by the fetch layer that sends it;
+# re-exported here so the settings documentation has one name for it.
+from extractium.core.fetch import DEFAULT_USER_AGENT
 
 
 ### Global Defaults ###
@@ -68,10 +63,6 @@ DEFAULT_MAX_PAGES = 10000
 
 # Polite pause between requests, in seconds. 0 disables the pause.
 DEFAULT_DELAY_SECONDS = 0.5
-
-# The crawler names itself and its repository. A tool distributed to
-# other organizations does not pretend to be a browser.
-DEFAULT_USER_AGENT = f"Extractium/{__version__} (+https://github.com/DepressionCenter/extractium)"
 
 # robots.txt is honored unless the operator switches it off for a site
 # they own.
@@ -116,94 +107,14 @@ TYPE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 ### Default Exclude Patterns ###
 
-# Non-content pages common to knowledge-base portals and code-hosting
-# sites: search forms, logins, print views, tag listings, and the
-# repository housekeeping views (issues, commits, settings, and the like)
-# that hold no documentation. Excluded from both crawling and indexing.
-# TODO: the portal and code-host patterns belong to the tdx and github
-# site handlers, which contribute them while enabled; only the asset
-# extension patterns are host-independent.
-_COMMON_EXCLUDE_PATTERNS = (
-    r"/Search[/?$]",
-    r"/Login[/?$]",
-    r"/Login\.aspx",
-    r"/Tags[/?$]",
-    r"/Print[/?$]",
-    r"/PrintArticle\?ID=",
-    r"\?print=",
-    r"/Archive[/?$]",
-    r"/FileOpen[/?$]",
-    r"/FileDownload[/?$]",
-    r"/pulse$",
-    r"/tags$",
-    r"/tagged$",
-    r"/TagID=",
-    r"/TagID/[0-9]+",
-    r"&tab=",
-    r"/issues?[/?]",
-    r"/projects?[/?]",
-    r"/pulls?[/?]",
-    r"/pushes?[/?]",
-    r"/forks?[/?]",
-    r"/network[/?]",
-    r"/commits?[/?]",
-    r"/discussions?[/?]",
-    r"/categories[/?]",
-    r"/announcements?[/?]",
-    r"/settings[/?]",
-    r"/contribs?[/?]",
-    r"/contributions?[/?]",
-    r"/checks?[/?]",
-    r"/comments?[/?]",
-    r"/author[/?]",
-    r"/profile[/?]",
-    r"/watchers[/?]",
-    r"/stargazers[/?]",
-    r"/stars[/?]",
-    r"/graphs[/?]",         # contributors, commit-activity, code-frequency, punch-card, traffic
-    r"/actions[/?]",        # CI workflow runs
-    r"/security[/?]",       # security advisories -- not KB content; /releases stays indexable
-    r"/compare[/?]",
-    r"/blame/",
-    r"/raw/",               # Markdown and text file bodies are fetched from the raw content
-                            # host instead (see extractium.core.fetch is_git_blob_text_url /
-                            # to_git_raw_url), so this only avoids re-crawling the redirect
-                            # URL when a page happens to link to it.
-    r"/find/",
-    r"/deployments[/?]",
-    r"/environments[/?]",
-    r"/packages[/?]",
-    r"/sponsors[/?]",
-    r"/people[/?]",
-    r"/followers[/?]",
-    r"/following[/?]",
-    # Wiki housekeeping actions (edit form, revision history, new-page
-    # draft, access settings) -- not real content.
-    r"/_edit$",
-    r"/_history$",
-    r"/_new$",
-    r"/_access$",
-)
-
-# Navigation-only pages: worth following, because they link to real
-# articles, but holding no content of their own worth indexing.
-_INDEX_ONLY_EXCLUDE_PATTERNS = (
-    r"/CategoryID=",
-    r"/CategoryID/[0-9]+",
-    r"/Category/",
-    r"/tree/",              # directory listings -- pure navigation, no server-rendered content
-)
-
-# Files whose bytes are not indexable text. Order within an exclude list
-# carries no meaning: a URL is excluded when any one pattern matches it.
-_ASSET_EXTENSION_PATTERNS = tuple(
-    rf"\.{ext}$" for ext in fetch.BINARY_EXTENSIONS + fetch.SOURCE_EXTENSIONS
-)
-
-DEFAULT_CRAWL_EXCLUDE_PATTERNS = _COMMON_EXCLUDE_PATTERNS + _ASSET_EXTENSION_PATTERNS
-DEFAULT_INDEX_EXCLUDE_PATTERNS = (
-    _COMMON_EXCLUDE_PATTERNS + _INDEX_ONLY_EXCLUDE_PATTERNS + _ASSET_EXTENSION_PATTERNS
-)
+# An omitted exclude list is stored as None and completed by the web
+# source at crawl time: the host-independent asset patterns
+# (extractium.core.fetch.ASSET_EXCLUDE_PATTERNS) plus the patterns each
+# enabled site handler contributes. The default depends on which
+# handlers are enabled, so it cannot be filled in here. An explicit list,
+# including an empty one, is used exactly as written.
+DEFAULT_CRAWL_EXCLUDE_PATTERNS = None
+DEFAULT_INDEX_EXCLUDE_PATTERNS = None
 
 
 ### Allowed Keys ###
@@ -524,6 +435,8 @@ def _read_patterns(data, key, default, source):
             regular expression.
     """
     patterns = _read_text_list(data, key, default, source, label="patterns")
+    if patterns is None:
+        return None
     for position, entry in enumerate(patterns, start=1):
         try:
             re.compile(entry, re.IGNORECASE)
@@ -570,6 +483,8 @@ def _read_web_source(entry, source):
     return {
         "seed_url": _read_url(entry, "seed_url", source, hint=" (the URL the crawl starts from)"),
         "include_patterns": _read_patterns(entry, "include_patterns", DEFAULT_INCLUDE_PATTERNS, source),
+        # None for either exclude list means "asset patterns plus the
+        # enabled handlers' defaults", completed by the web source.
         "crawl_exclude_patterns": _read_patterns(
             entry, "crawl_exclude_patterns", DEFAULT_CRAWL_EXCLUDE_PATTERNS, source
         ),
