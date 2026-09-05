@@ -44,9 +44,10 @@ sources:
     #  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
 
     # Pages the crawl must not fetch at all. Checked after include_patterns,
-    # so an entry here always wins. The default skips search forms, logins,
-    # print views, tag pages, code-host housekeeping pages, and files that
-    # are not readable text. Write an empty list ([]) to switch it off.
+    # so an entry here always wins. The default is the files that are not
+    # readable text plus what each enabled site handler adds: search forms,
+    # logins, print views, tag pages, and code-host housekeeping pages.
+    # Write an empty list ([]) to switch it off.
     #crawl_exclude_patterns:
     #  - '/Search[/?$]'
     #  - '/Login[/?$]'
@@ -59,7 +60,9 @@ sources:
 
     # Which site handlers take part in this crawl. Leave it out to use every
     # installed handler (tdx and github ship enabled). Write an empty list
-    # ([]) to read every page with the generic handler only.
+    # ([]) to read every page with the generic handler only. The generic
+    # handler is always on, and a handler that is off also stops adding its
+    # exclude patterns.
     #site_handlers: [tdx, github]
 
   # A folder of Markdown, text, and HTML files on this machine. Content from
@@ -130,8 +133,8 @@ sources:
 # tool and its repository.
 #user_agent: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
 
-# Whether to honor each site's robots.txt. Switch it off only for a site
-# you own.
+# Whether to honor each site's robots.txt. A site whose robots.txt cannot
+# be read is skipped entirely. Switch it off only for a site you own.
 #respect_robots_txt: true
 
 # Which content the PHI (protected health information) check scans:
