@@ -92,6 +92,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** a configuration file with one web source and two outputs loads, and a plugin dropped into `plugins/` shadows a built-in of the same name.
 
+*Finished 2026-09-04, commit 45ac7a6. The runner reachability result is still to be recorded; the workflow file stays until it is.*
+
 ### Phase 2: Web source, site handlers, crawl loop, stable identifiers
 
 **Goal.** Crawl a site end to end through the new structure, matching the reference script.
@@ -109,6 +111,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 **Documentation.** Specification updated with the User-Agent check result.
 
 **Done when** the fixture crawl matches the reference and the three handlers are selected by URL.
+
+*Finished 2026-09-04 on branch `phase-2-web-crawl`. The portal serves article HTML to the truthful User-Agent; no override is needed (specification, section 6).*
 
 ### Phase 3: Build step, container version 3, llms.txt, command line
 
@@ -250,7 +254,7 @@ Three facts about other systems decide parts of this plan. Each is verified earl
 | Check | When | What it decides |
 |---|---|---|
 | Do GitHub Actions runners reach the TeamDynamix portal and GitHub? | Phase 1 | Whether the Actions template can build the knowledge base, or only local runs can. |
-| Does the portal serve article HTML to a truthful User-Agent? | Phase 2 | Whether the default User-Agent needs a documented override for that site. |
+| Does the portal serve article HTML to a truthful User-Agent? | Phase 2 | Whether the default User-Agent needs a documented override for that site. Checked 2026-09-04: it does; no override. |
 | Does the real portal build with `--max-pages 25` open in the Python client? | Phase 3 | That the pipeline works outside the fixtures. |
 
 

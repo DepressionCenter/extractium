@@ -1,8 +1,10 @@
 """
 Summary: HTTP fetching with local conditional-GET caching (If-None-Match /
-If-Modified-Since against .kb_cache/), plus the URL scope, normalization,
-and Git-host classification helpers that decide what a crawl fetches and
-how far it follows discovered links.
+If-Modified-Since against .kb_cache/), the crawler's etiquette (a truthful
+User-Agent and a per-origin robots.txt policy), and the URL scope and
+normalization helpers that decide what a crawl fetches. Host-specific URL
+rules live in the site handlers under extractium.sources; the one
+exception is noted at derive_auto_prefix.
 
 This file is part of Extractium™
 extractium/core/fetch.py
@@ -28,16 +30,18 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-04"
 
 import hashlib
 import os
 import re
 import time
+import urllib.robotparser
 from urllib.parse import urlparse
 
-import requests
 from bs4 import BeautifulSoup
+
+from extractium import __version__
 
 # cache is imported and referenced by qualified attribute access
 # (cache.CACHE_PAGES_DIR, cache.save_cache_meta(...), etc.) everywhere in
@@ -49,31 +53,35 @@ from extractium.core import cache
 
 ### Constants ###
 
-# TODO: replace the fixed browser User-Agent below with a configurable
-# value defaulting to a truthful "Extractium/<version> (+repository URL)",
-# and honor robots.txt (urllib.robotparser) unless respect_robots_txt is
-# switched off. Some sites serve different HTML to a non-browser agent;
-# the TeamDynamix site handler documents any override it needs.
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
+# The crawler names itself and its repository. A tool distributed to
+# other organizations does not pretend to be a browser. Operators change
+# it through the user_agent setting.
+DEFAULT_USER_AGENT = f"Extractium/{__version__} (+https://github.com/DepressionCenter/extractium)"
+
+# Sent with every page request, alongside the User-Agent.
+ACCEPT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml",
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# BINARY_EXTENSIONS / SOURCE_EXTENSIONS feed ASSET_RE below, so the
-# crawl-scope check (applied to every URL regardless of include/exclude
-# configuration) and an operator's human-readable exclude patterns can't
-# drift out of sync with each other.
+# robots.txt is plain text. At least one portal (TeamDynamix) answers 406
+# when a request for it accepts only HTML, so the robots request carries
+# its own Accept header.
+ROBOTS_ACCEPT_HEADERS = {"Accept": "text/plain, */*;q=0.5"}
+
+# Seconds to wait for any single response before giving up on the URL.
+REQUEST_TIMEOUT_SECONDS = 15
+
+# BINARY_EXTENSIONS / SOURCE_EXTENSIONS feed ASSET_RE and
+# ASSET_EXCLUDE_PATTERNS below, so the crawl-scope check (applied to every
+# URL regardless of include/exclude configuration) and an operator's
+# human-readable exclude patterns can't drift out of sync with each other.
 #
 # SOURCE_EXTENSIONS covers a repo's source/config files: GitHub's file
 # viewer renders these (like any other non-Markdown blob) as an empty
 # client-hydrated shell with no scrapeable content, and they aren't
-# documentation anyway -- see is_git_blob_text_url/extract_content in
-# extractium.core.chunk for how Markdown/text files are handled instead.
+# documentation anyway -- see extractium.sources.github for how
+# Markdown/text files are handled instead.
 BINARY_EXTENSIONS = [
     "pdf", "zip", "gz", "exe", "rar", "7z", "tar", "bin", "dmg", "iso", "apk",
     "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "tiff", "tif", "ico", "avif", "heic",
@@ -90,11 +98,12 @@ ASSET_RE = re.compile(
     r"\.(" + "|".join(BINARY_EXTENSIONS + SOURCE_EXTENSIONS + ["ico", "css", "js", "xml", "json"]) + r")(\?|$)",
     re.I,
 )
-GIT_HOST_RE = re.compile(
-    r"^(?:github\.com|gitlab\.com|git\.[^.]+\.(?:com|edu|org|io)|(?:[^.]+\.)?github\.io)$",
-    re.I,
-)
-GIT_TEXT_FILE_RE = re.compile(r"/blob/[^/]+/.+\.(md|markdown|txt)$", re.I)
+
+# The host-independent part of the default exclude lists: files whose
+# bytes are not indexable text. Site handlers add their own host-specific
+# patterns while enabled. Order within an exclude list carries no meaning:
+# a URL is excluded when any one pattern matches it.
+ASSET_EXCLUDE_PATTERNS = tuple(rf"\.{ext}$" for ext in BINARY_EXTENSIONS + SOURCE_EXTENSIONS)
 
 
 ### URL Scope And Normalization ###
@@ -103,6 +112,11 @@ def derive_auto_prefix(seed_url):
     """
     Derives the default crawl-scope prefix from a seed URL when no
     explicit include pattern is configured.
+
+    The TeamDynamix rule below is the one host-specific rule left in core:
+    the site-handler protocol has no scope hook, and adding one would
+    change the protocol every handler implements. TODO: move this rule to
+    the tdx handler if the protocol ever gains a scope method.
 
     Args:
         seed_url (str): the crawl's starting URL.
@@ -142,36 +156,6 @@ def get_origin(url):
     """Returns just the scheme://host portion of a URL, dropping path and query."""
     parsed = urlparse(url)
     return f"{parsed.scheme}://{parsed.netloc}"
-
-
-def is_git_host_url(url):
-    """True if url's host is GitHub, GitLab, a generic self-hosted git host, or GitHub Pages."""
-    host = urlparse(url).netloc.lower()
-    return bool(GIT_HOST_RE.match(host))
-
-
-def is_git_blob_text_url(url):
-    """
-    True for a GitHub blob URL pointing at a Markdown or plain-text file,
-    at any path depth, e.g. .../blob/main/docs/setup.md. GitHub's blob
-    viewer is a client-hydrated app -- the file body exists only as JSON
-    inside the page's embedded data payload, not as scrapeable HTML -- so
-    these are fetched from raw.githubusercontent.com instead of parsed out
-    of the blob page. Wiki pages and /releases/tag pages are still classic
-    server-rendered HTML and don't need this path.
-    """
-    return is_git_host_url(url) and bool(GIT_TEXT_FILE_RE.search(urlparse(url).path))
-
-
-def to_git_raw_url(blob_url):
-    """
-    Rewrites a github.com blob URL to its raw.githubusercontent.com
-    equivalent: /<owner>/<repo>/blob/<branch>/<path> ->
-    /<owner>/<repo>/<branch>/<path>. Only meaningful for URLs already
-    matched by is_git_blob_text_url.
-    """
-    path = re.sub(r"^/([^/]+)/([^/]+)/blob/", r"/\1/\2/", urlparse(blob_url).path)
-    return f"https://raw.githubusercontent.com{path}"
 
 
 def normalise(url):
@@ -224,11 +208,109 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
     return True
 
 
-### Fetch ###
+### Request Headers And Progress ###
 
-# TODO: the two print calls in fetch() report to stdout only. A progress
-# callback supplied by the caller replaces them, so a library consumer, a
-# CI log, and a double-click run can each present progress their own way.
+def request_headers(user_agent=DEFAULT_USER_AGENT, extra=None):
+    """
+    Builds the headers one page request sends: the User-Agent, the Accept
+    headers, and any conditional-GET validators.
+
+    Args:
+        user_agent (str): the User-Agent value to identify the crawler by.
+        extra (dict | None): headers merged on top, such as If-None-Match.
+
+    Returns:
+        dict: header name -> value.
+    """
+    headers = {"User-Agent": user_agent, **ACCEPT_HEADERS}
+    if extra:
+        headers.update(extra)
+    return headers
+
+
+def _report(progress, line):
+    """Sends one progress line to the callback, or nowhere when the caller gave none."""
+    if progress is not None:
+        progress(line)
+
+
+### Robots Policy ###
+
+class RobotsPolicy:
+    """
+    Answers "may this crawler fetch this URL?" from each origin's
+    robots.txt, fetched once per origin through the caller's session.
+
+    The policy follows the robots exclusion standard (RFC 9309) for
+    unavailable files: a 4xx answer means the site publishes no rules and
+    everything is allowed, while a 5xx answer or a network failure means
+    the rules are unknown and every URL on that origin is refused. Failing
+    closed is deliberate: a crawler that cannot read a site's rules must
+    not guess that it is welcome.
+
+    Args:
+        session: HTTP session to request robots.txt through (a
+            requests.Session or a test double with the same get()).
+        user_agent (str): the User-Agent sent with the request and matched
+            against the file's User-agent lines.
+        enabled (bool): False allows every URL without any request, for a
+            site the operator owns.
+        progress (Callable[[str], None] | None): receives one line when a
+            robots.txt cannot be read.
+    """
+
+    def __init__(self, session, user_agent=DEFAULT_USER_AGENT, enabled=True, progress=None):
+        self.session = session
+        self.user_agent = user_agent
+        self.enabled = enabled
+        self.progress = progress
+        # origin -> RobotFileParser; each origin's file is fetched once
+        # per crawl, however many of its pages are visited.
+        self._parsers = {}
+
+    def allows(self, url):
+        """
+        True when the crawler may fetch url.
+
+        Args:
+            url (str): the URL that is about to be requested.
+
+        Returns:
+            bool: False when the origin's robots.txt disallows the URL for
+            this User-Agent, or when the file could not be read at all.
+        """
+        if not self.enabled:
+            return True
+        origin = get_origin(url)
+        parser = self._parsers.get(origin)
+        if parser is None:
+            parser = self._load(origin)
+            self._parsers[origin] = parser
+        return parser.can_fetch(self.user_agent, url)
+
+    def _load(self, origin):
+        """Fetches and parses one origin's robots.txt, falling back per the rules in the class docstring."""
+        parser = urllib.robotparser.RobotFileParser()
+        robots_url = f"{origin}/robots.txt"
+        headers = {"User-Agent": self.user_agent, **ROBOTS_ACCEPT_HEADERS}
+        try:
+            r = self.session.get(robots_url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+            status = r.status_code
+        except Exception as e:
+            _report(self.progress, f"  robots.txt unreadable for {origin} ({e}); skipping that site")
+            parser.disallow_all = True
+            return parser
+        if 400 <= status < 500:
+            parser.allow_all = True
+        elif status >= 500:
+            _report(self.progress, f"  robots.txt unavailable for {origin} (HTTP {status}); skipping that site")
+            parser.disallow_all = True
+        else:
+            parser.parse(r.text.splitlines())
+        return parser
+
+
+### Fetch ###
 
 def _flush_cache_meta_periodically(session, cache_meta):
     """
@@ -283,7 +365,7 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html):
     return BeautifulSoup(r.text, "html.parser") if expect_html else r.text
 
 
-def fetch(session, url, cache_meta, expect_html=True):
+def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AGENT, progress=None):
     """
     Fetches one URL through the local page cache. If a cache entry exists,
     sends a single conditional GET with If-None-Match / If-Modified-Since
@@ -305,12 +387,16 @@ def fetch(session, url, cache_meta, expect_html=True):
             and returns a parsed BeautifulSoup document. False requires
             text/plain (e.g. a raw.githubusercontent.com file) and returns
             the decoded text as-is, with no HTML parsing.
+        user_agent (str): the User-Agent header value to send.
+        progress (Callable[[str], None] | None): receives one line for a
+            cache hit or a skipped URL; None reports nothing.
 
     Returns:
         BeautifulSoup | str | None: the fetched content, or None if the
         request failed, raised an HTTP error, or the response's
-        content-type didn't match expect_html. Failures are logged to
-        stdout and never raise -- callers treat None as "skip this URL."
+        content-type didn't match expect_html. Failures are reported
+        through progress and never raise -- callers treat None as "skip
+        this URL."
     """
     entry = cache_meta.get(url)
     conditional_headers = {}
@@ -321,7 +407,11 @@ def fetch(session, url, cache_meta, expect_html=True):
             conditional_headers["If-Modified-Since"] = entry["last_modified"]
 
     try:
-        r = session.get(url, headers={**HEADERS, **conditional_headers}, timeout=15)
+        r = session.get(
+            url,
+            headers=request_headers(user_agent, conditional_headers),
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
 
         if conditional_headers and r.status_code == 304:
             try:
@@ -329,16 +419,16 @@ def fetch(session, url, cache_meta, expect_html=True):
                     cached_text = f.read()
             except OSError:
                 # Cache file missing/unreadable -- retry once as a plain GET.
-                r = session.get(url, headers=HEADERS, timeout=15)
+                r = session.get(url, headers=request_headers(user_agent), timeout=REQUEST_TIMEOUT_SECONDS)
                 r.raise_for_status()
                 return _store_fetched_page(r, url, session, cache_meta, expect_html)
             entry["fetched_at"] = time.time()
             _flush_cache_meta_periodically(session, cache_meta)
-            print("       (cached, not modified)")
+            _report(progress, "       (cached, not modified)")
             return BeautifulSoup(cached_text, "html.parser") if expect_html else cached_text
 
         r.raise_for_status()
         return _store_fetched_page(r, url, session, cache_meta, expect_html)
     except Exception as e:
-        print(f"  SKIP {url} -- {e}")
+        _report(progress, f"  SKIP {url} -- {e}")
         return None

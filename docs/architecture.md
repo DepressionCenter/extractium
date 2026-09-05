@@ -44,22 +44,23 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Part | File | State |
 |---|---|---|
 | Settings | `extractium/config.py` | Working. Loads and checks `config.yaml`: global settings, a `sources` list, and an `outputs` list, with per-type checks for the built-in types. See the [configuration reference](configuration.md). |
-| Fetch and cache | `extractium/core/fetch.py`, `core/cache.py` | Working. Conditional GET, on-disk page cache, URL scope rules. |
-| Chunking | `extractium/core/chunk.py` | Working. Content extraction, parent sections, child windows. Host-specific branches still live here. |
+| Fetch and cache | `extractium/core/fetch.py`, `core/cache.py` | Working. Conditional GET, on-disk page cache, URL scope rules, a truthful User-Agent, a per-origin `robots.txt` policy, and progress through a callback. One host-specific rule remains: the TeamDynamix portal-folder scope prefix in `derive_auto_prefix`, because the handler protocol has no scope hook. |
+| Chunking | `extractium/core/chunk.py` | Working. Parent sections, child windows, stable parent identifiers, `chunk_document` for a `Document` record. No host branches; reading a page is the site handlers' job. |
 | Scoring | `extractium/core/embed.py`, `dedup.py`, `bm25.py`, `calibration.py` | Working, each on its own. Nothing runs them in order yet. |
-| Crawl loop | — | Not ported. Still only in the frozen reference script. |
+| Crawl loop | `extractium/sources/web.py` | Working. The `web` source: takes the session, the cache metadata, and a progress callback; consults the site handlers per URL; yields `Document` records. Pinned against the reference crawl on the fixtures. |
 | Build step | — | Not written. |
-| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. No built-in plugin exists yet, so the entry-point groups in `pyproject.toml` are empty. |
+| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. The built-in `web` source and the `generic`, `tdx`, and `github` handlers are declared as entry points in `pyproject.toml`. |
 | Data models | `extractium/core/models.py` | Working. `Document`, `Extraction`, `Parent`, `Children`, `Compendium`, and the three plugin protocols. |
 | PHI check | `extractium/core/phi_lint.py` | Placeholder file. |
-| Sources and site handlers | `extractium/sources/*.py` | Placeholder files. |
+| Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. |
+| Other sources | `extractium/sources/local.py`, `github_api.py`, `youtube.py` | Placeholder files. |
 | Adapters | `extractium/adapters/*.py` | Placeholder files. |
 | Clients | — | Not started. The retrieval code to extract still lives in Field Station AI's `index.html`. |
 | Command line | `extractium/cli.py` | Prints a notice. Runs no build. |
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 275 tests as of 2026-09-04.
+The test suite passes: 354 tests as of 2026-09-04.
 
 
 ## Settled design decisions
@@ -82,7 +83,7 @@ Specification: section 2, key invariants.
 
 The original `crawl()` builds its own `requests.Session()` and reports progress with `print()`.
 
-**Decision:** the loop takes the session as a parameter and reports progress through a callback the caller supplies.
+**Decision:** the loop takes the session as a parameter and reports progress through a callback the caller supplies. The global crawl settings (page ceiling, delay, User-Agent, `robots.txt`) travel in a small `CrawlSettings` record, separate from the source's own options, because they apply to every source in a build.
 
 **Why:** a function that builds its own session can only be tested by monkeypatching the `requests` module, which reaches past the code under test. Progress has three audiences with different needs: a person watching a double-click run, a CI log, and a library caller who wants silence. A callback serves all three.
 
@@ -97,7 +98,7 @@ The current code has no identifiers. It links a child to its parent by position 
 
 **Why:** the ordinal is needed because a long section is cut into several parents that share a heading; without it they would share an id. Stable ids are what saved answers, cached enrichment, and future delta builds use to match old work to new content.
 
-This decision deliberately breaks equality with the frozen reference script for the id fields only. The characterization tests for chunk building carry a documented exception rather than a silent update.
+This decision deliberately breaks equality with the frozen reference script for the id fields only. The characterization tests for chunk building compare every field the reference has and treat `id` and the per-parent metadata (`source_type`, `content_type`, `categories`, `local`) as additions. The reference's coarse `kind` facet (`code`, `kb`, `page`) is replaced by `source_type` and `content_type`.
 
 Specification: section 3.3.
 
@@ -154,12 +155,14 @@ The reference script sends a browser User-Agent and never reads `robots.txt`.
 
 **Why:** a tool distributed to other organizations should not spoof a browser by default. The check exists because some portals do serve different pages to non-browser agents, and the answer belongs in the documentation, not in a surprise.
 
+The check was made on 2026-09-04: the portal serves full article HTML to the truthful User-Agent, so no override is needed. Its `robots.txt` answers 406 to a request that accepts only HTML, so the robots request sends a plain-text Accept header. When a site's `robots.txt` cannot be read (a 5xx answer or a network failure), every URL on that site is skipped and the reason is reported; a 404 means no rules. Failing closed is deliberate.
+
 Specification: section 6.
 
 
 ## Conclusion
 
-The core modules work, the settings layer, the registry, and the data models are in place, and the wiring between them does not exist yet. The next block of work is the crawl loop and site handlers, then the build step and the first two adapters. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
+The core modules work, the settings layer, the registry, and the data models are in place, and the web source crawls through the site handlers to produce documents. Nothing yet turns those documents into a scored compendium or writes a file. The next block of work is the build step, the container and `llms.txt` adapters, and the command line. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
 
 
 ## Additional Resources

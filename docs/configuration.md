@@ -33,7 +33,7 @@ A ready-to-copy starting point ships with the project: [examples/config.example.
 
 ## Status of this feature
 
-The settings file and its checks are in place, in [extractium/config.py](../extractium/config.py). The command that runs a full build is not finished yet, so nothing reads the file for you today. You can still load and check a file yourself:
+The settings file and its checks are in place, in [extractium/config.py](../extractium/config.py). The web source that acts on a `web` entry and the global crawl settings is in place too. The command that runs a full build is not finished yet, so nothing reads the file for you today. You can still load and check a file yourself:
 
 ```python
 from extractium.config import load_config
@@ -42,7 +42,7 @@ settings = load_config("config.yaml")
 print(settings.sources[0].options["seed_url"], settings.max_pages)
 ```
 
-The crawl scope rules the web source's settings feed (`in_scope`, `derive_auto_prefix`) already live in [extractium/core/fetch.py](../extractium/core/fetch.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
+The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
 
 
 ## Where the file goes
@@ -84,11 +84,11 @@ Each entry in `sources` and `outputs` names a `type` and then that type's own op
 | `cache_dir` | text | `.kb_cache` | Folder for fetched pages between builds. |
 | `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
-| `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. |
-| `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. |
+| `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
+| `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. See "How robots.txt is read" below. |
 | `phi_lint` | `local`, `all`, or `off` | `local` | Which content the protected health information check scans. |
 
-`phi_lint` and `respect_robots_txt` are validated now; the steps that act on them are not built yet. See [the implementation plan](implementation-plan.md).
+`phi_lint` is validated now; the check that acts on it is not built yet. See [the implementation plan](implementation-plan.md).
 
 
 ## Sources
@@ -101,9 +101,9 @@ Every entry needs a `type`. The options below are per type. An option you leave 
 |---|---|---|---|
 | `seed_url` | text | none (required) | The page the crawl starts from. Must begin with `http://` or `https://`. |
 | `include_patterns` | list of patterns | empty (see below) | Pages the crawl is allowed to visit. |
-| `crawl_exclude_patterns` | list of patterns | built-in list | Pages the crawl must not fetch. |
-| `index_exclude_patterns` | list of patterns | built-in list | Pages the crawl may visit, but whose content stays out of the index. |
-| `site_handlers` | list of names | every installed handler | Which site handlers take part. `[]` means the generic handler only. |
+| `crawl_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl must not fetch. |
+| `index_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl may visit, but whose content stays out of the index. |
+| `site_handlers` | list of names | every installed handler | Which site handlers take part. `[]` means the generic handler only. The generic handler always takes part, and always last. |
 
 A short entry is normal:
 
@@ -201,7 +201,28 @@ This is usually the right setting. Add patterns only when one build has to cover
 
 ### What the built-in exclusions cover
 
-You get the two exclusion lists for free. They skip search forms, sign-in pages, print views, tag pages, and the housekeeping pages of code-hosting sites, such as issues, commits, and settings. They also skip files that hold no readable text. The index list adds category and folder listings, which are worth following but not worth indexing.
+You get the two exclusion lists for free. Each list is the sum of two parts:
+
+1. **Files that hold no readable text**: images, archives, office documents, fonts, media, and source code. Always included.
+2. **What each enabled site handler adds.** The generic handler, which is always on, skips search forms, sign-in pages, print views, tag pages, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, file-download, and tag views, and its category listings to the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, commits, and settings, and folder listings (`/tree/`) to the index list.
+
+Category and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.
+
+### Which site handler reads a page
+
+For each page it fetches, the crawler asks the enabled site handlers, in order, which one recognizes the URL. `tdx` claims any `teamdynamix.*` host. `github` claims GitHub, GitLab, `git.<organization>` hosts, and GitHub Pages. `generic` claims everything else and is always consulted last. The handler that claims a page decides which URL to request, whether to expect HTML or plain text, the page title, the content node, and the categories recorded on every section.
+
+### How robots.txt is read
+
+With `respect_robots_txt` on (the default), the crawler reads `robots.txt` once per site, with the configured `user_agent`, before fetching anything from that site. Rules written for `extractium` by name apply, then rules for `*`.
+
+| The site answers | What the crawler does |
+|---|---|
+| 200 with rules | Follows the rules. A disallowed page is skipped and reported. |
+| 404 or another 4xx | Treats the site as having no rules. |
+| 5xx, or no answer at all | Skips every page on that site and reports why. |
+
+Skipping a whole site when its rules cannot be read is deliberate. A crawler that cannot read a site's rules must not guess that it is welcome. Switch `respect_robots_txt` off only for a site you own.
 
 ### Turning a default list off
 
@@ -214,7 +235,7 @@ sources:
     crawl_exclude_patterns: []   # fetch everything in scope, with no exclusions
 ```
 
-Do this only when you know why. With no exclusions, a crawl will happily fetch sign-in pages and print views.
+Do this only when you know why. With no exclusions, a crawl will happily fetch sign-in pages and print views. Files that hold no readable text are still skipped: that check runs on every link whatever the lists say.
 
 
 ## When something is wrong
@@ -249,6 +270,7 @@ A misspelled setting is treated as an error on purpose. If Extractium ignored it
 - Only `http` and `https` seeds are accepted. A `file:` seed would pull content off your own disk into an index whose web-facing outputs assume everything in it was already published.
 - Output files must stay under `out_dir`, so a configuration file cannot direct a build to overwrite a file elsewhere on the disk.
 - The `user_agent` value cannot contain line breaks, so the file cannot add extra request headers.
+- The crawler honors `robots.txt` by default and stops at a site whose rules it cannot read, so a configuration file cannot make it fetch pages a site has asked crawlers to leave alone unless the operator switches the check off.
 - Keep passwords, tokens, and participant identifiers out of this file. It is meant to be committed to a repository. Sources that need a token read it from the environment.
 - Content from `local` sources is left out of every output unless that output says `include_local: true`. Publishing is the normal use of every output, so the safe default is the one that cannot leak by omission.
 - Very complicated patterns can make matching slow on long URLs. Keep patterns short and plain.
@@ -265,7 +287,9 @@ You now know every setting a build accepts, what you get for free, and how to re
 * [examples/config.example.yaml](../examples/config.example.yaml) — commented example file to copy.
 * [extractium/config.py](../extractium/config.py) — the settings, defaults, and checks in code.
 * [extractium/core/registry.py](../extractium/core/registry.py) — how a `type` or site handler name is resolved to a plugin.
-* [extractium/core/fetch.py](../extractium/core/fetch.py) — the crawl scope rules the web source's settings feed.
+* [extractium/core/fetch.py](../extractium/core/fetch.py) — the crawl scope rules, the User-Agent, and the `robots.txt` policy.
+* [extractium/sources/web.py](../extractium/sources/web.py) — the crawl loop that acts on a `web` entry.
+* [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309) — the rules the `robots.txt` policy follows.
 * [Container format](container-format.md) — the file the `container` output writes.
 * [Implementation plan](implementation-plan.md) — which sources and outputs are built, and when.
 * [Extractium™ specification](extractium-spec.md) — architecture, outputs, and roadmap.

@@ -78,8 +78,12 @@ extractium = "extractium.cli:main"
 # operator's plugins/ folder and other installed packages shadow entries
 # of the same name (docs/extractium-spec.md section 2.2).
 [project.entry-points."extractium.sources"]
+web = "extractium.sources.web:WebSource"
 
 [project.entry-points."extractium.site_handlers"]
+generic = "extractium.sources.generic:GenericHandler"
+tdx = "extractium.sources.tdx:TdxHandler"
+github = "extractium.sources.github:GitHubHandler"
 
 [project.entry-points."extractium.adapters"]
 

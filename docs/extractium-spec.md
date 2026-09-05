@@ -228,7 +228,9 @@ The crawler identifies itself and respects the sites it reads.
 - `user_agent` defaults to `Extractium/<version> (+https://github.com/DepressionCenter/extractium)`. The original script sent a browser User-Agent; a tool distributed to other organizations does not.
 - `respect_robots_txt` defaults to true, using the standard library's parser. It can be switched off for a site the operator owns.
 - `delay_seconds` (default 0.5) paces requests; `max_pages` (default 10,000) is a safety ceiling.
-- Whether the TeamDynamix portal serves article HTML to the truthful User-Agent is checked before the crawler ships (implementation plan, Phase 2). If it does not, the `tdx` handler documents the override and the example configuration shows it.
+- Whether the TeamDynamix portal serves article HTML to the truthful User-Agent was checked against the real portal on 2026-09-04. It does: the home page, the knowledge-base listing, and an article page all answered 200 with the article body in `#divMainContent`. No override is needed. Two details from the same check shape the code: the portal's `robots.txt` answers 406 when a request accepts only HTML, so the robots request sends a plain-text Accept header; and the article breadcrumb is an `ol.breadcrumb` whose linked items are the hierarchy and whose unlinked last item is the page itself.
+- When a site's `robots.txt` cannot be read (a 5xx answer or a network failure), every URL on that site is skipped and the reason is reported. A 4xx answer means the site publishes no rules. This is the robots exclusion standard's rule (RFC 9309) and it fails closed on purpose.
+- Omitting `crawl_exclude_patterns` or `index_exclude_patterns` means the host-independent asset patterns plus whatever each enabled site handler contributes, so switching a handler off also drops its exclusions. An explicit list, including an empty one, is used as written. The TeamDynamix portal-folder scope rule (`/TDClient/<n>/<slug>/`) stays in core, because the handler protocol has no scope hook.
 
 
 ## 7. Local files and confidentiality

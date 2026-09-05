@@ -1,7 +1,8 @@
 """
 Summary: Tests pinning extractium.core.fetch's URL scope/normalization
-helpers: derive_auto_prefix, compile_patterns, get_origin, is_git_host_url,
-is_git_blob_text_url, to_git_raw_url, normalise, and in_scope. Mirrors
+helpers: derive_auto_prefix, compile_patterns, get_origin, normalise, and
+in_scope. The git-host URL helpers the reference kept beside these are
+pinned in tests/test_site_handlers.py, where they now live. Mirrors
 tests/test_scope_helpers.py (which pins the same behavior on the frozen
 reference script) against the real, ported implementation, proving the
 port is behavior-identical.
@@ -11,7 +12,7 @@ tests/test_core_scope.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-04
 Notes: See README file for documentation and full license information.
 """
 
@@ -64,41 +65,6 @@ def test_compile_patterns_returns_case_insensitive_compiled_regexes():
 
 def test_get_origin_strips_path_and_query():
     assert fetch.get_origin("https://example.org/a/b?c=1") == "https://example.org"
-
-
-# ---------------------------------------------------------------------------
-# is_git_host_url / is_git_blob_text_url / to_git_raw_url
-# ---------------------------------------------------------------------------
-
-def test_is_git_host_url_true_for_github():
-    assert fetch.is_git_host_url("https://github.com/example-org/example-repo") is True
-
-
-def test_is_git_host_url_false_for_non_git_host():
-    assert fetch.is_git_host_url("https://example.org/docs") is False
-
-
-def test_is_git_blob_text_url_true_for_markdown_blob():
-    url = "https://github.com/example-org/example-repo/blob/main/docs/setup.md"
-    assert fetch.is_git_blob_text_url(url) is True
-
-
-def test_is_git_blob_text_url_false_for_non_text_blob():
-    url = "https://github.com/example-org/example-repo/blob/main/src/app.py"
-    assert fetch.is_git_blob_text_url(url) is False
-
-
-def test_is_git_blob_text_url_false_for_non_blob_path():
-    url = "https://github.com/example-org/example-repo/tree/main/docs"
-    assert fetch.is_git_blob_text_url(url) is False
-
-
-def test_to_git_raw_url_rewrites_blob_to_raw_githubusercontent():
-    blob_url = "https://github.com/example-org/example-repo/blob/main/docs/setup.md"
-    assert (
-        fetch.to_git_raw_url(blob_url)
-        == "https://raw.githubusercontent.com/example-org/example-repo/main/docs/setup.md"
-    )
 
 
 # ---------------------------------------------------------------------------

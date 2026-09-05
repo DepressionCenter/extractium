@@ -1,8 +1,10 @@
 """
-Summary: Turns one fetched page into parent (full-section) and child
-(small overlapping window) chunks for small-to-big retrieval, including
-the title/content extraction and Markdown/plain-text-to-HTML conversion
-that feed the chunker.
+Summary: Turns one document into parent (full-section) and child (small
+overlapping window) chunks for small-to-big retrieval, gives every parent
+a stable identifier, and holds the host-independent helpers the crawl
+needs around chunking: link discovery and Markdown or plain-text to HTML
+conversion. Reading a page's title and content node is the site
+handlers' job (extractium.sources); nothing here branches on a host.
 
 This file is part of Extractium™
 extractium/core/chunk.py
@@ -30,6 +32,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-04"
 
+import hashlib
 import html
 import re
 from urllib.parse import urljoin, urlparse
@@ -37,10 +40,10 @@ from urllib.parse import urljoin, urlparse
 import markdown
 from bs4 import BeautifulSoup
 
-# Value-imported: these are pure functions with no module-level state any
-# test monkeypatches, so (unlike extractium.core.cache from
+# Value-imported: normalise is a pure function with no module-level state
+# any test monkeypatches, so (unlike extractium.core.cache from
 # extractium.core.fetch) a direct value import is safe here.
-from extractium.core.fetch import is_git_blob_text_url, is_git_host_url, normalise
+from extractium.core.fetch import normalise
 
 ### Constants ###
 
@@ -59,162 +62,63 @@ CHILD_CHUNK_MAX_CHARS = 350
 CHILD_CHUNK_MIN_CHARS = 60
 CHILD_OVERLAP_CHARS = 53
 
-# Selectors tried, in order, for a page that is neither TeamDynamix nor a
-# Git host -- the generic/fallback content extractor for any ordinary
-# website.
-GENERIC_CONTENT_SELECTORS = [
-    "#tdBodyContent",
-    ".kb-article-body",
-    ".td-page-body",
-    "[data-region='article-body']",
-    "#articleBody",
-    ".article-content",
-    "main",
-]
-STRIP_TAGS = [
-    "script", "style", "noscript", "nav", "footer", "header",
-    "aside", ".breadcrumb", ".td-utility-bar", ".td-nav", ".pager",
-    ".pagination", "#tdBreadcrumb", "#tdNavigation", "#tdSideMenu",
-    ".td-side-menu",
-]
+# A parent id is this many leading hexadecimal characters of a SHA-1
+# digest: 64 bits, enough that two sections in one index will not collide
+# and short enough to cite.
+PARENT_ID_HEX_CHARS = 16
 
 
-### Title And Content Extraction ###
+### Stable Identifiers ###
 
-# TODO: the host-specific branches in this section (TeamDynamix selectors
-# and title prefixes, Git-host wiki/release/blob handling, the "kind"
-# facet) belong to site-handler plugins that the web source consults per
-# URL, leaving only the generic fallback here. See extractium.sources.tdx
-# and extractium.sources.github for where each branch goes.
-
-def normalise_page_title(title, url=None):
-    """Strips a TeamDynamix "Article - "/"Question Detail - " prefix, if present, for TDX URLs."""
-    if url and "teamdynamix." in url.lower():
-        for prefix in ("Article - ", "Question Detail - "):
-            title = title.removeprefix(prefix)
-    return title
-
-
-def get_title(soup, url=None):
+def parent_id(url, heading, ordinal):
     """
-    Derives a page's title, trying (in order) the <title> tag, an <h1>, a
-    blob-path-derived fallback for raw Git text files, then "Untitled".
+    The stable identifier of one parent: the first PARENT_ID_HEX_CHARS
+    of sha1(normalized URL, NUL, heading, NUL, ordinal). The ordinal
+    counts parents on the same page that share a heading, because a long
+    section is cut into several parents with one heading and those must
+    not collide. The id survives a rebuild while the URL and heading are
+    unchanged, so saved answers and cached enrichment can be matched to
+    fresh content (docs/extractium-spec.md section 3.3).
 
     Args:
-        soup (BeautifulSoup): the parsed page.
-        url (str, optional): the page URL, used for TDX prefix stripping
-            and the Git blob-path fallback.
+        url (str): the page URL; normalised before hashing so a trailing
+            slash or fragment does not change the id.
+        heading (str): the parent's heading (its `t` field).
+        ordinal (int): 0-based position among same-heading parents on
+            the page.
 
     Returns:
-        str: the derived title.
+        str: 16 lowercase hexadecimal characters.
     """
-    t = soup.find("title")
-    if t:
-        title = re.sub(r"\s*[|]\s*.+$", "", t.get_text(" ", strip=True))
-        return normalise_page_title(title, url)
-    h1 = soup.find("h1")
-    if h1:
-        title = h1.get_text(" ", strip=True)
-        return normalise_page_title(title, url)
-    if url and is_git_blob_text_url(url):
-        return derive_title_from_blob_path(url)
-    return "Untitled"
+    key = "\0".join((normalise(url), heading, str(int(ordinal))))
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:PARENT_ID_HEX_CHARS]
 
 
-def extract_content(soup, url=None):
+def child_id(parent_identifier, ordinal):
+    """A child's identifier, derived and never stored: parent id, a hyphen, the child's ordinal within its parent."""
+    return f"{parent_identifier}-{int(ordinal)}"
+
+
+def assign_parent_ids(parents):
     """
-    Selects the main content node from a parsed page, branching on host:
-    TeamDynamix (#divMainContent/#questionsContent), a Git host wiki or
-    release-tag page (.markdown-body/etc.), a raw Git blob's already-clean
-    body, or the generic fallback selectors. Boilerplate elements
-    (STRIP_TAGS) are removed from the returned node in place.
+    Sets the `id` of every parent dict in place, numbering same-heading
+    parents in list order.
 
     Args:
-        soup (BeautifulSoup): the parsed page.
-        url (str, optional): the page URL, used to pick the extraction branch.
+        parents (list[dict]): one page's parents, each with `t` and `u`.
 
     Returns:
-        bs4.Tag | None: the content node, or None if no branch matched or
-        the matched node had no extractable text (e.g. a repo root page,
-        which is a client-hydrated shell with nothing server-rendered).
+        list[dict]: the same list, for chaining.
     """
-    if url and "teamdynamix." in url.lower():
-        for sel in ("#divMainContent", "#questionsContent"):
-            node = soup.select_one(sel)
-            if node:
-                for noise in STRIP_TAGS:
-                    for el in node.select(noise):
-                        el.decompose()
-                if node.get_text(" ", strip=True):
-                    return node
-        return None
-
-    if url and is_git_blob_text_url(url):
-        # Content already came from a raw .md/.txt fetch and was converted
-        # to a clean, chrome-free document by markdown_text_to_soup -- no
-        # nav/footer noise to strip.
-        body = soup.find("body")
-        return body if body and body.get_text(strip=True) else None
-
-    if is_git_host_url(url or ""):
-        path = urlparse(url).path.rstrip("/").lower()
-        if "/wiki" in path:
-            # Wiki pages are still classic server-rendered (Gollum) HTML.
-            selectors = (".markdown-body", "#wiki-content", "article", "main")
-        elif re.search(r"/releases/tag/[^/]+$", path):
-            # Individual release-notes pages are server-rendered inline.
-            selectors = (".markdown-body",)
-        else:
-            # Repo root / tree / commit list / etc: client-hydrated shell
-            # with no server-rendered content -- link-discovery hop only.
-            return None
-        for sel in selectors:
-            node = soup.select_one(sel)
-            if node:
-                for noise in STRIP_TAGS:
-                    for el in node.select(noise):
-                        el.decompose()
-                if node.get_text(" ", strip=True):
-                    return node
-        return None
-
-    for sel in GENERIC_CONTENT_SELECTORS:
-        node = soup.select_one(sel)
-        if node:
-            for noise in STRIP_TAGS:
-                for el in node.select(noise):
-                    el.decompose()
-            return node
-    return None
+    seen = {}
+    for parent in parents:
+        ordinal = seen.get(parent["t"], 0)
+        seen[parent["t"]] = ordinal + 1
+        parent["id"] = parent_id(parent["u"], parent["t"], ordinal)
+    return parents
 
 
-def extract_links(soup, base_url):
-    """Resolves every <a href> against base_url and normalises each, for link discovery."""
-    links = []
-    for a in soup.find_all("a", href=True):
-        href = normalise(urljoin(base_url, a["href"]))
-        if href:
-            links.append(href)
-    return links
-
-
-def chunk_kind(url):
-    """
-    Coarse per-chunk provenance facet, consumed by a browser-side
-    router-driven facet filter (e.g. a code question shouldn't be scored
-    against outreach pages) -- reserved for a future YouTube producer,
-    which will add a fourth kind alongside these three.
-
-    Returns:
-        str: "code" for a Git host URL, "kb" for a TeamDynamix URL,
-        otherwise "page".
-    """
-    if is_git_host_url(url):
-        return "code"
-    if "teamdynamix." in url.lower():
-        return "kb"
-    return "page"
-
+### Text To HTML ###
 
 def markdown_text_to_soup(raw_text, url):
     """
@@ -239,11 +143,16 @@ def markdown_text_to_soup(raw_text, url):
     return BeautifulSoup(f"<body>{body_html}</body>", "html.parser")
 
 
-def derive_title_from_blob_path(url):
-    """Fallback title for a repo text file with no Markdown H1: docs/setup.md -> 'Setup'."""
-    name = urlparse(url).path.rsplit("/", 1)[-1]
-    stem = re.sub(r"\.(md|markdown|txt)$", "", name, flags=re.I)
-    return re.sub(r"[-_]+", " ", stem).strip().title() or "Untitled"
+### Link Discovery ###
+
+def extract_links(soup, base_url):
+    """Resolves every <a href> against base_url and normalises each, for link discovery."""
+    links = []
+    for a in soup.find_all("a", href=True):
+        href = normalise(urljoin(base_url, a["href"]))
+        if href:
+            links.append(href)
+    return links
 
 
 ### Chunking ###
@@ -259,15 +168,15 @@ def split_into_parents(title, node, url):
     Args:
         title (str): the page title, used as (part of) each parent's heading.
         node (bs4.Tag): the extracted content node.
-        url (str): the page URL, used to derive host/kind metadata.
+        url (str): the page URL, recorded on each parent and hashed into
+            its id.
 
     Returns:
-        list[dict]: parent chunk dicts with keys t (heading), x (text),
-        u (url), host, kind, weight.
+        list[dict]: parent chunk dicts with keys id (stable identifier),
+        t (heading), x (text), u (url), host, weight.
     """
     chunks = []
     host = urlparse(url).netloc.lower()
-    kind = chunk_kind(url)
 
     def _make(heading, text):
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
@@ -277,10 +186,10 @@ def split_into_parents(title, node, url):
             cut = text.rfind("\n", 0, CHUNK_MAX_CHARS)
             if cut < CHUNK_MIN_CHARS:
                 cut = CHUNK_MAX_CHARS
-            chunks.append({"t": heading, "x": text[:cut], "u": url, "host": host, "kind": kind, "weight": 1.0})
+            chunks.append({"t": heading, "x": text[:cut], "u": url, "host": host, "weight": 1.0})
             text = text[cut:].strip()
         if text:
-            chunks.append({"t": heading, "x": text, "u": url, "host": host, "kind": kind, "weight": 1.0})
+            chunks.append({"t": heading, "x": text, "u": url, "host": host, "weight": 1.0})
 
     headings = node.find_all(["h2", "h3"])
     if headings:
@@ -304,7 +213,7 @@ def split_into_parents(title, node, url):
         text = node.get_text("\n", strip=True)
         _make(title, text)
 
-    return chunks
+    return assign_parent_ids(chunks)
 
 
 def split_parent_into_children(parent):
@@ -348,13 +257,26 @@ def split_parent_into_children(parent):
     return children if children else [dict(parent)]
 
 
+def _children_for(parents):
+    """Every parent's children in parent order, each carrying the page-local `pid` of its parent."""
+    children = []
+    for pid, parent in enumerate(parents):
+        for child in split_parent_into_children(parent):
+            child = dict(child)
+            child["pid"] = pid
+            children.append(child)
+    return children
+
+
 def build_parent_and_child_chunks(title, node, url):
     """
     Produces one page's parent chunks (full section text, sent to the
     model) and child chunks (small windows, embedded/searched). Each
     child's `pid` is a 0-based index into THIS page's own parent list; a
     caller crawling multiple pages must offset it into a globally valid
-    index as pages accumulate.
+    index as pages accumulate. Children carry a copy of their parent's
+    fields, including its `id`; a child's own id is derived with
+    child_id and never stored.
 
     Args:
         title (str): the page title.
@@ -363,22 +285,37 @@ def build_parent_and_child_chunks(title, node, url):
 
     Returns:
         tuple[list[dict], list[dict]]: (parents, children).
-
-    TODO: parents need stable ids that survive a rebuild: the first 16 hex
-    characters of sha1(normalized URL + NUL + heading + NUL + ordinal),
-    where the ordinal counts parents on the same page that share a
-    heading. The ordinal is required because a long section is cut into
-    several parents with one heading, and those must not collide. A
-    child's id is derived, never stored: parent id, a hyphen, and the
-    child's ordinal within its parent. The positional `pid` stays as the
-    in-memory link between the two lists (docs/extractium-spec.md
-    section 3, docs/container-format.md).
     """
     parents = split_into_parents(title, node, url)
-    children = []
-    for pid, parent in enumerate(parents):
-        for child in split_parent_into_children(parent):
-            child = dict(child)
-            child["pid"] = pid
-            children.append(child)
-    return parents, children
+    return parents, _children_for(parents)
+
+
+def chunk_document(document):
+    """
+    Chunks one Document into parents and children that carry the
+    document's metadata, ready for the build step.
+
+    Plain-text content (a str) is wrapped into a minimal HTML document
+    first: Markdown when the URL ends in .md or .markdown, a single <pre>
+    block otherwise. A parsed node is chunked as it is.
+
+    Args:
+        document (extractium.core.models.Document): what a source yielded.
+
+    Returns:
+        tuple[list[dict], list[dict]]: (parents, children). Every parent
+        dict holds id, t, x, u, host, source_type, content_type,
+        categories, local, and weight; every child is a copy of its
+        parent with its own `x` and a page-local `pid`.
+    """
+    node = document.content
+    if isinstance(node, str):
+        node = markdown_text_to_soup(node, document.url)
+    parents = split_into_parents(document.title, node, document.url)
+    for parent in parents:
+        parent["source_type"] = document.source_type
+        parent["content_type"] = document.content_type
+        parent["categories"] = tuple(document.categories)
+        parent["local"] = document.local
+        parent["weight"] = document.weight
+    return parents, _children_for(parents)

@@ -96,35 +96,31 @@ def test_config_is_immutable_and_holds_tuples():
     cfg = config.config_from_mapping(minimal())
     assert isinstance(cfg.sources, tuple)
     assert isinstance(cfg.outputs, tuple)
-    assert isinstance(cfg.sources[0].options["crawl_exclude_patterns"], tuple)
+    assert isinstance(cfg.sources[0].options["include_patterns"], tuple)
     with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.max_pages = 5
     with pytest.raises(TypeError):
         cfg.sources[0].options["seed_url"] = "https://elsewhere.example/"
 
 
-def test_default_crawl_exclude_patterns_match_reference_script(reference):
-    """The ported defaults must exclude exactly what the frozen original excluded."""
-    assert list(config.DEFAULT_CRAWL_EXCLUDE_PATTERNS) == list(reference.CRAWL_EXCLUDE_PATTERNS)
+def test_omitted_exclude_lists_are_left_for_the_web_source_to_complete():
+    """
+    The default exclude list depends on which site handlers are enabled,
+    so the loader records "omitted" as None and the web source completes
+    it (tests/test_web_source.py pins the completed list against the
+    reference script).
+    """
+    assert config.DEFAULT_CRAWL_EXCLUDE_PATTERNS is None
+    assert config.DEFAULT_INDEX_EXCLUDE_PATTERNS is None
+    source = config.config_from_mapping(minimal()).sources[0]
+    assert source.options["crawl_exclude_patterns"] is None
+    assert source.options["index_exclude_patterns"] is None
 
 
-def test_default_index_exclude_patterns_match_reference_script(reference):
-    # Order carries no meaning here (any single match excludes a URL), so the
-    # comparison is set-based; the reference interleaves its extra
-    # navigation-only patterns rather than appending them.
-    assert set(config.DEFAULT_INDEX_EXCLUDE_PATTERNS) == set(reference.INDEX_EXCLUDE_PATTERNS)
-
-
-def test_index_excludes_are_a_superset_of_crawl_excludes():
-    """A page never worth fetching is never worth indexing either."""
-    assert set(config.DEFAULT_CRAWL_EXCLUDE_PATTERNS) <= set(config.DEFAULT_INDEX_EXCLUDE_PATTERNS)
-
-
-def test_asset_extension_patterns_cover_binary_and_source_extensions():
+def test_default_user_agent_is_the_fetch_layers():
     from extractium.core import fetch
 
-    for ext in fetch.BINARY_EXTENSIONS + fetch.SOURCE_EXTENSIONS:
-        assert rf"\.{ext}$" in config.DEFAULT_CRAWL_EXCLUDE_PATTERNS
+    assert config.DEFAULT_USER_AGENT == fetch.DEFAULT_USER_AGENT
 
 
 # ---------------------------------------------------------------------------
@@ -291,8 +287,8 @@ def test_web_source_defaults():
     assert source.type == "web"
     assert source.options["seed_url"] == SEED
     assert source.options["include_patterns"] == ()
-    assert source.options["crawl_exclude_patterns"] == config.DEFAULT_CRAWL_EXCLUDE_PATTERNS
-    assert source.options["index_exclude_patterns"] == config.DEFAULT_INDEX_EXCLUDE_PATTERNS
+    assert source.options["crawl_exclude_patterns"] is None
+    assert source.options["index_exclude_patterns"] is None
     assert source.options["site_handlers"] is None
 
 
