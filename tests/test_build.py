@@ -183,6 +183,12 @@ def test_build_compendium_matches_the_reference_pipeline_on_the_same_fixtures(
     The scored result -- surviving windows, keyword statistics, and
     calibration -- must equal what the frozen script computes for the same
     pages. Only the container's own shape differs.
+
+    The two near-duplicate collapses agree here because the repetition in
+    these fixtures is one disclaimer shared by two pages, which is what
+    the step is for. They diverge on a page that repeats itself: the port
+    keeps such passages and the frozen script discards them. See
+    extractium.core.dedup.drop_near_duplicates.
     """
     urls = ("https://example.org/team", "https://example.org/project")
     names = ("page_boilerplate_a.html", "page_boilerplate_b.html")

@@ -50,28 +50,54 @@ def drop_near_duplicates(chunks, vecs, threshold=NEAR_DUP_COSINE_THRESHOLD):
     Keeps the first occurrence encountered (crawl order) of each
     near-duplicate cluster and drops the rest.
 
+    **Two chunks from the same page are never collapsed into each other.**
+    What this step exists to remove is boilerplate repeated across many
+    pages; two passages of one article are not that, however alike they
+    look. The comparison sees a vector of the section heading followed by
+    the passage, so without this rule an article with a long title would
+    have every one of its passages sharing a long identical prefix, which
+    raises their similarity until real content is discarded as duplicated.
+    A page's own repetitions are left in place, at a cost of a handful of
+    chunks in a corpus.
+
     Args:
-        chunks (list[dict]): child chunks, in crawl order.
+        chunks (list[dict]): child chunks, in crawl order, each with the
+            "u" of the page it came from.
         vecs (np.ndarray): shape (len(chunks), dims), L2-normalized embeddings.
         threshold (float): cosine similarity above which a chunk is
-            considered a duplicate of an already-kept chunk.
+            considered a duplicate of an already-kept chunk from another page.
 
     Returns:
         tuple[list[dict], np.ndarray, int]: (kept_chunks, kept_vecs, dropped_count).
     """
     if len(chunks) == 0:
         return chunks, vecs, 0
-    kept_rows = []      # indices into the original chunks/vecs arrays
-    kept_matrix = None  # np.ndarray, grows as rows are kept
+
+    # Pages as small integers, so "is this the page I am on?" is one
+    # vectorized comparison against the kept set rather than a string
+    # compare per candidate.
+    page_numbers = {}
+    page_of = np.fromiter(
+        (page_numbers.setdefault(chunk["u"], len(page_numbers)) for chunk in chunks),
+        dtype=np.int64, count=len(chunks),
+    )
+
+    kept_rows = []                                        # indices into chunks/vecs
+    kept_matrix = np.empty_like(vecs)                     # kept vectors, filled in order
+    kept_pages = np.empty(len(chunks), dtype=np.int64)    # their pages, same order
     for i in range(len(chunks)):
         v = vecs[i]
-        if kept_matrix is not None and kept_matrix.shape[0] > 0:
-            sims = kept_matrix @ v
+        count = len(kept_rows)
+        if count:
+            sims = kept_matrix[:count] @ v
+            # A chunk from this same page cannot make this one a duplicate.
+            sims = np.where(kept_pages[:count] == page_of[i], -1.0, sims)
             if float(sims.max()) > threshold:
-                continue  # near-duplicate of an already-kept chunk -- drop
+                continue  # near-duplicate of a chunk kept from another page -- drop
+        kept_matrix[count] = v
+        kept_pages[count] = page_of[i]
         kept_rows.append(i)
-        row = v.reshape(1, -1)
-        kept_matrix = row if kept_matrix is None else np.vstack([kept_matrix, row])
+
     dropped = len(chunks) - len(kept_rows)
     kept_chunks = [chunks[i] for i in kept_rows]
     kept_vecs = vecs[kept_rows]

@@ -97,6 +97,8 @@ Vectors are stored as whole numbers between -127 and 127. A reader divides by 12
 
 Windows that are near-identical to one already kept are dropped, which is what removes the same footer repeated on 400 pages. A section whose every window was dropped is removed too, so nothing is left that a search can never return.
 
+Two windows from the **same page** are never collapsed into each other. The point of this step is to remove boilerplate that many pages share; two passages of one article are not that, however alike they look. The comparison sees the section heading followed by the passage, so without this rule an article with a long title would have every passage sharing a long identical prefix, and real content would be thrown away as duplication. A page's own repetitions are kept, which costs a handful of windows in a corpus.
+
 ### 6. Statistics
 
 Two sets of numbers are built over what survives, in this order:
