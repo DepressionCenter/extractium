@@ -257,7 +257,7 @@ Three facts about other systems decide parts of this plan. Each is verified earl
 |---|---|---|
 | Do GitHub Actions runners reach the TeamDynamix portal and GitHub? | Phase 1 | Whether the Actions template can build the knowledge base, or only local runs can. Checked 2026-09-08: all three URLs answered 200 from an `ubuntu-24.04` runner, so a cloud build works. |
 | Does the portal serve article HTML to a truthful User-Agent? | Phase 2 | Whether the default User-Agent needs a documented override for that site. Checked 2026-09-04: it does; no override. |
-| Does the real portal build with `--max-pages 25` open in the Python client? | Phase 3 | That the pipeline works outside the fixtures. |
+| Does the real portal build with `--max-pages 25` open in the Python client? | Phase 3 | That the pipeline works outside the fixtures. Checked 2026-09-08 at 500 pages: the build produces the same sections, windows, keyword statistics, and vector bytes as the reference script, and the file passes every step of the reader checklist. |
 
 
 ## Assumptions and risks
