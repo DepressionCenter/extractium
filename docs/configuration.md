@@ -204,9 +204,13 @@ This is usually the right setting. Add patterns only when one build has to cover
 You get the two exclusion lists for free. Each list is the sum of two parts:
 
 1. **Files that hold no readable text**: images, archives, office documents, fonts, media, and source code. Always included.
-2. **What each enabled site handler adds.** The generic handler, which is always on, skips search forms, sign-in pages, print views, tag pages, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, file-download, and tag views, and its category listings to the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, commits, and settings, and folder listings (`/tree/`) to the index list.
+2. **What each enabled site handler adds.** The generic handler, which is always on, skips search forms, sign-in pages, print views, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, and file-download views, and puts its category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
 
-Category and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.
+Category, tag, and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.
+
+This split matters most on a TeamDynamix portal, which publishes no sitemap and no full article index. Its category and tag listings are the only route to most of its articles, so they have to be crawled; they are pure navigation, so they must not be indexed. If you write your own `crawl_exclude_patterns`, do not put a listing page in it, or the build will only find what the home page links to.
+
+Write patterns for the URL shape a site actually serves. A page reached as `.../issues` and as `.../issues/12` needs a pattern that matches both, and a portal that writes a tag as `?CategoryID=0&TagID=8245` needs one that matches a query parameter, not a path.
 
 ### Which site handler reads a page
 
