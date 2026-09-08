@@ -90,6 +90,16 @@ def output_compendium(compendium, options):
 
 def _without_local(compendium):
     """A copy of the compendium with every local parent, and everything derived from one, removed."""
+    if len(compendium.children) and not compendium.children.start:
+        # Without offsets there is no way to recover what each window's
+        # text was, so the keyword statistics cannot be rebuilt over the
+        # windows that remain. Refusing is the safe answer: the
+        # alternative is publishing an output whose statistics still
+        # describe content that was supposed to be dropped.
+        raise ValueError(
+            "cannot drop local content from a compendium whose children carry no offsets; "
+            "rebuild it, or set include_local on this output if that is what you intend."
+        )
     kept_pids = [i for i, parent in enumerate(compendium.parents) if not parent.local]
     old_to_new = {old: new for new, old in enumerate(kept_pids)}
     parents = tuple(compendium.parents[old] for old in kept_pids)

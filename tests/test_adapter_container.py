@@ -266,6 +266,28 @@ def test_dropping_local_parents_rebuilds_the_keyword_statistics(
     )
 
 
+def test_dropping_local_parents_refuses_a_compendium_that_has_no_offsets(
+    fixtures_dir, fake_embed_chunks_core
+):
+    """
+    The window offsets are optional in the container format. Without them
+    a dropped window's text cannot be recovered, so the keyword statistics
+    cannot be rebuilt, and shipping the old ones would describe content
+    that was meant to be gone.
+    """
+    import dataclasses
+
+    from extractium.core.models import Children
+
+    compendium = mixed_compendium(fixtures_dir, fake_embed_chunks_core)
+    without_offsets = dataclasses.replace(
+        compendium, children=Children(pid=compendium.children.pid)
+    )
+
+    with pytest.raises(ValueError, match="no offsets"):
+        output_compendium(without_offsets, {})
+
+
 @pytest.mark.parametrize("dtype_flag", [False, True])
 def test_dropping_local_parents_leaves_a_valid_compendium(
     fixtures_dir, fake_embed_chunks_core, dtype_flag
