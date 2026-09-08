@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and eleven
 phases of about one week each, with deliverables, tests, documentation,
@@ -92,7 +92,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** a configuration file with one web source and two outputs loads, and a plugin dropped into `plugins/` shadows a built-in of the same name.
 
-*Finished 2026-09-04, commit 45ac7a6. The runner reachability result is still to be recorded; the workflow file stays until it is.*
+*Finished 2026-09-04, commit 45ac7a6. The runner reachability check was run on 2026-09-08 and its result recorded in the specification, section 6; the throwaway workflow file has been deleted.*
 
 ### Phase 2: Web source, site handlers, crawl loop, stable identifiers
 
@@ -253,7 +253,7 @@ Three facts about other systems decide parts of this plan. Each is verified earl
 
 | Check | When | What it decides |
 |---|---|---|
-| Do GitHub Actions runners reach the TeamDynamix portal and GitHub? | Phase 1 | Whether the Actions template can build the knowledge base, or only local runs can. |
+| Do GitHub Actions runners reach the TeamDynamix portal and GitHub? | Phase 1 | Whether the Actions template can build the knowledge base, or only local runs can. Checked 2026-09-08: all three URLs answered 200 from an `ubuntu-24.04` runner, so a cloud build works. |
 | Does the portal serve article HTML to a truthful User-Agent? | Phase 2 | Whether the default User-Agent needs a documented override for that site. Checked 2026-09-04: it does; no override. |
 | Does the real portal build with `--max-pages 25` open in the Python client? | Phase 3 | That the pipeline works outside the fixtures. |
 

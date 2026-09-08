@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -229,6 +229,7 @@ The crawler identifies itself and respects the sites it reads.
 - `respect_robots_txt` defaults to true, using the standard library's parser. It can be switched off for a site the operator owns.
 - `delay_seconds` (default 0.5) paces requests; `max_pages` (default 10,000) is a safety ceiling.
 - Whether the TeamDynamix portal serves article HTML to the truthful User-Agent was checked against the real portal on 2026-09-04. It does: the home page, the knowledge-base listing, and an article page all answered 200 with the article body in `#divMainContent`. No override is needed. Two details from the same check shape the code: the portal's `robots.txt` answers 406 when a request accepts only HTML, so the robots request sends a plain-text Accept header; and the article breadcrumb is an `ol.breadcrumb` whose linked items are the hierarchy and whose unlinked last item is the page itself.
+- Whether a GitHub Actions runner reaches the sites this project indexes was checked on 2026-09-08, from an `ubuntu-24.04` runner sending the truthful User-Agent. All three answered 200: the TeamDynamix portal home page (32,845 bytes of `text/html`), `https://github.com/DepressionCenter` (308,048 bytes of `text/html`), and a `raw.githubusercontent.com` README (12,210 bytes of `text/plain`). A cloud runner can therefore build the knowledge base; local runs stay necessary only for sources a runner cannot reach, such as local folders and YouTube.
 - When a site's `robots.txt` cannot be read (a 5xx answer or a network failure), every URL on that site is skipped and the reason is reported. A 4xx answer means the site publishes no rules. This is the robots exclusion standard's rule (RFC 9309) and it fails closed on purpose.
 - Omitting `crawl_exclude_patterns` or `index_exclude_patterns` means the host-independent asset patterns plus whatever each enabled site handler contributes, so switching a handler off also drops its exclusions. An explicit list, including an empty one, is used as written. The TeamDynamix portal-folder scope rule (`/TDClient/<n>/<slug>/`) stays in core, because the handler protocol has no scope hook.
 
