@@ -53,7 +53,7 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Data models | `extractium/core/models.py` | Working. `Document`, `Extraction`, `Parent`, `Children`, `Compendium`, and the three plugin protocols. |
 | PHI check | `extractium/core/phi_lint.py` | Placeholder file. |
 | Other adapters | `extractium/adapters/sqlite_out.py`, `okf.py` | Placeholder files. |
-| Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. |
+| Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. |
 | Other sources | `extractium/sources/local.py`, `github_api.py`, `youtube.py` | Placeholder files. |
 | Adapters | `extractium/adapters/container.py`, `llmstxt.py` | Working, and registered as entry points. The container writer produces the version 3 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
 | Clients | — | Not started. The retrieval code to extract still lives in Field Station AI's `index.html`. |
@@ -61,7 +61,7 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 423 tests as of 2026-09-08.
+The test suite passes: 476 tests as of 2026-09-08.
 
 
 ## Settled design decisions
