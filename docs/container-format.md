@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: Specification of the Extractium™ binary container (version 3):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -31,7 +31,7 @@ The container is the one file every Extractium client reads: a search index with
 
 ## Status of this format
 
-**Draft.** This page describes the target format. The adapter that writes it, and the clients that read it, are scheduled in the [implementation plan](implementation-plan.md) (Phase 3 and Phase 4). Nothing in the repository writes this file yet.
+**Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v3_header.json` pins the header against a committed snapshot. The clients that read the file are scheduled in the [implementation plan](implementation-plan.md), Phase 4.
 
 Version 3 replaces the version 2 layout that Field Station AI's `build-kb-index.py` writes. Field Station AI keeps its own version 2 file and is not affected by anything on this page. The differences are listed near the end, under "Changes from version 2".
 
@@ -233,13 +233,15 @@ Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910
 
 ## Conclusion
 
-You can now read or write an Extractium container in any language: four bytes of length, a JSON header, and raw vectors. Keep the token rule, the query prefix, and the offset unit exactly as stated, and your client will rank the same way the reference clients do. For how the file is produced, read the [specification](extractium-spec.md); for when the writer and the clients land, read the [implementation plan](implementation-plan.md).
+You can now read or write an Extractium container in any language: four bytes of length, a JSON header, and raw vectors. Keep the token rule, the query prefix, and the offset unit exactly as stated, and your client will rank the same way the reference clients do. For how the file is produced, read the [data flow](data-flow.md); for how to produce one, read [Running a Build](usage.md).
 
 
 ## Additional Resources
 
 * [Extractium™ README](../README.md) — project overview and quick start.
 * [Extractium™ specification](extractium-spec.md) — architecture, data model, outputs, and sources.
+* [Running a build](usage.md) — how to produce one of these files.
+* [Data flow](data-flow.md) — what happens to content before it reaches this file.
 * [Implementation plan](implementation-plan.md) — the phase in which this format is written and read.
 * [tests/reference/build_kb_index_reference.py](../tests/reference/build_kb_index_reference.py) — the frozen version 2 writer this format replaces.
 * [BAAI bge-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5) — the default embedding model and its query instruction.

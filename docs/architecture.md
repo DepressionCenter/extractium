@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: How the Extractium codebase is put together today, which parts
 are finished, and the design decisions that have been settled, each with
 the reason and a pointer to where it is specified.
@@ -45,22 +45,23 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 |---|---|---|
 | Settings | `extractium/config.py` | Working. Loads and checks `config.yaml`: global settings, a `sources` list, and an `outputs` list, with per-type checks for the built-in types. See the [configuration reference](configuration.md). |
 | Fetch and cache | `extractium/core/fetch.py`, `core/cache.py` | Working. Conditional GET, on-disk page cache, URL scope rules, a truthful User-Agent, a per-origin `robots.txt` policy, and progress through a callback. One host-specific rule remains: the TeamDynamix portal-folder scope prefix in `derive_auto_prefix`, because the handler protocol has no scope hook. |
-| Chunking | `extractium/core/chunk.py` | Working. Parent sections, child windows, stable parent identifiers, `chunk_document` for a `Document` record. No host branches; reading a page is the site handlers' job. |
-| Scoring | `extractium/core/embed.py`, `dedup.py`, `bm25.py`, `calibration.py` | Working, each on its own. Nothing runs them in order yet. |
+| Chunking | `extractium/core/chunk.py` | Working. Parent sections, child windows with their offsets into the parent, stable parent identifiers, `chunk_document` for a `Document` record. No host branches; reading a page is the site handlers' job. |
+| Scoring | `extractium/core/embed.py`, `dedup.py`, `bm25.py`, `calibration.py` | Working. `core/build.py` runs them in order. The embedding library is imported only when embedding runs, so nothing that merely reads an index loads it. |
 | Crawl loop | `extractium/sources/web.py` | Working. The `web` source: takes the session, the cache metadata, and a progress callback; consults the site handlers per URL; yields `Document` records. Pinned against the reference crawl on the fixtures. |
-| Build step | — | Not written. |
+| Build step | `extractium/core/build.py` | Working. `build_compendium` chunks the documents, embeds the children once, collapses near-duplicates, compacts orphaned parents, builds the BM25 and calibration statistics, and returns one `Compendium`. |
 | Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. The built-in `web` source and the `generic`, `tdx`, and `github` handlers are declared as entry points in `pyproject.toml`. |
 | Data models | `extractium/core/models.py` | Working. `Document`, `Extraction`, `Parent`, `Children`, `Compendium`, and the three plugin protocols. |
 | PHI check | `extractium/core/phi_lint.py` | Placeholder file. |
-| Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. |
+| Other adapters | `extractium/adapters/sqlite_out.py`, `okf.py` | Placeholder files. |
+| Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. |
 | Other sources | `extractium/sources/local.py`, `github_api.py`, `youtube.py` | Placeholder files. |
-| Adapters | `extractium/adapters/*.py` | Placeholder files. |
+| Adapters | `extractium/adapters/container.py`, `llmstxt.py` | Working, and registered as entry points. The container writer produces the version 3 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
 | Clients | — | Not started. The retrieval code to extract still lives in Field Station AI's `index.html`. |
-| Command line | `extractium/cli.py` | Prints a notice. Runs no build. |
+| Command line | `extractium/cli.py` | Working. `extractium build --config config.yaml`, with `--out-dir`, `--max-pages`, and `--float32-vecs`; progress on standard error, the summary on standard output, and a distinct exit code for a bad configuration, an empty crawl, and an unwritable output. |
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 354 tests as of 2026-09-04.
+The test suite passes: 476 tests as of 2026-09-08.
 
 
 ## Settled design decisions
@@ -162,7 +163,7 @@ Specification: section 6.
 
 ## Conclusion
 
-The core modules work, the settings layer, the registry, and the data models are in place, and the web source crawls through the site handlers to produce documents. Nothing yet turns those documents into a scored compendium or writes a file. The next block of work is the build step, the container and `llms.txt` adapters, and the command line. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
+A build now runs end to end. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; and the container and `llms.txt` adapters write it from the command line. What is not built yet is anything that reads the file back. The next block of work is the JavaScript and Python clients. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
 
 
 ## Additional Resources
@@ -171,6 +172,8 @@ The core modules work, the settings layer, the registry, and the data models are
 * [Extractium™ specification](extractium-spec.md) — the intended design, data model, and plugin protocols.
 * [Implementation plan](implementation-plan.md) — the phased order of work.
 * [Container format](container-format.md) — the flagship output, byte by byte.
+* [Data flow](data-flow.md) — what happens to content between the site and the output folder.
+* [Running a build](usage.md) — the command line, its options, and its exit codes.
 * [Configuration reference](configuration.md) — every setting in `config.yaml` as it exists now.
 * [tests/reference/build_kb_index_reference.py](../tests/reference/build_kb_index_reference.py) — the frozen original the port is measured against.
 

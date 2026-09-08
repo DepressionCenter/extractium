@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and eleven
 phases of about one week each, with deliverables, tests, documentation,
@@ -92,7 +92,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** a configuration file with one web source and two outputs loads, and a plugin dropped into `plugins/` shadows a built-in of the same name.
 
-*Finished 2026-09-04, commit 45ac7a6. The runner reachability result is still to be recorded; the workflow file stays until it is.*
+*Finished 2026-09-04, commit 45ac7a6. The runner reachability check was run on 2026-09-08 and its result recorded in the specification, section 6; the throwaway workflow file has been deleted.*
 
 ### Phase 2: Web source, site handlers, crawl loop, stable identifiers
 
@@ -130,6 +130,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 **Documentation.** `container-format.md` changes status from draft to implemented; new `data-flow.md` and `usage.md`.
 
 **Done when** a build against the fixtures writes both outputs, and a manual run with `--max-pages 25` against the real portal produces a file the Python client in Phase 4 will open.
+
+*Finished 2026-09-08 on branch `phase-3-build-and-outputs`. The local-content guardrail moved forward from Phase 6 into `extractium/adapters/base.py`, so no adapter was ever written without it; Phase 6 keeps the local source, the PHI lint, and the command-line notice.*
 
 ### Phase 4: JavaScript and Python clients
 
@@ -173,7 +175,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 - `extractium/adapters/sqlite_out.py`: tables for metadata, parents, children, BM25 terms and postings, and vectors, with the grain of each table stated in comments.
 - `extractium/sources/local.py`: reads Markdown, text, and HTML from a folder; marks every parent `local: true`; uses paths relative to the folder as URLs.
 - `extractium/core/phi_lint.py`: pattern checks for likely protected health information; a report file in the working directory, never in the output folder; wording that never claims absence.
-- The guardrail in the adapter base: local parents are dropped from every output unless that output sets `include_local: true`, and the command line names every output that includes them.
+- The command line's notice naming every output that includes local content. The guardrail itself, in `extractium/adapters/base.py`, was written in Phase 3 with the first two adapters, so no output has ever shipped without it.
 
 **Tests.** Local parents are absent from every output by default and present only when opted in. The lint flags synthetic identifiers and its output never contains the phrase "no PHI". Row counts per table match the compendium.
 
@@ -253,9 +255,9 @@ Three facts about other systems decide parts of this plan. Each is verified earl
 
 | Check | When | What it decides |
 |---|---|---|
-| Do GitHub Actions runners reach the TeamDynamix portal and GitHub? | Phase 1 | Whether the Actions template can build the knowledge base, or only local runs can. |
+| Do GitHub Actions runners reach the TeamDynamix portal and GitHub? | Phase 1 | Whether the Actions template can build the knowledge base, or only local runs can. Checked 2026-09-08: all three URLs answered 200 from an `ubuntu-24.04` runner, so a cloud build works. |
 | Does the portal serve article HTML to a truthful User-Agent? | Phase 2 | Whether the default User-Agent needs a documented override for that site. Checked 2026-09-04: it does; no override. |
-| Does the real portal build with `--max-pages 25` open in the Python client? | Phase 3 | That the pipeline works outside the fixtures. |
+| Does the real portal build with `--max-pages 25` open in the Python client? | Phase 3 | That the pipeline works outside the fixtures. Checked 2026-09-08 at 500 pages: the build produces the same sections, windows, keyword statistics, and vector bytes as the reference script, and the file passes every step of the reader checklist. |
 
 
 ## Assumptions and risks

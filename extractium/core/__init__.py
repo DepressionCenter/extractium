@@ -31,10 +31,8 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
-# TODO: nothing here composes the core's parts into a finished index. A
-# build step is needed that chunks the documents, assigns stable ids,
-# embeds the children, drops near-duplicates, remaps parents, builds the
-# BM25 postings, computes calibration statistics, and returns one
-# Compendium record for the adapters to serialize. embed, dedup, bm25,
-# and calibration all exist as modules already; no code calls them in
-# order.
+# extractium.core.build.build_compendium composes the parts of this
+# package into a finished index: it chunks the documents, embeds the
+# children once, collapses near-duplicates, compacts orphaned parents,
+# builds the BM25 postings and the calibration statistics, and returns
+# one Compendium for the adapters to serialize.

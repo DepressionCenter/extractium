@@ -1,0 +1,14 @@
+# Example Org
+
+> A knowledge base of 3 sections drawn from 2 pages on example.org, compiled on 2026-01-02T03:04:05Z.
+
+This file is an index, not the content itself. Each entry below names one page, links to it, and quotes the opening of its text, so you can judge whether a page answers your question before fetching it. Entries are grouped by the kind of source they came from, in the order the pages were found.
+
+llms-full.txt, written alongside this file, holds the complete text of every page listed here, in the same order. Read that instead if you want everything at once rather than following links.
+
+Compiled by Extractium (https://github.com/DepressionCenter/extractium), copyright (c) 2026 The Regents of the University of Michigan, licensed under the GNU General Public License v3.0 or later. The indexed content remains under the license of the site it was read from.
+
+## Web pages
+
+- [Team Directory](https://example.org/team): Synthetic unique content for page A describing a fictional team member and their placeholder research focus area, for characterization testing purposes only.
+- [Project Overview](https://example.org/project): Synthetic unique content for page B describing a fictional placeholder research project overview, for characterization testing purposes only.

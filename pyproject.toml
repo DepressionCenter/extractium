@@ -86,6 +86,8 @@ tdx = "extractium.sources.tdx:TdxHandler"
 github = "extractium.sources.github:GitHubHandler"
 
 [project.entry-points."extractium.adapters"]
+container = "extractium.adapters.container:ContainerAdapter"
+llmstxt = "extractium.adapters.llmstxt:LlmsTxtAdapter"
 
 [tool.setuptools.packages.find]
 include = ["extractium*"]

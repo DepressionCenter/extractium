@@ -485,24 +485,270 @@ def test_resolve_site_handlers_rejects_an_unknown_name():
 
 
 # ---------------------------------------------------------------------------
+# Identity when a site refuses the truthful User-Agent
+# ---------------------------------------------------------------------------
+
+def test_a_crawl_that_honors_robots_never_retries_as_a_browser():
+    assert web.CrawlSettings().blocked_retry_user_agent is None
+    assert web.CrawlSettings(respect_robots_txt=True).blocked_retry_user_agent is None
+
+
+def test_turning_robots_off_allows_one_browser_retry_for_a_refused_page():
+    settings = web.CrawlSettings(respect_robots_txt=False)
+
+    assert settings.blocked_retry_user_agent == fetch.BROWSER_USER_AGENT
+    assert settings.blocked_retry_user_agent.startswith("Mozilla/5.0")
+
+
+def test_a_refused_page_is_retried_as_a_browser_only_when_robots_is_off(
+    isolated_core_cache, fake_session_factory
+):
+    """
+    One site in the Depression Center's own scope allows every crawler in
+    its robots.txt and still answers 403 to anything that does not look
+    like a browser. Working around that is an opt-in, not a default.
+    """
+    url = "https://example.org/blocked"
+    page = html_response("<html><head><title>Blocked Page</title></head>"
+                         "<body><main><p>Content behind the filter.</p></main></body></html>")
+
+    refused_only = fake_session_factory({url: [FakeResponse(status_code=403)]})
+    assert fetch.fetch(refused_only, url, {}, progress=quiet) is None
+    assert len(refused_only.calls) == 1
+
+    retried = fake_session_factory({url: [FakeResponse(status_code=403), page]})
+    soup = fetch.fetch(retried, url, {}, progress=quiet,
+                       fallback_user_agent=fetch.BROWSER_USER_AGENT)
+
+    assert soup is not None
+    assert len(retried.calls) == 2
+    assert retried.calls[0]["headers"]["User-Agent"] == fetch.DEFAULT_USER_AGENT
+    assert retried.calls[1]["headers"]["User-Agent"] == fetch.BROWSER_USER_AGENT
+
+
+def test_a_page_that_is_merely_missing_is_not_retried_as_a_browser(
+    isolated_core_cache, fake_session_factory
+):
+    url = "https://example.org/gone"
+    session = fake_session_factory({url: [FakeResponse(status_code=404)]})
+
+    assert fetch.fetch(session, url, {}, progress=quiet,
+                       fallback_user_agent=fetch.BROWSER_USER_AGENT) is None
+    assert len(session.calls) == 1
+
+
+def test_the_browser_retry_is_reported_so_a_log_shows_which_identity_was_used(
+    isolated_core_cache, fake_session_factory
+):
+    url = "https://example.org/blocked"
+    page = html_response("<html><head><title>Blocked</title></head><body><main>"
+                         "<p>Content.</p></main></body></html>")
+    session = fake_session_factory({url: [FakeResponse(status_code=403), page]})
+    lines = []
+
+    fetch.fetch(session, url, {}, progress=lines.append,
+                fallback_user_agent=fetch.BROWSER_USER_AGENT)
+
+    assert any("403" in line and "retrying once as a browser" in line for line in lines)
+
+
+def test_the_crawl_loop_passes_the_retry_identity_down_to_each_request(
+    isolated_core_cache, fake_session_factory
+):
+    seed = "https://example.org/blocked"
+    page = html_response("<html><head><title>Blocked</title></head><body><main>"
+                         "<p>Content long enough to clear the minimum chunk size threshold "
+                         "used by the chunker in this test.</p></main></body></html>")
+    session = fake_session_factory({
+        seed: [FakeResponse(status_code=403), page],
+        "https://example.org/robots.txt": ROBOTS_ABSENT,
+    })
+    source = web.WebSource({"seed_url": seed},
+                           settings=web.CrawlSettings(delay_seconds=0, respect_robots_txt=False))
+
+    documents = list(source.fetch(session, {}, quiet))
+
+    assert [d.title for d in documents] == ["Blocked"]
+    assert session.calls[-1]["headers"]["User-Agent"] == fetch.BROWSER_USER_AGENT
+
+
+# ---------------------------------------------------------------------------
+# configure(): adopting the registry and the global crawl settings
+# ---------------------------------------------------------------------------
+
+def test_configure_resolves_the_handlers_the_entry_asked_for():
+    source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ("tdx",)})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert [h.name for h in source.handlers] == ["tdx", "generic"]
+
+
+def test_configure_with_no_site_handlers_option_enables_every_installed_handler():
+    source = web.WebSource({"seed_url": "https://example.org/"})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert [h.name for h in source.handlers] == ["github", "tdx", "generic"]
+
+
+def test_configure_adopts_the_global_crawl_settings():
+    settings = web.CrawlSettings(max_pages=5, delay_seconds=0, user_agent="UA/1.0",
+                                 respect_robots_txt=False)
+    source = web.WebSource({"seed_url": "https://example.org/"})
+
+    source.configure(_built_in_registry(), settings)
+
+    assert source.settings == settings
+
+
+def test_configure_recomputes_the_exclude_defaults_for_the_handlers_it_adopted():
+    source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ()})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert r"/issues?[/?]" not in source.crawl_exclude_patterns      # github is off
+    assert r"\.pdf$" in source.crawl_exclude_patterns                # asset patterns stay
+
+
+def test_configure_leaves_an_explicit_exclude_list_as_written():
+    source = web.WebSource({"seed_url": "https://example.org/", "crawl_exclude_patterns": (r"/x",)})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert source.crawl_exclude_patterns == (r"/x",)
+
+
+def test_configure_rejects_a_site_handler_the_entry_names_but_nothing_installs():
+    source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ("nope",)})
+
+    with pytest.raises(registry.RegistryError, match="no site handler named 'nope'"):
+        source.configure(_built_in_registry(), web.CrawlSettings())
+
+
+# ---------------------------------------------------------------------------
 # Default exclude patterns
 # ---------------------------------------------------------------------------
 
-def test_default_crawl_exclude_patterns_match_reference_script(reference):
-    """
-    The asset patterns plus every built-in handler's contribution must
-    exclude exactly what the frozen original excluded. Order carries no
-    meaning (any single match excludes a URL), so the comparison is
-    set-based.
-    """
-    patterns = web.default_exclude_patterns(BUILT_IN_HANDLERS, "crawl")
-    assert set(patterns) == set(reference.CRAWL_EXCLUDE_PATTERNS)
-    assert len(patterns) == len(set(patterns))
+# URLs the frozen script's exclude lists were written to keep out, in the
+# shapes the real sites serve them in. The script's own patterns miss most
+# of these, so this list is the intent rather than a record of behaviour.
+NON_CONTENT_URLS = (
+    "https://github.com/DepressionCenter/Repo/issues",
+    "https://github.com/DepressionCenter/Repo/issues/12",
+    "https://github.com/DepressionCenter/Repo/pulls",
+    "https://github.com/DepressionCenter/Repo/pull/12",
+    "https://github.com/DepressionCenter/Repo/forks",
+    "https://github.com/DepressionCenter/Repo/branches",
+    "https://github.com/DepressionCenter/Repo/security",
+    "https://github.com/DepressionCenter/Repo/activity",
+    "https://github.com/DepressionCenter/Repo/milestones",
+    "https://github.com/DepressionCenter/Repo/labels",
+    "https://github.com/DepressionCenter/Repo/commits/main",
+    "https://github.com/DepressionCenter/Repo/stargazers",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/PrintArticle?ID=10904",
+    "https://example.org/Search",
+    "https://example.org/Login",
+)
+
+# Pages that must survive every exclude list: documentation on a code
+# host, and an ordinary site's own pages whose names happen to match a
+# code host's furniture.
+CONTENT_URLS = (
+    "https://github.com/DepressionCenter/Repo",
+    "https://github.com/DepressionCenter/Repo/blob/main/README.md",
+    "https://github.com/DepressionCenter/Repo/wiki",
+    "https://github.com/DepressionCenter/Repo/releases",
+    "https://example.org/project",
+    "https://example.org/community",
+    "https://example.org/security",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Article/10904/How-to-do-a-thing",
+)
 
 
-def test_default_index_exclude_patterns_match_reference_script(reference):
-    patterns = web.default_exclude_patterns(BUILT_IN_HANDLERS, "index")
-    assert set(patterns) == set(reference.INDEX_EXCLUDE_PATTERNS)
+def _excludes(kind):
+    return fetch.compile_patterns(web.default_exclude_patterns(BUILT_IN_HANDLERS, kind))
+
+
+@pytest.mark.parametrize("url", NON_CONTENT_URLS)
+def test_default_crawl_excludes_keep_out_the_pages_they_were_written_for(url):
+    """
+    The frozen script writes these patterns as `/issues?[/?]` and
+    `/TagID=`, which match only a sub-path or a path-style parameter. The
+    real sites serve a bare `/issues` and a query-string `&TagID=`, so the
+    original lets nearly every one of these through. Measured against the
+    Depression Center organization, that sent 150 pages of a 500-page
+    crawl to listings that produced no indexed content at all.
+    """
+    assert any(p.search(url) for p in _excludes("crawl")), url
+
+
+@pytest.mark.parametrize("url", CONTENT_URLS)
+def test_default_crawl_excludes_leave_real_pages_alone(url):
+    """
+    Every enabled handler's patterns apply to every URL in a crawl, so a
+    code host's exclusions must not reach an ordinary site's own pages.
+    """
+    assert not any(p.search(url) for p in _excludes("crawl")), url
+
+
+def test_default_exclude_patterns_have_no_duplicates():
+    for kind in ("crawl", "index"):
+        patterns = web.default_exclude_patterns(BUILT_IN_HANDLERS, kind)
+        assert len(patterns) == len(set(patterns))
+
+
+def test_default_excludes_still_cover_everything_the_reference_excluded(reference):
+    """
+    The pattern strings deliberately differ from the frozen script's, so
+    the comparison is behavioural: no URL the original kept out may now
+    get in.
+    """
+    ours = _excludes("crawl")
+    theirs = fetch.compile_patterns(reference.CRAWL_EXCLUDE_PATTERNS)
+    probes = NON_CONTENT_URLS + (
+        "https://github.com/Org/Repo/pulse",
+        "https://github.com/Org/Repo/network/members",
+        "https://github.com/Org/Repo/blame/main/x.md",
+        "https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx",
+        "https://example.org/page?print=1",
+    )
+    for url in probes:
+        if any(p.search(url) for p in theirs):
+            assert any(p.search(url) for p in ours), url
+
+
+@pytest.mark.parametrize("url", [
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Category/1015/All-Things-Data",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB?CategoryID=1015",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/CategoryID/1015",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8245",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/TagID/8245",
+    "https://github.com/DepressionCenter/Repo/tree/main/docs",
+])
+def test_listing_pages_are_followed_for_links_but_not_indexed(url):
+    """
+    A category, tag, or directory listing links to real content and holds
+    none of its own, so it belongs on the index list and not the crawl
+    list. A TeamDynamix portal publishes no sitemap and no full article
+    index, so these listings are the only route to most of what it holds:
+    dropping them from the crawl would shrink the knowledge base to
+    whatever the home page happens to link to.
+    """
+    assert not any(p.search(url) for p in _excludes("crawl")), url
+    assert any(p.search(url) for p in _excludes("index")), url
+
+
+def test_an_unfiltered_portal_listing_is_still_crawled():
+    """
+    The portal writes "no tag filter" as TagID=0, so a rule that skipped
+    the crawl on sight of a tag parameter would skip the unfiltered
+    listing too, which is the widest discovery page the portal has.
+    """
+    url = "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0&Filter=unanswered"
+
+    assert not any(p.search(url) for p in _excludes("crawl"))
 
 
 def test_index_defaults_are_a_superset_of_crawl_defaults():
@@ -530,10 +776,15 @@ def test_explicit_exclude_lists_are_used_as_written():
 
 def test_disabling_a_handler_drops_its_patterns():
     generic_only = make_source("https://example.org/", handlers=(generic.GenericHandler(),))
-    assert r"/Login\.aspx" not in generic_only.crawl_exclude_patterns      # tdx
-    assert r"/issues?[/?]" not in generic_only.crawl_exclude_patterns      # github
-    assert r"/Login[/?$]" in generic_only.crawl_exclude_patterns           # generic, always on
-    assert r"\.pdf$" in generic_only.crawl_exclude_patterns                # asset, always on
+    patterns = fetch.compile_patterns(generic_only.crawl_exclude_patterns)
+
+    def excluded(url):
+        return any(p.search(url) for p in patterns)
+
+    assert not excluded("https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx")  # tdx off
+    assert not excluded("https://github.com/Org/Repo/issues")                         # github off
+    assert excluded("https://example.org/Login")            # generic, always on
+    assert excluded("https://example.org/handbook.pdf")     # asset, always on
 
 
 # ---------------------------------------------------------------------------

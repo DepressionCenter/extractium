@@ -148,6 +148,69 @@ def test_tdx_breadcrumb_trail_becomes_categories_outermost_first():
     assert extraction.title == "Remote Study Technology"
 
 
+def test_tdx_recovers_a_title_the_portal_cut_short(fixtures_dir):
+    """
+    The real portal cuts a long <title> and marks the cut with an
+    ellipsis, which would otherwise become the heading of every section
+    of that article and of every citation of it.
+    """
+    soup = _soup_from_fixture(fixtures_dir, "tdx_article_truncated_title.html")
+
+    extraction = tdx.TdxHandler().extract(soup, TDX_URL)
+
+    assert extraction.title == (
+        "How to configure a synthetic placeholder integration for characterization testing"
+    )
+
+
+def test_tdx_recovers_a_cut_title_from_the_heading_when_there_is_no_metadata():
+    html = (
+        "<html><head><title>Article - How to configure a synthetic pla...</title></head><body>"
+        "<header><h1>How to configure a synthetic placeholder integration</h1></header>"
+        '<div id="divMainContent"><p>Synthetic article body text for the title test.</p></div>'
+        "</body></html>"
+    )
+
+    extraction = tdx.TdxHandler().extract(BeautifulSoup(html, "html.parser"), TDX_URL)
+
+    assert extraction.title == "How to configure a synthetic placeholder integration"
+
+
+def test_tdx_keeps_a_cut_title_when_no_uncut_one_is_on_the_page():
+    html = (
+        "<html><head><title>Article - How to configure a synthetic pla...</title></head><body>"
+        '<div id="divMainContent"><p>Synthetic article body text for the title test.</p></div>'
+        "</body></html>"
+    )
+
+    extraction = tdx.TdxHandler().extract(BeautifulSoup(html, "html.parser"), TDX_URL)
+
+    assert extraction.title == "How to configure a synthetic pla..."
+
+
+def test_tdx_leaves_an_uncut_title_alone_even_when_metadata_disagrees():
+    html = (
+        "<html><head><title>Article - Sleep Hygiene Tips</title>"
+        '<meta property="og:title" content="Something Else Entirely" /></head><body>'
+        '<div id="divMainContent"><p>Synthetic article body text for the title test.</p></div>'
+        "</body></html>"
+    )
+
+    extraction = tdx.TdxHandler().extract(BeautifulSoup(html, "html.parser"), TDX_URL)
+
+    assert extraction.title == "Sleep Hygiene Tips"
+
+
+@pytest.mark.parametrize("title, truncated", [
+    ("How to use OData query filt...", True),
+    ("How to use OData query filt…", True),
+    ("Sleep Hygiene Tips", False),
+    ("", False),
+])
+def test_is_truncated_title_recognizes_both_ellipsis_forms(title, truncated):
+    assert tdx.is_truncated_title(title) is truncated
+
+
 def test_tdx_page_without_an_article_body_is_a_link_hop(fixtures_dir):
     # A category listing has links but no #divMainContent / #questionsContent.
     soup = BeautifulSoup("<html><body><main><a href='/x'>x</a></main></body></html>", "html.parser")

@@ -392,6 +392,13 @@ class Source(Protocol):
     A source never constructs an HTTP session and never prints; both
     come from the caller so a library user, a CI log, and a person at a
     terminal can each handle them differently.
+
+    A source that takes part in a web crawl may also define an optional
+    `configure(registry, settings)`, which the caller invokes after
+    construction to hand over the plugin registry and the global crawl
+    settings. Those belong to the whole build rather than to one entry in
+    the sources list, so they do not travel in the entry's options. A
+    source that needs neither omits the method.
     """
 
     name: ClassVar[str]

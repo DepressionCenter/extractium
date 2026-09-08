@@ -111,10 +111,10 @@ def test_drop_near_duplicates_collapses_identical_text_keeps_first_occurrence(
     fake_embed_chunks_core
 ):
     children = [
-        {"t": "A", "x": "unique content one", "pid": 0},
-        {"t": "B", "x": "shared boilerplate text", "pid": 1},
-        {"t": "C", "x": "unique content two", "pid": 2},
-        {"t": "D", "x": "shared boilerplate text", "pid": 3},  # duplicate of index 1
+        {"t": "A", "x": "unique content one", "u": "https://example.org/a", "pid": 0},
+        {"t": "B", "x": "shared boilerplate text", "u": "https://example.org/a", "pid": 1},
+        {"t": "C", "x": "unique content two", "u": "https://example.org/b", "pid": 2},
+        {"t": "D", "x": "shared boilerplate text", "u": "https://example.org/b", "pid": 3},
     ]
     vecs = fake_embed_chunks_core(children)
 
@@ -123,6 +123,37 @@ def test_drop_near_duplicates_collapses_identical_text_keeps_first_occurrence(
     assert dropped == 1
     assert [c["pid"] for c in kept_chunks] == [0, 1, 2]
     assert kept_vecs.shape[0] == 3
+
+
+def test_drop_near_duplicates_leaves_a_pages_own_repetition_alone(fake_embed_chunks_core):
+    """
+    Collapsing across pages removes boilerplate; collapsing within one page
+    removes an article's own passages, which is content loss rather than
+    tidying (docs/extractium-spec.md section 3.2).
+    """
+    children = [
+        {"t": "A", "x": "repeated passage text", "u": "https://example.org/a", "pid": 0},
+        {"t": "A", "x": "repeated passage text", "u": "https://example.org/a", "pid": 1},
+    ]
+    vecs = fake_embed_chunks_core(children)
+
+    kept_chunks, _, dropped = dedup.drop_near_duplicates(children, vecs)
+
+    assert dropped == 0
+    assert len(kept_chunks) == 2
+
+
+def test_drop_near_duplicates_collapses_boilerplate_across_many_pages(fake_embed_chunks_core):
+    children = [
+        {"t": f"P{i}", "x": "shared footer disclaimer text", "u": f"https://example.org/{i}", "pid": i}
+        for i in range(5)
+    ]
+    vecs = fake_embed_chunks_core(children)
+
+    kept_chunks, _, dropped = dedup.drop_near_duplicates(children, vecs)
+
+    assert dropped == 4
+    assert [c["u"] for c in kept_chunks] == ["https://example.org/0"]
 
 
 def test_drop_near_duplicates_empty_input():

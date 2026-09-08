@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -167,6 +167,8 @@ A source yields `Document` records: the source URL, a title, the content (a pars
 
 Searching children and returning parents is "small-to-big" retrieval: precise matches, enough context to answer.
 
+Near-duplicate collapse removes a child that is near-identical to one already kept **from another page**. Children of one page are never collapsed into each other. The step exists to remove boilerplate many pages share, and two passages of one article are not that. The rule also removes a dependence on heading length: a child is embedded as its parent's heading followed by its own text, so an article with a long title gives every one of its children a long identical prefix, and comparing them without this rule discards real content as duplication. Measured on the Depression Center portal, recovering 119 truncated article titles cost 86 sections without it, of which only 14 were duplicates by their text alone.
+
 ### 3.3 Stable identifiers
 
 A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url + NUL + heading + NUL + ordinal)`, where the ordinal counts parents on the same page that share a heading. The ordinal exists because a long section is cut into several parents with one heading. A child's id is derived, never stored: parent id, a hyphen, and the child's ordinal within its parent. Ids survive a rebuild when the page URL and heading are unchanged.
@@ -209,7 +211,7 @@ Reading OKF bundles produced by other tools, as a source, is possible future wor
 |---|---|---|---|
 | Source | `web` | 2 | Core crawler. Scope: same origin plus a prefix, or explicit include patterns. Consults site handlers per URL. |
 | Site handler | `generic` | 2 | Core fallback: common content selectors, boilerplate stripping. |
-| Site handler | `tdx` | 2 | TeamDynamix portals: content selectors, title prefix stripping, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
+| Site handler | `tdx` | 2 | TeamDynamix portals: content selectors, title prefix stripping, recovery of a title the portal cut short, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
 | Site handler | `github` | 2 | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns. |
 | Source | `local` | 6 | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
 | Source | `github_api` | 7 | Organization enumeration through the REST API; README and Markdown through raw URLs; uses `GITHUB_TOKEN` when present. |
@@ -229,8 +231,14 @@ The crawler identifies itself and respects the sites it reads.
 - `respect_robots_txt` defaults to true, using the standard library's parser. It can be switched off for a site the operator owns.
 - `delay_seconds` (default 0.5) paces requests; `max_pages` (default 10,000) is a safety ceiling.
 - Whether the TeamDynamix portal serves article HTML to the truthful User-Agent was checked against the real portal on 2026-09-04. It does: the home page, the knowledge-base listing, and an article page all answered 200 with the article body in `#divMainContent`. No override is needed. Two details from the same check shape the code: the portal's `robots.txt` answers 406 when a request accepts only HTML, so the robots request sends a plain-text Accept header; and the article breadcrumb is an `ol.breadcrumb` whose linked items are the hierarchy and whose unlinked last item is the page itself.
+- Whether a GitHub Actions runner reaches the sites this project indexes was checked on 2026-09-08, from an `ubuntu-24.04` runner sending the truthful User-Agent. All three answered 200: the TeamDynamix portal home page (32,845 bytes of `text/html`), `https://github.com/DepressionCenter` (308,048 bytes of `text/html`), and a `raw.githubusercontent.com` README (12,210 bytes of `text/plain`). A cloud runner can therefore build the knowledge base; local runs stay necessary only for sources a runner cannot reach, such as local folders and YouTube.
+- One site in the Depression Center's own crawl scope, `code.depressioncenter.org`, answers 403 to the truthful User-Agent and serves the page to a browser one. Its `robots.txt` allows every crawler, so the block is a content-delivery filter rather than a stated policy. By default the crawler reports the 403 and moves on: a tool that names itself and then works around a site's own filter is not really naming itself.
+- `respect_robots_txt: false` is the operator's statement that they own the sites in scope, and it carries a second effect. With it off, a page that answers 401, 403, or 429 to the configured `user_agent` is requested once more with a common browser User-Agent, and both attempts are reported. Pages that were never refused are still fetched under the configured agent, and a 404 or a 5xx is never retried, because neither is a refusal. The two behaviours travel together deliberately: presenting as a browser is only defensible where ignoring robots rules already is.
 - When a site's `robots.txt` cannot be read (a 5xx answer or a network failure), every URL on that site is skipped and the reason is reported. A 4xx answer means the site publishes no rules. This is the robots exclusion standard's rule (RFC 9309) and it fails closed on purpose.
 - Omitting `crawl_exclude_patterns` or `index_exclude_patterns` means the host-independent asset patterns plus whatever each enabled site handler contributes, so switching a handler off also drops its exclusions. An explicit list, including an empty one, is used as written. The TeamDynamix portal-folder scope rule (`/TDClient/<n>/<slug>/`) stays in core, because the handler protocol has no scope hook.
+- A handler's default patterns are written for the URL shapes its sites really serve. A code host serves a listing both bare (`/issues`) and with a sub-path (`/issues/12`), and a portal writes a facet as a query parameter (`?CategoryID=0&TagID=8245`) as well as a path. A pattern that covers only one shape is inert against the other, which is how the frozen script came to spend 150 pages of a 500-page crawl on listings that produced no indexed content.
+- Because every enabled handler's patterns apply to every URL in a crawl, a handler's segment patterns are anchored to the paths its own sites use. Without that, the code host's `/projects` rule would also exclude an ordinary site's `/project` page.
+- Category and tag listings belong on the index list and never on the crawl list. A TeamDynamix portal publishes no sitemap and no full article index, so those listings are the only route to most of its articles; they are also pure navigation, so their own text is not indexed. The portal writes an unfiltered listing as `TagID=0`, so a rule keyed on the presence of a tag parameter would skip the widest discovery page it has.
 
 
 ## 7. Local files and confidentiality

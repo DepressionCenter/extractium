@@ -121,7 +121,7 @@ def _make_parent(text):
 def test_split_parent_into_children_short_parent_is_single_child():
     parent = _make_parent("Short body text well under the child chunk threshold.")
     children = chunk.split_parent_into_children(parent)
-    assert children == [dict(parent)]
+    assert children == [{**parent, "start": 0, "end": len(parent["x"])}]
 
 
 def test_split_parent_into_children_window_stepping_and_overlap():
@@ -150,6 +150,12 @@ def test_split_parent_into_children_window_stepping_and_overlap():
     for i in range(len(children) - 1):
         overlap = chunk.CHILD_OVERLAP_CHARS
         assert children[i]["x"][-overlap:] == children[i + 1]["x"][:overlap]
+
+    # Every window's offsets slice its own text back out of the parent,
+    # which is the contract the container's start/end columns rely on.
+    assert [c["start"] for c in children] == [0, 297, 594, 891]
+    for child in children:
+        assert parent["x"][child["start"]:child["end"]] == child["x"]
 
 
 def test_split_parent_into_children_guarantees_forward_progress():
@@ -276,7 +282,7 @@ def test_chunk_document_matches_build_parent_and_child_chunks_on_shared_fields(f
     ref_parents, ref_children = chunk.build_parent_and_child_chunks(extraction.title, extraction.node, url)
 
     assert [{k: p[k] for k in shared} for p in parents] == ref_parents
-    assert [{k: c[k] for k in shared + ("pid",)} for c in children] == ref_children
+    assert [{k: c[k] for k in shared + ("pid", "start", "end")} for c in children] == ref_children
 
 
 def test_chunk_document_wraps_plain_text_content():
