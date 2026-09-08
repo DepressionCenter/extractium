@@ -1,0 +1,469 @@
+{
+  "_license": "This file was produced by Extractium. Copyright © 2026 The Regents of the University of Michigan. Extractium is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/. The indexed content remains under the license of the site it was read from.",
+  "format": "extractium-compendium",
+  "v": 3,
+  "extractium": "0.1.0",
+  "builtAt": "2026-01-02T03:04:05Z",
+  "site": "Example Org",
+  "sourceCount": 2,
+  "embedding": {
+    "model": "BAAI/bge-small-en-v1.5",
+    "browserModel": "Xenova/bge-small-en-v1.5",
+    "dims": 384,
+    "normalized": true,
+    "queryPrefix": "Represent this sentence for searching relevant passages: ",
+    "passagePrefix": "",
+    "dtype": "int8",
+    "scale": 127
+  },
+  "offsetUnit": "utf16",
+  "parents": [
+    {
+      "id": "2327ecf867c7436d",
+      "t": "Team Directory -- Members",
+      "x": "Synthetic unique content for page A describing a fictional team\n  member and their placeholder research focus area, for characterization\n  testing purposes only.",
+      "u": "https://example.org/team",
+      "host": "example.org",
+      "source_type": "web",
+      "content_type": "page",
+      "categories": [],
+      "local": false,
+      "weight": 1.0
+    },
+    {
+      "id": "f1c70290315ca8c0",
+      "t": "Team Directory -- Standard Disclaimer",
+      "x": "This synthetic boilerplate disclaimer paragraph appears identically\n  on every page of the fictional test site and exists purely to exercise\n  the near-duplicate collapse path in the characterization test suite.",
+      "u": "https://example.org/team",
+      "host": "example.org",
+      "source_type": "web",
+      "content_type": "page",
+      "categories": [],
+      "local": false,
+      "weight": 1.0
+    },
+    {
+      "id": "f6a4301a17f6de1b",
+      "t": "Project Overview -- Overview",
+      "x": "Synthetic unique content for page B describing a fictional\n  placeholder research project overview, for characterization testing\n  purposes only.",
+      "u": "https://example.org/project",
+      "host": "example.org",
+      "source_type": "web",
+      "content_type": "page",
+      "categories": [],
+      "local": false,
+      "weight": 1.0
+    }
+  ],
+  "children": {
+    "pid": [
+      0,
+      1,
+      2
+    ],
+    "start": [
+      0,
+      0,
+      0
+    ],
+    "end": [
+      161,
+      211,
+      145
+    ]
+  },
+  "bm25": {
+    "k": 1.2,
+    "b": 0.75,
+    "d": 0.5,
+    "avgDocLen": 24.0,
+    "docLen": [
+      23,
+      30,
+      19
+    ],
+    "df": {
+      "team": 2,
+      "directory": 2,
+      "members": 1,
+      "synthetic": 3,
+      "unique": 2,
+      "content": 2,
+      "for": 2,
+      "page": 3,
+      "describing": 2,
+      "fictional": 3,
+      "member": 1,
+      "and": 2,
+      "their": 1,
+      "placeholder": 2,
+      "research": 2,
+      "focus": 1,
+      "area": 1,
+      "characterization": 3,
+      "testing": 2,
+      "purposes": 2,
+      "only": 2,
+      "standard": 1,
+      "disclaimer": 1,
+      "this": 1,
+      "boilerplate": 1,
+      "paragraph": 1,
+      "appears": 1,
+      "identically": 1,
+      "every": 1,
+      "the": 1,
+      "test": 1,
+      "site": 1,
+      "exists": 1,
+      "purely": 1,
+      "exercise": 1,
+      "near": 1,
+      "duplicate": 1,
+      "collapse": 1,
+      "path": 1,
+      "suite": 1,
+      "project": 1,
+      "overview": 1
+    },
+    "postings": {
+      "team": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "directory": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "members": [
+        [
+          0,
+          1
+        ]
+      ],
+      "synthetic": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "unique": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "content": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "for": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "page": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "describing": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "fictional": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "member": [
+        [
+          0,
+          1
+        ]
+      ],
+      "and": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "their": [
+        [
+          0,
+          1
+        ]
+      ],
+      "placeholder": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "research": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "focus": [
+        [
+          0,
+          1
+        ]
+      ],
+      "area": [
+        [
+          0,
+          1
+        ]
+      ],
+      "characterization": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "testing": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "purposes": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "only": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "standard": [
+        [
+          1,
+          1
+        ]
+      ],
+      "disclaimer": [
+        [
+          1,
+          2
+        ]
+      ],
+      "this": [
+        [
+          1,
+          1
+        ]
+      ],
+      "boilerplate": [
+        [
+          1,
+          1
+        ]
+      ],
+      "paragraph": [
+        [
+          1,
+          1
+        ]
+      ],
+      "appears": [
+        [
+          1,
+          1
+        ]
+      ],
+      "identically": [
+        [
+          1,
+          1
+        ]
+      ],
+      "every": [
+        [
+          1,
+          1
+        ]
+      ],
+      "the": [
+        [
+          1,
+          3
+        ]
+      ],
+      "test": [
+        [
+          1,
+          2
+        ]
+      ],
+      "site": [
+        [
+          1,
+          1
+        ]
+      ],
+      "exists": [
+        [
+          1,
+          1
+        ]
+      ],
+      "purely": [
+        [
+          1,
+          1
+        ]
+      ],
+      "exercise": [
+        [
+          1,
+          1
+        ]
+      ],
+      "near": [
+        [
+          1,
+          1
+        ]
+      ],
+      "duplicate": [
+        [
+          1,
+          1
+        ]
+      ],
+      "collapse": [
+        [
+          1,
+          1
+        ]
+      ],
+      "path": [
+        [
+          1,
+          1
+        ]
+      ],
+      "suite": [
+        [
+          1,
+          1
+        ]
+      ],
+      "project": [
+        [
+          2,
+          2
+        ]
+      ],
+      "overview": [
+        [
+          2,
+          3
+        ]
+      ]
+    }
+  },
+  "calibration": {
+    "mean": 0.04454532265663147,
+    "std": 0.014888426288962364,
+    "sampleSize": 3
+  }
+}

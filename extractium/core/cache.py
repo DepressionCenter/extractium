@@ -51,6 +51,25 @@ CACHE_PAGES_DIR = os.path.join(CACHE_DIR, "pages")
 CACHE_SAVE_INTERVAL = 25
 
 
+def use_cache_dir(path):
+    """
+    Points the cache at another folder, honoring the `cache_dir` setting.
+
+    The three paths move together, because a half-moved cache would read
+    validators for pages stored somewhere else and serve stale content.
+    Every function in this module reads the constants at call time, so a
+    caller sets this once before the first fetch.
+
+    Args:
+        path (str): folder to hold `meta.json` and `pages/`. Created on
+            first write, not here.
+    """
+    global CACHE_DIR, CACHE_META_PATH, CACHE_PAGES_DIR
+    CACHE_DIR = str(path)
+    CACHE_META_PATH = os.path.join(CACHE_DIR, "meta.json")
+    CACHE_PAGES_DIR = os.path.join(CACHE_DIR, "pages")
+
+
 ### Cache Metadata ###
 
 def load_cache_meta():

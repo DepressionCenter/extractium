@@ -30,10 +30,9 @@ __date__ = "2026-08-17"
 
 import numpy as np
 
-# TODO: import sentence_transformers inside embed_chunks instead of here.
-# A module-level import pulls torch into every consumer of this package,
-# including the search client and the adapters, which never embed.
-from sentence_transformers import SentenceTransformer
+# sentence_transformers is imported inside embed_chunks, not here: it pulls
+# in torch, several hundred megabytes that the adapters, the search client,
+# and anything reading a finished index never need.
 
 ### Constants ###
 
@@ -57,26 +56,35 @@ INT8_SCALE = 127
 
 ### Embedding ###
 
-def embed_chunks(chunks):
+def embed_chunks(chunks, progress=None):
     """
     Embeds a list of child chunks with the configured sentence-transformer
     model. Each chunk's embedded text is its heading ("t") followed by its
     body ("x"), matching the asymmetric retrieval convention: indexed
     passages get no query-side prefix.
 
+    The model library is imported here rather than at module level, so a
+    caller that only reads a finished index never loads torch.
+
     Args:
         chunks (list[dict]): child chunks with "t" (heading, optional) and
             "x" (body text) keys.
+        progress (Callable[[str], None] | None): receives one line per
+            stage. None reports nothing, which is what a library caller
+            and a test want.
 
     Returns:
         np.ndarray: shape (len(chunks), DIMS), float32, L2-normalized.
     """
-    print(f"\nLoading embedding model: {EMBED_MODEL}")
+    from sentence_transformers import SentenceTransformer
+
+    report = progress or (lambda message: None)
+    report(f"Loading embedding model: {EMBED_MODEL}")
     model = SentenceTransformer(EMBED_MODEL)
     texts = [((c["t"] + "\n") if c.get("t") else "") + c["x"] for c in chunks]
-    print(f"Embedding {len(texts)} chunks...")
+    report(f"Embedding {len(texts)} chunk(s)...")
     vecs = model.encode(texts, normalize_embeddings=True,
-                        batch_size=64, show_progress_bar=True)
+                        batch_size=64, show_progress_bar=False)
     return vecs.astype(np.float32)
 
 

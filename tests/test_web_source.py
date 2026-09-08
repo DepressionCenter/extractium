@@ -485,6 +485,60 @@ def test_resolve_site_handlers_rejects_an_unknown_name():
 
 
 # ---------------------------------------------------------------------------
+# configure(): adopting the registry and the global crawl settings
+# ---------------------------------------------------------------------------
+
+def test_configure_resolves_the_handlers_the_entry_asked_for():
+    source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ("tdx",)})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert [h.name for h in source.handlers] == ["tdx", "generic"]
+
+
+def test_configure_with_no_site_handlers_option_enables_every_installed_handler():
+    source = web.WebSource({"seed_url": "https://example.org/"})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert [h.name for h in source.handlers] == ["github", "tdx", "generic"]
+
+
+def test_configure_adopts_the_global_crawl_settings():
+    settings = web.CrawlSettings(max_pages=5, delay_seconds=0, user_agent="UA/1.0",
+                                 respect_robots_txt=False)
+    source = web.WebSource({"seed_url": "https://example.org/"})
+
+    source.configure(_built_in_registry(), settings)
+
+    assert source.settings == settings
+
+
+def test_configure_recomputes_the_exclude_defaults_for_the_handlers_it_adopted():
+    source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ()})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert r"/issues?[/?]" not in source.crawl_exclude_patterns      # github is off
+    assert r"\.pdf$" in source.crawl_exclude_patterns                # asset patterns stay
+
+
+def test_configure_leaves_an_explicit_exclude_list_as_written():
+    source = web.WebSource({"seed_url": "https://example.org/", "crawl_exclude_patterns": (r"/x",)})
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert source.crawl_exclude_patterns == (r"/x",)
+
+
+def test_configure_rejects_a_site_handler_the_entry_names_but_nothing_installs():
+    source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ("nope",)})
+
+    with pytest.raises(registry.RegistryError, match="no site handler named 'nope'"):
+        source.configure(_built_in_registry(), web.CrawlSettings())
+
+
+# ---------------------------------------------------------------------------
 # Default exclude patterns
 # ---------------------------------------------------------------------------
 

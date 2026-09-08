@@ -1,0 +1,29 @@
+# Example Org
+
+> 2 page(s) and 3 section(s), compiled on 2026-01-02T03:04:05Z.
+
+Compiled by Extractium (https://github.com/DepressionCenter/extractium), copyright (c) 2026 The Regents of the University of Michigan, licensed under the GNU General Public License v3.0 or later. The indexed content remains under the license of the site it was read from.
+
+## Team Directory -- Members
+
+Source: https://example.org/team
+
+Synthetic unique content for page A describing a fictional team
+  member and their placeholder research focus area, for characterization
+  testing purposes only.
+
+## Team Directory -- Standard Disclaimer
+
+Source: https://example.org/team
+
+This synthetic boilerplate disclaimer paragraph appears identically
+  on every page of the fictional test site and exists purely to exercise
+  the near-duplicate collapse path in the characterization test suite.
+
+## Project Overview -- Overview
+
+Source: https://example.org/project
+
+Synthetic unique content for page B describing a fictional
+  placeholder research project overview, for characterization testing
+  purposes only.

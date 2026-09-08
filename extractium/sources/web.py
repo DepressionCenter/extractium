@@ -168,12 +168,43 @@ class WebSource:
     name = "web"
 
     def __init__(self, options, site_handlers=(), settings=CrawlSettings()):
+        self.options = options
         self.seed_url = options["seed_url"]
+        self.include_patterns = tuple(options.get("include_patterns") or ())
+        self._adopt(site_handlers, settings)
+
+    def configure(self, registry, settings):
+        """
+        Adopts the enabled site handlers and the build's global crawl
+        settings, which a caller such as the command line knows and the
+        configuration file's own options do not carry.
+
+        This is the optional hook of the source protocol: a source that
+        takes no part in a crawl simply does not define it, and a caller
+        that has nothing to supply never calls it.
+
+        Args:
+            registry (extractium.core.registry.Registry): where site
+                handler classes are looked up.
+            settings (CrawlSettings): the page ceiling, the delay, the
+                User-Agent, and whether robots.txt is honored.
+
+        Raises:
+            extractium.core.registry.RegistryError: if the entry's
+                `site_handlers` list names a handler that is not installed.
+        """
+        self._adopt(resolve_site_handlers(registry, self.options.get("site_handlers")), settings)
+
+    def _adopt(self, site_handlers, settings):
+        """
+        Sets the handlers and settings, then recomputes the exclude lists,
+        which depend on which handlers are enabled: switching a handler
+        off also drops the exclusions it contributed.
+        """
         self.handlers = order_site_handlers(site_handlers)
         self.settings = settings
-        self.include_patterns = tuple(options.get("include_patterns") or ())
-        self.crawl_exclude_patterns = self._patterns(options, "crawl_exclude_patterns", "crawl")
-        self.index_exclude_patterns = self._patterns(options, "index_exclude_patterns", "index")
+        self.crawl_exclude_patterns = self._patterns(self.options, "crawl_exclude_patterns", "crawl")
+        self.index_exclude_patterns = self._patterns(self.options, "index_exclude_patterns", "index")
 
     def _patterns(self, options, key, kind):
         """The option's own list, or the handler-derived default when the option is None."""

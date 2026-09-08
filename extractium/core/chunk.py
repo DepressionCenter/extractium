@@ -233,11 +233,16 @@ def split_parent_into_children(parent):
 
     Returns:
         list[dict]: one or more child chunk dicts, each a shallow copy of
-        parent with "x" replaced by the child's text window.
+        parent with "x" replaced by the child's text window and with
+        "start" and "end" giving that window's position inside the
+        parent's text, as Python character offsets, so a reader slices
+        the window back out with parent["x"][start:end]. The container
+        writer converts them to UTF-16 code units, the unit JavaScript
+        strings index by (docs/container-format.md).
     """
     text = parent["x"]
     if len(text) <= CHILD_CHUNK_MAX_CHARS:
-        return [dict(parent)]
+        return [_whole_parent_as_child(parent)]
 
     children = []
     step = max(CHILD_CHUNK_MAX_CHARS - CHILD_OVERLAP_CHARS, CHILD_CHUNK_MIN_CHARS)
@@ -248,13 +253,27 @@ def split_parent_into_children(parent):
         cut = text.rfind("\n", start, end) if end < n else end
         if cut <= start:
             cut = end
-        child_text = text[start:cut].strip()
+        window = text[start:cut]
+        child_text = window.strip()
         if len(child_text) >= CHILD_CHUNK_MIN_CHARS:
-            children.append({**parent, "x": child_text})
+            # The stored window is the stripped text, so its start moves
+            # past whatever leading whitespace strip() removed.
+            child_start = start + (len(window) - len(window.lstrip()))
+            children.append({
+                **parent,
+                "x": child_text,
+                "start": child_start,
+                "end": child_start + len(child_text),
+            })
         if end >= n:
             break
         start += step  # fixed step, independent of `cut` -- guarantees progress every iteration
-    return children if children else [dict(parent)]
+    return children if children else [_whole_parent_as_child(parent)]
+
+
+def _whole_parent_as_child(parent):
+    """One child spanning its parent's whole text, for a section too short to split."""
+    return {**parent, "start": 0, "end": len(parent["x"])}
 
 
 def _children_for(parents):
@@ -306,7 +325,8 @@ def chunk_document(document):
         tuple[list[dict], list[dict]]: (parents, children). Every parent
         dict holds id, t, x, u, host, source_type, content_type,
         categories, local, and weight; every child is a copy of its
-        parent with its own `x` and a page-local `pid`.
+        parent with its own `x`, its `start` and `end` offsets into the
+        parent's text, and a page-local `pid`.
     """
     node = document.content
     if isinstance(node, str):
