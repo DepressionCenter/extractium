@@ -646,7 +646,8 @@ NON_CONTENT_URLS = (
     "https://github.com/DepressionCenter/Repo/labels",
     "https://github.com/DepressionCenter/Repo/commits/main",
     "https://github.com/DepressionCenter/Repo/stargazers",
-    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8245",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/PrintArticle?ID=10904",
     "https://example.org/Search",
     "https://example.org/Login",
 )
@@ -722,15 +723,32 @@ def test_default_excludes_still_cover_everything_the_reference_excluded(referenc
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Category/1015/All-Things-Data",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB?CategoryID=1015",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/CategoryID/1015",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8245",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/TagID/8245",
     "https://github.com/DepressionCenter/Repo/tree/main/docs",
 ])
 def test_listing_pages_are_followed_for_links_but_not_indexed(url):
     """
-    A category or directory listing links to real content and holds none
-    of its own, so it belongs on the index list and not the crawl list.
+    A category, tag, or directory listing links to real content and holds
+    none of its own, so it belongs on the index list and not the crawl
+    list. A TeamDynamix portal publishes no sitemap and no full article
+    index, so these listings are the only route to most of what it holds:
+    dropping them from the crawl would shrink the knowledge base to
+    whatever the home page happens to link to.
     """
     assert not any(p.search(url) for p in _excludes("crawl")), url
     assert any(p.search(url) for p in _excludes("index")), url
+
+
+def test_an_unfiltered_portal_listing_is_still_crawled():
+    """
+    The portal writes "no tag filter" as TagID=0, so a rule that skipped
+    the crawl on sight of a tag parameter would skip the unfiltered
+    listing too, which is the widest discovery page the portal has.
+    """
+    url = "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0&Filter=unanswered"
+
+    assert not any(p.search(url) for p in _excludes("crawl"))
 
 
 def test_index_defaults_are_a_superset_of_crawl_defaults():

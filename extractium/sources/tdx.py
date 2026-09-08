@@ -70,9 +70,10 @@ TDX_BREADCRUMB_SELECTORS = ("#tdBreadcrumb", ".breadcrumb")
 # The portal identifies a tag or a category in a query string, as
 # "Questions?CategoryID=0&TagID=8245", as well as in a path. A pattern
 # beginning "/TagID=" matches only the path form, so every filtered
-# listing was crawled: measured against the Depression Center portal, one
-# question list appeared 123 times under different filter combinations.
-# This leading class covers both places a parameter can start.
+# listing was indexed: measured against the Depression Center portal, one
+# question list appeared 123 times under different filter combinations,
+# contributing an eighth of the whole index in navigation furniture. This
+# leading class covers both places a parameter can start.
 PARAMETER_START = r"[/?&]"
 
 TDX_CRAWL_EXCLUDE_PATTERNS = (
@@ -80,16 +81,24 @@ TDX_CRAWL_EXCLUDE_PATTERNS = (
     r"/PrintArticle\?ID=",
     r"/FileOpen(?:[/?#]|$)",
     r"/FileDownload(?:[/?#]|$)",
-    rf"{PARAMETER_START}TagID=",
-    r"/TagID/[0-9]+",
 )
 
-# Category listings link to real articles but hold no content of their
-# own, so they are followed and not indexed.
+# Category and tag listings link to real articles and questions and hold
+# no content of their own, so they are followed and not indexed.
+#
+# They must stay on the crawl: a TeamDynamix portal publishes no sitemap
+# and no full article index, so browsing these listings is the only way to
+# reach most of what a portal holds. Excluding them from the crawl instead
+# would quietly shrink the knowledge base to whatever the home page
+# happens to link to. Note also that the portal writes an unfiltered
+# listing as "TagID=0", so a rule that skips the crawl on sight of a tag
+# parameter would skip the unfiltered page too.
 TDX_INDEX_ONLY_EXCLUDE_PATTERNS = (
     rf"{PARAMETER_START}CategoryID=",
     r"/CategoryID/[0-9]+",
     r"/Category/",
+    rf"{PARAMETER_START}TagID=",
+    r"/TagID/[0-9]+",
 )
 
 TDX_INDEX_EXCLUDE_PATTERNS = TDX_CRAWL_EXCLUDE_PATTERNS + TDX_INDEX_ONLY_EXCLUDE_PATTERNS
