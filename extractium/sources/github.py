@@ -68,40 +68,75 @@ WIKI_CONTENT_SELECTORS = (".markdown-body", "#wiki-content", "article", "main")
 RELEASE_CONTENT_SELECTORS = (".markdown-body",)
 
 # Repository housekeeping views that hold no documentation.
-GITHUB_CRAWL_EXCLUDE_PATTERNS = (
-    r"/pulse$",
-    r"/issues?[/?]",
-    r"/projects?[/?]",
-    r"/pulls?[/?]",
-    r"/pushes?[/?]",
-    r"/forks?[/?]",
-    r"/network[/?]",
-    r"/commits?[/?]",
-    r"/discussions?[/?]",
-    r"/categories[/?]",
-    r"/announcements?[/?]",
-    r"/contribs?[/?]",
-    r"/contributions?[/?]",
-    r"/checks?[/?]",
-    r"/watchers[/?]",
-    r"/stargazers[/?]",
-    r"/stars[/?]",
-    r"/graphs[/?]",         # contributors, commit-activity, code-frequency, punch-card, traffic
-    r"/actions[/?]",        # CI workflow runs
-    r"/security[/?]",       # security advisories -- not KB content; /releases stays indexable
-    r"/compare[/?]",
+# A code host serves each of its navigation pages both bare, as
+# ".../issues", and with something after it, as "/issues/12" or
+# "/issues?q=is%3Aopen". A pattern ending in a character class such as
+# `[/?]` matches only the second shape, so every list page slips through:
+# measured against the Depression Center organization, that let 150 of a
+# 500-page crawl go to issue, pull-request, branch, and fork listings that
+# contributed no indexed content at all. Ending each segment with this
+# instead covers both shapes.
+SEGMENT_END = r"(?:[/?#]|$)"
+
+# Every enabled handler's exclude patterns apply to every URL in a crawl,
+# not only to the hosts that handler claims. So each segment below is
+# anchored under an owner and a repository: without that, "/projects?"
+# would also exclude an ordinary site's own /project page, and
+# "/community" its community page.
+REPOSITORY_PATH = r"^https?://[^/]+/[^/]+/[^/]+"
+
+# Repository paths that are the code host's own furniture rather than
+# documentation. Each entry is one path segment, and a trailing "?" in an
+# entry makes its own last letter optional ("pulls?" covers /pull and
+# /pulls). A repository actually named after one of these would be skipped
+# too; no such name exists on the hosts this ships enabled for, and
+# `crawl_exclude_patterns` in the configuration file overrides the list.
+GITHUB_NON_CONTENT_SEGMENTS = (
+    "pulse",
+    "issues?",
+    "projects?",
+    "pulls?",
+    "pushes?",
+    "forks?",
+    "network",
+    "commits?",
+    "discussions?",
+    "categories",
+    "announcements?",
+    "contribs?",
+    "contributions?",
+    "checks?",
+    "watchers",
+    "stargazers",
+    "stars",
+    "graphs",            # contributors, commit-activity, code-frequency, punch-card, traffic
+    "actions",           # CI workflow runs
+    "security",          # security advisories -- not KB content; /releases stays indexable
+    "compare",
+    "deployments",
+    "environments",
+    "packages",
+    "sponsors",
+    "people",
+    "followers",
+    "following",
+    # Further listings GitHub links from every repository landing page.
+    "branches",
+    "activity",
+    "custom-properties",
+    "community",
+    "milestones",
+    "labels",
+)
+
+GITHUB_CRAWL_EXCLUDE_PATTERNS = tuple(
+    rf"{REPOSITORY_PATH}/{segment}{SEGMENT_END}" for segment in GITHUB_NON_CONTENT_SEGMENTS
+) + (
     r"/blame/",
     r"/raw/",               # Markdown and text file bodies are fetched from the raw content
                             # host instead (see fetch_url), so this only avoids re-crawling
                             # the redirect URL when a page happens to link to it.
     r"/find/",
-    r"/deployments[/?]",
-    r"/environments[/?]",
-    r"/packages[/?]",
-    r"/sponsors[/?]",
-    r"/people[/?]",
-    r"/followers[/?]",
-    r"/following[/?]",
     # Wiki housekeeping actions (edit form, revision history, new-page
     # draft, access settings) -- not real content.
     r"/_edit$",

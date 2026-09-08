@@ -69,20 +69,31 @@ STRIP_TAGS = (
 # Non-content pages found on most websites: search forms, sign-in pages,
 # print views, tag listings, and per-person pages. Applied to every crawl
 # because this handler is always enabled.
-GENERIC_CRAWL_EXCLUDE_PATTERNS = (
-    r"/Search[/?$]",
-    r"/Login[/?$]",
-    r"/Tags[/?$]",
-    r"/Print[/?$]",
+# A site serves these both bare, as ".../Search", and with something after
+# them, as "/Search/" or "/Search?q=x". `[/?$]` is a character class of
+# three literal characters, so it matches a dollar sign in a URL and never
+# matches the end of one; every bare page slipped through. This matches
+# both shapes, and is the same rule the code-host handler uses.
+SEGMENT_END = r"(?:[/?#]|$)"
+
+GENERIC_NON_CONTENT_SEGMENTS = (
+    "Search",
+    "Login",
+    "Tags",
+    "Print",
+    "Archive",
+    "settings",
+    "comments?",
+    "author",
+    "profile",
+)
+
+GENERIC_CRAWL_EXCLUDE_PATTERNS = tuple(
+    rf"/{segment}{SEGMENT_END}" for segment in GENERIC_NON_CONTENT_SEGMENTS
+) + (
     r"\?print=",
-    r"/Archive[/?$]",
-    r"/tags$",
     r"/tagged$",
     r"&tab=",
-    r"/settings[/?]",
-    r"/comments?[/?]",
-    r"/author[/?]",
-    r"/profile[/?]",
 )
 
 # A page never worth fetching is never worth indexing either, so the index

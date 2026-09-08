@@ -630,21 +630,107 @@ def test_configure_rejects_a_site_handler_the_entry_names_but_nothing_installs()
 # Default exclude patterns
 # ---------------------------------------------------------------------------
 
-def test_default_crawl_exclude_patterns_match_reference_script(reference):
-    """
-    The asset patterns plus every built-in handler's contribution must
-    exclude exactly what the frozen original excluded. Order carries no
-    meaning (any single match excludes a URL), so the comparison is
-    set-based.
-    """
-    patterns = web.default_exclude_patterns(BUILT_IN_HANDLERS, "crawl")
-    assert set(patterns) == set(reference.CRAWL_EXCLUDE_PATTERNS)
-    assert len(patterns) == len(set(patterns))
+# URLs the frozen script's exclude lists were written to keep out, in the
+# shapes the real sites serve them in. The script's own patterns miss most
+# of these, so this list is the intent rather than a record of behaviour.
+NON_CONTENT_URLS = (
+    "https://github.com/DepressionCenter/Repo/issues",
+    "https://github.com/DepressionCenter/Repo/issues/12",
+    "https://github.com/DepressionCenter/Repo/pulls",
+    "https://github.com/DepressionCenter/Repo/pull/12",
+    "https://github.com/DepressionCenter/Repo/forks",
+    "https://github.com/DepressionCenter/Repo/branches",
+    "https://github.com/DepressionCenter/Repo/security",
+    "https://github.com/DepressionCenter/Repo/activity",
+    "https://github.com/DepressionCenter/Repo/milestones",
+    "https://github.com/DepressionCenter/Repo/labels",
+    "https://github.com/DepressionCenter/Repo/commits/main",
+    "https://github.com/DepressionCenter/Repo/stargazers",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8245",
+    "https://example.org/Search",
+    "https://example.org/Login",
+)
+
+# Pages that must survive every exclude list: documentation on a code
+# host, and an ordinary site's own pages whose names happen to match a
+# code host's furniture.
+CONTENT_URLS = (
+    "https://github.com/DepressionCenter/Repo",
+    "https://github.com/DepressionCenter/Repo/blob/main/README.md",
+    "https://github.com/DepressionCenter/Repo/wiki",
+    "https://github.com/DepressionCenter/Repo/releases",
+    "https://example.org/project",
+    "https://example.org/community",
+    "https://example.org/security",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Article/10904/How-to-do-a-thing",
+)
 
 
-def test_default_index_exclude_patterns_match_reference_script(reference):
-    patterns = web.default_exclude_patterns(BUILT_IN_HANDLERS, "index")
-    assert set(patterns) == set(reference.INDEX_EXCLUDE_PATTERNS)
+def _excludes(kind):
+    return fetch.compile_patterns(web.default_exclude_patterns(BUILT_IN_HANDLERS, kind))
+
+
+@pytest.mark.parametrize("url", NON_CONTENT_URLS)
+def test_default_crawl_excludes_keep_out_the_pages_they_were_written_for(url):
+    """
+    The frozen script writes these patterns as `/issues?[/?]` and
+    `/TagID=`, which match only a sub-path or a path-style parameter. The
+    real sites serve a bare `/issues` and a query-string `&TagID=`, so the
+    original lets nearly every one of these through. Measured against the
+    Depression Center organization, that sent 150 pages of a 500-page
+    crawl to listings that produced no indexed content at all.
+    """
+    assert any(p.search(url) for p in _excludes("crawl")), url
+
+
+@pytest.mark.parametrize("url", CONTENT_URLS)
+def test_default_crawl_excludes_leave_real_pages_alone(url):
+    """
+    Every enabled handler's patterns apply to every URL in a crawl, so a
+    code host's exclusions must not reach an ordinary site's own pages.
+    """
+    assert not any(p.search(url) for p in _excludes("crawl")), url
+
+
+def test_default_exclude_patterns_have_no_duplicates():
+    for kind in ("crawl", "index"):
+        patterns = web.default_exclude_patterns(BUILT_IN_HANDLERS, kind)
+        assert len(patterns) == len(set(patterns))
+
+
+def test_default_excludes_still_cover_everything_the_reference_excluded(reference):
+    """
+    The pattern strings deliberately differ from the frozen script's, so
+    the comparison is behavioural: no URL the original kept out may now
+    get in.
+    """
+    ours = _excludes("crawl")
+    theirs = fetch.compile_patterns(reference.CRAWL_EXCLUDE_PATTERNS)
+    probes = NON_CONTENT_URLS + (
+        "https://github.com/Org/Repo/pulse",
+        "https://github.com/Org/Repo/network/members",
+        "https://github.com/Org/Repo/blame/main/x.md",
+        "https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx",
+        "https://example.org/page?print=1",
+    )
+    for url in probes:
+        if any(p.search(url) for p in theirs):
+            assert any(p.search(url) for p in ours), url
+
+
+@pytest.mark.parametrize("url", [
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Category/1015/All-Things-Data",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB?CategoryID=1015",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/CategoryID/1015",
+    "https://github.com/DepressionCenter/Repo/tree/main/docs",
+])
+def test_listing_pages_are_followed_for_links_but_not_indexed(url):
+    """
+    A category or directory listing links to real content and holds none
+    of its own, so it belongs on the index list and not the crawl list.
+    """
+    assert not any(p.search(url) for p in _excludes("crawl")), url
+    assert any(p.search(url) for p in _excludes("index")), url
 
 
 def test_index_defaults_are_a_superset_of_crawl_defaults():
@@ -672,10 +758,15 @@ def test_explicit_exclude_lists_are_used_as_written():
 
 def test_disabling_a_handler_drops_its_patterns():
     generic_only = make_source("https://example.org/", handlers=(generic.GenericHandler(),))
-    assert r"/Login\.aspx" not in generic_only.crawl_exclude_patterns      # tdx
-    assert r"/issues?[/?]" not in generic_only.crawl_exclude_patterns      # github
-    assert r"/Login[/?$]" in generic_only.crawl_exclude_patterns           # generic, always on
-    assert r"\.pdf$" in generic_only.crawl_exclude_patterns                # asset, always on
+    patterns = fetch.compile_patterns(generic_only.crawl_exclude_patterns)
+
+    def excluded(url):
+        return any(p.search(url) for p in patterns)
+
+    assert not excluded("https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx")  # tdx off
+    assert not excluded("https://github.com/Org/Repo/issues")                         # github off
+    assert excluded("https://example.org/Login")            # generic, always on
+    assert excluded("https://example.org/handbook.pdf")     # asset, always on
 
 
 # ---------------------------------------------------------------------------

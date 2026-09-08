@@ -67,19 +67,27 @@ TDX_BREADCRUMB_SELECTORS = ("#tdBreadcrumb", ".breadcrumb")
 
 # Portal pages with no article content: sign-in, print views, file
 # downloads, and tag listings.
+# The portal identifies a tag or a category in a query string, as
+# "Questions?CategoryID=0&TagID=8245", as well as in a path. A pattern
+# beginning "/TagID=" matches only the path form, so every filtered
+# listing was crawled: measured against the Depression Center portal, one
+# question list appeared 123 times under different filter combinations.
+# This leading class covers both places a parameter can start.
+PARAMETER_START = r"[/?&]"
+
 TDX_CRAWL_EXCLUDE_PATTERNS = (
     r"/Login\.aspx",
     r"/PrintArticle\?ID=",
-    r"/FileOpen[/?$]",
-    r"/FileDownload[/?$]",
-    r"/TagID=",
+    r"/FileOpen(?:[/?#]|$)",
+    r"/FileDownload(?:[/?#]|$)",
+    rf"{PARAMETER_START}TagID=",
     r"/TagID/[0-9]+",
 )
 
 # Category listings link to real articles but hold no content of their
 # own, so they are followed and not indexed.
 TDX_INDEX_ONLY_EXCLUDE_PATTERNS = (
-    r"/CategoryID=",
+    rf"{PARAMETER_START}CategoryID=",
     r"/CategoryID/[0-9]+",
     r"/Category/",
 )
