@@ -104,6 +104,93 @@ def test_index_names_each_page_once_however_many_sections_it_contributed(
     assert body.count("https://example.org/project)") == 1
 
 
+# ---------------------------------------------------------------------------
+# Orientation for a reader arriving with no context
+# ---------------------------------------------------------------------------
+
+def test_source_hosts_are_listed_once_in_first_appearance_order(
+    fixtures_dir, fake_embed_chunks_core
+):
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    assert llmstxt.source_hosts(compendium.parents) == ("example.org",)
+
+
+def test_source_hosts_skip_local_files_which_have_none(fixtures_dir, fake_embed_chunks_core):
+    compendium = mixed_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    assert "" not in llmstxt.source_hosts(compendium.parents)
+
+
+def test_name_sites_counts_the_ones_past_the_limit_instead_of_listing_them():
+    assert llmstxt.name_sites(()) == ""
+    assert llmstxt.name_sites(("a.edu",)) == "a.edu"
+    assert llmstxt.name_sites(("a.edu", "b.org")) == "a.edu and b.org"
+    assert llmstxt.name_sites(("a.edu", "b.org", "c.gov")) == "a.edu, b.org and c.gov"
+    assert llmstxt.name_sites(("a.edu", "b.org", "c.gov", "d.net")) == (
+        "a.edu, b.org, c.gov and 1 other site"
+    )
+    assert llmstxt.name_sites(("a.edu", "b.org", "c.gov", "d.net", "e.io")) == (
+        "a.edu, b.org, c.gov and 2 other sites"
+    )
+
+
+def test_count_of_reads_correctly_in_either_number():
+    assert llmstxt.count_of(1, "page") == "1 page"
+    assert llmstxt.count_of(2, "page") == "2 pages"
+    assert llmstxt.count_of(0, "page") == "0 pages"
+
+
+def test_summary_says_what_the_knowledge_base_is_where_it_came_from_and_when(
+    fixtures_dir, fake_embed_chunks_core
+):
+    """
+    A model arriving at this file cold needs the blockquote to explain the
+    rest of it, which is what the llms.txt convention reserves it for.
+    """
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    line = llmstxt.summary(compendium, page_count=2)
+
+    assert line.startswith("> ")
+    assert "knowledge base of 3 sections" in line
+    assert "drawn from 2 pages on example.org" in line
+    assert compendium.built_at in line
+    # The heading directly above already carries the name.
+    assert not line.startswith(f"> {compendium.name}")
+
+
+def test_index_explains_that_it_is_an_index_and_points_at_the_full_text(
+    fixtures_dir, fake_embed_chunks_core
+):
+    body = llmstxt.render_index(sample_compendium(fixtures_dir, fake_embed_chunks_core))
+
+    assert "This file is an index, not the content itself." in body
+    assert "llms-full.txt" in body
+
+
+def test_full_file_explains_that_it_is_the_content_and_points_at_the_index(
+    fixtures_dir, fake_embed_chunks_core
+):
+    body = llmstxt.render_full(sample_compendium(fixtures_dir, fake_embed_chunks_core))
+
+    assert "This file holds the complete text of every page indexed" in body
+    assert "llms.txt, written alongside this file" in body
+
+
+def test_the_orientation_uses_no_headings_of_its_own(fixtures_dir, fake_embed_chunks_core):
+    """
+    The llms.txt convention allows free-form prose between the summary and
+    the link sections but no headings there, because a heading starts a new
+    section for a parser reading the file (https://llmstxt.org/).
+    """
+    for body in (llmstxt.render_index(sample_compendium(fixtures_dir, fake_embed_chunks_core)),
+                 llmstxt.render_full(sample_compendium(fixtures_dir, fake_embed_chunks_core))):
+        before_sections = body.split("\n## ", 1)[0]
+        headings = [line for line in before_sections.splitlines() if line.startswith("#")]
+        assert headings == ["# Example Org"]
+
+
 def test_index_starts_with_one_heading_and_a_summary(fixtures_dir, fake_embed_chunks_core):
     body = llmstxt.render_index(sample_compendium(fixtures_dir, fake_embed_chunks_core))
 

@@ -72,6 +72,34 @@ LICENSE_LINE = (
     "under the license of the site it was read from."
 )
 
+# Sites named in the summary before the rest are counted rather than
+# listed, so the opening line stays one readable sentence.
+HOSTS_SHOWN = 3
+
+# What each file is and how to use it, for a reader arriving with no
+# context. The llms.txt convention puts the free-form explanation between
+# the summary and the link sections, and allows no headings there, so
+# these are plain paragraphs (https://llmstxt.org/).
+INDEX_ORIENTATION = (
+    "This file is an index, not the content itself. Each entry below names one "
+    "page, links to it, and quotes the opening of its text, so you can judge "
+    "whether a page answers your question before fetching it. Entries are "
+    "grouped by the kind of source they came from, in the order the pages were "
+    "found.",
+    f"{FULL_FILE}, written alongside this file, holds the complete text of every "
+    f"page listed here, in the same order. Read that instead if you want "
+    f"everything at once rather than following links.",
+)
+
+FULL_ORIENTATION = (
+    "This file holds the complete text of every page indexed, one heading per "
+    "section, with the address it came from under each heading. A page that ran "
+    "long appears as several sections sharing one heading.",
+    f"{INDEX_FILE}, written alongside this file, lists the same pages as links "
+    f"with a one-line excerpt each. Read that instead if you only need to find "
+    f"the right page.",
+)
+
 
 ### Text Helpers ###
 
@@ -135,17 +163,80 @@ def pages_in_order(parents):
 
 ### File Bodies ###
 
-def _preamble(compendium, page_count):
-    """The H1, the one-line summary, and the license line both files open with."""
-    return [
-        f"# {compendium.name}",
-        "",
-        f"> {page_count} page(s) and {len(compendium.parents)} section(s), "
-        f"compiled on {compendium.built_at}.",
-        "",
-        LICENSE_LINE,
-        "",
-    ]
+def source_hosts(parents):
+    """
+    The sites the content came from, in the order they first appear.
+
+    Args:
+        parents (Iterable[extractium.core.models.Parent]): the parents this
+            output may write.
+
+    Returns:
+        tuple[str, ...]: distinct host names. Local files have no host and
+        contribute none.
+    """
+    hosts = {}
+    for parent in parents:
+        if parent.host:
+            hosts.setdefault(parent.host, None)
+    return tuple(hosts)
+
+
+def name_sites(hosts, limit=HOSTS_SHOWN):
+    """
+    The hosts as a readable phrase, counting the ones past the limit rather
+    than listing them: "a.edu, b.org and 4 other sites".
+
+    Returns:
+        str: the phrase, or an empty string when there are no hosts, which
+        is the case for an output of purely local content.
+    """
+    if not hosts:
+        return ""
+    shown, extra = list(hosts[:limit]), len(hosts) - limit
+    if extra > 0:
+        shown.append(f"{extra} other site{'s' if extra > 1 else ''}")
+    if len(shown) == 1:
+        return shown[0]
+    return f"{', '.join(shown[:-1])} and {shown[-1]}"
+
+
+def count_of(number, noun):
+    """A counted noun that reads correctly in either number: "1 page", "2 pages"."""
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
+def summary(compendium, page_count):
+    """
+    The blockquote line: what this knowledge base is, where it came from,
+    and when it was built. The llms.txt convention puts the information a
+    reader needs in order to understand the rest of the file here, and the
+    heading above it already carries the name.
+    """
+    sites = name_sites(source_hosts(compendium.parents))
+    pages = count_of(page_count, "page") if sites else count_of(page_count, "file")
+    drawn_from = f" drawn from {pages} on {sites}" if sites else f" drawn from {pages}"
+    return (
+        f"> A knowledge base of {count_of(len(compendium.parents), 'section')}"
+        f"{drawn_from}, compiled on {compendium.built_at}."
+    )
+
+
+def _preamble(compendium, page_count, orientation):
+    """
+    The heading, summary, orientation, and license both files open with.
+
+    Args:
+        compendium (extractium.core.models.Compendium): the build result.
+        page_count (int): pages named in this file.
+        orientation (Sequence[str]): paragraphs saying what this file is
+            and how to read it.
+    """
+    lines = [f"# {compendium.name}", "", summary(compendium, page_count), ""]
+    for paragraph in orientation:
+        lines.extend([paragraph, ""])
+    lines.extend([LICENSE_LINE, ""])
+    return lines
 
 
 def render_index(compendium):
@@ -161,7 +252,7 @@ def render_index(compendium):
         str: the file's complete text, ending in a newline.
     """
     pages = pages_in_order(compendium.parents)
-    lines = _preamble(compendium, len(pages))
+    lines = _preamble(compendium, len(pages), INDEX_ORIENTATION)
     for source_type, title in SECTION_TITLES:
         group = [page for page in pages if page["source_type"] == source_type]
         if not group:
@@ -187,7 +278,7 @@ def render_full(compendium):
         str: the file's complete text, ending in a newline.
     """
     pages = pages_in_order(compendium.parents)
-    lines = _preamble(compendium, len(pages))
+    lines = _preamble(compendium, len(pages), FULL_ORIENTATION)
     for parent in compendium.parents:
         lines.append(f"## {parent.t}")
         lines.append("")

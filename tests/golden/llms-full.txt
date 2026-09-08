@@ -1,6 +1,10 @@
 # Example Org
 
-> 2 page(s) and 3 section(s), compiled on 2026-01-02T03:04:05Z.
+> A knowledge base of 3 sections drawn from 2 pages on example.org, compiled on 2026-01-02T03:04:05Z.
+
+This file holds the complete text of every page indexed, one heading per section, with the address it came from under each heading. A page that ran long appears as several sections sharing one heading.
+
+llms.txt, written alongside this file, lists the same pages as links with a one-line excerpt each. Read that instead if you only need to find the right page.
 
 Compiled by Extractium (https://github.com/DepressionCenter/extractium), copyright (c) 2026 The Regents of the University of Michigan, licensed under the GNU General Public License v3.0 or later. The indexed content remains under the license of the site it was read from.
 
