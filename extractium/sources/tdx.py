@@ -49,6 +49,17 @@ TDX_CONTENT_SELECTORS = ("#divMainContent", "#questionsContent")
 # The portal prefixes every <title> with the page kind.
 TDX_TITLE_PREFIXES = ("Article - ", "Question Detail - ")
 
+# The portal cuts a long <title> short and marks the cut with an ellipsis,
+# so an article's <title> can read "How to use OData query filt...". A
+# heading is what a reader is shown and what an answer cites, so a cut-off
+# one is worth replacing.
+TDX_TITLE_TRUNCATION_MARKERS = ("...", "…")
+
+# Where the whole title survives when the <title> does not. The metadata
+# the portal publishes for link sharing is unambiguous; the article's own
+# <h1> is the visible heading. Both are read before the body is stripped.
+TDX_FULL_TITLE_META = "og:title"
+
 # The breadcrumb trail above an article: "Knowledge Base > Category >
 # Article". Linked crumbs are the hierarchy; the unlinked last crumb is
 # the page itself.
@@ -87,6 +98,50 @@ def strip_title_prefix(title):
     """Removes the portal's "Article - " or "Question Detail - " prefix from a title."""
     for prefix in TDX_TITLE_PREFIXES:
         title = title.removeprefix(prefix)
+    return title
+
+
+def is_truncated_title(title):
+    """True when the portal cut this title short and marked it with an ellipsis."""
+    return title.endswith(TDX_TITLE_TRUNCATION_MARKERS)
+
+
+def full_title(soup):
+    """
+    The article's whole title, taken from a part of the page the portal
+    leaves intact.
+
+    Args:
+        soup (BeautifulSoup): the parsed page, before boilerplate is
+            stripped, because the heading can sit inside an element the
+            stripper removes.
+
+    Returns:
+        str | None: the title, or None when neither source has one that
+        is itself uncut.
+    """
+    meta = soup.find("meta", attrs={"property": TDX_FULL_TITLE_META})
+    heading = soup.find("h1")
+    candidates = (
+        (meta.get("content") or "") if meta else "",
+        heading.get_text(" ", strip=True) if heading else "",
+    )
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if candidate and not is_truncated_title(candidate):
+            return candidate
+    return None
+
+
+def article_title(soup):
+    """
+    The title recorded on every section of one portal page: the <title>
+    without the portal's page-kind prefix, replaced by the article's own
+    heading when the portal cut the <title> short.
+    """
+    title = strip_title_prefix(page_title(soup) or UNTITLED)
+    if is_truncated_title(title):
+        return full_title(soup) or title
     return title
 
 
@@ -143,14 +198,15 @@ class TdxHandler:
         """
         The article or question body with boilerplate stripped, or None
         when neither selector finds a node with text (a listing page).
-        Categories come from the breadcrumb trail, read before the body
-        is stripped.
+        The categories and the title are both read before the body is
+        stripped, because the breadcrumb trail and the article heading
+        can sit inside elements the stripper removes.
         """
         categories = breadcrumb_categories(soup)
+        title = article_title(soup)
         node = select_content(soup, TDX_CONTENT_SELECTORS, require_text=True)
         if node is None:
             return None
-        title = strip_title_prefix(page_title(soup) or UNTITLED)
         return Extraction(title=title, node=node, categories=categories)
 
     def content_type(self, url):

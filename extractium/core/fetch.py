@@ -58,6 +58,21 @@ from extractium.core import cache
 # it through the user_agent setting.
 DEFAULT_USER_AGENT = f"Extractium/{__version__} (+https://github.com/DepressionCenter/extractium)"
 
+# Some content-delivery filters refuse anything that does not look like a
+# browser, whatever the site's robots.txt allows. This is the identity a
+# crawl falls back to for such a page, and only when the operator has
+# already turned robots.txt off for the build, which is the deliberate
+# statement that they own or have permission for the sites in scope.
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
+
+# Answers that mean "not for you", as opposed to "not here" or "broken".
+# A page that gives one of these to the tool's own User-Agent is worth one
+# retry as a browser; a 404 or a 500 is not.
+BLOCKED_STATUS_CODES = (401, 403, 429)
+
 # Sent with every page request, alongside the User-Agent.
 ACCEPT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml",
@@ -365,7 +380,8 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html):
     return BeautifulSoup(r.text, "html.parser") if expect_html else r.text
 
 
-def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AGENT, progress=None):
+def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AGENT,
+          progress=None, fallback_user_agent=None):
     """
     Fetches one URL through the local page cache. If a cache entry exists,
     sends a single conditional GET with If-None-Match / If-Modified-Since
@@ -390,6 +406,11 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
         user_agent (str): the User-Agent header value to send.
         progress (Callable[[str], None] | None): receives one line for a
             cache hit or a skipped URL; None reports nothing.
+        fallback_user_agent (str | None): identity to retry the request
+            with, once, when the site answers one of BLOCKED_STATUS_CODES
+            to user_agent. None, the default, never retries and never
+            sends anything but user_agent. Both attempts are reported, so
+            a log always shows that the second identity was used.
 
     Returns:
         BeautifulSoup | str | None: the fetched content, or None if the
@@ -412,6 +433,16 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
             headers=request_headers(user_agent, conditional_headers),
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
+
+        if (r.status_code in BLOCKED_STATUS_CODES
+                and fallback_user_agent
+                and fallback_user_agent != user_agent):
+            _report(progress, f"       {r.status_code} for {user_agent!r}; retrying once as a browser")
+            r = session.get(
+                url,
+                headers=request_headers(fallback_user_agent, conditional_headers),
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
 
         if conditional_headers and r.status_code == 304:
             try:

@@ -75,6 +75,21 @@ class CrawlSettings:
     user_agent: str = fetching.DEFAULT_USER_AGENT
     respect_robots_txt: bool = True
 
+    @property
+    def blocked_retry_user_agent(self):
+        """
+        The identity a refused page is retried with once, or None to never
+        retry.
+
+        Turning `respect_robots_txt` off is an operator's statement that
+        they own the sites in scope, or have permission for them. That is
+        the only condition under which a crawl will present itself as a
+        browser, and then only for a page that refused the truthful
+        identity outright. A crawl left at the default never does it, so
+        no site is misled by a build nobody chose to configure that way.
+        """
+        return None if self.respect_robots_txt else fetching.BROWSER_USER_AGENT
+
 
 ### Site Handler Selection ###
 
@@ -280,6 +295,7 @@ class WebSource:
             fetched = fetching.fetch(
                 session, request_url, cache,
                 expect_html=expect_html, user_agent=settings.user_agent, progress=progress,
+                fallback_user_agent=settings.blocked_retry_user_agent,
             )
             if fetched is None:
                 continue

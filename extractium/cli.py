@@ -57,6 +57,21 @@ EXIT_OUTPUT = 4            # an output could not be written
 
 ### Progress And Messages ###
 
+def write_line(message, stream):
+    """
+    Writes one line to a stream, whatever characters it holds.
+
+    Page titles and file names come from sites nobody here controls, and a
+    console whose encoding cannot represent one of their characters raises
+    rather than printing. Losing a finished build to that, after the whole
+    crawl and every vector, would be absurd, so an unrepresentable
+    character is replaced and the line still goes out.
+    """
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    safe = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    print(safe, file=stream, flush=True)
+
+
 def progress_to_stderr(message):
     """
     Prints one progress line to standard error.
@@ -65,12 +80,12 @@ def progress_to_stderr(message):
     summary, which means a caller can redirect the summary to a file while
     still watching the run.
     """
-    print(message, file=sys.stderr, flush=True)
+    write_line(message, sys.stderr)
 
 
 def fail(message, code):
     """Prints one actionable line to standard error and returns the exit code."""
-    print(f"extractium: {message}", file=sys.stderr)
+    write_line(f"extractium: {message}", sys.stderr)
     return code
 
 
@@ -150,16 +165,19 @@ def print_summary(compendium, written):
     content read from a local folder, so nobody publishes such a file
     without having been told.
     """
-    print(f"Built {compendium.name!r} at {compendium.built_at}")
-    print(f"  sections : {len(compendium.parents)}")
-    print(f"  windows  : {len(compendium.children)}")
-    print(f"  sources  : {compendium.source_count}")
+    write_line(f"Built {compendium.name!r} at {compendium.built_at}", sys.stdout)
+    write_line(f"  sections : {len(compendium.parents)}", sys.stdout)
+    write_line(f"  windows  : {len(compendium.children)}", sys.stdout)
+    write_line(f"  sources  : {compendium.source_count}", sys.stdout)
     for entry, paths in written:
         for path in paths:
             size_mb = path.stat().st_size / 1024 / 1024
-            print(f"  wrote    : {path} ({size_mb:.2f} MB)")
+            write_line(f"  wrote    : {path} ({size_mb:.2f} MB)", sys.stdout)
         if entry.include_local and compendium.local_parents():
-            print(f"  NOTICE   : output {entry.type!r} includes local content; check before publishing.")
+            write_line(
+                f"  NOTICE   : output {entry.type!r} includes local content; check before publishing.",
+                sys.stdout,
+            )
 
 
 ### Build Command ###

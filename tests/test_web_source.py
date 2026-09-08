@@ -485,6 +485,94 @@ def test_resolve_site_handlers_rejects_an_unknown_name():
 
 
 # ---------------------------------------------------------------------------
+# Identity when a site refuses the truthful User-Agent
+# ---------------------------------------------------------------------------
+
+def test_a_crawl_that_honors_robots_never_retries_as_a_browser():
+    assert web.CrawlSettings().blocked_retry_user_agent is None
+    assert web.CrawlSettings(respect_robots_txt=True).blocked_retry_user_agent is None
+
+
+def test_turning_robots_off_allows_one_browser_retry_for_a_refused_page():
+    settings = web.CrawlSettings(respect_robots_txt=False)
+
+    assert settings.blocked_retry_user_agent == fetch.BROWSER_USER_AGENT
+    assert settings.blocked_retry_user_agent.startswith("Mozilla/5.0")
+
+
+def test_a_refused_page_is_retried_as_a_browser_only_when_robots_is_off(
+    isolated_core_cache, fake_session_factory
+):
+    """
+    One site in the Depression Center's own scope allows every crawler in
+    its robots.txt and still answers 403 to anything that does not look
+    like a browser. Working around that is an opt-in, not a default.
+    """
+    url = "https://example.org/blocked"
+    page = html_response("<html><head><title>Blocked Page</title></head>"
+                         "<body><main><p>Content behind the filter.</p></main></body></html>")
+
+    refused_only = fake_session_factory({url: [FakeResponse(status_code=403)]})
+    assert fetch.fetch(refused_only, url, {}, progress=quiet) is None
+    assert len(refused_only.calls) == 1
+
+    retried = fake_session_factory({url: [FakeResponse(status_code=403), page]})
+    soup = fetch.fetch(retried, url, {}, progress=quiet,
+                       fallback_user_agent=fetch.BROWSER_USER_AGENT)
+
+    assert soup is not None
+    assert len(retried.calls) == 2
+    assert retried.calls[0]["headers"]["User-Agent"] == fetch.DEFAULT_USER_AGENT
+    assert retried.calls[1]["headers"]["User-Agent"] == fetch.BROWSER_USER_AGENT
+
+
+def test_a_page_that_is_merely_missing_is_not_retried_as_a_browser(
+    isolated_core_cache, fake_session_factory
+):
+    url = "https://example.org/gone"
+    session = fake_session_factory({url: [FakeResponse(status_code=404)]})
+
+    assert fetch.fetch(session, url, {}, progress=quiet,
+                       fallback_user_agent=fetch.BROWSER_USER_AGENT) is None
+    assert len(session.calls) == 1
+
+
+def test_the_browser_retry_is_reported_so_a_log_shows_which_identity_was_used(
+    isolated_core_cache, fake_session_factory
+):
+    url = "https://example.org/blocked"
+    page = html_response("<html><head><title>Blocked</title></head><body><main>"
+                         "<p>Content.</p></main></body></html>")
+    session = fake_session_factory({url: [FakeResponse(status_code=403), page]})
+    lines = []
+
+    fetch.fetch(session, url, {}, progress=lines.append,
+                fallback_user_agent=fetch.BROWSER_USER_AGENT)
+
+    assert any("403" in line and "retrying once as a browser" in line for line in lines)
+
+
+def test_the_crawl_loop_passes_the_retry_identity_down_to_each_request(
+    isolated_core_cache, fake_session_factory
+):
+    seed = "https://example.org/blocked"
+    page = html_response("<html><head><title>Blocked</title></head><body><main>"
+                         "<p>Content long enough to clear the minimum chunk size threshold "
+                         "used by the chunker in this test.</p></main></body></html>")
+    session = fake_session_factory({
+        seed: [FakeResponse(status_code=403), page],
+        "https://example.org/robots.txt": ROBOTS_ABSENT,
+    })
+    source = web.WebSource({"seed_url": seed},
+                           settings=web.CrawlSettings(delay_seconds=0, respect_robots_txt=False))
+
+    documents = list(source.fetch(session, {}, quiet))
+
+    assert [d.title for d in documents] == ["Blocked"]
+    assert session.calls[-1]["headers"]["User-Agent"] == fetch.BROWSER_USER_AGENT
+
+
+# ---------------------------------------------------------------------------
 # configure(): adopting the registry and the global crawl settings
 # ---------------------------------------------------------------------------
 

@@ -134,7 +134,10 @@ sources:
 #user_agent: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
 
 # Whether to honor each site's robots.txt. A site whose robots.txt cannot
-# be read is skipped entirely. Switch it off only for a site you own.
+# be read is skipped entirely. Switch it off only for sites you own: as
+# well as ignoring robots rules, it lets a page that answers 403 to the
+# crawler be requested once more as a browser, which is the only way past
+# a filter that turns away anything that is not one.
 #respect_robots_txt: true
 
 # Which content the PHI (protected health information) check scans:

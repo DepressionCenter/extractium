@@ -395,6 +395,29 @@ def test_the_summary_calls_out_an_output_that_includes_local_content(build_works
     assert "includes local content" in capsys.readouterr().out
 
 
+def test_output_survives_a_console_that_cannot_encode_a_page_title(tmp_path):
+    """
+    Page titles come from sites nobody here controls. A console whose
+    encoding has no room for one of their characters must not cost a
+    finished build its summary.
+    """
+    path = tmp_path / "summary.txt"
+    with open(path, "w", encoding="cp1252", newline="\n") as narrow:
+        cli.write_line("Built 'Mobile Tech ⌚ FAQs \U0001F4C5'", narrow)
+
+    written = path.read_text(encoding="cp1252")
+    assert written.startswith("Built 'Mobile Tech ")
+    assert "FAQs" in written
+
+
+def test_output_leaves_text_the_stream_can_encode_alone(tmp_path):
+    path = tmp_path / "summary.txt"
+    with open(path, "w", encoding="utf-8", newline="\n") as wide:
+        cli.write_line("Built 'Mobile Tech ⌚ FAQs'", wide)
+
+    assert path.read_text(encoding="utf-8") == "Built 'Mobile Tech ⌚ FAQs'\n"
+
+
 def test_version_flag_reports_the_package_version(capsys):
     with pytest.raises(SystemExit) as exit_info:
         cli.main(["--version"])

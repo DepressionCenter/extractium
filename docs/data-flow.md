@@ -61,7 +61,7 @@ The same thing in words, for anyone whose reader does not show the diagram: the 
 
 A source visits a URL. The web source asks its site handlers which one reads that kind of page; the handler returns the page title, the part of the page that holds the content, and any category hierarchy the page shows, such as a portal's breadcrumb trail.
 
-Every request carries the User-Agent from your settings, and every site's `robots.txt` is checked first. A site whose `robots.txt` cannot be read at all is skipped entirely, not crawled anyway.
+Every request carries the User-Agent from your settings, and every site's `robots.txt` is checked first. A site whose `robots.txt` cannot be read at all is skipped entirely, not crawled anyway. A page that refuses the crawler outright is reported and skipped, unless you have set `respect_robots_txt: false`, which also allows one retry as a browser for such a page. See the [configuration reference](configuration.md).
 
 ### 2. A document
 

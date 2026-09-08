@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -85,7 +85,7 @@ Each entry in `sources` and `outputs` names a `type` and then that type's own op
 | `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
-| `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. See "How robots.txt is read" below. |
+| `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |
 | `phi_lint` | `local`, `all`, or `off` | `local` | Which content the protected health information check scans. |
 
 `phi_lint` is validated now; the check that acts on it is not built yet. See [the implementation plan](implementation-plan.md).
@@ -223,6 +223,23 @@ With `respect_robots_txt` on (the default), the crawler reads `robots.txt` once 
 | 5xx, or no answer at all | Skips every page on that site and reports why. |
 
 Skipping a whole site when its rules cannot be read is deliberate. A crawler that cannot read a site's rules must not guess that it is welcome. Switch `respect_robots_txt` off only for a site you own.
+
+### What happens when a site refuses the crawler
+
+Some sites sit behind a filter that turns away anything that does not look like a web browser, no matter what their `robots.txt` allows. The page answers `403 Forbidden` to the crawler and opens normally in a browser.
+
+By default, Extractium reports the refusal and moves on. It does not disguise itself, because a tool that names itself and then works around a site's own filter is not really naming itself.
+
+Setting `respect_robots_txt: false` changes that, on the grounds that you only turn the check off for sites you own or have permission for. With it off:
+
+- Every page is still requested with your `user_agent` first.
+- A page that answers `401`, `403`, or `429` to that is requested **once more** with a common browser User-Agent.
+- Both attempts are printed, so the log always shows which identity got the page.
+- A page that is simply missing (`404`) or broken (`5xx`) is never retried. Those are not refusals.
+
+Pages that were never refused are still fetched under your own `user_agent`, so a site that would have served the crawler happily is never misled.
+
+Leave `respect_robots_txt` at `true` unless you own the sites in your crawl scope. Turning it off means both parts of this: robots rules are ignored, and a refused page is retried as a browser.
 
 ### Turning a default list off
 
