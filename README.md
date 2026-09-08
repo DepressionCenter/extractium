@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -30,20 +30,24 @@ Extractium™ turns scattered public documentation into one searchable knowledge
 
 Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and can publish multiple output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in Field Station AI™ and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
 
-Project status: this repository is currently at the package-skeleton stage, and the command-line interface is not yet functional. See the implementation plan in `docs/` for the order of work.
+Project status: a build runs end to end and writes the search index and the `llms.txt` files. The client libraries that read the index back are not built yet. See the implementation plan in `docs/` for the order of work.
 
 
 ## Quick Start Guide
 ```bash
 pip install -e ".[dev]"
+cp examples/config.example.yaml config.yaml   # then change the seed URL to your own site
+extractium build --config config.yaml --max-pages 25
 ```
-The `extractium` command is not yet functional (package-skeleton stage — see [docs/implementation-plan.md](docs/implementation-plan.md) for the order of work).
+That writes `dist/kb-index.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Drop the page cap once the page list in `dist/llms.txt` looks right. See [docs/usage.md](docs/usage.md) for every option and what each exit code means.
 
 
 ## Documentation
 + The full documentation is available at: https://michmed.org/efdc-kb
 + Technical pages live in [docs/](docs/README.md):
+  + [Running a build](docs/usage.md) — the command line, its options, and its exit codes.
   + [Configuration reference](docs/configuration.md) — every setting in `config.yaml`.
+  + [Data flow](docs/data-flow.md) — what happens to content between the site and the output folder.
   + [Specification](docs/extractium-spec.md) — architecture, plugin kinds, outputs, and sources.
   + [Container format](docs/container-format.md) — the index file every client reads.
   + [Implementation plan](docs/implementation-plan.md) — the phased order of work.

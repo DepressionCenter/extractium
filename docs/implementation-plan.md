@@ -131,6 +131,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** a build against the fixtures writes both outputs, and a manual run with `--max-pages 25` against the real portal produces a file the Python client in Phase 4 will open.
 
+*Finished 2026-09-08 on branch `phase-3-build-and-outputs`. The local-content guardrail moved forward from Phase 6 into `extractium/adapters/base.py`, so no adapter was ever written without it; Phase 6 keeps the local source, the PHI lint, and the command-line notice.*
+
 ### Phase 4: JavaScript and Python clients
 
 **Goal.** Read the container back and search it, identically, in two languages.
@@ -173,7 +175,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 - `extractium/adapters/sqlite_out.py`: tables for metadata, parents, children, BM25 terms and postings, and vectors, with the grain of each table stated in comments.
 - `extractium/sources/local.py`: reads Markdown, text, and HTML from a folder; marks every parent `local: true`; uses paths relative to the folder as URLs.
 - `extractium/core/phi_lint.py`: pattern checks for likely protected health information; a report file in the working directory, never in the output folder; wording that never claims absence.
-- The guardrail in the adapter base: local parents are dropped from every output unless that output sets `include_local: true`, and the command line names every output that includes them.
+- The command line's notice naming every output that includes local content. The guardrail itself, in `extractium/adapters/base.py`, was written in Phase 3 with the first two adapters, so no output has ever shipped without it.
 
 **Tests.** Local parents are absent from every output by default and present only when opted in. The lint flags synthetic identifiers and its output never contains the phrase "no PHI". Row counts per table match the compendium.
 

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-08
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -23,7 +23,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds the written documentation for Extractium™. Each page below covers one topic. Start with the configuration reference if you are setting up a build, or the specification if you want to know how the tool is put together.
+This folder holds the written documentation for Extractium™. Each page below covers one topic. Start with Running a Build if you want to produce an index, the configuration reference if you are setting one up, or the specification if you want to know how the tool is put together.
 
 
 ## Pages
@@ -32,8 +32,10 @@ This folder holds the written documentation for Extractium™. Each page below c
   and the design decisions still open.
 * [Configuration Reference](configuration.md) — every setting in `config.yaml`, its default, and how the URL patterns work.
 * [Container Format](container-format.md) — the binary index file every client reads: byte layout, header fields, and the checklist for writing a reader.
+* [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
 * [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
+* [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
 * [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session, phase or not; your request goes on the last line.
 
