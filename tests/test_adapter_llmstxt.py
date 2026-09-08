@@ -56,6 +56,22 @@ def test_excerpt_leaves_short_text_alone():
     assert llmstxt.excerpt("short enough") == "short enough"
 
 
+def test_link_escapes_a_title_that_would_end_the_link_early():
+    assert llmstxt.link("Guide [draft]", "https://example.org/g") == (
+        "[Guide \\[draft\\]](https://example.org/g)"
+    )
+
+
+def test_link_encodes_url_characters_that_would_end_the_link_early():
+    assert llmstxt.link("Guide", "https://example.org/a(b)c d") == (
+        "[Guide](https://example.org/a%28b%29c%20d)"
+    )
+
+
+def test_link_leaves_an_ordinary_title_and_url_alone():
+    assert llmstxt.link("Guide", "https://example.org/g") == "[Guide](https://example.org/g)"
+
+
 # ---------------------------------------------------------------------------
 # Snapshots
 # ---------------------------------------------------------------------------

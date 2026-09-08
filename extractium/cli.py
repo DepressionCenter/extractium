@@ -35,6 +35,8 @@ __date__ = "2026-08-17"
 import argparse
 import sys
 
+import requests
+
 from extractium import __version__
 from extractium.config import ConfigError, load_config
 from extractium.core import cache as caching
@@ -172,8 +174,6 @@ def run_build(args):
     Returns:
         int: one of the EXIT_ constants.
     """
-    import requests
-
     overrides = {
         "out_dir": args.out_dir,
         "max_pages": args.max_pages,

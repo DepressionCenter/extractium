@@ -80,6 +80,19 @@ def page_title(heading):
     return heading.split(HEADING_SEPARATOR, 1)[0].strip()
 
 
+def link(title, url):
+    """
+    One Markdown link, safe to build from a crawled page title and URL.
+
+    Both come from a page nobody here controls. A `]` in a title or a `)`
+    in a URL would end the link early and turn the rest of the line into
+    stray text, so the first is escaped and the second is percent-encoded.
+    """
+    safe_title = title.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    safe_url = url.replace("(", "%28").replace(")", "%29").replace(" ", "%20")
+    return f"[{safe_title}]({safe_url})"
+
+
 def excerpt(text, limit=EXCERPT_CHARS):
     """
     One line of text for a link's description: whitespace collapsed, cut
@@ -156,7 +169,7 @@ def render_index(compendium):
         lines.append(f"## {title}")
         lines.append("")
         for page in group:
-            lines.append(f"- [{page['title']}]({page['url']}): {excerpt(page['text'])}")
+            lines.append(f"- {link(page['title'], page['url'])}: {excerpt(page['text'])}")
         lines.append("")
     return "\n".join(lines).rstrip("\n") + "\n"
 
