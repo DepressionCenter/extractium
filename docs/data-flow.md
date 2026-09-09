@@ -159,7 +159,7 @@ So: assume any folder you point a local source at may hold protected health info
 
 Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, and a `github/` folder of file bodies read through the GitHub API. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
 
-Each file read from GitHub is stored under its blob name, which is Git's own name for those exact bytes. The same file is therefore downloaded once however many branches or paths point at it. Nothing in that folder holds an access token: only the file body is written, never a request header.
+Each file read from GitHub is stored under its blob name, which is Git's own name for those exact bytes. The same file is therefore downloaded once however many branches or paths point at it, and however it arrived: a repository is normally read as one archive in memory, and the files taken out of it are stored the same way as files requested one at a time. A rebuild of a repository nobody has changed downloads nothing. Nothing in that folder holds an access token: only the file body is written, never a request header.
 
 Note that the cache holds page bodies as fetched. If you crawl a site that requires a login, the cache holds whatever that login gave you. Extractium sends no credentials of its own, apart from a `GITHUB_TOKEN` you set in the environment, which is sent to GitHub and to nowhere else.
 

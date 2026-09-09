@@ -33,9 +33,11 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-09"
 
+import io
 import json
 import pathlib
 import re
+import tarfile
 
 import pytest
 
@@ -71,9 +73,35 @@ def quiet(line):
     """A progress sink for tests that do not inspect progress."""
 
 
-def api_routes(fixture, repositories=None, trees=None):
+def make_archive(entries, prefix="example-org-example-tools-abc1234"):
+    """A gzip tar shaped the way GitHub ships one: everything under one top folder."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for path, body in entries.items():
+            data = body.encode("utf-8")
+            info = tarfile.TarInfo(f"{prefix}/{path}")
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return buffer.getvalue()
+
+
+def repository_archive(fixture, name):
+    """The archive GitHub would ship for one repository of the fixture."""
+    paths = {
+        entry["path"]: fixture["blobs"][entry["sha"]]
+        for entry in fixture["trees"][name]["tree"]
+        if entry.get("type") == "blob" and entry["sha"] in fixture["blobs"]
+    }
+    return make_archive(paths, prefix=f"example-org-{name}-abc1234")
+
+
+def api_routes(fixture, repositories=None, trees=None, archives=True):
     """
     The scripted API answers for the synthetic organization.
+
+    Both routes to a file body are scripted: the repository archive, which
+    is how a small repository is read, and the individual blobs, which is
+    how a large one is.
 
     Args:
         fixture (dict): the loaded fixture file.
@@ -81,6 +109,8 @@ def api_routes(fixture, repositories=None, trees=None):
             own list by default.
         trees (dict | None): repository name to tree answer; the
             fixture's own trees by default.
+        archives (bool): False leaves the tarball addresses unscripted, so
+            a test can exercise the fall back to individual requests.
     """
     repositories = fixture["repositories"] if repositories is None else repositories
     trees = fixture["trees"] if trees is None else trees
@@ -95,6 +125,10 @@ def api_routes(fixture, repositories=None, trees=None):
             routes[f"{API_ROOT}/repos/example-org/{name}/git/trees/main"] = FakeApiResponse(
                 payload=trees[name]
             )
+            if archives:
+                routes[f"{API_ROOT}/repos/example-org/{name}/tarball/main"] = FakeApiResponse(
+                    content=repository_archive(fixture, name)
+                )
     for sha, body in fixture["blobs"].items():
         routes[f"{API_ROOT}/repos/example-org/example-tools/git/blobs/{sha}"] = FakeApiResponse(text=body)
         routes[f"{API_ROOT}/repos/example-org/example-notes/git/blobs/{sha}"] = FakeApiResponse(text=body)
@@ -348,7 +382,7 @@ def test_the_size_ceiling_is_configurable(fixture, fake_github_session_factory):
 def test_a_file_that_vanished_between_the_inventory_and_the_download_is_reported(
     fixture, fake_github_session_factory,
 ):
-    routes = api_routes(fixture)
+    routes = api_routes(fixture, archives=False)
     del routes[f"{API_ROOT}/repos/example-org/example-tools/git/blobs/"
                f"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
     lines = []
@@ -510,18 +544,90 @@ def test_a_failure_partway_through_neither_loses_a_repository_nor_repeats_one(
     }
 
 
-def test_a_file_body_read_once_is_not_downloaded_again(
+# ---------------------------------------------------------------------------
+# How file bodies are downloaded
+# ---------------------------------------------------------------------------
+
+def test_a_repository_is_read_as_one_archive_rather_than_a_request_per_file(
+    fixture, fake_github_session_factory,
+):
+    """
+    Requests are the scarce resource: an anonymous build gets roughly
+    sixty an hour in total, and one archive spends one of them however
+    many files come out of it.
+    """
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(), session)
+
+    assert f"{API_ROOT}/repos/example-org/example-tools/tarball/main" in session.urls
+    assert not [url for url in session.urls if "/git/blobs/" in url]
+    assert any(d.url.endswith("example-tools/blob/main/README.md") for d in documents)
+
+
+def test_a_repository_too_large_for_an_archive_is_read_a_file_at_a_time(
+    fixture, fake_github_session_factory,
+):
+    """The ceiling is what keeps a very large repository out of memory."""
+    large = dict(fixture["repositories"][0], size=999_999)
+    lines = []
+    session = fake_github_session_factory(
+        api_routes(fixture, repositories=[large, fixture["repositories"][1]])
+    )
+
+    documents = read(make_source(), session, progress=lines.append)
+
+    assert any("too large to read as one archive" in line for line in lines)
+    assert [url for url in session.urls if "/git/blobs/" in url]
+    assert any(d.url.endswith("example-tools/blob/main/README.md") for d in documents)
+
+
+def test_an_archive_that_cannot_be_read_falls_back_to_one_request_per_file(
+    fixture, fake_github_session_factory,
+):
+    """An unreadable archive must not cost the repository its documentation."""
+    lines = []
+    session = fake_github_session_factory(api_routes(fixture, archives=False))
+
+    documents = read(make_source(), session, progress=lines.append)
+
+    assert any("one at a time" in line for line in lines)
+    assert any(d.url.endswith("example-tools/blob/main/README.md") for d in documents)
+
+
+def test_a_file_read_once_is_never_downloaded_again(
+    fixture, fake_github_session_factory, isolated_core_cache,
+):
+    """
+    Both routes fill and read one cache, keyed by the blob name Git gives
+    those exact bytes, so a repository nobody changed needs no download.
+    """
+    session = fake_github_session_factory(api_routes(fixture))
+    read(make_source(), session)
+    lines = []
+
+    second_session = fake_github_session_factory(api_routes(fixture))
+    documents = read(make_source(), second_session, progress=lines.append)
+
+    assert f"{API_ROOT}/repos/example-org/example-tools/tarball/main" in session.urls
+    assert not [url for url in second_session.urls if "/tarball/" in url]
+    assert not [url for url in second_session.urls if "/git/blobs/" in url]
+    assert any("unchanged since the last build" in line for line in lines)
+    # The content is still there; it came off the disk.
+    assert any(d.url.endswith("example-tools/blob/main/README.md") for d in documents)
+
+
+def test_a_file_read_through_an_archive_is_stored_under_its_blob_name(
     fixture, fake_github_session_factory, isolated_core_cache,
 ):
     session = fake_github_session_factory(api_routes(fixture))
+
     read(make_source(), session)
-    blob_requests = len([url for url in session.urls if "/git/blobs/" in url])
 
-    second_session = fake_github_session_factory(api_routes(fixture))
-    read(make_source(), second_session)
-
-    assert blob_requests > 0
-    assert not [url for url in second_session.urls if "/git/blobs/" in url]
+    readme_sha = "a" * 40
+    stored = isolated_core_cache / "github" / "blobs" / readme_sha
+    assert stored.is_file()
+    assert stored.read_text(encoding="utf-8") == fixture["blobs"][readme_sha]
 
 
 # ---------------------------------------------------------------------------

@@ -35,6 +35,7 @@ __date__ = "2026-09-09"
 
 import re
 
+from extractium.core import cache as caching
 from extractium.core.fetch import DEFAULT_USER_AGENT, normalise
 from extractium.core.models import Document
 from extractium.sources import github_files as files
@@ -74,13 +75,15 @@ GITHUB_WEB_ROOT = "https://github.com"
 # An owner or repository address on GitHub, as an operator would paste it.
 OWNER_URL_RE = re.compile(r"^https?://(?:www\.)?github\.com/([^/?#]+)(?:/([^/?#]+))?", re.I)
 
-# Wanting more files than this from one repository makes a single archive
-# download cheaper than a request per file. Below it, individual requests
-# avoid pulling down a whole repository to read a handful of pages.
-ARCHIVE_THRESHOLD_FILES = 25
-
-# Repository sizes GitHub reports are in kibibytes. A repository larger
-# than this is not worth downloading whole for its documentation.
+# One archive is the default way of reading a repository's files, because
+# the scarce resource is requests rather than bytes. Reading anonymously
+# allows roughly sixty requests an hour for the whole build, so a single
+# documentation-heavy repository can spend the lot one file at a time,
+# while the same content arrives in one request as an archive.
+#
+# Repository sizes GitHub reports are in kibibytes. Above this ceiling the
+# archive is not worth holding in memory, and the files are requested
+# individually instead.
 MAX_ARCHIVE_REPOSITORY_KIB = 60_000
 
 
@@ -359,36 +362,55 @@ class GitHubApiSource:
 
     def _download(self, client, owner, name, branch, repository, wanted, progress):
         """
-        Reads the wanted file bodies, by whichever route is cheaper.
+        Reads the wanted file bodies, from one archive where it can.
 
-        One archive is worth it when many files are wanted and the
-        repository is not enormous; otherwise each file is requested on
-        its own, which avoids downloading a whole repository to read a
-        README. When neither is possible the repository is reported and
-        skipped, rather than guessing and doing the expensive thing anyway.
+        Requests are the scarce resource, not bytes: an anonymous build
+        gets roughly sixty requests an hour in total, and one archive
+        spends one of them however many files come out of it. So an
+        archive is the default, and files are requested one at a time only
+        when the repository is too large to hold in memory or the archive
+        could not be read. When neither route is possible the repository
+        is reported and skipped, rather than guessing and doing the
+        expensive thing anyway.
         """
         if not wanted:
             return {}
         full_name = f"{owner}/{name}"
         size_kib = repository.get("size") or 0
 
-        if len(wanted) >= ARCHIVE_THRESHOLD_FILES and size_kib <= MAX_ARCHIVE_REPOSITORY_KIB:
+        # Whatever a previous build already read costs nothing to read
+        # again, and is taken out of the plan before a route is chosen. A
+        # repository nobody has changed therefore needs no download at all.
+        bodies, outstanding = self._from_cache(wanted)
+        if not outstanding:
+            progress(f"  {full_name}: every file unchanged since the last build")
+            return bodies
+
+        if size_kib <= MAX_ARCHIVE_REPOSITORY_KIB:
+            progress(f"  {full_name}: reading {len(outstanding)} file(s) from one archive")
             try:
-                progress(f"  {full_name}: reading {len(wanted)} files from one archive")
-                return client.archive_files(owner, name, branch, wanted)
-            except GitHubUnavailable as e:
-                progress(f"  {full_name}: {e}")
+                fetched = client.archive_files(owner, name, branch, outstanding)
+                self._cache(outstanding, fetched)
+                return {**bodies, **fetched}
+            except (GitHubUnavailable, GitHubNotFound) as e:
+                # An archive that cannot be read is not the end of the
+                # repository; its files can still be asked for one by one.
+                progress(f"  {full_name}: {e} Requesting its files one at a time.")
+        else:
+            progress(
+                f"  {full_name}: too large to read as one archive ({size_kib} KiB); "
+                f"requesting its {len(outstanding)} file(s) one at a time"
+            )
 
         budget = client.rate_limit.budget
-        if budget is not None and budget < len(wanted):
+        if budget is not None and budget < len(outstanding):
             progress(
-                f"  {full_name}: skipped; reading its {len(wanted)} files needs more "
+                f"  {full_name}: skipped; reading its {len(outstanding)} files needs more "
                 f"requests than are left. Setting GITHUB_TOKEN raises the budget."
             )
-            return {}
+            return bodies
 
-        bodies = {}
-        for path, entry in wanted.items():
+        for path, entry in outstanding.items():
             try:
                 bodies[path] = client.blob_text(owner, name, entry["sha"])
             except GitHubNotFound:
@@ -396,6 +418,43 @@ class GitHubApiSource:
             except ValueError as e:
                 progress(f"  {full_name}/{path}: skipped ({e})")
         return bodies
+
+    def _from_cache(self, wanted):
+        """
+        Splits the wanted files into what is already on disk and what
+        still has to be downloaded.
+
+        Returns:
+            tuple[dict, dict]: path to text for the files the blob cache
+            already holds, and path to inventory entry for the rest.
+        """
+        bodies = {}
+        outstanding = {}
+        for path, entry in wanted.items():
+            cached = _cached_body(entry.get("sha"))
+            if cached is None:
+                outstanding[path] = entry
+            else:
+                bodies[path] = cached
+        return bodies, outstanding
+
+    def _cache(self, wanted, fetched):
+        """
+        Stores file bodies read from an archive under their blob names, so
+        the next build reads them from disk.
+
+        Keyed the same way single-file downloads are keyed, so the two
+        routes fill and read one cache rather than two.
+        """
+        for path, text in fetched.items():
+            sha = (wanted.get(path) or {}).get("sha")
+            if sha:
+                try:
+                    caching.save_github_blob(sha, text)
+                except (OSError, ValueError):
+                    # A cache that cannot be written costs a slower next
+                    # build. It must never cost this one its content.
+                    pass
 
     def _url_for(self, owner, name, branch, path):
         """
@@ -570,6 +629,19 @@ class GitHubApiSource:
             f"{name:<{width}}  {TIER_NAMES[tier]:<30}  {TIER_COVERAGE[tier]}"
             for name, tier in self.coverage.items()
         ]
+
+
+def _cached_body(blob_sha):
+    """The file body the cache holds for a blob name, or None for anything unreadable."""
+    if not blob_sha:
+        return None
+    try:
+        return caching.load_github_blob(blob_sha)
+    except ValueError:
+        # The SHA came from an API response. One that is not a Git object
+        # name is not looked up; the file is downloaded instead, and the
+        # transport refuses the name if it is still wrong.
+        return None
 
 
 ### Target ###

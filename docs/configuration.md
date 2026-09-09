@@ -197,6 +197,8 @@ sources:
 
 **What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`. Source files, generated folders, binaries, lock files, and anything holding a credential are never downloaded. `.env.example` is kept, because it documents what a project needs.
 
+**How files are downloaded.** A repository is normally downloaded once, as a single archive, and the wanted files are read out of it in memory. Nothing is ever extracted to disk. This spends one request per repository instead of one per file, which matters because reading GitHub anonymously allows only about sixty requests an hour in total. A repository too large to hold in memory has its files requested one at a time instead. Either way, each file is stored under its blob name, so the next build downloads nothing that has not changed.
+
 **Tokens.** Set `GITHUB_TOKEN` in the environment to raise the request limit. It never goes in the configuration file, in an output, in a log line, or in the cache. A token raises how much a build can read; it never widens what a build may publish, and private repositories are never indexed.
 
 **When GitHub cannot be read.** The build tries three ways in order: with a token, without one, and finally an ordinary crawl of the documentation pages. The first two produce exactly the same result for a public repository. The third reads documentation only and runs no code analysis. Whatever happens, the summary names each repository and the way it was read:
