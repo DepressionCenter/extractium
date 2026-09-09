@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/compliance.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: The security, privacy, and accessibility posture of Extractium as
 it stands today: the controls that exist and where they live in the code,
 the evidence for each, the known gaps, and what still needs institutional
@@ -42,6 +42,11 @@ Extractium reads public documentation, turns it into a searchable file, and publ
 |---|---|---|
 | Content from a local folder is left out of every output unless that output opts in | `extractium/adapters/base.py`, `output_compendium` | `tests/test_adapter_container.py` checks that a local section is absent by default, that its text does not appear anywhere in the header, and that keyword statistics and vectors are rebuilt to match. |
 | The build says so when an output does include local content | `extractium/cli.py` | Covered by the command-line tests in `tests/test_cli.py`. |
+| A local source cannot reach outside the folder it was pointed at | `extractium/sources/local.py`, `matching_files` | A file whose real location is outside the folder is skipped and the reason is printed. `tests/test_source_local.py` covers a symbolic link out of the tree. |
+| No absolute path from the operator's disk reaches an output | `extractium/sources/local.py`, `relative_url` | Every local document's URL is `local:` plus a path relative to the source folder. Pinned in `tests/test_source_local.py`. |
+| Content is checked for likely identifiers before anything is published | `extractium/core/phi_lint.py` | 26 rules covering the HIPAA Safe Harbor identifiers a pattern can reach. `tests/test_phi_lint.py` exercises every rule and checks that ordinary documentation is not flagged. |
+| The check's reports never copy what they found, and never leave the working folder | `extractium/core/phi_lint.py`, `write_reports` | `tests/test_phi_lint.py` checks, for every rule, that the matched text appears in neither report, and that both are written where the build was run rather than under `out_dir`. |
+| The check never states an absence of protected health information | `extractium/core/phi_lint.py`, `ZERO_MATCH_SENTENCE` | A clean scan reports "0 pattern matches (this does not confirm absence of PHI)". `tests/test_phi_lint.py` pins the sentence and checks the forbidden phrasing against the module source as well as its output. |
 | The crawler identifies itself truthfully | `extractium/core/fetch.py`, `DEFAULT_USER_AGENT` | The default names the tool and its repository. It is a setting, not a hard-coded string. |
 | `robots.txt` is honored, and a site whose rules cannot be read is skipped entirely | `extractium/core/fetch.py`, `RobotsPolicy` | `tests/test_core_fetch.py` covers a disallow, a missing file, and an unreadable one. Failing closed is deliberate. |
 | The crawl waits between requests | `delay_seconds` setting, default 0.5 seconds | Documented in the [configuration reference](configuration.md). |
@@ -58,8 +63,9 @@ Extractium reads public documentation, turns it into a searchable file, and publ
 
 These are real and current. None is hidden behind a setting.
 
-- **The protected-health-information check is not built.** `extractium/core/phi_lint.py` is a placeholder, and the `phi_lint` setting is accepted but does nothing yet. Until it ships, nothing scans content for identifiers. Treat the local source as unscanned.
-- **The local-folder source is not built either.** `extractium/sources/local.py` is a placeholder. The guardrail that keeps local content out of outputs exists first, on purpose, so no output has ever been written without it.
+- **The check for protected health information reads shapes, not meaning.** It finds an identifier that looks like one: a number with a check digit, or a value sitting next to a word such as "Patient" or "Serial number". It does not recognise a person's name or a place name written in ordinary prose, with no label nearby. A clean result is not evidence of anything.
+- **Adding that recognition would mean adding a language model.** The libraries that do it well need a model of several hundred megabytes, and the one that reads addresses needs a C library with no simple install on Windows. That is a large, fragile dependency for a check that only ever flags something for a person to read, so the project does without it and states the gap here instead. Revisit the trade if a build is ever pointed at clinical free text rather than documentation.
+- **The check does not read images, PDFs, or spreadsheets.** Neither does the build, so nothing from them reaches an output; but a folder holding them is not covered by the report.
 - **No security scanning runs in continuous integration.** There is no dependency-audit or code-scanning workflow in this repository yet.
 - **The scheduled workflow has not been observed running.** It is written and its shape is tested, but as of 2026-09-08 no run has completed on GitHub. Treat the first run as a check to perform, not a result to rely on.
 - **Actions are pinned to a major version, not to a commit.** `actions/checkout@v4` follows that major line. Pinning to a commit digest is stricter and is worth doing if your organization requires it.

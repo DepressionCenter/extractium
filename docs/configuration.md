@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -33,7 +33,7 @@ A ready-to-copy starting point ships with the project: [examples/config.example.
 
 ## Status of this feature
 
-The settings file and its checks are in place, in [extractium/config.py](../extractium/config.py). The web source that acts on a `web` entry and the global crawl settings is in place too. The command that runs a full build is not finished yet, so nothing reads the file for you today. You can still load and check a file yourself:
+The settings file and its checks are in place, in [extractium/config.py](../extractium/config.py), and `extractium build --config config.yaml` reads the file and runs the whole build. You can also load and check a file yourself:
 
 ```python
 from extractium.config import load_config
@@ -86,9 +86,11 @@ Each entry in `sources` and `outputs` names a `type` and then that type's own op
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
 | `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |
-| `phi_lint` | `local`, `all`, or `off` | `local` | Which content the protected health information check scans. |
+| `phi_lint` | `local`, `all`, or `off` | `local` | Which content the check for protected health information scans. |
 
-`phi_lint` is validated now; the check that acts on it is not built yet. See [the implementation plan](implementation-plan.md).
+Quote the value when you turn the check off (`phi_lint: 'off'`). YAML reads a bare `off` as the word false, and the build refuses it with a message naming the setting.
+
+See "The check for protected health information" below for what the check does.
 
 
 ## Sources
@@ -121,6 +123,10 @@ sources:
 | `include_globs` | list of glob patterns | `**/*.md`, `**/*.txt`, `**/*.html` | Which files under the folder are read. |
 
 Content from a local source stays out of every output unless that output sets `include_local: true`. See "Outputs" below.
+
+The `path` is the folder to read. Files are read as UTF-8. A file the patterns select but whose real location is outside the folder, reached through a shortcut or a symbolic link, is skipped and the reason is printed. A folder that does not exist stops the build, so a mistyped path does not look like an empty folder.
+
+Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files would need extra software the project does not install.
 
 ### `github_api`: list an organization's repositories
 
@@ -172,7 +178,31 @@ outputs:
     include_local: true      # this file stays on your machine, so local content is fine
 ```
 
-Only the settings are validated today. The adapters that write these files are built in later phases of the [implementation plan](implementation-plan.md). An output type that is not one of the four above is passed to the registry as written, like a plugin source type.
+The container, `llmstxt`, and `sqlite` writers exist today. The `okf` writer is built in a later phase of the [implementation plan](implementation-plan.md). An output type that is not one of the four above is passed to the registry as written, like a plugin source type.
+
+The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
+
+
+## The check for protected health information
+
+Every build scans the text its sources produced for the shapes identifiers usually take, and writes two reports you can read before you publish anything. The `phi_lint` setting decides what it looks at:
+
+| Value | What it scans |
+|---|---|
+| `local` (default) | Only content read from a `local` source. That is the content that was never published. |
+| `all` | Every document, including crawled web pages. |
+| `'off'` | Nothing. Quote the value; YAML reads a bare `off` as false. |
+
+Two files are written to the folder you ran the build from, never to `out_dir`:
+
+| File | Who it is for |
+|---|---|
+| `phi-lint-report.json` | A program or an AI assistant. Counts, and one entry per finding. |
+| `phi-lint-report.txt` | A person. The same findings, grouped by file, with what to do next. |
+
+Neither report copies the text it matched. It names the file and the line, so you open the file and look. A report that quoted what it found would be a second copy of the identifiers, saved somewhere nobody guards.
+
+The check reads shapes, not meaning. It will miss things, and it will flag things that are fine. **A clean result never means content is safe to publish.** The reports say so, and so does this page. See [the compliance page](compliance.md) for what the check does and does not cover.
 
 
 ## How the URL patterns work
@@ -294,6 +324,8 @@ A misspelled setting is treated as an error on purpose. If Extractium ignored it
 - The crawler honors `robots.txt` by default and stops at a site whose rules it cannot read, so a configuration file cannot make it fetch pages a site has asked crawlers to leave alone unless the operator switches the check off.
 - Keep passwords, tokens, and participant identifiers out of this file. It is meant to be committed to a repository. Sources that need a token read it from the environment.
 - Content from `local` sources is left out of every output unless that output says `include_local: true`. Publishing is the normal use of every output, so the safe default is the one that cannot leak by omission.
+- A `local` source refuses a file whose real location is outside the folder you named, so a shortcut or a symbolic link cannot pull in content from elsewhere on the disk.
+- The reports from the check for protected health information are written where you ran the build, never into `out_dir`, so a scheduled build cannot publish them by accident.
 - Very complicated patterns can make matching slow on long URLs. Keep patterns short and plain.
 
 

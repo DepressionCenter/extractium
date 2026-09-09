@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and eleven
 phases of about one week each, with deliverables, tests, documentation,
@@ -186,6 +186,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 **Documentation.** `configuration.md` gains the local source and the `include_local` option; `compliance.md` describes the lint's limits; `data-flow.md` shows where local content can and cannot go.
 
 **Done when** a build with a local source publishes nothing local by default.
+
+*Finished 2026-09-09 on branch `phase-6-local-files-and-sqlite`. The pattern set grew beyond the four rules this phase first scoped: it now covers the HIPAA Safe Harbor identifiers a pattern can reach, in two tiers, with the date rules anchored to a birth or clinical label so ordinary documentation is not flagged. The lint writes two reports, one for a program and one for a person, and neither copies the text it matched. No dependency was added; the gap that leaves is recorded in `compliance.md`. The command-line notice shipped in Phase 3 with the guardrail.*
 
 ### Phase 7: GitHub API source and OKF adapter
 

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, what each exit code means, and how to try a small run
@@ -114,6 +114,23 @@ extractium build --config config.yaml > build-summary.txt
 ```
 
 If any output contains content read from a local folder, the summary says so on its own line. That never happens unless you set `include_local: true` on that output.
+
+
+## Indexing a folder on your own machine
+
+A `local` source reads Markdown, plain text, and HTML files from a folder. Use it for material that is not on a website. Two rules make it safe to use:
+
+- **Nothing local reaches an output unless that output asks for it** with `include_local: true`. The default cannot leak by being forgotten.
+- **No path from your disk travels with the content.** A file is recorded as `local:` plus its path relative to the folder you named.
+
+Every build also checks what it read for likely protected health information, and writes two reports where you ran the build:
+
+```
+phi-lint-report.txt    for you to read
+phi-lint-report.json   for a program or an AI assistant
+```
+
+The text report lists each file and line to look at, and what to do about it. Neither report copies what it found, so it never becomes a second copy of the identifiers. Read it, fix what needs fixing, and delete it when you are done. **A clean report does not mean content is safe to publish.** Only a person can decide that. See [the configuration reference](configuration.md) for the `phi_lint` setting and [the compliance page](compliance.md) for what the check does not cover.
 
 
 ## Exit codes

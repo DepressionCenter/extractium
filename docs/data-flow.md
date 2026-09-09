@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/data-flow.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: What happens to content between the site it is read from and the
 files a build writes: the stages, the shape of the data at each one, the
 units and time zones every field uses, and the two places where content
@@ -133,9 +133,14 @@ The safe default is the one that cannot leak by being forgotten.
 
 ### Protected health information
 
-The PHI check is scheduled for a later phase and is not built yet. When it exists, it will run over local content by default, write its report to the working folder and never to the output folder, and report likely matches for a person to review. It will never state that content is free of protected health information, because a pattern check cannot establish that.
+Every build checks the text its sources produced for the shapes identifiers usually take, and writes two reports for a person to read before publishing. The `phi_lint` setting decides the scope: `local` (the default) covers content read from a folder, `all` covers every document, and `'off'` covers nothing.
 
-Until then: assume any folder you point a local source at may contain protected health information, and have a person review what a build produced before publishing it. Nothing on this page is a compliance claim. See [the specification](extractium-spec.md), section 8.
+- The reports go to the folder you ran the build from, **never to the output folder**, so a scheduled build cannot publish them by accident.
+- `phi-lint-report.json` is for a program. `phi-lint-report.txt` is for a person.
+- Neither report copies the text it matched. It names the file and the line number, so you open the file and look. Copying the value would make the report a second copy of the identifiers.
+- The check reads shapes, not meaning. It will miss things, and it will flag things that are fine. It never states that content is free of protected health information, because a pattern check cannot establish that.
+
+So: assume any folder you point a local source at may hold protected health information, read the report, and have a person review what a build produced before publishing it. Nothing on this page is a compliance claim. See [the compliance page](compliance.md) for what the check covers and what it does not, and [the specification](extractium-spec.md), section 7.
 
 
 ## Time zones, units, and encodings
