@@ -258,9 +258,17 @@ At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listin
 
 **Planned.** The loader accepts this type, but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 11.
 
+### `dspace`: read a repository's deposits
+
+**Planned.** This type is not built yet, so a build that uses it stops with `no source named 'dspace'`. It arrives in phase 13.
+
+It will read scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue, through the repository's own interface rather than by crawling its pages. Collections are named in the settings file and never discovered, the same rule that governs GitHub accounts. Each deposit becomes one document carrying its abstract, its authors and subjects, its handle and DOI, and the text of its files, which the repository has already extracted, so no PDF or Word reader is added to this build.
+
+See [Indexing a DSpace repository](dspace-repository-indexing.md) for the settings it will take and why.
+
 ### Source types from plugins
 
-A type that is not one of the four above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.
+A type that is not one of the five above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.
 
 
 ## Outputs

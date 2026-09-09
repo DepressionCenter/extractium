@@ -302,9 +302,34 @@ This has nothing to do with GitHub. It is a serialization of whatever the build 
 
 **Done when** both examples answer a query from a fresh deployment.
 
-### After Phase 12
+### Phase 13: DSpace repository source
 
-Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; speech-to-text for videos without captions; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Migrating Field Station AI to the JavaScript client and version 3 is a task for that repository, not this one.
+**Goal.** Index scholarly deposits held in a DSpace repository, starting with the University of Michigan Library's Deep Blue.
+
+The design is [Indexing a DSpace repository](dspace-repository-indexing.md). Read it first; the interface was checked against Deep Blue and the findings are recorded there.
+
+**Why it is not a crawl.** A Deep Blue collection page is about 650 KB of markup holding roughly 2,300 characters of navigation text, with the list of deposits absent from the HTML. The repository publishes a machine interface instead, and that interface already holds the text of every deposited file, extracted when the file was deposited.
+
+**Deliverables.**
+
+- `extractium/sources/dspace.py`: reads named collections through the DSpace 7 interface; one document per deposit, carrying its abstract, authors, date, subjects, rights, identifiers, and the extracted text of its files.
+- Built as `dspace` rather than as Deep Blue. Nothing in it is specific to one repository; the two addresses and the two collection identifiers are settings.
+- The three kinds of address in `dc.identifier.uri` told apart and all kept: the handle, the DOI, and whatever else the depositor pointed at, which is often the project's own documentation.
+- Text read from the repository's own `TEXT` bundle. No PDF library, no Word reader, no archive handling, and no new dependency.
+- Incremental builds from the `lastModified` the listing carries per deposit: a collection nobody has touched costs one request and downloads nothing.
+- Collections are named in the settings file, never discovered. The same rule as `github_owners`, for the same reason.
+- `repository` added to the `source_type` vocabulary.
+- No fall back to crawling. The pages a crawler could reach hold no deposits, so an unreadable interface is reported and the source stops.
+
+**Tests.** Every response faked from committed fixtures; no test reaches Deep Blue. Paging; an empty collection and one that does not exist; the three identifier kinds told apart; a deposit with extracted text, one with none, and one whose only file is an image; the size ceiling; an unchanged collection downloading nothing; a withdrawn deposit disappearing; an identifier that is not a UUID refused; an interface address that answers HTML reported clearly.
+
+**Documentation.** `configuration.md` gains the type; the specification's source table gains the row; `dspace-repository-indexing.md` records what the checks found; `compliance.md` gains the posture, in particular that the check for protected health information covers extracted document text.
+
+**Done when** both Deep Blue collections index from their identifiers alone, every deposit carries its abstract and its identifiers, a deposit whose file holds no readable text is still indexed and says so, and a second build of an unchanged collection downloads nothing.
+
+### After Phase 13
+
+Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; speech-to-text for videos without captions; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and version 3 is a task for that repository, not this one.
 
 
 ## Checks made outside the code
@@ -342,6 +367,7 @@ You now know the order of work and what "done" means for each phase. Start with 
 * [Architecture and Current State](architecture.md) — what exists in the repository today.
 * [Container format](container-format.md) — the file written in Phase 3 and read from Phase 4 on.
 * [GitHub repository indexing](github-repository-indexing.md) — the detailed design for Phases 7 and 8.
+* [Indexing a DSpace repository](dspace-repository-indexing.md) — the detailed design for Phase 13.
 * [Configuration reference](configuration.md) — the settings file as it exists now.
 * [Field Station AI](https://github.com/DepressionCenter/FieldStationAI) — the project the engine was extracted from and its bundled version 2 index.
 

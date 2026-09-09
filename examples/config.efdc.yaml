@@ -116,34 +116,31 @@ sources:
   #      EFDC:   https://hdl.handle.net/2027.42/195355
   #      MeTRIC: https://hdl.handle.net/2027.42/195645
   #
-  #    LEFT OUT ON PURPOSE, for two reasons.
+  #    NOT A WEB CRAWL, and not yet available.
   #
   #    Deep Blue builds its pages in the browser. A collection page is about
-  #    650 KB of markup holding roughly 2,000 characters of navigation text,
-  #    and the list of items in the collection is not in it. Crawling it would
-  #    add the collection's name and nothing else.
+  #    650 KB of markup holding roughly 2,300 characters of navigation text,
+  #    and the list of deposits is not in it. Crawling it would add the
+  #    collection's name and nothing else.
   #
-  #    The two collections are also one thing rather than two: sibling
-  #    collections on one host that do not link to each other. That is a
-  #    single source with two starting addresses, not two sources.
+  #    Deep Blue publishes a machine interface instead, which already holds
+  #    the text of every deposited file. Reading it is the dspace source,
+  #    which arrives in phase 13 of the implementation plan. Uncommenting
+  #    this today stops the build with "no source named 'dspace'".
   #
-  #    Note the handle addresses redirect to deepblue.lib.umich.edu. Seed
-  #    the resolved addresses, not the handles: a seed that redirects out
-  #    of its own scope is refused, and the whole of Deep Blue is the
-  #    University of Michigan institutional repository rather than these
-  #    two collections, so the scope needs pinning by hand as well.
+  #    Both collections belong to one source, because they are one thing:
+  #    the Depression Center's deposits in Deep Blue.
   #
-  #    If Deep Blue ever serves its item lists as plain HTML:
+  #- type: dspace
+  #  api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
+  #  site_url: https://deepblue.lib.umich.edu
+  #  label: Deep Blue Documents
+  #  collections:
+  #    - 3acf951c-e107-4b8d-8f7d-ced171665b11    # Eisenberg Family Depression Center
+  #    - 7503b0dc-27a2-4ce9-bcbc-50b339ecb486    # MeTRIC
   #
-  #      - type: web
-  #        seed_urls:
-  #          - https://deepblue.lib.umich.edu/collections/3acf951c-e107-4b8d-8f7d-ced171665b11
-  #          - https://deepblue.lib.umich.edu/collections/7503b0dc-27a2-4ce9-bcbc-50b339ecb486
-  #        include_patterns:
-  #          - "3acf951c-e107-4b8d-8f7d-ced171665b11"
-  #          - "7503b0dc-27a2-4ce9-bcbc-50b339ecb486"
-  #
-  #    Deep Blue's robots.txt allows this; it disallows /search and /admin.
+  #    See docs/dspace-repository-indexing.md. Note the interface is on a
+  #    different host from the site a reader opens; that is not a mistake.
 
   # 8. Campus Mind Works: https://campusmindworks.org/
   #    On the center's own list of resources, but a site for students rather
