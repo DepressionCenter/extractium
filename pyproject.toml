@@ -79,6 +79,7 @@ extractium = "extractium.cli:main"
 # of the same name (docs/extractium-spec.md section 2.2).
 [project.entry-points."extractium.sources"]
 web = "extractium.sources.web:WebSource"
+local = "extractium.sources.local:LocalSource"
 
 [project.entry-points."extractium.site_handlers"]
 generic = "extractium.sources.generic:GenericHandler"
