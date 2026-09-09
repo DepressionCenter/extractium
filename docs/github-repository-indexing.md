@@ -354,7 +354,7 @@ The following are wanted. Every one of them is subject to the same gate before i
 | TypeScript | `.ts`, `.tsx` | High |
 | R | `.R`, `.r` | High |
 | Bash and shell | `.sh`, `.bash`, `.zsh` | High |
-| Lua | `.lua` | High |
+| Lua | `.lua`, and Lua embedded in `.lsp` | High |
 | C# | `.cs` | High |
 | HTML | `.html`, `.htm` | High |
 | Markdown | `.md` | High |
@@ -387,14 +387,17 @@ Several formats in this field are containers, not languages. Handle them by pull
 | R Markdown (`.Rmd`) and Quarto (`.qmd`) | R, Python, and others | Parse the Markdown, index the prose as documentation, parse each fenced chunk with the grammar its label names |
 | Jupyter notebook (`.ipynb`) | Usually Python or R | Read the JSON, index Markdown cells as documentation, parse code cells with the kernel's grammar. **Outputs are never indexed** |
 | HTML | JavaScript | Parse the document, index the text, parse `<script>` contents with the JavaScript grammar |
+| Lua Server Pages (`.lsp`) | Lua | Parse the surrounding HTML, index the text, parse each embedded Lua block with the Lua grammar |
+
+Lua Server Pages works the way PHP does: an HTML page with blocks of Lua inside it. Nothing runs to read one. The reader finds the delimiters, hands each block to the Lua grammar, and hands the rest to the HTML path, so a `.lsp` file yields both its page text and its Lua symbols. The exact delimiter set is confirmed against a working implementation before this ships rather than assumed from memory.
 
 Notebooks matter more than their place in this table suggests. In this field a great deal of real analysis lives in `.ipynb` and `.Rmd` files and nowhere else. They also carry the greatest privacy risk in the whole phase: **a notebook's stored outputs can contain printed rows of real participant data.** That is why outputs are never read, and why the existing protected-health-information lint has to be pointed at whatever this phase produces before any of it is published.
 
 ### What is not used, and why
 
-No language server, no compiler, no build step, no container runtime, no graph database, no language model.
+No compiler, no build step, no container runtime, no graph database, no language model, and no Language Server Protocol client.
 
-Lua language server support was asked about specifically. The answer is no, and the reason is scope rather than capability: a language server is a per-language daemon that has to be installed, launched, kept alive, and shut down on Windows, macOS, and Linux. It would dominate build time and installation size, and the whole point of this phase is a parser that starts instantly and parses bytes. If Lua call resolution turns out to be too weak without one, that is the moment to reconsider — not before.
+The last one is worth separating from Lua Server Pages, which shares the initials and is nothing like it. A Language Server Protocol client would mean a per-language daemon installed, launched, and shut down on three operating systems, which is against everything this phase is for. Lua Server Pages is a file format, costs nothing, and is supported: see the container table above.
 
 ### How the parser layer is arranged
 
@@ -529,7 +532,7 @@ extractium/
         indexer.py           Coordinates analysis for one repository
         languages.py         Registry: paths to grammars, plus the license record
         tree_sitter.py       Loads grammars, runs queries
-        embedded.py          Pulls code out of notebooks, R Markdown, and HTML
+        embedded.py          Pulls code out of notebooks, R Markdown, Lua Server Pages, and HTML
         relationships.py     Symbol table, imports, calls, reverse edges
         render.py            Turns records into deterministic text
         ctags.py             Detects and safely invokes Universal Ctags
@@ -541,7 +544,7 @@ extractium/
 ### Phase 8 is done when
 
 - Every language in the table above is either analyzed by Tree-sitter, analyzed by Ctags, or recorded at the file-metadata tier, with the gate result recorded for each.
-- Notebooks, R Markdown, and HTML have their embedded code parsed, and notebook outputs are never read.
+- Notebooks, R Markdown, Lua Server Pages, and HTML have their embedded code parsed, and notebook outputs are never read.
 - File records and symbol records are produced, with structure and no source bodies.
 - File summaries come from documentation, a header, a README, or a deterministic template, and nothing else.
 - Import edges resolve; call edges carry `resolved`, `probable`, or `unresolved`; reverse edges are computed from the graph.
@@ -565,7 +568,7 @@ Both phases are tested from committed fixtures. No automated test contacts GitHu
 | API behavior | One page and several pages of results; organization and user owners; empty account; archived, fork, and disabled repositories; missing default branch; recursive and truncated trees; subtree walking; blob and archive fetches; rate-limit headers; 401, 403, 404, and 429; a repository disappearing mid-run |
 | File filtering | Markdown, plain text, extensionless README and LICENSE, manifests, source, tests, vendored code, generated code, minified files, lock files, binaries, oversized files, `.env`, `.env.example`, submodules, LFS pointers |
 | Parsing | Per language: definitions, signatures, documentation, imports, exports, calls, inheritance, constants, annotations, module-level code, and a file with recoverable syntax errors |
-| Embedded code | An `.Rmd` with R and Python chunks, an `.ipynb` with outputs present, an HTML file with inline script |
+| Embedded code | An `.Rmd` with R and Python chunks, an `.ipynb` with outputs present, an HTML file with inline script, an `.lsp` page with several Lua blocks |
 | Relationships | Same-file calls, relative imports, aliases, local includes, unique and ambiguous names, dynamic calls, reverse edges, all three confidence levels |
 | Ctags | A fake executable for determinism; no shell invocation; JSON capability detection; malformed output refused; absence does not break Tree-sitter files |
 | Caching | Same blob not downloaded twice; same signature not reparsed; changed blob, grammar version, or schema version invalidates; changed tree rebuilds the map; **no cache file contains a token** |
@@ -590,7 +593,7 @@ These are unresolved. Each is settled during implementation and the answer is re
 
 ## Out of scope
 
-Not in either phase: private GitHub repositories; GitLab or GitHub Enterprise ingestion; language servers; compilers; type resolution; control-flow or data-flow analysis; whole-program analysis; runtime tracing; building, running, or installing anything from an indexed repository; vulnerability scanning; free-form language-model code summaries; graph databases; a redesign of the embedding cache; and automatic submodule recursion.
+Not in either phase: private GitHub repositories; GitLab or GitHub Enterprise ingestion; Language Server Protocol clients; compilers; type resolution; control-flow or data-flow analysis; whole-program analysis; runtime tracing; building, running, or installing anything from an indexed repository; vulnerability scanning; free-form language-model code summaries; graph databases; a redesign of the embedding cache; and automatic submodule recursion.
 
 Each can be revisited when there is a concrete retrieval benefit worth its cost.
 

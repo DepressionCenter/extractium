@@ -149,6 +149,8 @@ Set `GITHUB_TOKEN` in the environment to raise the API rate limit. The token nev
 
 At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listing a channel or playlist needs `YOUTUBE_API_KEY` in the environment.
 
+**Planned.** As with `github_api`, the loader accepts this type but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 11.
+
 ### Source types from plugins
 
 A type that is not one of the four above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.

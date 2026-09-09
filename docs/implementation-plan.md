@@ -215,13 +215,13 @@ The detailed design for this phase and the next is [GitHub repository indexing](
 
 ### Phase 8: Lightweight static code analysis
 
-**Goal.** Make code findable — where a symbol is defined, what a file holds, what imports and calls it — with no clone, compiler, language server, or language model.
+**Goal.** Make code findable — where a symbol is defined, what a file holds, what imports and calls it — with no clone, compiler, Language Server Protocol client, or language model.
 
 **This phase is larger than one week, and is planned that way.** It is not split further, because a parser layer that produces records nothing renders is worse than no parser layer. The design is in [GitHub repository indexing](github-repository-indexing.md).
 
 **Deliverables.**
 
-- `extractium/code/`: a language registry, a Tree-sitter engine driven by per-language query files, an extractor for code embedded in notebooks, R Markdown, and HTML, a relationship resolver, a deterministic renderer, and an optional Universal Ctags fallback.
+- `extractium/code/`: a language registry, a Tree-sitter engine driven by per-language query files, an extractor for code embedded in notebooks, R Markdown, Lua Server Pages, and HTML, a relationship resolver, a deterministic renderer, and an optional Universal Ctags fallback.
 - Language coverage for Python, JavaScript, TypeScript, R, shell, Lua, C#, HTML, Markdown, SQL, Kotlin, Swift, PowerShell, and MATLAB, each subject to a recorded license, maintenance, and cross-platform wheel check. Stata is expected to fall to the file-metadata tier; whatever it does, the reason is recorded.
 - File records and symbol records carrying structure, never source bodies, per the specification, section 5. File summaries come from the file's own documentation, its header `Summary:` line, its directory README, or a template over parser facts — never from a guess.
 - Import edges; call edges labelled `resolved`, `probable`, or `unresolved`; reverse edges computed from the finished graph.
@@ -230,7 +230,7 @@ The detailed design for this phase and the next is [GitHub repository indexing](
 - Two `content_type` values: `code_file` and `code_symbol`.
 - The fix for near-duplicate collapse treating two symbols in one file as two pages, which otherwise drops legitimate near-identical symbols.
 
-**Tests.** Per-language fixtures for every supported capture, including a file with recoverable syntax errors; embedded code in `.Rmd`, `.ipynb`, and HTML, with notebook outputs never read; relationship resolution across a small synthetic repository at all three confidence levels; a fake Ctags executable proving no shell invocation and refusal of malformed output; cache invalidation on each key; a test that near-identical symbols in one file all survive; the security set — archive paths, symbolic links, traversal, shell characters and newlines in filenames, invalid UTF-8, impossible declared sizes.
+**Tests.** Per-language fixtures for every supported capture, including a file with recoverable syntax errors; embedded code in `.Rmd`, `.ipynb`, `.lsp`, and HTML, with notebook outputs never read; relationship resolution across a small synthetic repository at all three confidence levels; a fake Ctags executable proving no shell invocation and refusal of malformed output; cache invalidation on each key; a test that near-identical symbols in one file all survive; the security set — archive paths, symbolic links, traversal, shell characters and newlines in filenames, invalid UTF-8, impossible declared sizes.
 
 **Documentation.** `github-repository-indexing.md` records every gate result; `compliance.md` gains the no-execution and untrusted-content posture and the new dependencies; `architecture.md` and the specification's source table are updated; `configuration.md` gains `include_code` and `ctags_fallback`.
 
