@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: How the Extractium codebase is put together today, which parts
 are finished, and the design decisions that have been settled, each with
 the reason and a pointer to where it is specified.
@@ -49,13 +49,14 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Scoring | `extractium/core/embed.py`, `dedup.py`, `bm25.py`, `calibration.py` | Working. `core/build.py` runs them in order. The embedding library is imported only when embedding runs, so nothing that merely reads an index loads it. |
 | Crawl loop | `extractium/sources/web.py` | Working. The `web` source: takes the session, the cache metadata, and a progress callback; consults the site handlers per URL; yields `Document` records. Pinned against the reference crawl on the fixtures. |
 | Build step | `extractium/core/build.py` | Working. `build_compendium` chunks the documents, embeds the children once, collapses near-duplicates, compacts orphaned parents, builds the BM25 and calibration statistics, and returns one `Compendium`. |
-| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. The built-in `web` source and the `generic`, `tdx`, and `github` handlers are declared as entry points in `pyproject.toml`. |
+| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. The built-in `web` and `local` sources, the `generic`, `tdx`, and `github` handlers, and the `container`, `llmstxt`, and `sqlite` adapters are declared as entry points in `pyproject.toml`. |
 | Data models | `extractium/core/models.py` | Working. `Document`, `Extraction`, `Parent`, `Children`, `Compendium`, and the three plugin protocols. |
-| PHI check | `extractium/core/phi_lint.py` | Placeholder file. |
-| Other adapters | `extractium/adapters/sqlite_out.py`, `okf.py` | Placeholder files. |
+| PHI check | `extractium/core/phi_lint.py` | Working. A table of 26 rules over the HIPAA Safe Harbor identifiers, in two tiers: shapes settled by a check digit fire anywhere, and the rest fire only next to a label word. Writes a JSON report and a plain-text report to the working directory, neither holding the text it matched. The command line runs it between the sources and the build step. |
+| Other adapters | `extractium/adapters/okf.py` | Placeholder file. |
 | Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. |
-| Other sources | `extractium/sources/local.py`, `github_api.py`, `youtube.py` | Placeholder files. |
-| Adapters | `extractium/adapters/container.py`, `llmstxt.py` | Working, and registered as entry points. The container writer produces the version 3 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
+| Other sources | `extractium/sources/github_api.py`, `youtube.py` | Placeholder files. |
+| Adapters | `extractium/adapters/container.py`, `llmstxt.py`, `sqlite_out.py` | Working, and registered as entry points. The container writer produces the version 3 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`; the SQLite writer produces `compendium.sqlite`, the same content in tables a SQL consumer can query. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
+| Local source | `extractium/sources/local.py` | Working, and registered as an entry point. Reads Markdown, plain text, and HTML from a folder; marks every document `local`; records a path relative to that folder as the URL; refuses a file whose real location is outside it. |
 | Clients | `extractium/search.py`, `clients/js/extractium-client.js` | Working. Each reads the version 3 container, refuses a file that fails any reader check, and runs the same hybrid search: cosine similarity, BM25, reciprocal rank fusion, a corpus-relative relevance cutoff, diversity selection with a per-section cap, and resolution of a matched window to its whole section. The caller supplies the query embedder. A committed golden container and query vector hold both to the same ranking. |
 | Operations | `run.sh`, `run.bat`, `requirements-lock.txt`, `.github/workflows/build-compendium.yml`, `examples/data-repo/` | Working. One command builds locally on either platform from a hash-checked lock file; the workflow runs weekly and on a button press, reuses the crawl cache between runs, and publishes through the official GitHub Pages actions only. The data-repository template is what an organization copies for its own content. |
 | Command line | `extractium/cli.py` | Working. `extractium build --config config.yaml`, with `--out-dir`, `--max-pages`, and `--float32-vecs`; progress on standard error, the summary on standard output, and a distinct exit code for a bad configuration, an empty crawl, and an unwritable output. |
@@ -164,7 +165,7 @@ Specification: section 6.
 
 ## Conclusion
 
-A build now runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; the container and `llms.txt` adapters write it from the command line; the Python and JavaScript clients search the result identically; and one command, locally or on a weekly schedule, does the whole thing and publishes it. What is not built yet is the SQLite output, the local-folder source, the check for protected health information, the GitHub API source, the Open Knowledge Format output, the example MCP servers, and the YouTube source. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
+A build now runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; the container and `llms.txt` adapters write it from the command line; the Python and JavaScript clients search the result identically; and one command, locally or on a weekly schedule, does the whole thing and publishes it. A folder on the operator's own machine can be indexed, with every output dropping that content unless it opted in, and every build now checks what it read for likely protected health information and writes two reports for review. What is not built yet is the GitHub API source, the Open Knowledge Format output, the example MCP servers, and the YouTube source. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
 
 
 ## Additional Resources

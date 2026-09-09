@@ -38,6 +38,7 @@ import textwrap
 import pytest
 
 from extractium import cli
+from extractium.core import phi_lint
 
 # A source plugin the tests drop into a plugins/ folder. It yields fixed
 # documents rather than fetching anything, which is what lets the whole
@@ -333,6 +334,151 @@ def test_an_unexpected_failure_exits_one_without_a_traceback(build_workspace, mo
     assert code == cli.EXIT_FAILED
     assert "ZeroDivisionError" in err
     assert "Traceback" not in err
+
+
+# ---------------------------------------------------------------------------
+# Local content and the review reports
+# ---------------------------------------------------------------------------
+
+LOCAL_NOTE = (
+    "# Intake Notes\n\n"
+    "MRN: AB123456. The rest of this note is ordinary prose, long enough that "
+    "the chunker keeps it as one section of its own for this test.\n"
+)
+
+
+def workspace_with_a_local_folder(folder):
+    """The build workspace with a folder of local notes beside it."""
+    notes = folder / "notes"
+    notes.mkdir()
+    (notes / "intake.md").write_text(LOCAL_NOTE, encoding="utf-8")
+    return notes
+
+
+def test_a_local_source_reaches_no_output_that_did_not_opt_in(build_workspace, capsys):
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        name: Example Org
+        out_dir: dist
+        cache_dir: .cache
+        sources:
+          - type: local
+            path: notes
+        outputs:
+          - type: container
+          - type: sqlite
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    published = (build_workspace / "dist" / "kb-index.json").read_bytes()
+    assert b"AB123456" not in published
+    assert "NOTICE" not in capsys.readouterr().out
+
+
+def test_an_output_that_opts_in_gets_the_local_content_and_is_named_in_the_summary(
+    build_workspace, capsys
+):
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        name: Example Org
+        out_dir: dist
+        cache_dir: .cache
+        sources:
+          - type: local
+            path: notes
+        outputs:
+          - type: container
+          - type: sqlite
+            include_local: true
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert "output 'sqlite' includes local content" in out
+    assert "output 'container' includes local content" not in out
+    assert b"AB123456" not in (build_workspace / "dist" / "kb-index.json").read_bytes()
+    assert b"AB123456" in (build_workspace / "dist" / "compendium.sqlite").read_bytes()
+
+
+def test_a_build_writes_both_review_reports_to_the_working_folder(build_workspace, capsys):
+    """
+    The reports say where someone should look before publishing, so they
+    stay out of the folder that gets published.
+    """
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        out_dir: dist
+        cache_dir: .cache
+        sources:
+          - type: local
+            path: notes
+    """)
+
+    cli.main(["build", "--config", config])
+
+    assert (build_workspace / phi_lint.JSON_REPORT_NAME).exists()
+    assert (build_workspace / phi_lint.TEXT_REPORT_NAME).exists()
+    assert not (build_workspace / "dist" / phi_lint.JSON_REPORT_NAME).exists()
+    assert not (build_workspace / "dist" / phi_lint.TEXT_REPORT_NAME).exists()
+
+
+def test_the_review_summary_reports_what_was_found_without_claiming_what_was_not(
+    build_workspace, capsys
+):
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: local
+            path: notes
+    """)
+
+    cli.main(["build", "--config", config])
+
+    captured = capsys.readouterr()
+    assert "PHI lint" in captured.err
+    assert "pattern match(es) to review" in captured.err
+    assert "no phi" not in (captured.err + captured.out).lower()
+
+
+def test_turning_the_check_off_writes_no_report(build_workspace, capsys):
+    """
+    The mode is quoted because YAML reads a bare off as the boolean false.
+    The configuration loader refuses that with a message naming the setting.
+    """
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        phi_lint: 'off'
+        sources:
+          - type: local
+            path: notes
+    """)
+
+    cli.main(["build", "--config", config])
+
+    assert not (build_workspace / phi_lint.JSON_REPORT_NAME).exists()
+    assert "PHI lint: off" in capsys.readouterr().err
+
+
+def test_a_report_that_cannot_be_written_exits_four(build_workspace, monkeypatch, capsys):
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: local
+            path: notes
+    """)
+
+    def refuse(report, directory=None):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(phi_lint, "write_reports", refuse)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OUTPUT
+    assert "report could not be written" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

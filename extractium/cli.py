@@ -3,7 +3,9 @@ Summary: Command-line entry point for the Extractium build tool (console
 script `extractium`, per pyproject.toml [project.scripts]). Reads a
 configuration file, resolves the source, site-handler, and adapter plugins
 through the registry, runs every source once, hands the documents to the
-core build step, and lets each adapter write its own output format.
+core build step, and lets each adapter write its own output format. Along
+the way it scans what the sources produced for likely protected health
+information and writes the review reports.
 Progress goes to standard error; the summary goes to standard output.
 
 This file is part of Extractium™
@@ -11,7 +13,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,6 +42,7 @@ import requests
 from extractium import __version__
 from extractium.config import ConfigError, load_config
 from extractium.core import cache as caching
+from extractium.core import phi_lint
 from extractium.core.build import build_compendium
 from extractium.core.registry import RegistryError, build_registry
 from extractium.sources.web import CrawlSettings
@@ -127,6 +130,36 @@ def run_sources(config, registry, session, cache, progress):
             source.configure(registry, settings)
         documents.extend(source.fetch(session, cache, progress))
     return documents
+
+
+### Protected Health Information ###
+
+def run_phi_lint(config, documents, progress):
+    """
+    Scans what the sources produced for likely identifiers and writes the
+    two review reports.
+
+    The reports go to the working directory, never to the output folder,
+    because everything in that folder is written in order to be published.
+    The scan runs before the build so that its result survives a later
+    failure: a person who pointed the tool at the wrong folder should learn
+    that whether or not the embedding step then works.
+
+    Args:
+        config (extractium.config.Config): the validated configuration.
+        documents (list): every document the sources produced.
+        progress (Callable[[str], None]): receives the one summary line.
+
+    Returns:
+        extractium.core.phi_lint.Report: what was scanned and what fired.
+
+    Raises:
+        OSError: if a report file cannot be written.
+    """
+    report = phi_lint.scan(documents, mode=config.phi_lint)
+    paths = () if config.phi_lint == phi_lint.MODE_OFF else phi_lint.write_reports(report)
+    progress(phi_lint.summary_line(report, paths))
+    return report
 
 
 ### Outputs ###
@@ -219,6 +252,11 @@ def run_build(args):
         # leaves the pages it did fetch usable by the next run.
         caching.save_cache_meta(cache)
         session.close()
+
+    try:
+        run_phi_lint(config, documents, progress_to_stderr)
+    except OSError as e:
+        return fail(f"the review report could not be written: {e}", EXIT_OUTPUT)
 
     compendium = build_compendium(
         documents,

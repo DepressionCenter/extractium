@@ -141,7 +141,10 @@ sources:
 #respect_robots_txt: true
 
 # Which content the PHI (protected health information) check scans:
-# local (local sources only), all, or off.
+# local (local sources only), all, or off. Every build writes
+# phi-lint-report.txt and phi-lint-report.json where you ran it, never
+# into out_dir. Quote the value to switch the check off: YAML reads a
+# bare off as false.
 #phi_lint: local
 
 
