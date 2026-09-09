@@ -32,6 +32,14 @@ sources:
   # The web crawler. It starts at seed_url, stays within that site (or
   # the TeamDynamix portal the URL belongs to), and asks the installed
   # site handlers how to read each page it visits.
+  #
+  # For a site whose sections do not link to one another, write seed_urls
+  # (a list) instead of seed_url, and the one crawl starts at each of
+  # them. Give one form or the other, never both.
+  #
+  # Avoid a short link here. If the address redirects somewhere the crawl
+  # is not allowed to follow, the build refuses that seed and names the
+  # address to use instead.
   - type: web
     seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 

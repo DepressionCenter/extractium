@@ -302,9 +302,14 @@ def accounts_named_by(sources):
             if owner:
                 named.add(owner)
         elif entry.type == "web":
-            owner = owner_for_url(options.get("seed_url") or "")
-            if owner:
-                named.add(owner)
+            # Every seed counts, not only the first: one crawl may start at
+            # more than one address, and each names whatever account it
+            # belongs to.
+            seeds = options.get("seed_urls") or ([options["seed_url"]] if options.get("seed_url") else [])
+            for seed in seeds:
+                owner = owner_for_url(seed or "")
+                if owner:
+                    named.add(owner)
     return named
 
 

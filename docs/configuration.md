@@ -136,7 +136,8 @@ Every entry needs a `type`. The options below are per type. An option you leave 
 
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `seed_url` | text | none (required) | The page the crawl starts from. Must begin with `http://` or `https://`. |
+| `seed_url` | text | one of these two is required | The page the crawl starts from. Must begin with `http://` or `https://`. |
+| `seed_urls` | list of text | one of these two is required | Several pages to start from, for a site whose sections do not link to one another. Still one crawl. |
 | `include_patterns` | list of patterns | empty (see below) | Pages the crawl is allowed to visit. |
 | `crawl_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl must not fetch. |
 | `index_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl may visit, but whose content stays out of the index. |
@@ -149,6 +150,41 @@ sources:
   - type: web
     seed_url: 'https://example.edu/TDClient/000/ExampleOrg/Home/'
 ```
+
+#### Starting in more than one place
+
+Some sites have sections that do not link to one another: two sibling collections in a repository, a microsite nobody links to from the main navigation. Give `seed_urls` instead of `seed_url` and the crawl starts at each of them:
+
+```yaml
+sources:
+  - type: web
+    seed_urls:
+      - 'https://library.example/collections/first-collection'
+      - 'https://library.example/collections/second-collection'
+```
+
+Give one or the other, never both.
+
+This is **one crawl**, not two sources, and the difference matters. One crawl keeps one list of the pages it has visited, so a page reachable from both starting points is fetched once and indexed once. It also shares one `max_pages` budget and one set of patterns. Two sources covering the same ground would each fetch that page.
+
+Scope is worked out from every seed. A link is followed if it is inside the scope of any of them, so two seeds on different hosts put both hosts in scope. If you need something narrower than a whole host, write `include_patterns`.
+
+#### When a seed redirects
+
+Short links are convenient and they hide where they go. `https://example.edu/kb` might land on a portal at another address entirely.
+
+That used to produce a nearly empty index with no error. The crawl works out what it is allowed to visit from the address **you wrote**, so after the redirect, every link on the page it received was out of scope, and the crawl stopped after one page.
+
+The build now notices and refuses that seed, naming the address to use instead:
+
+```text
+SKIP https://example.edu/kb -- it redirects to https://portal.example/TDClient/210/Org/Home/,
+which is outside what this source may crawl. Nothing there could be followed, so the crawl
+would index one page and stop. Use https://portal.example/TDClient/210/Org/Home/ as the seed
+instead, or add an include pattern that covers it.
+```
+
+Put the address it names in your settings file. A redirect that stays in scope, such as `http` to `https` or a missing trailing slash, is normal and passes without comment.
 
 ### `local`: read files from a folder
 
@@ -373,7 +409,9 @@ Extractium checks the whole file before a build starts, and stops on the first p
 | `sources is required` | The file is empty, or has no `sources` list. | Add a `sources` list with at least one entry. |
 | `sources must list at least one source` | The list is empty. | Add an entry. |
 | `sources entry 1: type is required` | An entry has no `type`. | Add `type: web` (or another type). |
-| `sources entry 1 (web): seed_url is required` | A web source has no seed. | Add `seed_url`. |
+| `sources entry 1 (web): seed_url is required` | A web source has no seed. | Add `seed_url`, or `seed_urls` for several. |
+| `give either seed_url or seed_urls, not both` | A web source has both keys. | Keep one. `seed_urls` covers the single-seed case too. |
+| `it redirects to ... which is outside what this source may crawl` | The seed is a short link to somewhere else. | Use the address the message names. |
 | `seed_url must start with http:// or https://` | The URL uses another scheme, such as `file:`, or has no scheme at all. | Use the full web address. |
 | `seed_url belongs inside a sources entry` | The file uses the old single-seed layout. | Move `seed_url` under a `- type: web` entry. |
 | `unrecognized setting(s): max_page` | A setting name is misspelled. The message lists the names Extractium knows. | Correct the spelling. |
