@@ -30,7 +30,7 @@ Extractium™ turns scattered public documentation into one searchable knowledge
 
 Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and can publish multiple output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in Field Station AI™ and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
 
-Project status: a build runs end to end and writes the search index and the `llms.txt` files. The client libraries that read the index back are not built yet. See the implementation plan in `docs/` for the order of work.
+Project status: a build runs end to end and writes the search index and the `llms.txt` files, and the Python and JavaScript clients search that index. See the implementation plan in `docs/` for the order of work.
 
 
 ## Quick Start Guide
@@ -50,7 +50,11 @@ That writes `dist/kb-index.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Dro
   + [Data flow](docs/data-flow.md) — what happens to content between the site and the output folder.
   + [Specification](docs/extractium-spec.md) — architecture, plugin kinds, outputs, and sources.
   + [Container format](docs/container-format.md) — the index file every client reads.
+  + [How to search a compendium](docs/how-to/search-a-compendium.md) — searching a built index from Python or JavaScript.
+  + [How to run a weekly build](docs/how-to/run-a-weekly-build.md) — the one-command local build and the scheduled one.
+  + [Troubleshooting](docs/troubleshooting.md) — known failures, causes, and fixes.
   + [Implementation plan](docs/implementation-plan.md) — the phased order of work.
++ [SKILLS.md](SKILLS.md) tells an AI agent how to use a published index.
 
 
 

@@ -56,12 +56,13 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. |
 | Other sources | `extractium/sources/local.py`, `github_api.py`, `youtube.py` | Placeholder files. |
 | Adapters | `extractium/adapters/container.py`, `llmstxt.py` | Working, and registered as entry points. The container writer produces the version 3 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
-| Clients | — | Not started. The retrieval code to extract still lives in Field Station AI's `index.html`. |
+| Clients | `extractium/search.py`, `clients/js/extractium-client.js` | Working. Each reads the version 3 container, refuses a file that fails any reader check, and runs the same hybrid search: cosine similarity, BM25, reciprocal rank fusion, a corpus-relative relevance cutoff, diversity selection with a per-section cap, and resolution of a matched window to its whole section. The caller supplies the query embedder. A committed golden container and query vector hold both to the same ranking. |
+| Operations | `run.sh`, `run.bat`, `requirements-lock.txt`, `.github/workflows/build-compendium.yml`, `examples/data-repo/` | Working. One command builds locally on either platform from a hash-checked lock file; the workflow runs weekly and on a button press, reuses the crawl cache between runs, and publishes through the official GitHub Pages actions only. The data-repository template is what an organization copies for its own content. |
 | Command line | `extractium/cli.py` | Working. `extractium build --config config.yaml`, with `--out-dir`, `--max-pages`, and `--float32-vecs`; progress on standard error, the summary on standard output, and a distinct exit code for a bad configuration, an empty crawl, and an unwritable output. |
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 476 tests as of 2026-09-08.
+The test suite passes: 564 Python tests as of 2026-09-08, plus 36 Node tests for the JavaScript client (`node --test clients/js`).
 
 
 ## Settled design decisions
@@ -163,7 +164,7 @@ Specification: section 6.
 
 ## Conclusion
 
-A build now runs end to end. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; and the container and `llms.txt` adapters write it from the command line. What is not built yet is anything that reads the file back. The next block of work is the JavaScript and Python clients. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
+A build now runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; the container and `llms.txt` adapters write it from the command line; the Python and JavaScript clients search the result identically; and one command, locally or on a weekly schedule, does the whole thing and publishes it. What is not built yet is the SQLite output, the local-folder source, the check for protected health information, the GitHub API source, the Open Knowledge Format output, the example MCP servers, and the YouTube source. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md).
 
 
 ## Additional Resources

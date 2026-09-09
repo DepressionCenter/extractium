@@ -1,0 +1,11 @@
+# Binary outputs committed for the client tests keep their bytes exactly as written.
+# The container is a JSON header followed by raw vector bytes; a line-ending
+# conversion would change the byte count the reader checks.
+tests/golden/contract-container.json binary
+
+# Shell scripts run on macOS, Linux, and GitHub runners, where a carriage
+# return at the end of a line is part of the command and breaks the script.
+*.sh text eol=lf
+
+# Windows batch files need the line endings the Windows shell expects.
+*.bat text eol=crlf

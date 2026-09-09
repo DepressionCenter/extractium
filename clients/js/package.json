@@ -1,0 +1,14 @@
+{
+  "_license": "This file is part of Extractium. Copyright © 2026 The Regents of the University of Michigan. Licensed under the GNU General Public License v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the project README for full license information.",
+  "name": "extractium-client",
+  "version": "0.1.0",
+  "description": "Reads an Extractium version 3 compendium and searches it: one file, no dependencies, no build step.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "extractium-client.js",
+  "exports": "./extractium-client.js",
+  "files": ["extractium-client.js"],
+  "scripts": {
+    "test": "node --test"
+  }
+}

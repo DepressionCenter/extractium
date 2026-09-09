@@ -1,0 +1,32 @@
+# This file is part of Extractium™
+# examples/data-repo/.gitignore
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-08
+# Last Modified: 2026-09-08
+# Summary: What a data repository must not commit: the crawl cache, the
+# local virtual environment, and the build output when it is published by
+# the workflow rather than committed.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# Fetched pages. Only saves time on the next run; deleting it is safe.
+.kb_cache/
+
+# A local build environment, when you build on your own machine.
+.venv/
+
+# The build output. The workflow publishes it straight to Pages, so it
+# does not need to be committed. Remove this line if you build locally and
+# want the files in the repository.
+dist/

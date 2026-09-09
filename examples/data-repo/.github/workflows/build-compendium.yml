@@ -1,0 +1,125 @@
+# This file is part of Extractium™
+# examples/data-repo/.github/workflows/build-compendium.yml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-08
+# Last Modified: 2026-09-08
+# Summary: Weekly scheduled build for an organization's data repository,
+# also runnable from the Actions tab with the "Run workflow" button. Checks
+# out Extractium at a pinned version, installs its pinned dependencies,
+# reuses the crawl cache between runs, and publishes the output folder to
+# GitHub Pages through the official Pages actions.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+name: Build compendium
+
+on:
+  schedule:
+    # Weekly, Monday morning UTC. An odd minute keeps this run out of the
+    # crowd of jobs scheduled on the hour.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      max_pages:
+        description: "Visit at most this many pages (blank uses the settings file)"
+        required: false
+        default: ""
+
+# Least privilege: the job reads this repository and writes nothing back to
+# it. The Pages permissions belong to the publishing job alone.
+permissions:
+  contents: read
+
+# One publish at a time, and never cancel a run that is already
+# publishing: a half-uploaded site is worse than a late one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CONFIG_FILE: config.yaml
+  OUT_DIR: dist
+  # The version of the tool this repository builds with. Raise it
+  # deliberately, so a change in the tool never arrives unannounced in a
+  # scheduled run. Any tag or commit of the Extractium repository works.
+  EXTRACTIUM_REF: main
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out this data repository
+        uses: actions/checkout@v4
+
+      - name: Check out Extractium
+        uses: actions/checkout@v4
+        with:
+          repository: DepressionCenter/extractium
+          ref: ${{ env.EXTRACTIUM_REF }}
+          path: .extractium
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Extractium and its pinned dependencies
+        # Every package in the lock file carries a hash, so pip refuses
+        # anything whose contents do not match what was locked.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r .extractium/requirements-lock.txt
+          python -m pip install --no-deps ./.extractium
+
+      # Pages already fetched keep their entry, so a weekly rebuild
+      # downloads only what changed. The key follows the settings file:
+      # change what is crawled and the run starts from a clean cache.
+      - name: Restore the crawl cache
+        uses: actions/cache@v4
+        with:
+          path: .kb_cache
+          key: kb-cache-${{ runner.os }}-${{ hashFiles('config.yaml') }}-${{ github.run_id }}
+          restore-keys: |
+            kb-cache-${{ runner.os }}-${{ hashFiles('config.yaml') }}-
+
+      - name: Build the compendium
+        run: |
+          extractium build --config "$CONFIG_FILE" --out-dir "$OUT_DIR" ${MAX_PAGES:+--max-pages "$MAX_PAGES"}
+        env:
+          MAX_PAGES: ${{ inputs.max_pages }}
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the output folder
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.OUT_DIR }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    # Writing to Pages needs an identity token; nothing here writes to the
+    # repository itself.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
