@@ -36,6 +36,7 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
+* [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
 * [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session, phase or not; your request goes on the last line.
 
