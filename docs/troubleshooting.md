@@ -29,6 +29,41 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 This page lists failures that have actually happened, with the cause and the fix for each. Find the symptom that matches yours and work from there. If your problem is not here, the [running a build](usage.md) page explains what each exit code means, which usually narrows it down quickly.
 
 
+## Installing
+
+### `does not appear to be a Python project: neither 'setup.py' nor 'pyproject.toml' found`
+
+**Cause.** `pip install -e .` was run in a folder that does not hold the project. The `.` means "the folder I am in", so an empty folder you just created has nothing to install. This happens when the clone step is skipped, or when a folder is made for the project and the clone is never run inside it.
+
+**Fix.** Get the project first, then install from inside it:
+
+```
+git clone https://github.com/DepressionCenter/extractium.git
+cd extractium
+pip install -e ".[dev]"
+```
+
+If you already made an empty folder, delete it or clone into it with `git clone https://github.com/DepressionCenter/extractium.git .` — note the trailing dot.
+
+### `extractium: command not found`, or `The term 'extractium' is not recognized`
+
+**Cause.** The install worked, but the folder pip put the `extractium` command in is not on your `PATH`. It happens after a user install, which pip does automatically when it cannot write to the system Python folder. You will have seen `Defaulting to user installation because normal site-packages is not writeable` earlier in the output.
+
+**Fix.** Run it as a module instead. This always works, whatever your `PATH` says, and it is the same program:
+
+```
+python -m extractium.cli build --config config.yaml
+```
+
+If you would rather have the short command, add the folder to your `PATH`. To find it:
+
+```
+python -c "import sysconfig, os; print(sysconfig.get_path('scripts', os.name + '_user'))"
+```
+
+On Windows that is usually `%APPDATA%\Python\Python3xx\Scripts`; on macOS and Linux, usually `~/.local/bin`.
+
+
 ## Running the build
 
 ### `run.sh` stops with `$'\r': command not found`
@@ -64,7 +99,7 @@ uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashe
 **Fix.** Run a small trial and read what it says:
 
 ```
-extractium build --config config.yaml --max-pages 25 --out-dir trial
+python -m extractium.cli build --config config.yaml --max-pages 25 --out-dir trial
 ```
 
 The progress lines name each page visited and each one skipped, with the reason.
