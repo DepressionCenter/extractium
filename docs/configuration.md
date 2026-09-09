@@ -136,6 +136,8 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 
 Set `GITHUB_TOKEN` in the environment to raise the API rate limit. The token never goes in the file.
 
+**Planned.** The loader accepts this type today, but the source itself is not built yet, so a build that uses it stops with `no source named 'github_api'`. When it arrives it also takes a `user` or a `url` instead of `org`, repository include and exclude lists, `include_forks`, `include_archived`, `include_code`, and `max_file_bytes`. A `web` source whose `seed_url` points at GitHub will use the API automatically, with no extra settings at all. See [GitHub repository indexing](github-repository-indexing.md).
+
 ### `youtube`: read captions
 
 | Option | Type | Default | What it does |

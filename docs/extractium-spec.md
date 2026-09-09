@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -178,7 +178,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | Field | Values |
 |---|---|
 | `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local` |
-| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript` |
+| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`; `manifest` and `repo_map` from phase 7; `code_file` and `code_symbol` from phase 8 |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
 | `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
@@ -197,7 +197,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | Binary container, version 3 | `kb-index.json` (name configurable) | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
 | llms.txt | `llms.txt`, `llms-full.txt` | 3 | Root manifest and full concatenation for web-browsing language models. |
 | SQLite | `compendium.sqlite` | 6 | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
-| OKF bundle | directory with `index.md`, `log.md`, one Markdown file per page | 7 | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. OKF defines no archive packaging, so none is written. |
+| OKF bundle | directory with `index.md`, `log.md`, one Markdown file per page | 9 | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. OKF defines no archive packaging, so none is written. |
 | gzip container | `--gzip` flag | later | Same format, compressed; browsers decode with `DecompressionStream`. |
 | Parquet, DuckDB | install extras | future | `[parquet]` and `[duckdb]` extras only. |
 | JSONL plus separate vector file | none | never | No ecosystem behind it; the container covers the case. |
@@ -214,9 +214,9 @@ Reading OKF bundles produced by other tools, as a source, is possible future wor
 | Site handler | `tdx` | 2 | TeamDynamix portals: content selectors, title prefix stripping, recovery of a title the portal cut short, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
 | Site handler | `github` | 2 | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns. |
 | Source | `local` | 6 | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
-| Source | `github_api` | 7 | Organization enumeration through the REST API; README and Markdown through raw URLs; uses `GITHUB_TOKEN` when present. |
-| Source | `youtube` | 9 | Captions only. Explicit video ids need no key; playlists and channels are listed through the YouTube Data API with `YOUTUBE_API_KEY` from the environment. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and cached; a CI run reuses the cache. Parents deep-link to a timestamp. |
-| Source | GitHub code structure | future | AST-based module overviews (signatures, docstrings, purpose). Never raw code bodies. No language model. |
+| Source | `github_api` | 7 | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget; it never widens what may be published. See [GitHub repository indexing](github-repository-indexing.md). |
+| Source | `youtube` | 11 | Captions only. Explicit video ids need no key; playlists and channels are listed through the YouTube Data API with `YOUTUBE_API_KEY` from the environment. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and cached; a CI run reuses the cache. Parents deep-link to a timestamp. |
+| Source | GitHub code structure | 8 | Tree-sitter analysis of repository code: signatures, documentation, imports, calls, and repository maps. Never raw code bodies, and no language model; a symbol record links to its lines on GitHub instead of copying them. Universal Ctags is an optional second parser; an unsupported language still gets a file-level record. See [GitHub repository indexing](github-repository-indexing.md). |
 | Source | Speech-to-text fallback | future | For videos without captions. External, optional plugin. |
 | Source | OKF bundles from other tools | future | Maybe. |
 
@@ -252,7 +252,7 @@ A local folder can hold content that must never be published. The rules:
 
 ## 8. Cache
 
-- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), and `youtube/` (transcripts). `embeddings/` and `enrichment/` are reserved for delta builds.
+- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), `github/` (repository metadata and trees, file bodies keyed by blob SHA, and parser output keyed by blob SHA and parser signature), and `youtube/` (transcripts). `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token.
 - Revalidation uses conditional GET (`If-None-Match`, `If-Modified-Since`, honoring 304), not HEAD probing: several servers omit validators on HEAD.
 - A content SHA-256 is stored per page so a future delta build can skip unchanged chunks.
 - On GitHub Actions, `.kb_cache/` persists between runs through the cache action, keyed on a hash of the configuration file.
@@ -275,9 +275,9 @@ The compendium on a static host is the single source of truth; every access meth
 | Tier | Method | Search quality | Hosting cost | Plan phase |
 |---|---|---|---|---|
 | 0 | Static files (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | Model-dependent; no ranking | None | 3 |
-| 1 | Local MCP server on the user's machine (Node via `npx`, or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | 8 |
-| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | 10 |
-| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | 10 |
+| 1 | Local MCP server on the user's machine (Node via `npx`, or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | 10 |
+| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | 12 |
+| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | 12 |
 
 Tier 2 detail, from the hosts' published limits: a Cloudflare Worker on the free plan has 10 milliseconds of CPU per request and a 3 MB script limit, so it cannot parse a multi-megabyte JSON header on every call; the example imports the SQLite output into D1 and answers BM25 queries from it, with optional query embedding through Workers AI, which serves the same `bge-small-en-v1.5` model. A Val Town HTTP val has 4 GiB of memory and a one-minute wall-clock limit on the free plan, so it can hold the whole container in memory after fetching it from the published URL.
 
@@ -365,6 +365,8 @@ extractium/
 │   │                            # phi_lint, registry, models, build
 │   ├── sources/                 # web (core crawler); site handlers generic, tdx, github;
 │   │                            # sources local, github_api, youtube
+│   ├── code/                    # Tree-sitter registry, engine, query files, embedded-code
+│   │                            # extraction, relationships, rendering, ctags fallback
 │   ├── adapters/                # container, llmstxt, sqlite_out, okf
 │   ├── search.py                # Python client
 │   └── cli.py                   # extractium build --config config.yaml
@@ -422,6 +424,7 @@ You now know what Extractium is meant to become: one crawler with pluggable site
 * [Architecture and Current State](architecture.md) — what exists in the repository today.
 * [Implementation plan](implementation-plan.md) — the phased order of work.
 * [Container format](container-format.md) — the flagship output, byte by byte.
+* [GitHub repository indexing](github-repository-indexing.md) — the GitHub API source and the code-analysis design, sections 5 and 8 in detail.
 * [Configuration reference](configuration.md) — the settings file as it exists now.
 * [Field Station AI](https://github.com/DepressionCenter/FieldStationAI) — the project the engine was extracted from.
 * [Open Knowledge Format specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md) — the OKF v0.2 format the OKF adapter writes.
