@@ -395,11 +395,60 @@ def test_local_source_globs_must_be_a_list_of_text():
         config.config_from_mapping({"sources": [{"type": "local", "path": "docs", "include_globs": "**/*.md"}]})
 
 
-def test_github_api_source_requires_an_org():
+def test_github_api_source_takes_exactly_one_selector():
     source = config.config_from_mapping({"sources": [{"type": "github_api", "org": "example-org"}]}).sources[0]
     assert source.options["org"] == "example-org"
-    with pytest.raises(config.ConfigError, match=r"\(github_api\): org is required"):
+    assert source.options["user"] is None and source.options["url"] is None
+
+    with pytest.raises(config.ConfigError, match="give exactly one of org, user, or url"):
         config.config_from_mapping({"sources": [{"type": "github_api"}]})
+    # Two selectors is a contradiction, not a request for both.
+    with pytest.raises(config.ConfigError, match="got org and user"):
+        config.config_from_mapping({"sources": [{"type": "github_api", "org": "a", "user": "b"}]})
+
+
+def test_github_api_source_refuses_an_address_in_the_account_setting():
+    """A pasted URL under org would be sent to GitHub as an account name and fail there."""
+    with pytest.raises(config.ConfigError, match="Write a repository or owner address under url"):
+        config.config_from_mapping({
+            "sources": [{"type": "github_api", "org": "https://github.com/example-org"}],
+        })
+
+
+def test_github_api_source_fills_in_its_defaults():
+    source = config.config_from_mapping({"sources": [{"type": "github_api", "user": "example-user"}]}).sources[0]
+
+    assert source.options["include_forks"] is False       # forks fill the index with near-copies
+    assert source.options["include_archived"] is True     # archived documentation is documentation
+    assert source.options["include_repos"] == ()
+    assert source.options["max_file_bytes"] == config.DEFAULT_GITHUB_MAX_FILE_BYTES
+
+
+def test_github_owners_is_a_global_allowlist_of_exact_names():
+    cfg = config.config_from_mapping({
+        "github_owners": ["some-collaborator"],
+        "sources": [{"type": "web", "seed_url": "https://example.org/"}],
+    })
+    assert cfg.github_owners == ("some-collaborator",)
+
+
+def test_github_owners_defaults_to_reading_no_extra_account():
+    cfg = config.config_from_mapping({"sources": [{"type": "web", "seed_url": "https://example.org/"}]})
+
+    assert cfg.github_owners == ()
+
+
+@pytest.mark.parametrize("entry", ["*", "some-org/*", "https://github.com/some-org", "-leading-hyphen"])
+def test_github_owners_refuses_anything_but_an_exact_account_name(entry):
+    """
+    An allowlist with a pattern in it can allow accounts nobody chose,
+    which is the failure the list exists to prevent.
+    """
+    with pytest.raises(config.ConfigError, match="must be an exact GitHub account name"):
+        config.config_from_mapping({
+            "github_owners": [entry],
+            "sources": [{"type": "web", "seed_url": "https://example.org/"}],
+        })
 
 
 def test_youtube_source_defaults_and_options():

@@ -12,7 +12,7 @@ extractium/sources/web.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-09"
 
 import time
 from collections import deque
@@ -68,12 +68,17 @@ class CrawlSettings:
         delay_seconds (float): pause after each page, in seconds; 0 for none.
         user_agent (str): how the crawler introduces itself.
         respect_robots_txt (bool): whether robots.txt rules are honored.
+        github_owners (tuple[str, ...]): the GitHub accounts this build
+            may read. Empty means the build reads only the accounts its
+            own sources named. The GitHub site handler enforces this; no
+            other handler looks at it.
     """
 
     max_pages: int = DEFAULT_MAX_PAGES
     delay_seconds: float = DEFAULT_DELAY_SECONDS
     user_agent: str = fetching.DEFAULT_USER_AGENT
     respect_robots_txt: bool = True
+    github_owners: tuple = ()
 
     @property
     def blocked_retry_user_agent(self):
@@ -93,7 +98,7 @@ class CrawlSettings:
 
 ### Site Handler Selection ###
 
-def resolve_site_handlers(registry, names=None):
+def resolve_site_handlers(registry, names=None, settings=None):
     """
     Instantiates the site handlers a web source entry asks for.
 
@@ -103,6 +108,10 @@ def resolve_site_handlers(registry, names=None):
         names (Sequence[str] | None): the entry's `site_handlers` option.
             None means every registered handler; an empty sequence means
             the generic fallback only.
+        settings (CrawlSettings | None): the build's global crawl
+            settings, offered to each handler that defines the optional
+            `configure` hook. A handler whose rules depend only on the URL
+            does not define it and never sees these.
 
     Returns:
         tuple: handler instances in the order given (or, for None, in
@@ -113,8 +122,33 @@ def resolve_site_handlers(registry, names=None):
     """
     if names is None:
         names = registry.site_handler_names()
-    handlers = [registry.get_site_handler(name)() for name in names]
+    handlers = []
+    for name in names:
+        handler = registry.get_site_handler(name)()
+        if settings is not None and hasattr(handler, "configure"):
+            handler.configure(settings)
+        handlers.append(handler)
     return order_site_handlers(handlers)
+
+
+def handlers_allow(handlers, url):
+    """
+    Whether every handler that has an opinion lets a URL into the crawl.
+
+    Every handler defining the optional `allows` hook is asked about every
+    URL, whatever its `matches` says, because a scope rule has to cover
+    the addresses a handler does not itself read: the GitHub rule applies
+    to raw.githubusercontent.com as much as to github.com. One refusal is
+    enough to keep the URL out.
+
+    Args:
+        handlers (Iterable): the enabled handler instances.
+        url (str): the candidate URL.
+
+    Returns:
+        bool: True when no handler refuses it.
+    """
+    return all(handler.allows(url) for handler in handlers if hasattr(handler, "allows"))
 
 
 def order_site_handlers(handlers):
@@ -174,6 +208,15 @@ class WebSource:
             either exclude list means "asset patterns plus the enabled
             handlers' defaults"), and site_handlers (unused here; the
             caller resolves names to the handlers argument).
+
+            Two further keys are set by a caller inside the program, never
+            by a configuration file: `already_indexed`, a set of URLs
+            another source has already turned into documents, which are
+            followed for their links but never indexed twice; and
+            `promote`, which a caller sets to False to stop a handler
+            offering a different source for the seed. A source that
+            falls back to a crawl sets both, so the crawl neither repeats
+            its work nor hands the seed straight back to it.
         site_handlers (Iterable): handler instances, consulted per URL in
             this order. The generic handler is appended when missing and
             always consulted last.
@@ -186,6 +229,8 @@ class WebSource:
         self.options = options
         self.seed_url = options["seed_url"]
         self.include_patterns = tuple(options.get("include_patterns") or ())
+        self.already_indexed = set(options.get("already_indexed") or ())
+        self.registry = None
         self._adopt(site_handlers, settings)
 
     def configure(self, registry, settings):
@@ -208,7 +253,11 @@ class WebSource:
             extractium.core.registry.RegistryError: if the entry's
                 `site_handlers` list names a handler that is not installed.
         """
-        self._adopt(resolve_site_handlers(registry, self.options.get("site_handlers")), settings)
+        self.registry = registry
+        self._adopt(
+            resolve_site_handlers(registry, self.options.get("site_handlers"), settings),
+            settings,
+        )
 
     def _adopt(self, site_handlers, settings):
         """
@@ -255,9 +304,21 @@ class WebSource:
                 this source only flushes it periodically.
             progress (Callable[[str], None]): receives one line per event.
 
+        Before any of that, each enabled handler is asked whether it knows
+        a better source for the seed. A repository host read through its
+        own interface gives complete, structured content, where scraping
+        its pages gives whatever its browser code happened to render. The
+        offer is for the seed only, so a link found mid-crawl never
+        redirects the build.
+
         Yields:
             extractium.core.models.Document: one per page with content.
         """
+        offered = self._offered_source(progress)
+        if offered is not None:
+            yield from offered.fetch(session, cache, progress)
+            return
+
         settings = self.settings
         auto_prefix = fetching.derive_auto_prefix(self.seed_url)
         origin = fetching.get_origin(self.seed_url)
@@ -304,12 +365,22 @@ class WebSource:
             # Enqueue new in-scope links, deduped before download.
             for link in extract_links(soup, url):
                 if link not in visited and link not in queued:
-                    if fetching.in_scope(link, auto_prefix, origin, include_res, crawl_exclude_res):
+                    in_scope = fetching.in_scope(
+                        link, auto_prefix, origin, include_res, crawl_exclude_res
+                    )
+                    if in_scope and handlers_allow(self.handlers, link):
                         queued.add(link)
                         queue.append(link)
 
             # Index exclusion only prevents indexing, not crawling.
             if any(r.search(url) for r in index_exclude_res):
+                self._pause()
+                continue
+
+            # A page another source already turned into a document is
+            # still followed for its links, and never indexed twice.
+            if url in self.already_indexed:
+                progress("       (already read; not indexed again)")
                 self._pause()
                 continue
 
@@ -329,6 +400,32 @@ class WebSource:
             self._pause()
 
         progress(f"Crawled {len(visited)} page(s).")
+
+    def _offered_source(self, progress):
+        """
+        The source a handler offers for this crawl's seed, ready to run,
+        or None when no handler offers one.
+
+        Needs the registry, so it does nothing for a source constructed
+        without `configure`. A caller that has already decided how to read
+        the seed sets the `promote` option to False, which is how a source
+        that falls back to a crawl avoids being handed straight back to
+        itself.
+        """
+        if self.registry is None or not self.options.get("promote", True):
+            return None
+        for handler in self.handlers:
+            offer = handler.offer_source(self.seed_url) if hasattr(handler, "offer_source") else None
+            if offer is None:
+                continue
+            name, options = offer
+            progress(f"Seed:         {self.seed_url}")
+            progress(f"  the {handler.name} handler reads this address through the {name} source")
+            source = self.registry.get_source(name)(options)
+            if hasattr(source, "configure"):
+                source.configure(self.registry, self.settings)
+            return source
+        return None
 
     def _pause(self):
         """Waits delay_seconds between requests, so the crawl stays polite to the site."""

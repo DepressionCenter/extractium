@@ -5,16 +5,19 @@ rewrites Markdown and text blob URLs to their raw-content equivalent,
 extracts server-rendered wiki and release-notes pages, treats repository
 root and tree pages as link-discovery hops with no indexable content, and
 owns the code-host exclude patterns (issues, commits, settings, and the
-like). Enumerating an organization through the GitHub API is a separate
-source plugin, extractium.sources.github_api, not this handler. See
-docs/extractium-spec.md section 5.
+like). It also keeps a crawl to the GitHub accounts the operator named,
+and offers the API source when a crawl is seeded at a GitHub address.
+Reading an account through the API is a separate source plugin,
+extractium.sources.github_api, not this handler. See
+docs/extractium-spec.md section 5 and
+docs/github-repository-indexing.md.
 
 This file is part of Extractium™
 extractium/sources/github.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,8 +36,9 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-09"
 
+import collections
 import re
 from urllib.parse import urlparse
 
@@ -154,6 +158,32 @@ GITHUB_INDEX_ONLY_EXCLUDE_PATTERNS = (
 GITHUB_INDEX_EXCLUDE_PATTERNS = GITHUB_CRAWL_EXCLUDE_PATTERNS + GITHUB_INDEX_ONLY_EXCLUDE_PATTERNS
 
 
+### Which Accounts May Be Read ###
+
+# GitHub account names turn up everywhere: in a README's credits, in a
+# dependency list, in a fork notice, in a contributor's profile link.
+# Following them is how a build meant to read one organization ends up
+# indexing thousands of strangers' repositories. So an account is read
+# only when the operator named it, and these patterns are how the account
+# is read out of an address.
+#
+# All three GitHub-shaped hosts are covered, because the same account owns
+# content on each of them.
+_ACCOUNT_PATH_HOSTS = ("github.com", "www.github.com", "raw.githubusercontent.com",
+                       "gist.github.com", "objects.githubusercontent.com")
+_ACCOUNT_PAGES_HOST_RE = re.compile(r"^([^.]+)\.github\.io$", re.I)
+
+# Paths under github.com that belong to GitHub itself rather than to an
+# account, so they are never mistaken for an account name.
+GITHUB_RESERVED_ACCOUNT_NAMES = frozenset({
+    "about", "apps", "assets", "blog", "collections", "contact", "customer-stories",
+    "enterprise", "events", "explore", "features", "git", "github", "issues",
+    "join", "login", "logout", "marketplace", "new", "notifications", "orgs",
+    "pricing", "pulls", "search", "security", "settings", "signup", "site",
+    "sponsors", "stars", "topics", "trending", "users",
+})
+
+
 ### URL Helpers ###
 
 def is_git_host_url(url):
@@ -193,6 +223,34 @@ def derive_title_from_blob_path(url):
     return re.sub(r"[-_]+", " ", stem).strip().title() or UNTITLED
 
 
+def owner_for_url(url):
+    """
+    The GitHub account an address belongs to, or None when it belongs to
+    no account.
+
+    Args:
+        url (str): any URL.
+
+    Returns:
+        str | None: the account name, lowercased, for a github.com,
+        raw.githubusercontent.com, or <account>.github.io address; None
+        for every other host, and for GitHub's own pages, which belong to
+        no account.
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    pages = _ACCOUNT_PAGES_HOST_RE.match(host)
+    if pages:
+        return pages.group(1).lower()
+    if host not in _ACCOUNT_PATH_HOSTS:
+        return None
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if not segments:
+        return None
+    owner = segments[0].lower()
+    return None if owner in GITHUB_RESERVED_ACCOUNT_NAMES else owner
+
+
 def repository_categories(url):
     """
     The hierarchy a git-host URL sits in, outermost first: the owner and
@@ -215,6 +273,41 @@ def repository_categories(url):
     return tuple(segments[:2])
 
 
+### Accounts A Build May Read ###
+
+def accounts_named_by(sources):
+    """
+    The GitHub accounts a build's own sources named.
+
+    An account joins this set only by being asked for: as the owner of a
+    `github_api` source, or as the owner in the address a `web` source is
+    seeded at. Nothing joins it by being linked, forked, depended on, or
+    mentioned often.
+
+    Args:
+        sources (Iterable): the configuration's source entries, each with
+            a `type` and an `options` mapping.
+
+    Returns:
+        set[str]: account names, lowercased.
+    """
+    named = set()
+    for entry in sources:
+        options = entry.options
+        if entry.type == "github_api":
+            for key in ("org", "user"):
+                if options.get(key):
+                    named.add(options[key].lower())
+            owner = owner_for_url(options.get("url") or "")
+            if owner:
+                named.add(owner)
+        elif entry.type == "web":
+            owner = owner_for_url(options.get("seed_url") or "")
+            if owner:
+                named.add(owner)
+    return named
+
+
 ### Handler ###
 
 class GitHubHandler:
@@ -232,6 +325,117 @@ class GitHubHandler:
     source_type = "github"
     default_crawl_exclude_patterns = GITHUB_CRAWL_EXCLUDE_PATTERNS
     default_index_exclude_patterns = GITHUB_INDEX_EXCLUDE_PATTERNS
+
+    def __init__(self):
+        # None means "no account rule in force". A handler constructed
+        # directly, by a library caller or a test, restricts nothing; the
+        # rule only applies once a build hands over what its operator
+        # actually asked for. Defaulting the other way would make a plain
+        # GitHubHandler() drop every GitHub URL, and that failure would
+        # look like a broken crawl rather than a guardrail.
+        self.allowed_accounts = None
+        self.skipped_accounts = collections.Counter()
+
+    def configure(self, settings):
+        """
+        Adopts the build's global crawl settings, which carry the GitHub
+        accounts the operator named.
+
+        This is the optional settings hook of the site-handler protocol.
+        A handler whose rules depend only on the URL does not define it.
+
+        Args:
+            settings: the build's crawl settings, or None to leave the
+                account rule out of force.
+        """
+        accounts = getattr(settings, "github_owners", None)
+        self.allowed_accounts = None if accounts is None else frozenset(
+            account.lower() for account in accounts
+        )
+
+    def allows(self, url):
+        """
+        Whether a crawl may follow a URL, under the account rule.
+
+        A GitHub account is read only when the operator named it: as a
+        source, or in the `github_owners` setting. Nothing else joins that
+        set, however it was linked and however often it is mentioned.
+
+        This matters most for the default crawl scope. A crawl seeded at
+        github.com/SomeOrg has github.com as its origin, and a crawl stays
+        inside its origin by default, so without this rule every account
+        on the host would be in scope.
+
+        Args:
+            url (str): a URL the crawl is considering.
+
+        Returns:
+            bool: True unless the URL belongs to a GitHub account the
+            operator did not name. A URL on any other host is not this
+            handler's business and is always allowed.
+
+        Side effects:
+            Counts each refused account, so the build can report once what
+            it held back rather than once per link.
+        """
+        if self.allowed_accounts is None:
+            return True
+        owner = owner_for_url(url)
+        if owner is None or owner in self.allowed_accounts:
+            return True
+        self.skipped_accounts[owner] += 1
+        return False
+
+    def offer_source(self, seed_url):
+        """
+        Offers the GitHub API source for a crawl seeded at a GitHub
+        address, so an account is read through the API rather than scraped
+        page by page.
+
+        The offer is for the seed only. A link to somebody's repository
+        found halfway through crawling an unrelated website stays an
+        ordinary link; otherwise one stray mention could pull an entire
+        GitHub account into a small site crawl.
+
+        An owner address means that owner's repositories and a repository
+        address means that one repository. The two are kept strictly
+        apart: reading them the same way would turn a small request into
+        hours of work.
+
+        Args:
+            seed_url (str): the URL the crawl would start from.
+
+        Returns:
+            tuple[str, dict] | None: the source name and its options, or
+            None when the seed is not a GitHub owner or repository
+            address.
+        """
+        parsed = urlparse(seed_url)
+        if parsed.netloc.lower() not in ("github.com", "www.github.com"):
+            return None
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        if not segments or segments[0].lower() in GITHUB_RESERVED_ACCOUNT_NAMES:
+            return None
+        options = {"org": None, "user": None, "url": seed_url}
+        return ("github_api", options)
+
+    def skipped_account_report(self):
+        """
+        One line naming the accounts the rule held back, with how many
+        links pointed at each.
+
+        Returns:
+            str: the report, or an empty string when nothing was skipped.
+            An operator who did want one of these can see it and say so,
+            and one who did not can see that the guardrail worked.
+        """
+        if not self.skipped_accounts:
+            return ""
+        named = ", ".join(
+            f"{account} ({count} link{'s' if count != 1 else ''})"
+            for account, count in self.skipped_accounts.most_common()
+        )
+        return f"Not read; add to github_owners to include: {named}"
 
     def matches(self, url):
         """True for any URL on a git host (see GIT_HOST_RE)."""

@@ -38,7 +38,9 @@ import textwrap
 import pytest
 
 from extractium import cli
+from extractium.config import load_config
 from extractium.core import phi_lint
+from extractium.sources.github import accounts_named_by
 
 # A source plugin the tests drop into a plugins/ folder. It yields fixed
 # documents rather than fetching anything, which is what lets the whole
@@ -539,6 +541,84 @@ def test_the_summary_calls_out_an_output_that_includes_local_content(build_works
     cli.main(["build", "--config", config])
 
     assert "includes local content" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# GitHub accounts and coverage
+# ---------------------------------------------------------------------------
+
+REPORTING_SOURCE = '''
+from extractium.core.models import Document
+
+
+class ReportingSource:
+    """A source that produces one document and one coverage note."""
+
+    name = "reporting"
+
+    def __init__(self, options):
+        self.options = options
+        self.settings = None
+
+    def configure(self, registry, settings):
+        self.settings = settings
+
+    def fetch(self, session, cache, progress):
+        yield Document(
+            url="https://github.com/example-org/example-tools",
+            title="example-org/example-tools: repository summary",
+            content="Repository summary text, long enough to clear the minimum "
+                    "section size the chunker uses for a build in this test.",
+            source_type="github", content_type="repo_map",
+        )
+
+    def summary_lines(self):
+        return ["example-org/example-tools  tier 3 (documentation crawl)  "
+                "documentation only; no code analysis"]
+
+
+def register(registry):
+    registry.register_source(ReportingSource)
+'''
+
+
+def test_the_summary_says_how_completely_each_repository_was_read(build_workspace, capsys):
+    """A gap the reader never sees is a gap that will be mistaken for an answer."""
+    (build_workspace / "plugins" / "reporting_source.py").write_text(REPORTING_SOURCE, encoding="utf-8")
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: reporting
+        outputs:
+          - type: container
+    """)
+
+    cli.main(["build", "--config", config])
+
+    out = capsys.readouterr().out
+    assert "coverage : example-org/example-tools" in out
+    assert "no code analysis" in out
+
+
+def test_the_accounts_a_build_may_read_come_from_its_own_sources(build_workspace):
+    """Deny by default: nothing joins the set by being linked or mentioned."""
+    config_path = write_config(build_workspace, """
+        cache_dir: .cache
+        github_owners:
+          - some-collaborator
+        sources:
+          - type: web
+            seed_url: https://github.com/example-org/example-tools
+        outputs:
+          - type: container
+    """)
+    loaded = load_config(config_path)
+
+    settings_owners = set(accounts_named_by(loaded.sources)) | {
+        owner.lower() for owner in loaded.github_owners
+    }
+
+    assert settings_owners == {"example-org", "some-collaborator"}
 
 
 def test_output_survives_a_console_that_cannot_encode_a_page_title(tmp_path):

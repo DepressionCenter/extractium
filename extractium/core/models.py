@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-09"
 
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -60,8 +60,14 @@ from extractium.core.embed import (
 SOURCE_TYPES = frozenset({"kb", "github", "web", "youtube", "local"})
 
 # Every value a parent's content_type may hold.
+# "manifest" is a project or build file indexed as text (a pyproject.toml,
+# a DESCRIPTION, a Dockerfile): short, and often a faster explanation of a
+# project than its prose. "repo_map" is the synthetic per-repository
+# summary a code source writes, which also records how completely that
+# repository could be read.
 CONTENT_TYPES = frozenset({
     "article", "readme", "wiki", "release_notes", "page", "text", "video_transcript",
+    "manifest", "repo_map",
 })
 
 # A local document's URL is "local:" plus a path relative to the source
@@ -423,6 +429,20 @@ class SiteHandler(Protocol):
     are consulted in registration order and `generic` is always last.
     A handler reads a page; it never discovers links, so the crawl stays
     one graph however many handlers are enabled.
+
+    Three methods are optional, and a handler that defines none behaves
+    exactly as the required five describe:
+
+    - `configure(settings)` receives the build's global crawl settings
+      after construction. A handler needs it when its rules depend on
+      what the operator configured rather than on the URL alone.
+    - `allows(url)` may veto a URL the crawl would otherwise follow.
+      Every handler that defines it is asked about every URL, whatever
+      `matches` says, and one refusal keeps the URL out of scope. This
+      is how a host-specific scope rule stays in its own handler.
+    - `offer_source(seed_url)` may name a better source for a crawl's
+      seed, as `(source name, options)`. It is consulted for the seed
+      only, so a link found mid-crawl never redirects the build.
 
     Class attributes:
         name: registry key and the value used in `site_handlers:`.

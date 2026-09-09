@@ -1,8 +1,9 @@
 """
 Summary: Shared pytest fixtures for extractium's characterization test
 suite: a safe (no-network) import of the vendored reference module, fake
-HTTP session/response test doubles, a deterministic embed_chunks stand-in,
-and cache-directory isolation.
+HTTP session/response test doubles for both page fetches and the GitHub
+API, a deterministic embed_chunks stand-in, and cache-directory
+isolation.
 
 This file is part of Extractium™
 tests/conftest.py
@@ -108,6 +109,84 @@ class FakeSession:
         return entry
 
 
+class FakeApiResponse:
+    """
+    Stand-in for a requests.Response from the GitHub API: adds the JSON
+    body and the streamed content that FakeResponse has no need of.
+
+    Args:
+        status_code (int): the HTTP status to report.
+        headers (dict | None): response headers, including the rate-limit
+            headers the client reads.
+        payload (object | None): the decoded JSON body; None makes json()
+            raise, which is how a non-JSON answer is scripted.
+        text (str): the body as text, for a raw file request.
+        content (bytes): the body as bytes, for a streamed download.
+    """
+
+    def __init__(self, status_code=200, headers=None, payload=None, text="", content=b""):
+        self.status_code = status_code
+        self.headers = CaseInsensitiveDict(headers or {})
+        self.payload = payload
+        self.text = text
+        self.content = content
+
+    def json(self):
+        if self.payload is None:
+            raise ValueError("no JSON object could be decoded")
+        return self.payload
+
+    def iter_content(self, chunk_size=1):
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start:start + chunk_size]
+
+
+class FakeGitHubSession:
+    """
+    Stand-in for requests.Session, scripted per API address.
+
+    `responses` maps a URL, without its query string, to one
+    FakeApiResponse or to a list of them popped in call order. Every call
+    is recorded in .calls, so a test can assert what was requested, in
+    what order, and with which headers -- in particular that no request
+    ever carried a token it should not have.
+
+    A URL nothing is scripted for answers 404, which is what GitHub does
+    for an account or repository that does not exist.
+    """
+
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def get(self, url, headers=None, params=None, timeout=None, stream=False):
+        self.calls.append({
+            "url": url, "headers": dict(headers or {}), "params": dict(params or {}),
+            "timeout": timeout, "stream": stream,
+        })
+        entry = self.responses.get(url)
+        if entry is None:
+            return FakeApiResponse(status_code=404, payload={"message": "Not Found"})
+        if isinstance(entry, list):
+            return entry.pop(0) if len(entry) > 1 else entry[0]
+        return entry
+
+    @property
+    def urls(self):
+        """Every URL requested, in order."""
+        return [call["url"] for call in self.calls]
+
+    def sent_any_token(self):
+        """True if any request carried an Authorization header."""
+        return any("Authorization" in call["headers"] for call in self.calls)
+
+
+@pytest.fixture
+def fake_github_session_factory():
+    """Returns the FakeGitHubSession class so tests can script one per scenario."""
+    return FakeGitHubSession
+
+
 @pytest.fixture
 def fake_session_factory():
     """Returns the FakeSession class so tests can build one per-scenario."""
@@ -206,6 +285,13 @@ def isolated_core_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "CACHE_DIR", str(cache_dir))
     monkeypatch.setattr(cache, "CACHE_META_PATH", str(cache_dir / "meta.json"))
     monkeypatch.setattr(cache, "CACHE_PAGES_DIR", str(cache_dir / "pages"))
+    # The GitHub subtree moves with the rest: a half-moved cache would read
+    # file bodies stored somewhere else and serve the wrong content.
+    github_dir = cache_dir / "github"
+    monkeypatch.setattr(cache, "CACHE_GITHUB_DIR", str(github_dir))
+    monkeypatch.setattr(cache, "CACHE_GITHUB_BLOBS_DIR", str(github_dir / "blobs"))
+    monkeypatch.setattr(cache, "CACHE_GITHUB_REPOSITORIES_DIR", str(github_dir / "repositories"))
+    monkeypatch.setattr(cache, "CACHE_GITHUB_ANALYSIS_DIR", str(github_dir / "analysis"))
     return cache_dir
 
 
