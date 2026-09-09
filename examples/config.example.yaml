@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-04
+# Last Modified: 2026-09-09
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -72,10 +72,23 @@ sources:
   #  path: ./internal-docs
   #  include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
 
-  # Every repository of a GitHub organization, listed through the API.
-  # Uses GITHUB_TOKEN from the environment when it is set.
+  # A GitHub account's repositories, read through the API rather than
+  # scraped page by page. Give exactly one of org, user, or url. Uses
+  # GITHUB_TOKEN from the environment when it is set, which raises the
+  # request limit; the same content is read without one.
+  #
+  # You often do not need this type at all: a web source whose seed_url is
+  # a GitHub address reads the API by itself.
   #- type: github_api
   #  org: example-org
+  #  #user: example-person          # instead of org, for a person's own repositories
+  #  #url: https://github.com/example-org/example-tools   # or one repository
+  #  include_repos: []              # empty means every repository that matches
+  #  exclude_repos: []              # an exclusion always wins
+  #  include_forks: false           # forks fill the index with near-identical copies
+  #  include_archived: true         # archived documentation is still documentation
+  #  include_code: true             # reserved for code analysis; changes nothing yet
+  #  max_file_bytes: 2000000        # larger files are skipped, and each one is named
 
   # Captions from a YouTube channel, playlists, or single videos. Listing a
   # channel or playlist needs YOUTUBE_API_KEY in the environment.
@@ -128,6 +141,15 @@ sources:
 # Seconds to wait between requests, so the crawl stays polite to the site
 # it is reading. Use 0 for no wait.
 #delay_seconds: 0.5
+
+# Extra GitHub accounts this build may follow links into. A GitHub account
+# is read only when you named it: as a source, or here. Without this, one
+# link in one README could pull thousands of other people's repositories
+# into your index. Write exact account names, never patterns. Allowing an
+# account lets links into it be followed; it does not list everything that
+# account has published.
+#github_owners:
+#  - some-collaborator
 
 # How the crawler introduces itself to each site. The default names the
 # tool and its repository.

@@ -89,6 +89,41 @@ DEFAULT_LOCAL_INCLUDE_GLOBS = ("**/*.md", "**/*.txt", "**/*.html")
 # Caption languages a YouTube source asks for when none are given.
 DEFAULT_YOUTUBE_LANGUAGES = ("en",)
 
+# Which repositories a GitHub source reads when the entry says nothing.
+# Forks are left out because indexing a project and several near-identical
+# copies of it fills the index with duplicates. Archived repositories are
+# read, because archived documentation is still documentation, and
+# dropping it silently loses a project's history.
+DEFAULT_GITHUB_INCLUDE_FORKS = False
+DEFAULT_GITHUB_INCLUDE_ARCHIVED = True
+
+# Whether a GitHub source analyses code structure alongside documentation.
+# The analysis itself is not built yet, so the setting is carried and
+# reported but changes nothing today.
+DEFAULT_GITHUB_INCLUDE_CODE = True
+
+# Largest single file a GitHub source downloads, in bytes. Documentation
+# files are small; a file above this is far more often generated output or
+# data than prose worth indexing. Every file left out for this reason is
+# named in the progress log, so nothing disappears in silence.
+DEFAULT_GITHUB_MAX_FILE_BYTES = 2_000_000
+
+# The three ways one GitHub source entry may name what to read. Exactly
+# one is allowed: two selectors is a contradiction, not a request for
+# both.
+GITHUB_SELECTORS = ("org", "user", "url")
+
+# A GitHub account name: letters, digits, and single hyphens, up to 39
+# characters. Used to check the github_owners list, which is an allowlist
+# and therefore holds exact names, never patterns. A pattern that quietly
+# matches more accounts than intended is the failure this list exists to
+# prevent.
+GITHUB_ACCOUNT_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
+
+# GitHub accounts a build may follow links into, beyond the ones its own
+# sources name. Empty by default: an account nobody asked for is not read.
+DEFAULT_GITHUB_OWNERS = ()
+
 # An empty include list is meaningful, not missing: the crawler then scopes
 # itself to the seed URL's origin, or, for a TeamDynamix portal URL, to its
 # /TDClient/<digits>/<slug>/ prefix. See
@@ -131,6 +166,7 @@ KNOWN_KEYS = frozenset({
     "user_agent",
     "respect_robots_txt",
     "phi_lint",
+    "github_owners",
     "sources",
     "outputs",
 })
@@ -144,7 +180,10 @@ SOURCE_OPTION_KEYS = {
         "index_exclude_patterns", "site_handlers",
     }),
     "local": frozenset({"path", "include_globs"}),
-    "github_api": frozenset({"org"}),
+    "github_api": frozenset({
+        "org", "user", "url", "include_repos", "exclude_repos",
+        "include_forks", "include_archived", "include_code", "max_file_bytes",
+    }),
     "youtube": frozenset({"channel_id", "playlist_ids", "video_ids", "languages"}),
 }
 
@@ -222,6 +261,10 @@ class Config:
         user_agent (str): the User-Agent header the crawler sends.
         respect_robots_txt (bool): whether robots.txt disallow rules are honored.
         phi_lint (str): one of PHI_LINT_MODES.
+        github_owners (tuple[str, ...]): GitHub accounts, beyond the ones
+            the sources themselves name, whose pages a build may follow
+            links into. Allowing an account does not list everything it
+            has published; only naming an account as a source does that.
         sources (tuple[SourceConfig, ...]): at least one source, in file order.
         outputs (tuple[OutputConfig, ...]): at least one output, in file order.
     """
@@ -236,6 +279,7 @@ class Config:
     user_agent: str = DEFAULT_USER_AGENT
     respect_robots_txt: bool = DEFAULT_RESPECT_ROBOTS_TXT
     phi_lint: str = DEFAULT_PHI_LINT
+    github_owners: tuple = DEFAULT_GITHUB_OWNERS
 
 
 ### Validate Settings ###
@@ -425,6 +469,43 @@ def _read_text_list(data, key, default, source, label="names"):
     return tuple(entries)
 
 
+def _read_github_account(data, key, source):
+    """
+    Reads a required GitHub account name.
+
+    Raises:
+        ConfigError: if the value is missing, blank, or is not shaped like
+            an account name. A value holding a slash is almost always a
+            whole URL pasted into the wrong setting, so it is named as
+            such rather than sent to GitHub to fail there.
+    """
+    value = _read_required_text(data, key, source, hint=" (a GitHub account name)")
+    if not GITHUB_ACCOUNT_RE.match(value):
+        hint = " Write a repository or owner address under url instead." if "/" in value else ""
+        _fail(source, f"{key} must be a GitHub account name, not {value!r}.{hint}")
+    return value
+
+
+def _read_github_owners(data, source):
+    """
+    Reads the global list of GitHub accounts a build may follow links into.
+
+    Raises:
+        ConfigError: if the list is malformed or an entry is not an
+            account name. Entries are exact names: this is an allowlist,
+            and a wildcard in it would allow accounts nobody chose.
+    """
+    owners = _read_text_list(data, "github_owners", DEFAULT_GITHUB_OWNERS, source, label="account names")
+    for position, entry in enumerate(owners, start=1):
+        if not GITHUB_ACCOUNT_RE.match(entry):
+            _fail(
+                source,
+                f"github_owners entry {position} must be an exact GitHub account name, "
+                f"not {entry!r}. Patterns and addresses are not accepted.",
+            )
+    return owners
+
+
 def _read_patterns(data, key, default, source):
     """
     Reads an optional list of regular expressions, each matched
@@ -508,8 +589,38 @@ def _read_local_source(entry, source):
 
 
 def _read_github_api_source(entry, source):
-    """Validates the options of a github_api source entry."""
-    return {"org": _read_required_text(entry, "org", source, hint=" (the organization to list)")}
+    """
+    Validates the options of a github_api source entry.
+
+    Exactly one selector is required. An entry naming both an
+    organization and a repository URL is a contradiction the build cannot
+    resolve on the operator's behalf, so it is refused rather than merged
+    or silently resolved in favour of one of them.
+    """
+    named = [key for key in GITHUB_SELECTORS if not _is_missing(entry.get(key))]
+    if not named:
+        _fail(source, "give exactly one of org, user, or url (what to read on GitHub).")
+    if len(named) > 1:
+        _fail(source, f"give exactly one of org, user, or url; got {' and '.join(named)}.")
+    selector = named[0]
+
+    options = {key: None for key in GITHUB_SELECTORS}
+    if selector == "url":
+        options["url"] = _read_url(entry, "url", source, hint=" (an owner or repository address on GitHub)")
+    else:
+        options[selector] = _read_github_account(entry, selector, source)
+
+    return {
+        **options,
+        "include_repos": _read_text_list(entry, "include_repos", (), source, label="repository names"),
+        "exclude_repos": _read_text_list(entry, "exclude_repos", (), source, label="repository names"),
+        "include_forks": _read_bool(entry, "include_forks", DEFAULT_GITHUB_INCLUDE_FORKS, source),
+        "include_archived": _read_bool(entry, "include_archived", DEFAULT_GITHUB_INCLUDE_ARCHIVED, source),
+        "include_code": _read_bool(entry, "include_code", DEFAULT_GITHUB_INCLUDE_CODE, source),
+        "max_file_bytes": _read_positive_int(
+            entry, "max_file_bytes", DEFAULT_GITHUB_MAX_FILE_BYTES, source
+        ),
+    }
 
 
 def _read_youtube_source(entry, source):
@@ -679,6 +790,7 @@ def config_from_mapping(data, source="configuration"):
         user_agent=user_agent,
         respect_robots_txt=_read_bool(data, "respect_robots_txt", DEFAULT_RESPECT_ROBOTS_TXT, source),
         phi_lint=_read_choice(data, "phi_lint", DEFAULT_PHI_LINT, PHI_LINT_MODES, source),
+        github_owners=_read_github_owners(data, source),
         sources=_read_sources(data, source),
         outputs=_read_outputs(data, source),
     )

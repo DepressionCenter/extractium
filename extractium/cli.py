@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-09"
 
 import argparse
 import sys
@@ -45,6 +45,8 @@ from extractium.core import cache as caching
 from extractium.core import phi_lint
 from extractium.core.build import build_compendium
 from extractium.core.registry import RegistryError, build_registry
+from extractium.sources.github import accounts_named_by
+from extractium.sources.github_api import GitHubSourceError
 from extractium.sources.web import CrawlSettings
 
 ### Exit Codes ###
@@ -106,8 +108,11 @@ def run_sources(config, registry, session, cache, progress):
         progress (Callable[[str], None]): receives one line per event.
 
     Returns:
-        list[extractium.core.models.Document]: every document produced, in
-        source order.
+        tuple[list, list[str]]: every document produced, in source order,
+        and the notes the sources want the reader to see at the end -- how
+        completely each repository was read, and which accounts were left
+        out. A note nobody reads is a gap that will be mistaken for an
+        answer, so these are collected rather than only logged.
 
     Raises:
         extractium.core.registry.RegistryError: if a source type is not
@@ -118,8 +123,16 @@ def run_sources(config, registry, session, cache, progress):
         delay_seconds=config.delay_seconds,
         user_agent=config.user_agent,
         respect_robots_txt=config.respect_robots_txt,
+        # Deny by default: a GitHub account is read only when this build
+        # asked for it, either in a source or in the github_owners
+        # setting. Otherwise one link in one README could pull thousands
+        # of other people's repositories into the index.
+        github_owners=tuple(sorted(
+            accounts_named_by(config.sources) | {o.lower() for o in config.github_owners}
+        )),
     )
     documents = []
+    sources = []
     for entry in config.sources:
         progress(f"Source: {entry.type}")
         source = registry.get_source(entry.type)(entry.options)
@@ -128,8 +141,32 @@ def run_sources(config, registry, session, cache, progress):
         # here, because neither belongs to its own configuration entry.
         if hasattr(source, "configure"):
             source.configure(registry, settings)
+        sources.append(source)
         documents.extend(source.fetch(session, cache, progress))
-    return documents
+    return documents, collect_notes(sources)
+
+
+def collect_notes(sources):
+    """
+    The lines the sources want reported at the end of a build.
+
+    Args:
+        sources (Iterable): the source instances that have already run.
+
+    Returns:
+        list[str]: coverage lines from each source that offers them, then
+        one line per source naming the accounts its handlers held back.
+    """
+    notes = []
+    for source in sources:
+        if hasattr(source, "summary_lines"):
+            notes.extend(source.summary_lines())
+    for source in sources:
+        for handler in getattr(source, "handlers", ()):
+            report = handler.skipped_account_report() if hasattr(handler, "skipped_account_report") else ""
+            if report and report not in notes:
+                notes.append(report)
+    return notes
 
 
 ### Protected Health Information ###
@@ -190,13 +227,13 @@ def run_outputs(config, registry, compendium, progress):
     return written
 
 
-def print_summary(compendium, written):
+def print_summary(compendium, written, notes=()):
     """
     Prints what the build produced, on standard output.
 
-    Names every file and its size, and calls out any output that contains
-    content read from a local folder, so nobody publishes such a file
-    without having been told.
+    Names every file and its size, reports how completely each source was
+    read, and calls out any output that contains content read from a local
+    folder, so nobody publishes such a file without having been told.
     """
     write_line(f"Built {compendium.name!r} at {compendium.built_at}", sys.stdout)
     write_line(f"  sections : {len(compendium.parents)}", sys.stdout)
@@ -211,6 +248,8 @@ def print_summary(compendium, written):
                 f"  NOTICE   : output {entry.type!r} includes local content; check before publishing.",
                 sys.stdout,
             )
+    for note in notes:
+        write_line(f"  coverage : {note}", sys.stdout)
 
 
 ### Build Command ###
@@ -244,8 +283,13 @@ def run_build(args):
     session = requests.Session()
 
     try:
-        documents = run_sources(config, registry, session, cache, progress_to_stderr)
+        documents, notes = run_sources(config, registry, session, cache, progress_to_stderr)
     except RegistryError as e:
+        return fail(str(e), EXIT_CONFIG)
+    except GitHubSourceError as e:
+        # The operator asked for something that is not there. Falling back
+        # would turn a misspelled account name into a strange, empty
+        # result, so the build stops and says what was wrong.
         return fail(str(e), EXIT_CONFIG)
     finally:
         # Saved whatever happened, so a run interrupted halfway still
@@ -278,7 +322,7 @@ def run_build(args):
     except OSError as e:
         return fail(f"an output could not be written: {e}", EXIT_OUTPUT)
 
-    print_summary(compendium, written)
+    print_summary(compendium, written, notes)
     return EXIT_OK
 
 

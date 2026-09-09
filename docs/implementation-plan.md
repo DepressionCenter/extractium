@@ -214,6 +214,8 @@ The detailed design for this phase and the next is [GitHub repository indexing](
 
 **Done when** an organization indexes through the API with a token, indexes identically without one, still produces its documentation with a coverage note when the API cannot be used at all, and reads no account the operator did not name.
 
+*Finished 2026-09-09 on branch `phase-7-github-api-source`. The source is three modules rather than one: the REST transport, the path rules, and the source itself, because one file holding all three would have been about nine hundred lines. Two things came out differently from the design. Walking a truncated tree is keyed on each folder's path, not on its tree object: two folders with identical contents share one object name, and keying on that silently loses every file in the second one, which a test now pins. And the file classifier checks manifests before documentation, so `requirements.txt` keeps the label that says what it is instead of being read as prose. Review changed one default: a repository is read as one archive whenever it fits in memory, rather than only when many files are wanted. Requests are what a build runs out of, not bytes. Files taken out of an archive are stored under their blob names, so the archive route and the single-file route share one cache and an unchanged repository downloads nothing. The site-handler protocol gained the three optional hooks the design asked for; the TeamDynamix scope rule could now move out of core and has not, since that is not this phase's work.*
+
 ### Phase 8: Lightweight static code analysis
 
 **Goal.** Make code findable — where a symbol is defined, what a file holds, what imports and calls it — with no clone, compiler, Language Server Protocol client, or language model.

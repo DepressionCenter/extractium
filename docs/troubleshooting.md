@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -27,6 +27,41 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 ## Summary
 
 This page lists failures that have actually happened, with the cause and the fix for each. Find the symptom that matches yours and work from there. If your problem is not here, the [running a build](usage.md) page explains what each exit code means, which usually narrows it down quickly.
+
+
+## Installing
+
+### `does not appear to be a Python project: neither 'setup.py' nor 'pyproject.toml' found`
+
+**Cause.** `pip install -e .` was run in a folder that does not hold the project. The `.` means "the folder I am in", so an empty folder you just created has nothing to install. This happens when the clone step is skipped, or when a folder is made for the project and the clone is never run inside it.
+
+**Fix.** Get the project first, then install from inside it:
+
+```
+git clone https://github.com/DepressionCenter/extractium.git
+cd extractium
+pip install -e ".[dev]"
+```
+
+If you already made an empty folder, delete it or clone into it with `git clone https://github.com/DepressionCenter/extractium.git .` — note the trailing dot.
+
+### `extractium: command not found`, or `The term 'extractium' is not recognized`
+
+**Cause.** The install worked, but the folder pip put the `extractium` command in is not on your `PATH`. It happens after a user install, which pip does automatically when it cannot write to the system Python folder. You will have seen `Defaulting to user installation because normal site-packages is not writeable` earlier in the output.
+
+**Fix.** Run it as a module instead. This always works, whatever your `PATH` says, and it is the same program:
+
+```
+python -m extractium.cli build --config config.yaml
+```
+
+If you would rather have the short command, add the folder to your `PATH`. To find it:
+
+```
+python -c "import sysconfig, os; print(sysconfig.get_path('scripts', os.name + '_user'))"
+```
+
+On Windows that is usually `%APPDATA%\Python\Python3xx\Scripts`; on macOS and Linux, usually `~/.local/bin`.
 
 
 ## Running the build
@@ -64,7 +99,7 @@ uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashe
 **Fix.** Run a small trial and read what it says:
 
 ```
-extractium build --config config.yaml --max-pages 25 --out-dir trial
+python -m extractium.cli build --config config.yaml --max-pages 25 --out-dir trial
 ```
 
 The progress lines name each page visited and each one skipped, with the reason.
@@ -74,6 +109,41 @@ The progress lines name each page visited and each one skipped, with the reason.
 **Cause.** The site's `robots.txt` could not be read. Extractium fails closed: if the rules are unknown, no page on that site is fetched. One real example is a portal that answers a request for `robots.txt` with 406 when the request accepts only HTML.
 
 **Fix.** Open the site's `robots.txt` in a browser and see what it says. If it genuinely disallows crawling, respect that; the answer is to ask the site owner, not to switch the check off. Switch `respect_robots_txt` off only for a site your own group runs.
+
+
+## Reading GitHub
+
+### The build stops with `GitHub has no account ...`
+
+**Cause.** The account or repository name does not exist on GitHub. Almost always a misspelling.
+
+**Fix.** Check the spelling against the address in your browser. This one failure stops the build on purpose: if it quietly carried on, you would get an index that is empty for no visible reason.
+
+### The summary says a repository was read at `tier 3 (documentation crawl)`
+
+**Cause.** GitHub could not be read through its API for that repository, so the build fell back to crawling its documentation pages. Usually the request budget was spent; sometimes GitHub was unreachable.
+
+**Fix.** Set `GITHUB_TOKEN` in the environment. Reading GitHub anonymously allows roughly sixty requests an hour, which one small organization can use up. A token raises that considerably and changes nothing else about what is indexed.
+
+That line is not an error. It is telling you the index has that repository's documentation and not its code structure.
+
+### The summary says the access token was refused
+
+**Cause.** `GITHUB_TOKEN` is set to a value GitHub did not accept: expired, revoked, or copied incorrectly.
+
+**Fix.** Replace the token. The build carried on reading GitHub anonymously, so you still have your documentation; you had the smaller request budget rather than the larger one. The message exists because a token that was silently ignored looks exactly like a token that worked.
+
+### A repository you expected is missing from the index
+
+**Cause.** One of the defaults left it out. Forks are skipped, so are empty repositories, repositories GitHub has disabled, and private ones.
+
+**Fix.** Read the progress log: every repository left out is named there with its reason. Set `include_forks: true` if forks are what you wanted. Private repositories are never indexed, whatever your token can read.
+
+### The summary says `Not read; add to github_owners to include: ...`
+
+**Cause.** Something in the content linked to a GitHub account your configuration never named, and the build did not follow it.
+
+**Fix.** Nothing, if that is what you wanted, which it usually is: the line is there so you can see the guardrail working. If you did want that account's pages, add its exact name to `github_owners`. That lets links into the account be followed; it does not index everything the account has published.
 
 
 ## The scheduled build

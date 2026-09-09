@@ -80,6 +80,7 @@ extractium = "extractium.cli:main"
 [project.entry-points."extractium.sources"]
 web = "extractium.sources.web:WebSource"
 local = "extractium.sources.local:LocalSource"
+github_api = "extractium.sources.github_api:GitHubApiSource"
 
 [project.entry-points."extractium.site_handlers"]
 generic = "extractium.sources.generic:GenericHandler"

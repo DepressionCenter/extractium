@@ -260,15 +260,19 @@ There is a configurable maximum size per file, with a conservative default. Noth
 
 A skipped file always produces a progress event naming the repository, the path, and the reason. **A selected file is never dropped in silence.** An index quietly missing its largest documentation file is worse than one that says it skipped it.
 
-### Downloading: one file at a time, or one archive
+### Downloading: one archive, or one file at a time
 
-The inventory makes it possible to choose.
+**One archive is the default.** The scarce resource is requests, not bytes. Reading GitHub anonymously allows roughly sixty requests an hour for the whole build, and a single documentation-heavy repository can spend all of them one file at a time. The same content arrives in one request as an archive. A repository is therefore downloaded whole unless there is a reason not to.
 
-Request files individually when only a small part of the repository is wanted, the files are small, and the remaining request budget makes it reasonable. Download one repository archive instead when many files are wanted, the repository is not enormous, and one download avoids a long run of requests.
+Files are requested one at a time in two cases: the repository is larger than the memory ceiling, or the archive could not be read. An unreadable archive is not the end of that repository; its files are simply asked for individually instead.
 
-The choice reads the API's own rate-limit headers rather than following a fixed file count. If neither option is safe — too many requests, and too large an archive — stop that repository with a message that says authenticated access would fix it. Guessing and doing the expensive thing anyway is not an option.
+Before either route is chosen, everything already in the blob cache is taken out of the plan. A repository nobody has changed since the last build therefore needs no download at all, and a repository with one changed file downloads one archive rather than nothing at all — which is the cost of this default and is worth naming.
 
-Archive entries are streamed and read in memory. Nothing is extracted to disk, so no archive path can be used to write anywhere. Only selected regular files are read. Archive paths are never trusted, never joined onto a real directory, and never used to name a temporary file.
+Both routes fill the same cache, keyed by the blob name Git gives those exact bytes, so a file read out of an archive is never downloaded again by either route.
+
+If neither route is possible — too large for an archive, and more files than the remaining request budget covers — that repository is reported and skipped, with a message saying authenticated access would fix it. Guessing and doing the expensive thing anyway is not an option.
+
+**Archive handling, and why it is safe on every platform.** Entries are streamed into memory and read there with the standard library's own archive reader. There is no external `tar` program and no shell, so nothing depends on what is installed. Nothing is extracted to disk, which is what makes the platform question go away: an archive path is only ever compared as text and its bytes read, never used to create a file. Windows' illegal file names, its path separators, and its path-length limit therefore never come into it, and no symbolic link is ever created. Only regular files are read, so a symbolic link or a device entry inside an archive is ignored rather than followed. The only file written is a cache entry named by its blob name, which is forty hexadecimal characters and legal everywhere.
 
 ### Rate limits
 
@@ -296,7 +300,7 @@ Nothing under `.kb_cache/github/` ever contains a token. A cache test checks thi
 
 ### Configuration
 
-The planned options for an explicit source. The reference in [configuration.md](configuration.md) documents only what is implemented today, which is `org` alone; it gains the rest when this phase lands.
+The options an explicit source takes. All of them are implemented; [configuration.md](configuration.md) is the reference for using them.
 
 ```yaml
 sources:
@@ -355,6 +359,26 @@ Every document keeps `source_type = github`, so existing filters keep working. T
 `readme`, `text`, `wiki`, and `release_notes` are unchanged.
 
 Categories use the existing hierarchy, not a second GitHub-only system. `DepressionCenter/extractium/extractium/core/build.py` becomes `DepressionCenter`, `extractium`, `extractium`, `core`.
+
+### What Phase 7 built, and where it differs from this plan
+
+Phase 7 shipped on 2026-09-09. Three modules rather than one, because one file holding the transport, the path rules, and the source would have been about nine hundred lines:
+
+| File | What it holds |
+|---|---|
+| `extractium/sources/github_client.py` | The REST transport: the token, paginated listings, trees, file bodies, one archive read in memory, rate-limit headers, and the split between a failure to work around and a failure only the operator can fix |
+| `extractium/sources/github_files.py` | Which paths are documentation, which are project files, and which are never downloaded |
+| `extractium/sources/github_api.py` | The source itself: the ladder, repository selection, the ledger, the records, and the coverage report |
+
+Three differences from the design above, each found by a test:
+
+1. **A truncated tree is walked by path, not by tree object.** The first version keyed the walk on each folder's own object name, so a folder would be read once however many places pointed at it. Two folders holding identical files share one object name, and that version silently lost every file in the second one. The walk now keys on the path, which is unique, and a request ceiling covers the pathological case of a folder that reports itself as its own child.
+2. **Manifests are classified before documentation.** `requirements.txt` carries a documentation extension. Checking documentation first read it as prose and threw away the label saying it is a dependency list.
+3. **The API source also checks the owner GitHub reports.** The owner arrives in an API response, which is untrusted like anything else read at runtime. A repository reporting an owner the operator did not name is skipped, so the rule holds even if a listing returns something unexpected.
+
+A fourth difference came from review. The first version chose between an archive and individual requests on a file count, and preferred individual requests below it. That reads the trade backwards: requests are what a build runs out of, and bytes are not. The archive is now the default for any repository inside the memory ceiling, individual requests are the fall back rather than the norm, and files read out of an archive are stored under their blob names so the two routes share one cache.
+
+The site-handler protocol gained the three optional hooks: `configure`, `allows`, and `offer_source`. A handler that defines none behaves exactly as it did. Moving the TeamDynamix folder-scope rule out of `core/fetch.py` is now possible on the same hook; it was not part of this phase and core still holds that rule.
 
 ### Phase 7 is done when
 

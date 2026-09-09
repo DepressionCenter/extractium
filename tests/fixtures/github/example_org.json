@@ -1,0 +1,120 @@
+{
+  "_license": "This file is part of Extractium. Copyright (C) 2026 The Regents of the University of Michigan. Licensed under the GNU General Public License v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the README for full license information.",
+  "_summary": "Synthetic GitHub API responses for one small organization, used by the GitHub source tests. Nothing here was fetched from GitHub: every account, repository, person, and file body is invented. No test contacts the network.",
+
+  "account": {
+    "login": "example-org",
+    "type": "Organization",
+    "name": "Example Organization"
+  },
+
+  "repositories": [
+    {
+      "name": "example-tools",
+      "full_name": "example-org/example-tools",
+      "owner": {"login": "example-org"},
+      "default_branch": "main",
+      "description": "Shared analysis helpers for the example study.",
+      "language": "Python",
+      "license": {"name": "GNU General Public License v3.0"},
+      "topics": ["analysis", "example"],
+      "updated_at": "2026-08-01T00:00:00Z",
+      "size": 420,
+      "private": false,
+      "fork": false,
+      "archived": false,
+      "disabled": false
+    },
+    {
+      "name": "example-notes",
+      "full_name": "example-org/example-notes",
+      "owner": {"login": "example-org"},
+      "default_branch": "main",
+      "description": "Study documentation.",
+      "language": null,
+      "license": null,
+      "topics": [],
+      "updated_at": "2026-07-15T00:00:00Z",
+      "size": 12,
+      "private": false,
+      "fork": false,
+      "archived": true,
+      "disabled": false
+    },
+    {
+      "name": "example-fork",
+      "full_name": "example-org/example-fork",
+      "owner": {"login": "example-org"},
+      "default_branch": "main",
+      "description": "A copy of somebody else's project.",
+      "language": "R",
+      "license": null,
+      "topics": [],
+      "updated_at": "2026-06-01T00:00:00Z",
+      "size": 90,
+      "private": false,
+      "fork": true,
+      "archived": false,
+      "disabled": false
+    },
+    {
+      "name": "example-empty",
+      "full_name": "example-org/example-empty",
+      "owner": {"login": "example-org"},
+      "default_branch": "main",
+      "description": "Nothing here yet.",
+      "language": null,
+      "license": null,
+      "topics": [],
+      "updated_at": "2026-05-01T00:00:00Z",
+      "size": 0,
+      "private": false,
+      "fork": false,
+      "archived": false,
+      "disabled": false
+    }
+  ],
+
+  "trees": {
+    "example-tools": {
+      "sha": "1111111111111111111111111111111111111111",
+      "truncated": false,
+      "tree": [
+        {"path": "README.md", "type": "blob", "size": 240,
+         "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"path": "docs/setup.md", "type": "blob", "size": 200,
+         "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        {"path": "pyproject.toml", "type": "blob", "size": 180,
+         "sha": "cccccccccccccccccccccccccccccccccccccccc"},
+        {"path": "src/app.py", "type": "blob", "size": 900,
+         "sha": "dddddddddddddddddddddddddddddddddddddddd"},
+        {"path": ".env", "type": "blob", "size": 60,
+         "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
+        {"path": ".env.example", "type": "blob", "size": 70,
+         "sha": "ffffffffffffffffffffffffffffffffffffffff"},
+        {"path": "node_modules/other/README.md", "type": "blob", "size": 100,
+         "sha": "0101010101010101010101010101010101010101"},
+        {"path": "docs/very-large-report.md", "type": "blob", "size": 9000000,
+         "sha": "0202020202020202020202020202020202020202"},
+        {"path": "docs", "type": "tree",
+         "sha": "0303030303030303030303030303030303030303"}
+      ]
+    },
+    "example-notes": {
+      "sha": "2222222222222222222222222222222222222222",
+      "truncated": false,
+      "tree": [
+        {"path": "README.md", "type": "blob", "size": 200,
+         "sha": "1212121212121212121212121212121212121212"}
+      ]
+    }
+  },
+
+  "blobs": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "# Example Tools\n\nHelpers the example study uses to prepare its weekly summaries. Every function here reads a copy of the data and writes a new file, so the original export is never changed.\n",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": "# Setup\n\nInstall the package, then point it at the folder holding the weekly exports. The tool writes its results beside them and never overwrites an input file.\n",
+    "cccccccccccccccccccccccccccccccccccccccc": "[project]\nname = \"example-tools\"\nversion = \"0.3.0\"\ndescription = \"Shared analysis helpers for the example study, with no external services.\"\nrequires-python = \">=3.11\"\n",
+    "ffffffffffffffffffffffffffffffffffffffff": "# Copy this file to .env and fill in your own values.\nEXAMPLE_DATA_DIR=C:\\Path\\To\\Input\nEXAMPLE_API_KEY=EXAMPLE_API_KEY\nEXAMPLE_TIME_ZONE=UTC\n",
+    "1212121212121212121212121212121212121212": "# Example Notes\n\nWritten decisions for the example study, kept so somebody joining later can see why each choice was made rather than guessing at it.\n"
+  }
+}

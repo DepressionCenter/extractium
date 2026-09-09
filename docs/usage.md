@@ -34,7 +34,16 @@ This page shows you how to build your knowledge index. You write one settings fi
 You need three things:
 
 1. Python 3.10 or newer.
-2. Extractium installed: `pip install -e .` from a copy of this repository.
+2. Extractium installed. Clone the repository, then install it from inside the clone:
+
+   ```
+   git clone https://github.com/DepressionCenter/extractium.git
+   cd extractium
+   pip install -e ".[dev]"
+   ```
+
+   Install from inside the clone, not from an empty folder: `pip install -e .` reads the `pyproject.toml` sitting in the folder you are in.
+
 3. A settings file. Copy [examples/config.example.yaml](../examples/config.example.yaml), name it `config.yaml`, and change the seed URL to your own site.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
@@ -43,16 +52,18 @@ The first build downloads the embedding model, about 130 MB. Later builds reuse 
 ## The build command
 
 ```
-extractium build --config config.yaml
+python -m extractium.cli build --config config.yaml
 ```
 
 That reads the settings file, visits your sources, and writes every output into the folder the file names (`dist` unless you change it).
 
-You can also run it as a module, which is useful when the console script is not on your path:
+There is a shorter form:
 
 ```
-python -m extractium.cli build --config config.yaml
+extractium build --config config.yaml
 ```
+
+It needs Python's scripts folder on your `PATH`, which it often is not after a user install. The module form above always works, whatever your `PATH` says, so it is the one this page uses. See [Troubleshooting](troubleshooting.md) for how to add the folder if you want the short form.
 
 ### Options
 
@@ -70,7 +81,7 @@ python -m extractium.cli build --config config.yaml
 A first run against a new site is a good place to find a pattern that is broader than you meant. Cap it:
 
 ```
-extractium build --config config.yaml --max-pages 25 --out-dir trial
+python -m extractium.cli build --config config.yaml --max-pages 25 --out-dir trial
 ```
 
 Look at `trial/llms.txt`. It lists every page that was indexed, one line each. If pages you did not expect are in there, tighten `include_patterns` or add a `crawl_exclude_patterns` entry, and run again. When the list looks right, drop the cap.
@@ -110,7 +121,7 @@ Built 'Example Org Knowledge Base' at 2026-09-08T14:30:00Z
 While the build runs, it prints progress to the error stream and the summary to the output stream. So you can save the summary and still watch the run:
 
 ```
-extractium build --config config.yaml > build-summary.txt
+python -m extractium.cli build --config config.yaml > build-summary.txt
 ```
 
 If any output contains content read from a local folder, the summary says so on its own line. That never happens unless you set `include_local: true` on that output.
