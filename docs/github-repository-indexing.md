@@ -136,6 +136,53 @@ A repository address must never expand into every repository its owner has. An o
 
 The offer applies to the **seed URL only**. A link to some repository found halfway through crawling an unrelated website stays an ordinary link. Otherwise one stray mention could pull an entire GitHub account into a small site crawl.
 
+### Only accounts the operator asked for
+
+GitHub account names turn up everywhere: in a README's credits, in a dependency list, in a fork notice, in a contributor's profile link, in an article that happens to cite somebody's project. Following them is how a build meant to read one organization ends up indexing thousands of strangers' repositories.
+
+**The rule: a GitHub account is read only when the operator named it.** Everything else on the host is out of scope, whatever links to it and however it was found.
+
+The allowed set is built from what the configuration actually asked for:
+
+- every `org`, `user`, or `url` owner named by a `github_api` source;
+- the owner in the address of any `web` source whose seed points at GitHub;
+- any account listed in the `github_owners` setting, which exists so an operator can add one deliberately.
+
+Nothing else joins that set. There is no rule that adds an account because it was linked, forked, depended on, or mentioned often.
+
+**Allowed is not the same as enumerated**, and the difference matters:
+
+| The operator did this | The account is read | Its whole account is listed |
+|---|---|---|
+| Named it as a source, by owner address | Yes | Yes |
+| Named one of its repositories as a source | Yes, that repository | No |
+| Added it to `github_owners` | Yes, repositories reached from what is in scope | No |
+| Did not name it at all | No | No |
+
+So adding an account to `github_owners` says "you may follow links into this account". It never says "index everything this account has ever published". Only naming an owner as a source does that.
+
+The check reads the account out of the address, so it covers every GitHub-shaped host: `github.com/OWNER/...`, `raw.githubusercontent.com/OWNER/...`, and `OWNER.github.io`.
+
+It is enforced in two places, because one is not enough. A disallowed account is never promoted to the API source, **and** it is never in crawl scope. The second half is the important one: a crawl seeded at `github.com/DepressionCenter` has `github.com` as its origin, and the default scope rule keeps a crawl to its origin. Without this rule every account on the host is same-origin and therefore fair game.
+
+Skipped accounts are counted and reported once at the end of the build, not once per link:
+
+```text
+Not read; add to github_owners to include: some-other-org (14 links), a-contributor (3 links)
+```
+
+That way an operator who did want one of them can see it and say so, and an operator who did not can see that the guardrail worked.
+
+### What this needs from the crawler
+
+This is the one part of Phase 7 that reaches outside the GitHub files, so it is called out rather than discovered during implementation.
+
+Site handlers are constructed with no arguments and contribute only fixed exclude patterns, so no handler can see what the operator configured. `derive_auto_prefix` in `core/fetch.py` returns the bare origin for a GitHub address, which is what leaves the whole host in scope. Its own comment already records the gap: the TeamDynamix folder-scope rule sits in core because the handler protocol has no scope hook.
+
+One optional hook answers both. A handler that defines it is offered the build's settings and may then decide whether a URL is in scope; a handler that does not define it behaves exactly as it does now. The GitHub handler uses it for the account rule. Moving the TeamDynamix rule out of core becomes possible on the same hook, but it is not part of this phase and core keeps that rule for now.
+
+The alternative is to have the handler contribute a computed exclude pattern with a negative lookahead over the allowed accounts. It works, it needs the same configuration to reach the handler, and it is far harder to read. The hook is the better trade.
+
 ### Telling an organization from a user
 
 Do not guess, and do not probe two endpoints to find out. Read the account once and look at the type GitHub reports. If it is an organization, list the organization's public repositories; if it is a user, list that user's own public repositories. If the account cannot be read at all, that is a ladder event, not a guess.
@@ -277,6 +324,15 @@ sources:
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 
+`github_owners` is a global setting rather than a source option, because it governs the whole crawl graph. A link found by one source can lead anywhere, so a guardrail that lived on one entry would leave the others open:
+
+```yaml
+github_owners:
+  - some-collaborator
+```
+
+It holds exact account names, never patterns. This is deny by default: the list says what is allowed, and a pattern that quietly matches more accounts than intended is the failure this rule exists to prevent. An empty or absent list means the build reads only the accounts its own sources named.
+
 ### When something goes wrong
 
 | Class | Examples | What happens |
@@ -304,6 +360,7 @@ Categories use the existing hierarchy, not a second GitHub-only system. `Depress
 
 - A `web` source pointed at an organization, a user, or a repository on GitHub uses the API instead of crawling it.
 - An owner address enumerates that owner's repositories; a repository address indexes only that repository.
+- An account the operator did not name is never read, however it was linked, and the accounts skipped that way are reported once with their link counts.
 - A build with no `GITHUB_TOKEN` produces the same documents as a build with one, for public repositories.
 - A rejected token drops to tier 2, indexes the same content, and says the token was refused.
 - An API failure that cannot be recovered from drops to a documentation-only crawl, keeps the requested scope, does not re-fetch what was already read, and reports the gap.
@@ -565,6 +622,7 @@ Both phases are tested from committed fixtures. No automated test contacts GitHu
 |---|---|
 | URL handling | Organization, user, repository, deeper repository paths, raw content, GitHub Pages, invalid owner, invalid repository |
 | The ladder | Token accepted; token refused; no token; API unreachable; partial failure after some repositories; explicit source demoted; scope preserved; nothing fetched twice; the report naming each tier |
+| Account allowlist | A named owner is read; an unnamed owner linked from a README, a fork notice, and a contributor profile is not; a `github_owners` entry is followed but never enumerated whole; the same rule on `raw.githubusercontent.com` and `OWNER.github.io`; a disallowed owner is neither promoted to the API nor crawled; the skipped-owner report counts links and names accounts |
 | API behavior | One page and several pages of results; organization and user owners; empty account; archived, fork, and disabled repositories; missing default branch; recursive and truncated trees; subtree walking; blob and archive fetches; rate-limit headers; 401, 403, 404, and 429; a repository disappearing mid-run |
 | File filtering | Markdown, plain text, extensionless README and LICENSE, manifests, source, tests, vendored code, generated code, minified files, lock files, binaries, oversized files, `.env`, `.env.example`, submodules, LFS pointers |
 | Parsing | Per language: definitions, signatures, documentation, imports, exports, calls, inheritance, constants, annotations, module-level code, and a file with recoverable syntax errors |

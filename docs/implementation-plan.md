@@ -206,12 +206,13 @@ The detailed design for this phase and the next is [GitHub repository indexing](
 - Blob caching by SHA under `.kb_cache/github/`, and rate-limit handling that reads the response headers.
 - Two `content_type` values: `manifest` and `repo_map`.
 - The GitHub site handler gains the hook that offers the API source for a GitHub seed URL. The web source stays host-agnostic.
+- The account guardrail: a GitHub account is read only when the operator named it, as a source or in the new global `github_owners` setting. Being allowed lets links into that account be followed; only naming an account as a source lists the whole account. Enforced both in API promotion and in crawl scope, because a GitHub seed makes every account on the host same-origin. Skipped accounts are counted and reported once. This needs an optional scope hook on the site-handler protocol, which `derive_auto_prefix` already records as missing; the TeamDynamix rule stays in core for now.
 
-**Tests.** Every API response faked from committed fixtures; no test contacts GitHub. Organization, user, and repository scopes; truncated trees and subtree walking; rate-limit headers and 401, 403, 404, and 429; each rung of the ladder including a refused token and a failure partway through a run; scope preserved and nothing fetched twice after a demotion; the file filter across manifests, binaries, oversized files, `.env`, and `.env.example`; no token in any output, log, or cache file.
+**Tests.** Every API response faked from committed fixtures; no test contacts GitHub. Organization, user, and repository scopes; truncated trees and subtree walking; rate-limit headers and 401, 403, 404, and 429; each rung of the ladder including a refused token and a failure partway through a run; scope preserved and nothing fetched twice after a demotion; the file filter across manifests, binaries, oversized files, `.env`, and `.env.example`; an unnamed account linked from a README, a fork notice, and a contributor profile is read by neither the API nor the crawler, on `github.com`, `raw.githubusercontent.com`, and `github.io` alike; a `github_owners` entry is followed but never enumerated whole; no token in any output, log, or cache file.
 
 **Documentation.** `configuration.md` gains the full `github_api` option set; `examples/config.example.yaml` gains the example; the specification's source table is updated; `github-repository-indexing.md` records what the checks found.
 
-**Done when** an organization indexes through the API with a token, indexes identically without one, and still produces its documentation with a coverage note when the API cannot be used at all.
+**Done when** an organization indexes through the API with a token, indexes identically without one, still produces its documentation with a coverage note when the API cannot be used at all, and reads no account the operator did not name.
 
 ### Phase 8: Lightweight static code analysis
 
