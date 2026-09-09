@@ -51,6 +51,8 @@ That writes `dist/kb-index.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Dro
   + [Specification](docs/extractium-spec.md) — architecture, plugin kinds, outputs, and sources.
   + [Container format](docs/container-format.md) — the index file every client reads.
   + [How to search a compendium](docs/how-to/search-a-compendium.md) — searching a built index from Python or JavaScript.
+  + [How to run a weekly build](docs/how-to/run-a-weekly-build.md) — the one-command local build and the scheduled one.
+  + [Troubleshooting](docs/troubleshooting.md) — known failures, causes, and fixes.
   + [Implementation plan](docs/implementation-plan.md) — the phased order of work.
 + [SKILLS.md](SKILLS.md) tells an AI agent how to use a published index.
 

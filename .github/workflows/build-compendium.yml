@@ -1,0 +1,148 @@
+# This file is part of Extractium™
+# .github/workflows/build-compendium.yml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-08
+# Last Modified: 2026-09-08
+# Summary: Weekly scheduled build of a knowledge index, also runnable from
+# the Actions tab with the "Run workflow" button. Installs the pinned
+# dependencies, reuses the crawl cache between runs, and publishes the
+# output folder to GitHub Pages through the official Pages actions. Copy
+# this file into your own data repository; examples/data-repo/ holds the
+# version to start from.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+name: Build compendium
+
+on:
+  schedule:
+    # Weekly, Monday morning UTC. An odd minute keeps this run out of the
+    # crowd of jobs scheduled on the hour.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "Settings file to build from"
+        required: false
+        default: "config.yaml"
+      out_dir:
+        description: "Folder to write the outputs into"
+        required: false
+        default: "dist"
+      max_pages:
+        description: "Visit at most this many pages (blank means no cap)"
+        required: false
+        default: ""
+
+# Least privilege: the job reads the repository and writes nothing back to
+# it. The Pages permissions belong to the publishing job alone.
+permissions:
+  contents: read
+
+# One publish at a time, and never cancel a run that is already
+# publishing: a half-uploaded site is worse than a late one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CONFIG_FILE: ${{ inputs.config || 'config.yaml' }}
+  OUT_DIR: ${{ inputs.out_dir || 'dist' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      built: ${{ steps.build.outputs.built }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # This repository holds the tool, not an organization's content, so
+      # it carries no settings file of its own. The run ends here with a
+      # notice instead of a failure. In a data repository the file exists
+      # and the build goes ahead.
+      - name: Look for the settings file
+        id: settings
+        run: |
+          if [ -f "$CONFIG_FILE" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No $CONFIG_FILE in this repository, so there is nothing to build. Copy examples/data-repo/ into your own repository to use this workflow."
+          fi
+
+      - name: Set up Python
+        if: steps.settings.outputs.present == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the pinned dependencies
+        if: steps.settings.outputs.present == 'true'
+        # Every package in the lock file carries a hash, so pip refuses
+        # anything whose contents do not match what was locked.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r requirements-lock.txt
+          python -m pip install --no-deps .
+
+      # Pages already fetched keep their entry, so a weekly rebuild
+      # downloads only what changed. The key follows the settings file:
+      # change what is crawled and the run starts from a clean cache.
+      - name: Restore the crawl cache
+        if: steps.settings.outputs.present == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .kb_cache
+          key: kb-cache-${{ runner.os }}-${{ hashFiles(env.CONFIG_FILE) }}-${{ github.run_id }}
+          restore-keys: |
+            kb-cache-${{ runner.os }}-${{ hashFiles(env.CONFIG_FILE) }}-
+
+      - name: Build the compendium
+        id: build
+        if: steps.settings.outputs.present == 'true'
+        run: |
+          extractium build --config "$CONFIG_FILE" --out-dir "$OUT_DIR" ${MAX_PAGES:+--max-pages "$MAX_PAGES"}
+          echo "built=true" >> "$GITHUB_OUTPUT"
+        env:
+          MAX_PAGES: ${{ inputs.max_pages }}
+
+      - name: Configure Pages
+        if: steps.build.outputs.built == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload the output folder
+        if: steps.build.outputs.built == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.OUT_DIR }}
+
+  publish:
+    needs: build
+    if: needs.build.outputs.built == 'true'
+    runs-on: ubuntu-24.04
+    # Writing to Pages needs an identity token; nothing here writes to the
+    # repository itself.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,48 @@
+# This file is part of Extractium™
+# examples/data-repo/config.yaml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-08
+# Last Modified: 2026-09-08
+# Summary: Settings file for a data repository: one web source, the two
+# default outputs, and a name for the published knowledge base. Change the
+# seed URL to your own site and the name to your own organization.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# Display name of the published knowledge base.
+name: "Example Org Knowledge Base"
+
+# Where the built files land. The workflow publishes this folder.
+out_dir: dist
+
+# The pages to read. One web source is enough to start: the crawl stays
+# inside the site the seed URL belongs to. See the configuration reference
+# for include and exclude patterns.
+sources:
+  - type: web
+    seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
+
+# The files to write. These two are the defaults; they are listed here so
+# it is obvious what gets published.
+outputs:
+  - type: container
+    file: kb-index.json
+  - type: llmstxt
+
+# A safety net while you are still tuning the patterns. Raise it once the
+# page list in dist/llms.txt looks right.
+max_pages: 500
+
+# Seconds between requests, so the crawl stays polite to the site it reads.
+delay_seconds: 0.5

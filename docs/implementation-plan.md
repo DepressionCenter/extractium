@@ -149,6 +149,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** both clients return the same ranked parents for the golden file.
 
+*Finished 2026-09-08 on branch `phase-4-5-clients-and-operations`. The cross-encoder reranker the original browser code runs after diversity selection was left out: it needs a second model, and the specification does not list one for the clients.*
+
 ### Phase 5: Operations (minimum viable product complete)
 
 **Goal.** A non-developer can run the weekly build, locally or from GitHub.
@@ -165,6 +167,8 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 **Documentation.** New `how-to/run-a-weekly-build.md`, `how-to/publish-to-github-pages.md`, `compliance.md`; `troubleshooting.md` with entries for failures actually seen.
 
 **Done when** the example data repository builds and publishes from a button press.
+
+*Finished 2026-09-08 on the same branch as Phase 4. The lock file is generated with `uv pip compile --universal --generate-hashes`. The workflow's shape is pinned by tests, but no scheduled run has completed on GitHub yet, so the button-press check is still owed; the run scripts were exercised on Windows only.*
 
 ### Phase 6: SQLite adapter, local files, PHI lint, guardrail
 

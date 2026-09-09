@@ -37,6 +37,10 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.
+* [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the one-command local build and the scheduled build on GitHub.
+* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — turning Pages on, what is published, and what publishing means.
+* [Compliance and Posture](compliance.md) — the controls that exist, the evidence for each, and the known gaps.
+* [Troubleshooting](troubleshooting.md) — failures seen so far: symptom, cause, fix.
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
 * [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session, phase or not; your request goes on the last line.
 
