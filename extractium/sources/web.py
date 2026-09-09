@@ -96,6 +96,40 @@ class CrawlSettings:
         return None if self.respect_robots_txt else fetching.BROWSER_USER_AGENT
 
 
+### Seeds ###
+
+def seed_urls_from(options):
+    """
+    The addresses a crawl starts from, as a tuple, however the entry
+    wrote them.
+
+    One crawl may start in several places. That is not the same as
+    several sources: one crawl keeps one list of pages it has already
+    visited, so a page reachable from two starting points is fetched once
+    and indexed once. Two sources covering the same ground would index it
+    twice.
+
+    Args:
+        options (Mapping): a web entry's options, holding `seed_urls`,
+            `seed_url`, or both (the loader fills in both; a caller
+            inside the program may set either).
+
+    Returns:
+        tuple[str, ...]: the seeds, in the order given, each once.
+
+    Raises:
+        KeyError: if the options name no seed at all.
+    """
+    seeds = options.get("seed_urls") or ()
+    if not seeds:
+        seeds = (options["seed_url"],)
+    unique = []
+    for seed in seeds:
+        if fetching.normalise(seed) not in {fetching.normalise(s) for s in unique}:
+            unique.append(seed)
+    return tuple(unique)
+
+
 ### Site Handler Selection ###
 
 def resolve_site_handlers(registry, names=None, settings=None):
@@ -227,7 +261,10 @@ class WebSource:
 
     def __init__(self, options, site_handlers=(), settings=CrawlSettings()):
         self.options = options
-        self.seed_url = options["seed_url"]
+        self.seed_urls = seed_urls_from(options)
+        # The first seed, for the things that need one address rather than
+        # the set: the handler offer, and progress lines that name the crawl.
+        self.seed_url = self.seed_urls[0]
         self.include_patterns = tuple(options.get("include_patterns") or ())
         self.already_indexed = set(options.get("already_indexed") or ())
         self.registry = None
@@ -320,8 +357,8 @@ class WebSource:
             return
 
         settings = self.settings
-        auto_prefix = fetching.derive_auto_prefix(self.seed_url)
-        origin = fetching.get_origin(self.seed_url)
+        auto_prefix = tuple(fetching.derive_auto_prefix(seed) for seed in self.seed_urls)
+        origin = tuple(fetching.get_origin(seed) for seed in self.seed_urls)
         include_res = fetching.compile_patterns(self.include_patterns)
         crawl_exclude_res = fetching.compile_patterns(self.crawl_exclude_patterns)
         index_exclude_res = fetching.compile_patterns(self.index_exclude_patterns)
@@ -329,15 +366,17 @@ class WebSource:
             session, settings.user_agent, enabled=settings.respect_robots_txt, progress=progress
         )
 
-        progress(f"Seed:         {self.seed_url}")
-        progress(f"Auto prefix:  {auto_prefix}")
+        for seed in self.seed_urls:
+            progress(f"Seed:         {seed}")
+        progress(f"Auto prefix:  {', '.join(dict.fromkeys(auto_prefix))}")
         progress(f"Include pats: {list(self.include_patterns) or '(auto -- prefix only)'}")
         progress(f"Site handlers: {[h.name for h in self.handlers]}")
 
-        seed_norm = fetching.normalise(self.seed_url)
+        seed_norms = [fetching.normalise(seed) for seed in self.seed_urls]
         visited = set()
-        queued = {seed_norm}   # dedup before download
-        queue = deque([seed_norm])
+        queued = set(seed_norms)   # dedup before download
+        queue = deque(seed_norms)
+        landed = {}
 
         while queue and len(visited) < settings.max_pages:
             url = queue.popleft()
@@ -352,14 +391,24 @@ class WebSource:
                 progress(f"  SKIP {url} -- disallowed by robots.txt")
                 continue
 
+            # Where a seed actually lands decides whether the crawl can go
+            # anywhere at all, so it is worth one callback to find out.
+            is_seed = url in seed_norms
             expect_html = handler.expects_html(url)
             fetched = fetching.fetch(
                 session, request_url, cache,
                 expect_html=expect_html, user_agent=settings.user_agent, progress=progress,
                 fallback_user_agent=settings.blocked_retry_user_agent,
+                note_final_url=(lambda final, key=url: landed.__setitem__(key, final)) if is_seed else None,
             )
             if fetched is None:
                 continue
+
+            if is_seed and self._seed_redirected_out_of_scope(
+                url, landed.get(url), auto_prefix, origin, include_res, crawl_exclude_res, progress
+            ):
+                continue
+
             soup = fetched if expect_html else markdown_text_to_soup(fetched, url)
 
             # Enqueue new in-scope links, deduped before download.
@@ -400,6 +449,52 @@ class WebSource:
             self._pause()
 
         progress(f"Crawled {len(visited)} page(s).")
+
+    def _seed_redirected_out_of_scope(self, seed, final_url, auto_prefix, origin,
+                                      include_res, crawl_exclude_res, progress):
+        """
+        Whether a seed landed somewhere the crawl is not allowed to go, and
+        says so if it did.
+
+        A short link is the usual cause. `https://example.edu/kb` may
+        redirect to a portal on another host: the page arrives, but the
+        scope was derived from the address that was configured, so every
+        link on it is out of scope and the crawl stops after one page. Worse
+        than that, links written relative to the page resolve against the
+        configured address rather than the one it landed on, so they point
+        at addresses that do not exist.
+
+        Nothing about the result would show this. The index would simply be
+        almost empty. So the seed is refused and the address to use instead
+        is named, rather than crawling on and producing that quietly.
+
+        A redirect that stays in scope is normal and passes without comment:
+        http to https, a missing trailing slash, a canonical host.
+
+        Args:
+            seed (str): the seed as configured, normalised.
+            final_url (str | None): where the request landed, or None when
+                the session did not report it.
+            auto_prefix (tuple[str, ...]): the derived scope prefixes.
+            origin (tuple[str, ...]): the seeds' origins.
+            include_res (list[re.Pattern]): the compiled include patterns.
+            crawl_exclude_res (list[re.Pattern]): the compiled exclusions.
+            progress (Callable[[str], None]): receives the explanation.
+
+        Returns:
+            bool: True when this seed must be abandoned.
+        """
+        if not final_url or fetching.normalise(final_url) == seed:
+            return False
+        if fetching.in_scope(final_url, auto_prefix, origin, include_res, crawl_exclude_res):
+            return False
+        progress(
+            f"  SKIP {seed} -- it redirects to {final_url}, which is outside what this "
+            f"source may crawl. Nothing there could be followed, so the crawl would "
+            f"index one page and stop. Use {final_url} as the seed instead, or add an "
+            f"include pattern that covers it."
+        )
+        return True
 
     def _offered_source(self, progress):
         """

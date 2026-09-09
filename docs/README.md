@@ -35,6 +35,7 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
 * [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
 * [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
+* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, planned for Phase 13.
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.

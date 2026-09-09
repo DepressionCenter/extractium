@@ -104,6 +104,25 @@ python -m extractium.cli build --config config.yaml --max-pages 25 --out-dir tri
 
 The progress lines name each page visited and each one skipped, with the reason.
 
+### The build indexes one page and stops
+
+**Cause.** The seed is a short link that redirects somewhere else. The crawl works out what it may visit from the address you wrote, so after the redirect every link on the page it received is out of scope.
+
+**Fix.** The build now catches this and names the address to use:
+
+```text
+SKIP https://example.edu/kb -- it redirects to https://portal.example/TDClient/210/Org/Home/,
+which is outside what this source may crawl.
+```
+
+Put that address in the settings file instead of the short link. If you want the short link kept anyway, add an `include_patterns` entry that covers where it lands.
+
+### The build says it skipped pages an earlier source had already indexed
+
+**Cause.** Two sources are covering the same ground. A website and a section of it, or a portal and a short link into one of its articles.
+
+**Fix.** Often nothing: the page is indexed once, by whichever source reached it first, and the count is there so the overlap is visible rather than silent. If the count is large, the two sources are mostly duplicates of each other and one of them can go. If you want both, and want them separate, narrow one with `include_patterns` so their scopes do not meet.
+
 ### Every page is skipped with a message about `robots.txt`
 
 **Cause.** The site's `robots.txt` could not be read. Extractium fails closed: if the rules are unknown, no page on that site is fetched. One real example is a portal that answers a request for `robots.txt` with 406 when the request accepts only HTML.
