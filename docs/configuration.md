@@ -42,7 +42,7 @@ settings = load_config("config.yaml")
 print(settings.sources[0].options["seed_url"], settings.max_pages)
 ```
 
-The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
+The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
 
 
 ## Where the file goes
@@ -87,10 +87,45 @@ Each entry in `sources` and `outputs` names a `type` and then that type's own op
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
 | `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |
 | `phi_lint` | `local`, `all`, or `off` | `local` | Which content the check for protected health information scans. |
+| `github_owners` | list of text | empty | Extra GitHub accounts this build may follow links into. See "Which GitHub accounts a build reads" below. |
 
 Quote the value when you turn the check off (`phi_lint: 'off'`). YAML reads a bare `off` as the word false, and the build refuses it with a message naming the setting.
 
 See "The check for protected health information" below for what the check does.
+
+### Which GitHub accounts a build reads
+
+A GitHub account name can turn up anywhere: in a README's credits, in a list of dependencies, in a fork notice, in somebody's profile link. If a build followed all of them, one link would pull thousands of other people's repositories into your index.
+
+So a build reads a GitHub account **only when you named it**. That means:
+
+- an account named by a `github_api` source, under `org`, `user`, or `url`;
+- the account in the address a `web` source starts from;
+- an account you listed in `github_owners`.
+
+Nothing else is read, however often it is linked to.
+
+`github_owners` says "you may follow links into this account". It does not say "index everything this account has published". Only naming an account as a source does that:
+
+| You did this | The account is read | Its whole account is listed |
+|---|---|---|
+| Named it as a source, by owner address | Yes | Yes |
+| Named one of its repositories as a source | That repository | No |
+| Added it to `github_owners` | Repositories reached from what is in scope | No |
+| Did not name it | No | No |
+
+Write exact account names. Patterns and addresses are refused, because a pattern that matches more accounts than you meant is the exact mistake this list prevents.
+
+```yaml
+github_owners:
+  - some-collaborator
+```
+
+The rule covers `github.com`, `raw.githubusercontent.com`, and `<account>.github.io`, since one account owns content on all three. Accounts left out are counted and reported once at the end of the build, so you can see what was held back and add it if you did want it:
+
+```text
+  coverage : Not read; add to github_owners to include: some-other-org (14 links), a-contributor (3 links)
+```
 
 
 ## Sources
@@ -128,15 +163,49 @@ The `path` is the folder to read. Files are read as UTF-8. A file the patterns s
 
 Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files would need extra software the project does not install.
 
-### `github_api`: list an organization's repositories
+### `github_api`: read repositories through the GitHub API
 
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `org` | text | none (required) | The GitHub organization to list. |
+| `org` | text | none | A GitHub organization. Reads its public repositories. |
+| `user` | text | none | A GitHub user. Reads that person's own public repositories. |
+| `url` | text | none | A GitHub address. An owner address reads that owner's repositories; a repository address reads that one repository. |
+| `include_repos` | list of text | empty | Repository names to read. Empty means all of them. |
+| `exclude_repos` | list of text | empty | Repository names to leave out. An exclusion always wins. |
+| `include_forks` | true or false | `false` | Reads forks too. Off by default, because a project and several forks of it fill the index with near-identical copies. |
+| `include_archived` | true or false | `true` | Reads archived repositories. On by default, because archived documentation is still documentation. |
+| `include_code` | true or false | `true` | Reserved for code analysis, which arrives in phase 8. Accepted and reported today; it changes nothing yet. |
+| `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. |
 
-Set `GITHUB_TOKEN` in the environment to raise the API rate limit. The token never goes in the file.
+Give **exactly one** of `org`, `user`, or `url`. Two is an error, not a request for both.
 
-**Planned.** The loader accepts this type today, but the source itself is not built yet, so a build that uses it stops with `no source named 'github_api'`. When it arrives it also takes a `user` or a `url` instead of `org`, repository include and exclude lists, `include_forks`, `include_archived`, `include_code`, and `max_file_bytes`. A `web` source whose `seed_url` points at GitHub will use the API automatically, with no extra settings at all. A global `github_owners` list arrives with it: GitHub accounts are read only when the configuration named them, so a link to a stranger's repository never pulls that account into the build. See [GitHub repository indexing](github-repository-indexing.md).
+```yaml
+sources:
+  - type: github_api
+    org: DepressionCenter
+    exclude_repos:
+      - old-prototype
+```
+
+Most of the time you do not need this type at all. Point a `web` source at a GitHub address and it reads the API by itself:
+
+```yaml
+sources:
+  - type: web
+    seed_url: https://github.com/DepressionCenter/extractium
+```
+
+**What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`. Source files, generated folders, binaries, lock files, and anything holding a credential are never downloaded. `.env.example` is kept, because it documents what a project needs.
+
+**Tokens.** Set `GITHUB_TOKEN` in the environment to raise the request limit. It never goes in the configuration file, in an output, in a log line, or in the cache. A token raises how much a build can read; it never widens what a build may publish, and private repositories are never indexed.
+
+**When GitHub cannot be read.** The build tries three ways in order: with a token, without one, and finally an ordinary crawl of the documentation pages. The first two produce exactly the same result for a public repository. The third reads documentation only and runs no code analysis. Whatever happens, the summary names each repository and the way it was read:
+
+```text
+  coverage : DepressionCenter/extractium  tier 2 (public API)  documentation, code analysis
+```
+
+A refused token drops to reading GitHub anonymously and says so. A misspelled account name stops the build instead, because a quiet fall back would give you a strange, empty result rather than an error.
 
 ### `youtube`: read captions
 
@@ -149,7 +218,7 @@ Set `GITHUB_TOKEN` in the environment to raise the API rate limit. The token nev
 
 At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listing a channel or playlist needs `YOUTUBE_API_KEY` in the environment.
 
-**Planned.** As with `github_api`, the loader accepts this type but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 11.
+**Planned.** The loader accepts this type, but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 11.
 
 ### Source types from plugins
 

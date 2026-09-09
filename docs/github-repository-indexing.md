@@ -296,7 +296,7 @@ Nothing under `.kb_cache/github/` ever contains a token. A cache test checks thi
 
 ### Configuration
 
-The planned options for an explicit source. The reference in [configuration.md](configuration.md) documents only what is implemented today, which is `org` alone; it gains the rest when this phase lands.
+The options an explicit source takes. All of them are implemented; [configuration.md](configuration.md) is the reference for using them.
 
 ```yaml
 sources:
@@ -355,6 +355,24 @@ Every document keeps `source_type = github`, so existing filters keep working. T
 `readme`, `text`, `wiki`, and `release_notes` are unchanged.
 
 Categories use the existing hierarchy, not a second GitHub-only system. `DepressionCenter/extractium/extractium/core/build.py` becomes `DepressionCenter`, `extractium`, `extractium`, `core`.
+
+### What Phase 7 built, and where it differs from this plan
+
+Phase 7 shipped on 2026-09-09. Three modules rather than one, because one file holding the transport, the path rules, and the source would have been about nine hundred lines:
+
+| File | What it holds |
+|---|---|
+| `extractium/sources/github_client.py` | The REST transport: the token, paginated listings, trees, file bodies, one archive read in memory, rate-limit headers, and the split between a failure to work around and a failure only the operator can fix |
+| `extractium/sources/github_files.py` | Which paths are documentation, which are project files, and which are never downloaded |
+| `extractium/sources/github_api.py` | The source itself: the ladder, repository selection, the ledger, the records, and the coverage report |
+
+Three differences from the design above, each found by a test:
+
+1. **A truncated tree is walked by path, not by tree object.** The first version keyed the walk on each folder's own object name, so a folder would be read once however many places pointed at it. Two folders holding identical files share one object name, and that version silently lost every file in the second one. The walk now keys on the path, which is unique, and a request ceiling covers the pathological case of a folder that reports itself as its own child.
+2. **Manifests are classified before documentation.** `requirements.txt` carries a documentation extension. Checking documentation first read it as prose and threw away the label saying it is a dependency list.
+3. **The API source also checks the owner GitHub reports.** The owner arrives in an API response, which is untrusted like anything else read at runtime. A repository reporting an owner the operator did not name is skipped, so the rule holds even if a listing returns something unexpected.
+
+The site-handler protocol gained the three optional hooks: `configure`, `allows`, and `offer_source`. A handler that defines none behaves exactly as it did. Moving the TeamDynamix folder-scope rule out of `core/fetch.py` is now possible on the same hook; it was not part of this phase and core still holds that rule.
 
 ### Phase 7 is done when
 

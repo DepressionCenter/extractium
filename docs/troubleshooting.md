@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -74,6 +74,41 @@ The progress lines name each page visited and each one skipped, with the reason.
 **Cause.** The site's `robots.txt` could not be read. Extractium fails closed: if the rules are unknown, no page on that site is fetched. One real example is a portal that answers a request for `robots.txt` with 406 when the request accepts only HTML.
 
 **Fix.** Open the site's `robots.txt` in a browser and see what it says. If it genuinely disallows crawling, respect that; the answer is to ask the site owner, not to switch the check off. Switch `respect_robots_txt` off only for a site your own group runs.
+
+
+## Reading GitHub
+
+### The build stops with `GitHub has no account ...`
+
+**Cause.** The account or repository name does not exist on GitHub. Almost always a misspelling.
+
+**Fix.** Check the spelling against the address in your browser. This one failure stops the build on purpose: if it quietly carried on, you would get an index that is empty for no visible reason.
+
+### The summary says a repository was read at `tier 3 (documentation crawl)`
+
+**Cause.** GitHub could not be read through its API for that repository, so the build fell back to crawling its documentation pages. Usually the request budget was spent; sometimes GitHub was unreachable.
+
+**Fix.** Set `GITHUB_TOKEN` in the environment. Reading GitHub anonymously allows roughly sixty requests an hour, which one small organization can use up. A token raises that considerably and changes nothing else about what is indexed.
+
+That line is not an error. It is telling you the index has that repository's documentation and not its code structure.
+
+### The summary says the access token was refused
+
+**Cause.** `GITHUB_TOKEN` is set to a value GitHub did not accept: expired, revoked, or copied incorrectly.
+
+**Fix.** Replace the token. The build carried on reading GitHub anonymously, so you still have your documentation; you had the smaller request budget rather than the larger one. The message exists because a token that was silently ignored looks exactly like a token that worked.
+
+### A repository you expected is missing from the index
+
+**Cause.** One of the defaults left it out. Forks are skipped, so are empty repositories, repositories GitHub has disabled, and private ones.
+
+**Fix.** Read the progress log: every repository left out is named there with its reason. Set `include_forks: true` if forks are what you wanted. Private repositories are never indexed, whatever your token can read.
+
+### The summary says `Not read; add to github_owners to include: ...`
+
+**Cause.** Something in the content linked to a GitHub account your configuration never named, and the build did not follow it.
+
+**Fix.** Nothing, if that is what you wanted, which it usually is: the line is there so you can see the guardrail working. If you did want that account's pages, add its exact name to `github_owners`. That lets links into the account be followed; it does not index everything the account has published.
 
 
 ## The scheduled build

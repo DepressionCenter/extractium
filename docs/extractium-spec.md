@@ -214,7 +214,7 @@ Reading OKF bundles produced by other tools, as a source, is possible future wor
 | Site handler | `tdx` | 2 | TeamDynamix portals: content selectors, title prefix stripping, recovery of a title the portal cut short, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
 | Site handler | `github` | 2 | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns. |
 | Source | `local` | 6 | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
-| Source | `github_api` | 7 | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget; it never widens what may be published. Only accounts the operator named are read, whatever links to them (section 6). See [GitHub repository indexing](github-repository-indexing.md). |
+| Source | `github_api` | 7, built | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget; it never widens what may be published. Only accounts the operator named are read, whatever links to them (section 6). See [GitHub repository indexing](github-repository-indexing.md). |
 | Source | `youtube` | 11 | Captions only. Explicit video ids need no key; playlists and channels are listed through the YouTube Data API with `YOUTUBE_API_KEY` from the environment. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and cached; a CI run reuses the cache. Parents deep-link to a timestamp. |
 | Source | GitHub code structure | 8 | Tree-sitter analysis of repository code: signatures, documentation, imports, calls, and repository maps. Never raw code bodies, and no language model; a symbol record links to its lines on GitHub instead of copying them. Universal Ctags is an optional second parser; an unsupported language still gets a file-level record. See [GitHub repository indexing](github-repository-indexing.md). |
 | Source | Speech-to-text fallback | future | For videos without captions. External, optional plugin. |
@@ -324,6 +324,8 @@ max_pages: 10000
 user_agent: Extractium/0.1 (+https://github.com/DepressionCenter/extractium)
 respect_robots_txt: true
 phi_lint: local                     # local | all | off
+github_owners: []                   # extra GitHub accounts this build may follow links
+                                    # into; deny by default, exact names, never patterns
 
 sources:
   - type: web
@@ -336,7 +338,13 @@ sources:
     path: ./internal-docs
     include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
   - type: github_api
-    org: example-org                # uses GITHUB_TOKEN from the environment when set
+    org: example-org                # exactly one of org, user, or url
+    include_repos: []               # empty = every repository that matches
+    exclude_repos: []               # an exclusion always wins
+    include_forks: false
+    include_archived: true
+    include_code: true              # reserved for phase 8; carried and reported today
+    max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
   - type: youtube
     channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # needs YOUTUBE_API_KEY in the environment
     playlist_ids: []
