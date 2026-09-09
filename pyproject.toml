@@ -89,6 +89,7 @@ github = "extractium.sources.github:GitHubHandler"
 [project.entry-points."extractium.adapters"]
 container = "extractium.adapters.container:ContainerAdapter"
 llmstxt = "extractium.adapters.llmstxt:LlmsTxtAdapter"
+sqlite = "extractium.adapters.sqlite_out:SqliteAdapter"
 
 [tool.setuptools.packages.find]
 include = ["extractium*"]
