@@ -5,7 +5,7 @@ Author(s): Gabriel Mongefranco
 Created: 2026-09-04
 Last Modified: 2026-09-09
 Summary: The phased plan for building Extractium™: why the project is
-worth building, the design decisions the plan relies on, and eleven
+worth building, the design decisions the plan relies on, and thirteen
 phases of about one week each, with deliverables, tests, documentation,
 and a done-when rule for each.
 Notes: See README file for documentation and full license information.
@@ -57,6 +57,8 @@ Each decision is explained in the specification. They are listed here so a reade
 ## How phases are sized
 
 Each phase has a goal, a list of deliverables, the tests that prove them, the documentation that must change in the same phase, and a "done when" rule. A phase is about one week for one developer. A phase that grows past that is split, not stretched. The repository must pass its test suite at the end of every phase.
+
+Phase 8 is the one deliberate exception, and it says so in its own text. Splitting a parser layer in half would leave a release that parses code and renders nothing, which is worse than a longer phase. Every other phase keeps to the rule.
 
 
 ## Phases
@@ -189,22 +191,70 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 *Finished 2026-09-09 on branch `phase-6-local-files-and-sqlite`. The pattern set grew beyond the four rules this phase first scoped: it now covers the HIPAA Safe Harbor identifiers a pattern can reach, in two tiers, with the date rules anchored to a birth or clinical label so ordinary documentation is not flagged. The lint writes two reports, one for a program and one for a person, and neither copies the text it matched. No dependency was added; the gap that leaves is recorded in `compliance.md`. The command-line notice shipped in Phase 3 with the guardrail.*
 
-### Phase 7: GitHub API source and OKF adapter
+### Phase 7: GitHub API source
 
-**Goal.** Enumerate a code organization without scraping, and write the Open Knowledge Format.
+**Goal.** Read a code organization through the API instead of scraping it, and keep working when there is no token or no API at all.
+
+The detailed design for this phase and the next is [GitHub repository indexing](github-repository-indexing.md). Read it first.
 
 **Deliverables.**
 
-- `extractium/sources/github_api.py`: lists an organization's repositories through the REST API, reads README and Markdown files from raw URLs, uses `GITHUB_TOKEN` when present.
-- `extractium/adapters/okf.py`: one Markdown file per parent group with OKF v0.2 front matter (`type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`), plus `index.md` and `log.md`. No zip file; OKF defines none.
+- `extractium/sources/github_api.py`: resolves an organization, a user, or one repository; enumerates repositories with pagination; takes a complete tree inventory, walking subtrees when GitHub marks the recursive tree truncated; filters paths before downloading anything; indexes documentation and selected project manifests in full; uses `GITHUB_TOKEN` when present.
+- The three-tier ingestion ladder, applied the same way to an explicit `github_api` source and to a `web` seed that points at GitHub: authenticated API, then unauthenticated API with the same capability, then a documentation-only crawl that runs no code analysis. A refused token drops a tier rather than failing the build.
+- A per-run ledger of URLs already turned into documents, so a demotion neither loses a repository nor fetches one twice, and the requested scope survives the demotion.
+- A coverage report: every repository's tier, named in the progress output and in the build summary.
+- Blob caching by SHA under `.kb_cache/github/`, and rate-limit handling that reads the response headers.
+- Two `content_type` values: `manifest` and `repo_map`.
+- The GitHub site handler gains the hook that offers the API source for a GitHub seed URL. The web source stays host-agnostic.
+- The account guardrail: a GitHub account is read only when the operator named it, as a source or in the new global `github_owners` setting. Being allowed lets links into that account be followed; only naming an account as a source lists the whole account. Enforced both in API promotion and in crawl scope, because a GitHub seed makes every account on the host same-origin. Skipped accounts are counted and reported once. This needs an optional scope hook on the site-handler protocol, which `derive_auto_prefix` already records as missing; the TeamDynamix rule stays in core for now.
 
-**Tests.** API responses faked from fixtures; rate-limit handling; OKF front matter validated against the fields above.
+**Tests.** Every API response faked from committed fixtures; no test contacts GitHub. Organization, user, and repository scopes; truncated trees and subtree walking; rate-limit headers and 401, 403, 404, and 429; each rung of the ladder including a refused token and a failure partway through a run; scope preserved and nothing fetched twice after a demotion; the file filter across manifests, binaries, oversized files, `.env`, and `.env.example`; an unnamed account linked from a README, a fork notice, and a contributor profile is read by neither the API nor the crawler, on `github.com`, `raw.githubusercontent.com`, and `github.io` alike; a `github_owners` entry is followed but never enumerated whole; no token in any output, log, or cache file.
 
-**Documentation.** `configuration.md` gains both types; the specification's output table marks OKF as implemented.
+**Documentation.** `configuration.md` gains the full `github_api` option set; `examples/config.example.yaml` gains the example; the specification's source table is updated; `github-repository-indexing.md` records what the checks found.
 
-**Done when** an organization with two repositories indexes through the API and the OKF folder opens in any Markdown viewer.
+**Done when** an organization indexes through the API with a token, indexes identically without one, still produces its documentation with a coverage note when the API cannot be used at all, and reads no account the operator did not name.
 
-### Phase 8: Local MCP servers
+### Phase 8: Lightweight static code analysis
+
+**Goal.** Make code findable — where a symbol is defined, what a file holds, what imports and calls it — with no clone, compiler, Language Server Protocol client, or language model.
+
+**This phase is larger than one week, and is planned that way.** It is not split further, because a parser layer that produces records nothing renders is worse than no parser layer. The design is in [GitHub repository indexing](github-repository-indexing.md).
+
+**Deliverables.**
+
+- `extractium/code/`: a language registry, a Tree-sitter engine driven by per-language query files, an extractor for code embedded in notebooks, R Markdown, Lua Server Pages, and HTML, a relationship resolver, a deterministic renderer, and an optional Universal Ctags fallback.
+- Language coverage for Python, JavaScript, TypeScript, R, shell, Lua, C#, HTML, Markdown, SQL, Kotlin, Swift, PowerShell, and MATLAB, each subject to a recorded license, maintenance, and cross-platform wheel check. Stata is expected to fall to the file-metadata tier; whatever it does, the reason is recorded.
+- File records and symbol records carrying structure, never source bodies, per the specification, section 5. File summaries come from the file's own documentation, its header `Summary:` line, its directory README, or a template over parser facts — never from a guess.
+- Import edges; call edges labelled `resolved`, `probable`, or `unresolved`; reverse edges computed from the finished graph.
+- One repository map per repository, naming the tier that read it, and one owner map for an owner-level request.
+- Analysis caching keyed on blob SHA, parser, grammar, and schema version.
+- Two `content_type` values: `code_file` and `code_symbol`.
+- The fix for near-duplicate collapse treating two symbols in one file as two pages, which otherwise drops legitimate near-identical symbols.
+
+**Tests.** Per-language fixtures for every supported capture, including a file with recoverable syntax errors; embedded code in `.Rmd`, `.ipynb`, `.lsp`, and HTML, with notebook outputs never read; relationship resolution across a small synthetic repository at all three confidence levels; a fake Ctags executable proving no shell invocation and refusal of malformed output; cache invalidation on each key; a test that near-identical symbols in one file all survive; the security set — archive paths, symbolic links, traversal, shell characters and newlines in filenames, invalid UTF-8, impossible declared sizes.
+
+**Documentation.** `github-repository-indexing.md` records every gate result; `compliance.md` gains the no-execution and untrusted-content posture and the new dependencies; `architecture.md` and the specification's source table are updated; `configuration.md` gains `include_code` and `ctags_fallback`.
+
+**Done when** every listed language is parsed, analyzed by Ctags, or recorded at the metadata tier with the reason written down; symbol records carry structure and links but no bodies; maps name their tier; and the parser set installs and runs on Windows, macOS, and Linux on the oldest and newest supported Python versions.
+
+### Phase 9: Open Knowledge Format output
+
+**Goal.** Write the Open Knowledge Format, as an output of equal standing to the container file.
+
+This has nothing to do with GitHub. It is a serialization of whatever the build produced, and it must work identically for a TeamDynamix portal, a local folder, and a code repository. It is a phase of its own so that it is never built around one source's shape.
+
+**Deliverables.**
+
+- `extractium/adapters/okf.py`: one Markdown file per parent group with OKF v0.2 front matter (`type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`), plus `index.md` and `log.md`. No archive; OKF defines none.
+- Local parents dropped unless the output opts in, through the shared adapter base, as for every other output.
+
+**Tests.** Front matter validated against the fields above; the same compendium written from a portal crawl, a local folder, and a GitHub source produces the same structure with no source-specific branches; the local-content guardrail holds.
+
+**Documentation.** `configuration.md` marks the `okf` output as implemented; the specification's output table does the same.
+
+**Done when** the folder opens in any Markdown viewer and the adapter contains no reference to any particular source.
+
+### Phase 10: Local MCP servers
 
 **Goal.** Let an AI assistant on the user's own machine search the index.
 
@@ -219,7 +269,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** an MCP client lists the tool and gets ranked parents back.
 
-### Phase 9: YouTube source
+### Phase 11: YouTube source
 
 **Goal.** Index a channel's captions.
 
@@ -234,7 +284,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** a playlist indexes locally and the Actions run reuses the cache without touching YouTube.
 
-### Phase 10: Remote MCP examples and platform prompts
+### Phase 12: Remote MCP examples and platform prompts
 
 **Goal.** Show how the published index is searched from a hosted endpoint, with no server of your own.
 
@@ -250,7 +300,7 @@ Each phase has a goal, a list of deliverables, the tests that prove them, the do
 
 **Done when** both examples answer a query from a fresh deployment.
 
-### After Phase 10
+### After Phase 12
 
 Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; speech-to-text for videos without captions; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Migrating Field Station AI to the JavaScript client and version 3 is a task for that repository, not this one.
 
@@ -289,6 +339,7 @@ You now know the order of work and what "done" means for each phase. Start with 
 * [Extractium™ specification](extractium-spec.md) — the design each phase builds toward.
 * [Architecture and Current State](architecture.md) — what exists in the repository today.
 * [Container format](container-format.md) — the file written in Phase 3 and read from Phase 4 on.
+* [GitHub repository indexing](github-repository-indexing.md) — the detailed design for Phases 7 and 8.
 * [Configuration reference](configuration.md) — the settings file as it exists now.
 * [Field Station AI](https://github.com/DepressionCenter/FieldStationAI) — the project the engine was extracted from and its bundled version 2 index.
 

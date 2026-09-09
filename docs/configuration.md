@@ -136,6 +136,8 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 
 Set `GITHUB_TOKEN` in the environment to raise the API rate limit. The token never goes in the file.
 
+**Planned.** The loader accepts this type today, but the source itself is not built yet, so a build that uses it stops with `no source named 'github_api'`. When it arrives it also takes a `user` or a `url` instead of `org`, repository include and exclude lists, `include_forks`, `include_archived`, `include_code`, and `max_file_bytes`. A `web` source whose `seed_url` points at GitHub will use the API automatically, with no extra settings at all. A global `github_owners` list arrives with it: GitHub accounts are read only when the configuration named them, so a link to a stranger's repository never pulls that account into the build. See [GitHub repository indexing](github-repository-indexing.md).
+
 ### `youtube`: read captions
 
 | Option | Type | Default | What it does |
@@ -146,6 +148,8 @@ Set `GITHUB_TOKEN` in the environment to raise the API rate limit. The token nev
 | `languages` | list of text | `en` | Caption languages to ask for, in order of preference. |
 
 At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listing a channel or playlist needs `YOUTUBE_API_KEY` in the environment.
+
+**Planned.** As with `github_api`, the loader accepts this type but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 11.
 
 ### Source types from plugins
 
