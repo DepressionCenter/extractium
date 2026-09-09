@@ -2,7 +2,7 @@
 # examples/data-repo/config.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-08
+# Last Modified: 2026-09-09
 # Summary: Settings file for a data repository: one web source, the two
 # default outputs, and a name for the published knowledge base. Change the
 # seed URL to your own site and the name to your own organization.
@@ -27,10 +27,12 @@ name: "Example Org Knowledge Base"
 out_dir: dist
 
 # The pages to read. One web source is enough to start: the crawl stays
-# inside the site the seed URL belongs to. See the configuration reference
-# for include and exclude patterns.
+# inside the site the seed URL belongs to. The label is the name a reader
+# sees for this collection, and every source needs one. See the
+# configuration reference for include and exclude patterns.
 sources:
   - type: web
+    label: Example Knowledge Base
     seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 
 # The files to write. These two are the defaults; they are listed here so

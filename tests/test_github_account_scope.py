@@ -82,14 +82,14 @@ def test_the_account_is_read_from_every_github_shaped_address(url, expected):
 # ---------------------------------------------------------------------------
 
 def test_an_account_named_by_a_github_source_is_allowed():
-    cfg = config.config_from_mapping({"sources": [{"type": "github_api", "org": NAMED}]})
+    cfg = config.config_from_mapping({"sources": [{"type": "github_api", "label": "Example Repositories", "org": NAMED}]})
 
     assert github.accounts_named_by(cfg.sources) == {NAMED}
 
 
 def test_an_account_named_in_a_web_seed_is_allowed():
     cfg = config.config_from_mapping({
-        "sources": [{"type": "web", "seed_url": f"https://github.com/{NAMED}/example-tools"}],
+        "sources": [{"type": "web", "label": "Example Website", "seed_url": f"https://github.com/{NAMED}/example-tools"}],
     })
 
     assert github.accounts_named_by(cfg.sources) == {NAMED}
@@ -97,7 +97,7 @@ def test_an_account_named_in_a_web_seed_is_allowed():
 
 def test_an_account_named_by_a_repository_address_is_allowed():
     cfg = config.config_from_mapping({
-        "sources": [{"type": "github_api", "url": f"https://github.com/{NAMED}/example-tools"}],
+        "sources": [{"type": "github_api", "label": "Example Repositories", "url": f"https://github.com/{NAMED}/example-tools"}],
     })
 
     assert github.accounts_named_by(cfg.sources) == {NAMED}
@@ -105,7 +105,7 @@ def test_an_account_named_by_a_repository_address_is_allowed():
 
 def test_a_crawl_of_an_ordinary_website_allows_no_github_account():
     cfg = config.config_from_mapping({
-        "sources": [{"type": "web", "seed_url": "https://example.org/docs"}],
+        "sources": [{"type": "web", "label": "Example Website", "seed_url": "https://example.org/docs"}],
     })
 
     assert github.accounts_named_by(cfg.sources) == set()
@@ -118,7 +118,7 @@ def test_allowing_an_account_is_not_the_same_as_listing_everything_it_has():
     """
     cfg = config.config_from_mapping({
         "github_owners": [UNNAMED],
-        "sources": [{"type": "github_api", "org": NAMED}],
+        "sources": [{"type": "github_api", "label": "Example Repositories", "org": NAMED}],
     })
 
     assert github.accounts_named_by(cfg.sources) == {NAMED}

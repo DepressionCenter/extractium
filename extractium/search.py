@@ -1,5 +1,5 @@
 """
-Summary: The Python client for a version 3 compendium: reads the binary
+Summary: The Python client for a version 4 compendium: reads the binary
 container back, checks it against the reader checklist, and runs the
 hybrid search over it -- cosine similarity, BM25, reciprocal rank fusion,
 a corpus-relative relevance threshold, diversity selection, and
@@ -15,7 +15,7 @@ extractium/search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -50,7 +50,7 @@ import numpy as np
 # anything else is read, so a file of some other shape that happens to
 # carry a .json name is refused rather than half-parsed.
 CONTAINER_FORMAT = "extractium-compendium"
-CONTAINER_VERSION = 3
+CONTAINER_VERSION = 4
 
 # Width in bytes of one stored vector component, by container dtype.
 DTYPE_WIDTHS = {"int8": 1, "float32": 4}
@@ -110,7 +110,7 @@ RRF_BM25_WEIGHT = 0.5
 
 
 class ContainerError(ValueError):
-    """Raised when a file is not a readable version 3 compendium."""
+    """Raised when a file is not a readable version 4 compendium."""
 
 
 ### Container Reader ###
@@ -612,7 +612,7 @@ class SearchIndex:
 
 def load_container(source, model=None, dims=None):
     """
-    Reads a version 3 container and returns an index ready to search.
+    Reads a version 4 container and returns an index ready to search.
 
     Every check in the container format's reader checklist runs here, so
     a truncated, altered, or foreign file is refused with a message that
@@ -632,7 +632,7 @@ def load_container(source, model=None, dims=None):
         SearchIndex: the loaded compendium.
 
     Raises:
-        ContainerError: if the file is not a readable version 3
+        ContainerError: if the file is not a readable version 4
             compendium, or does not match the embedder named above.
         OSError: if the path cannot be read.
     """

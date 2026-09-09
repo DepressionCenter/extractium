@@ -11,7 +11,7 @@ extractium/core/chunk.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -324,7 +324,7 @@ def chunk_document(document):
     Returns:
         tuple[list[dict], list[dict]]: (parents, children). Every parent
         dict holds id, t, x, u, host, source_type, content_type,
-        categories, local, and weight; every child is a copy of its
+        source_label, categories, local, and weight; every child is a copy of its
         parent with its own `x`, its `start` and `end` offsets into the
         parent's text, and a page-local `pid`.
     """
@@ -335,6 +335,7 @@ def chunk_document(document):
     for parent in parents:
         parent["source_type"] = document.source_type
         parent["content_type"] = document.content_type
+        parent["source_label"] = document.source_label
         parent["categories"] = tuple(document.categories)
         parent["local"] = document.local
         parent["weight"] = document.weight

@@ -163,16 +163,16 @@ A deposit that has been withdrawn simply stops appearing in the listing, and the
 
 Nothing in the design above is specific to Deep Blue. It is all plain DSpace 7, which runs a large share of the world's university repositories. A `dspace` source with Deep Blue as its first configured instance costs nothing extra to build and works for any of them; a `deep_blue` source would have to be written again for the next repository somebody asks about.
 
-The only Deep Blue facts are its two addresses and its two collection identifiers, and those belong in a settings file rather than in code. If a name that says "Deep Blue" is wanted in the output, the `label` option below provides it.
+The only Deep Blue facts are its two addresses and its two collection identifiers, and those belong in a settings file rather than in code. Every source names itself with a `label`, so "Deep Blue Documents" is what a reader sees whatever the plugin is called.
 
 ### Settings
 
 ```yaml
 sources:
   - type: dspace
+    label: Deep Blue Documents
     api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
     site_url: https://deepblue.lib.umich.edu
-    label: Deep Blue Documents
     collections:
       - 3acf951c-e107-4b8d-8f7d-ced171665b11    # Eisenberg Family Depression Center
       - 7503b0dc-27a2-4ce9-bcbc-50b339ecb486    # MeTRIC
@@ -184,7 +184,7 @@ sources:
 |---|---|---|
 | `api_url` | required | Where the repository's interface lives. Not guessable; see above for how to find it |
 | `site_url` | required | Where a reader opens a deposit. Recorded on every document so a search result is a link a person can follow |
-| `label` | the repository's own name | What this repository is called in the index |
+| `label` | required, as for every source | What this repository is called in the index. See [configuration reference](configuration.md) |
 | `collections` | required, at least one | Which collections to read, by identifier |
 | `include_full_text` | `true` | Whether extracted text is indexed as well as the description |
 | `max_file_bytes` | 2000000 | Largest extracted text file to read. Anything larger is named and skipped |

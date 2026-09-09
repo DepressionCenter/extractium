@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -45,6 +45,10 @@ import yaml
 # The default User-Agent is owned by the fetch layer that sends it;
 # re-exported here so the settings documentation has one name for it.
 from extractium.core.fetch import DEFAULT_USER_AGENT
+
+# The label rules belong to the records that carry the label, so the
+# configuration checks against the same limit the records enforce.
+from extractium.core.models import MAX_SOURCE_LABEL_CHARS
 
 
 ### Global Defaults ###
@@ -171,9 +175,19 @@ KNOWN_KEYS = frozenset({
     "outputs",
 })
 
-# Option keys per built-in source type, beyond "type" itself. A type not
-# listed here belongs to a plugin, and its options are passed through for
-# that plugin to check.
+# A label to name in the error message when a source has none, so the fix
+# is one line to copy rather than a guess. These are examples, not
+# defaults: the configuration must still choose a name.
+SUGGESTED_SOURCE_LABELS = {
+    "web": "Website",
+    "local": "Local Files",
+    "github_api": "GitHub",
+    "youtube": "YouTube Channel",
+}
+
+# Option keys per built-in source type, beyond "type" and "label", which
+# every source accepts. A type not listed here belongs to a plugin, and
+# its options are passed through for that plugin to check.
 SOURCE_OPTION_KEYS = {
     "web": frozenset({
         "seed_url", "seed_urls", "include_patterns", "crawl_exclude_patterns",
@@ -215,12 +229,17 @@ class SourceConfig:
 
     Attributes:
         type (str): registry name of the source plugin.
+        label (str): what a reader sees this source called, such as
+            "Peer-to-Peer Program". Required, because only the person
+            writing the configuration knows which of several web sources
+            is the main site and which is a program microsite.
         options (Mapping): the entry's validated options, read-only. For a
             built-in type every option is present with its default filled
             in; for a plugin type the options are as written.
     """
 
     type: str
+    label: str
     options: Mapping
 
 
@@ -559,6 +578,48 @@ def _read_type(entry, source):
     return type_name
 
 
+def _read_source_label(entry, type_name, source):
+    """
+    Reads the display name a source must give itself.
+
+    This is required rather than defaulted because the useful name is
+    knowledge only the configuration holds. Three `web` sources may be a
+    main website, a program microsite, and a code hub; nothing in the
+    address or the markup says which is which, and a reader searching the
+    finished index needs to be told where an answer came from.
+
+    Args:
+        entry (Mapping): the sources entry as written.
+        type_name (str): the entry's source type, used to suggest a label
+            in the error message.
+        source (str): label used in error messages.
+
+    Returns:
+        str: the label, with surrounding blanks removed.
+
+    Raises:
+        ConfigError: if the label is absent, blank, not text, or longer
+            than MAX_SOURCE_LABEL_CHARS.
+    """
+    if _is_missing(entry.get("label")):
+        suggestion = SUGGESTED_SOURCE_LABELS.get(type_name, "My Source")
+        _fail(
+            source,
+            "label is required: the name a reader sees for this source, such as "
+            f'"{suggestion}". Every source needs one, because two sources of the '
+            "same type cannot be told apart without it.",
+        )
+    label = _read_text(entry, "label", None, source)
+    if len(label) > MAX_SOURCE_LABEL_CHARS:
+        _fail(
+            source,
+            f"label must be {MAX_SOURCE_LABEL_CHARS} characters or fewer; got {len(label)}. "
+            "It heads a section in llms.txt and sits beside a search result, so keep "
+            "it to a short name.",
+        )
+    return label
+
+
 def _read_seed_urls(entry, source):
     """
     Reads where a crawl starts: one address, or several.
@@ -706,17 +767,24 @@ def _read_sources(data, source):
 
     sources = []
     for position, entry in enumerate(value, start=1):
-        label = f"{source}: sources entry {position}"
+        where = f"{source}: sources entry {position}"
         if not isinstance(entry, Mapping):
-            raise ConfigError(f"{label} must be a mapping with a type, not {type(entry).__name__}.")
-        type_name = _read_type(entry, label)
-        label = f"{label} ({type_name})"
-        options = {k: v for k, v in entry.items() if k != "type"}
+            raise ConfigError(f"{where} must be a mapping with a type, not {type(entry).__name__}.")
+        type_name = _read_type(entry, where)
+        where = f"{where} ({type_name})"
+        source_label = _read_source_label(entry, type_name, where)
+        # "type" and "label" are read the same way for every source, so a
+        # plugin source type gets a label without knowing the setting exists.
+        options = {k: v for k, v in entry.items() if k not in ("type", "label")}
         reader = _SOURCE_READERS.get(type_name)
         if reader is not None:
-            _check_known_keys(options, SOURCE_OPTION_KEYS[type_name], label)
-            options = reader(entry, label)
-        sources.append(SourceConfig(type=type_name, options=MappingProxyType(options)))
+            _check_known_keys(options, SOURCE_OPTION_KEYS[type_name], where)
+            options = reader(entry, where)
+        sources.append(SourceConfig(
+            type=type_name,
+            label=source_label,
+            options=MappingProxyType(options),
+        ))
     return tuple(sources)
 
 

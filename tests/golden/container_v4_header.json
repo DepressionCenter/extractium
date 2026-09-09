@@ -1,7 +1,7 @@
 {
   "_license": "This file was produced by Extractium. Copyright © 2026 The Regents of the University of Michigan. Extractium is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/. The indexed content remains under the license of the site it was read from.",
   "format": "extractium-compendium",
-  "v": 3,
+  "v": 4,
   "extractium": "0.1.0",
   "builtAt": "2026-01-02T03:04:05Z",
   "site": "Example Org",
@@ -26,6 +26,7 @@
       "host": "example.org",
       "source_type": "web",
       "content_type": "page",
+      "source_label": "Website",
       "categories": [],
       "local": false,
       "weight": 1.0
@@ -38,6 +39,7 @@
       "host": "example.org",
       "source_type": "web",
       "content_type": "page",
+      "source_label": "Website",
       "categories": [],
       "local": false,
       "weight": 1.0
@@ -50,6 +52,7 @@
       "host": "example.org",
       "source_type": "web",
       "content_type": "page",
+      "source_label": "Website",
       "categories": [],
       "local": false,
       "weight": 1.0

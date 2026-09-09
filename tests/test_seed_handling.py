@@ -183,7 +183,7 @@ def test_in_scope_takes_one_prefix_or_several():
 
 def test_seed_urls_fills_in_both_keys():
     entry = config.config_from_mapping({
-        "sources": [{"type": "web", "seed_urls": ["https://a.example/", "https://b.example/"]}],
+        "sources": [{"type": "web", "label": "Example Website", "seed_urls": ["https://a.example/", "https://b.example/"]}],
     }).sources[0]
 
     assert entry.options["seed_urls"] == ("https://a.example/", "https://b.example/")
@@ -192,7 +192,7 @@ def test_seed_urls_fills_in_both_keys():
 
 def test_one_seed_url_fills_in_both_keys_too():
     entry = config.config_from_mapping({
-        "sources": [{"type": "web", "seed_url": "https://a.example/"}],
+        "sources": [{"type": "web", "label": "Example Website", "seed_url": "https://a.example/"}],
     }).sources[0]
 
     assert entry.options["seed_urls"] == ("https://a.example/",)
@@ -202,13 +202,13 @@ def test_one_seed_url_fills_in_both_keys_too():
 def test_giving_both_forms_is_a_contradiction():
     with pytest.raises(config.ConfigError, match="not both"):
         config.config_from_mapping({"sources": [{
-            "type": "web", "seed_url": "https://a.example/", "seed_urls": ["https://b.example/"],
+            "type": "web", "label": "Example Website", "seed_url": "https://a.example/", "seed_urls": ["https://b.example/"],
         }]})
 
 
 def test_an_empty_seed_list_is_refused():
     with pytest.raises(config.ConfigError, match="at least one URL"):
-        config.config_from_mapping({"sources": [{"type": "web", "seed_urls": []}]})
+        config.config_from_mapping({"sources": [{"type": "web", "label": "Example Website", "seed_urls": []}]})
 
 
 @pytest.mark.parametrize("bad", ["ftp://a.example/", "not a url", "/relative/path"])
@@ -222,7 +222,7 @@ def test_every_seed_in_the_list_is_checked(bad):
 def test_every_seed_names_the_github_account_it_belongs_to():
     """A crawl starting in two GitHub accounts names both, not only the first."""
     cfg = config.config_from_mapping({"sources": [{
-        "type": "web",
+        "type": "web", "label": "Example Website",
         "seed_urls": ["https://github.com/example-org/tools",
                       "https://github.com/other-org/tools"],
     }]})

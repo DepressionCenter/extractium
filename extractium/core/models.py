@@ -59,6 +59,29 @@ from extractium.core.embed import (
 # search clients key display rules on it.
 SOURCE_TYPES = frozenset({"kb", "github", "web", "youtube", "local"})
 
+# The display name used when a record is built without one. A build reads
+# its labels from the configuration, where every source must name itself;
+# these cover records made outside a build, such as by a plugin under test
+# or by a program that uses this package as a library. They are deliberately
+# generic, because the useful name ("Peer-to-Peer Program", "Video Library")
+# is knowledge the configuration holds and this file cannot guess.
+#
+# Keyed on source_type rather than on the configured source type, because a
+# web source pointed at a TeamDynamix portal yields "kb" records: the site
+# handler decides, not the configuration entry.
+DEFAULT_SOURCE_LABELS = {
+    "kb": "Knowledge Base",
+    "github": "GitHub",
+    "web": "Website",
+    "youtube": "YouTube Channel",
+    "local": "Local Files",
+}
+
+# Longest a source label may be. Long enough for a program or center name,
+# short enough to head a section in llms.txt and to sit in a search result
+# without wrapping.
+MAX_SOURCE_LABEL_CHARS = 60
+
 # Every value a parent's content_type may hold.
 # "manifest" is a project or build file indexed as text (a pyproject.toml,
 # a DESCRIPTION, a Dockerfile): short, and often a faster explanation of a
@@ -114,6 +137,40 @@ def _check_local_marker(url, local):
         raise ValueError(f"a {LOCAL_URL_PREFIX} URL must be marked local; got {url!r}.")
 
 
+def _resolve_source_label(value, source_type):
+    """
+    The display name to store on a record, filling in a generic one when
+    the caller gave none.
+
+    Every record carries a label, so a client never has to decide what to
+    show when the field is missing. A build overrides these defaults with
+    the label its configuration requires of each source.
+
+    Args:
+        value (str | None): the label the caller supplied, if any.
+        source_type (str): the record's source_type, already validated.
+
+    Returns:
+        str: the supplied label with surrounding blanks removed, or the
+        default for this source_type.
+
+    Raises:
+        ValueError: if the label is not text, or is longer than
+            MAX_SOURCE_LABEL_CHARS.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return DEFAULT_SOURCE_LABELS[source_type]
+    if not isinstance(value, str):
+        raise ValueError(f"source_label must be text; got {type(value).__name__}.")
+    label = value.strip()
+    if len(label) > MAX_SOURCE_LABEL_CHARS:
+        raise ValueError(
+            f"source_label must be {MAX_SOURCE_LABEL_CHARS} characters or fewer; "
+            f"got {len(label)}."
+        )
+    return label
+
+
 ### Source Output ###
 
 @dataclass(frozen=True)
@@ -130,6 +187,11 @@ class Document:
             text the chunker wraps itself.
         source_type (str): one of SOURCE_TYPES.
         content_type (str): one of CONTENT_TYPES.
+        source_label (str): the name a reader sees for the collection
+            this came from, such as "Peer-to-Peer Program". Blank or
+            absent takes the DEFAULT_SOURCE_LABELS entry for
+            source_type, so the field is never empty. A build replaces
+            it with the label its configuration gives the source.
         categories (tuple[str, ...]): hierarchy from the source,
             outermost first; empty when the source has none.
         local (bool): True for local-filesystem content, which every
@@ -138,8 +200,9 @@ class Document:
             fusion; greater than zero, 1.0 by default.
 
     Raises:
-        ValueError: if a field is blank, outside its vocabulary, or the
-            local flag disagrees with the URL prefix.
+        ValueError: if a field is blank, outside its vocabulary, longer
+            than its limit, or the local flag disagrees with the URL
+            prefix.
     """
 
     url: str
@@ -147,6 +210,7 @@ class Document:
     content: object
     source_type: str
     content_type: str
+    source_label: str = ""
     categories: tuple = ()
     local: bool = False
     weight: float = 1.0
@@ -155,6 +219,9 @@ class Document:
         _require_text(self.url, "url")
         _require_vocabulary(self.source_type, "source_type", SOURCE_TYPES)
         _require_vocabulary(self.content_type, "content_type", CONTENT_TYPES)
+        object.__setattr__(
+            self, "source_label", _resolve_source_label(self.source_label, self.source_type)
+        )
         if not (isinstance(self.weight, (int, float)) and self.weight > 0):
             raise ValueError(f"weight must be a number greater than zero; got {self.weight!r}.")
         _check_local_marker(self.url, self.local)
@@ -201,6 +268,8 @@ class Parent:
         host (str): lowercase host of u; empty for local files.
         source_type (str): one of SOURCE_TYPES.
         content_type (str): one of CONTENT_TYPES.
+        source_label (str): the name a reader sees for the collection
+            this section came from. Never empty; see Document.
         categories (tuple[str, ...]): hierarchy, outermost first.
         local (bool): True when the parent came from a local source.
         weight (float): per-document multiplier; greater than zero.
@@ -213,6 +282,7 @@ class Parent:
     host: str
     source_type: str
     content_type: str
+    source_label: str = ""
     categories: tuple = ()
     local: bool = False
     weight: float = 1.0
@@ -223,6 +293,9 @@ class Parent:
         _require_text(self.u, "u")
         _require_vocabulary(self.source_type, "source_type", SOURCE_TYPES)
         _require_vocabulary(self.content_type, "content_type", CONTENT_TYPES)
+        object.__setattr__(
+            self, "source_label", _resolve_source_label(self.source_label, self.source_type)
+        )
         if not (isinstance(self.weight, (int, float)) and self.weight > 0):
             raise ValueError(f"weight must be a number greater than zero; got {self.weight!r}.")
         _check_local_marker(self.u, self.local)

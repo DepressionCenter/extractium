@@ -47,6 +47,12 @@ name: Eisenberg Family Depression Center Knowledge Base
 # ---------------------------------------------------------------------------
 # Sources
 #
+# Every source carries a label: the name a reader sees for it. Five of the
+# sources below are websites, so without one a search result could only say
+# "web", and nobody could tell the main site from the Peer-to-Peer program.
+# These labels head the sections of dist/llms.txt, so keep them the names the
+# center actually uses.
+#
 # A page two sources both reach is indexed once, by whichever reached it
 # first, and the build says how many pages that happened to. So an overlap
 # costs duplicated fetching rather than a failed build. It is still worth
@@ -63,6 +69,7 @@ sources:
   #    wandering into the rest of teamdynamix.umich.edu.
   #    Short link: https://michmed.org/efdc-kb
   - type: web
+    label: Research Resource Library
     seed_url: https://teamdynamix.umich.edu/TDClient/210/DepressionCenter/Home/
 
   # 2. EFDC Open Source Hub. This site links out to many repositories under
@@ -71,12 +78,14 @@ sources:
   #    names are. The build counts them and names them once at the end, which
   #    is the guardrail working rather than an error. See github_owners below.
   - type: web
+    label: Open Source Hub
     seed_url: https://code.depressioncenter.org/
 
   # 3. The center's own GitHub repositories, read through the GitHub API
   #    rather than scraped page by page. Set GITHUB_TOKEN in the environment
   #    to raise the request limit; the same content is read without one.
   - type: github_api
+    label: Code Repositories
     org: DepressionCenter
     include_forks: false        # a fork and its original are near-identical
     include_archived: true      # archived documentation is still documentation
@@ -92,6 +101,7 @@ sources:
   #    from both addresses is fetched once and indexed once. One page
   #    budget, and one set of patterns, too.
   - type: web
+    label: Depression Center Website
     seed_urls:
       - https://depressioncenter.org/
       - https://depressioncenter.org/outreach-education/depression-center-toolkit
@@ -99,6 +109,7 @@ sources:
   # 5. Peer-to-Peer Depression Awareness Program Resource Center. Its own
   #    host, so it cannot overlap with source 4.
   - type: web
+    label: Peer-to-Peer Program
     seed_url: https://p2p.depressioncenter.org/
 
   # 6. EFDC YouTube channel: https://www.youtube.com/@DepressionCenter
@@ -109,6 +120,7 @@ sources:
   #    environment, and the channel id rather than the @handle.
   #
   #- type: youtube
+  #  label: Video Library
   #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
   #  languages: [en]
 
@@ -132,9 +144,9 @@ sources:
   #    the Depression Center's deposits in Deep Blue.
   #
   #- type: dspace
+  #  label: Deep Blue Documents
   #  api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
   #  site_url: https://deepblue.lib.umich.edu
-  #  label: Deep Blue Documents
   #  collections:
   #    - 3acf951c-e107-4b8d-8f7d-ced171665b11    # Eisenberg Family Depression Center
   #    - 7503b0dc-27a2-4ce9-bcbc-50b339ecb486    # MeTRIC
@@ -147,6 +159,7 @@ sources:
   #    than project documentation. Add it if you want it in the index.
   #
   #- type: web
+  #  label: Campus Mind Works
   #  seed_url: https://campusmindworks.org/
 
 

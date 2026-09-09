@@ -329,7 +329,7 @@ The design is [Indexing a DSpace repository](dspace-repository-indexing.md). Rea
 
 ### After Phase 13
 
-Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; speech-to-text for videos without captions; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and version 3 is a task for that repository, not this one.
+Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; speech-to-text for videos without captions; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one.
 
 
 ## Checks made outside the code

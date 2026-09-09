@@ -56,9 +56,9 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. The GitHub handler additionally keeps a crawl to the accounts the operator named, and offers the API source for a GitHub seed, through the three optional handler hooks. |
 | GitHub source | `extractium/sources/github_api.py`, `github_client.py`, `github_files.py` | Working, and registered as an entry point. Reads an organization, a user, or one repository through the REST API: complete tree inventory with subtree walking, documentation and project manifests in full, file bodies cached by blob SHA, rate-limit headers obeyed. Three ways of reading GitHub are tried in order, and every repository's tier is reported. See [GitHub repository indexing](github-repository-indexing.md). |
 | Other sources | `extractium/sources/youtube.py` | Placeholder file. It arrives in phase 11. |
-| Adapters | `extractium/adapters/container.py`, `llmstxt.py`, `sqlite_out.py` | Working, and registered as entry points. The container writer produces the version 3 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`; the SQLite writer produces `compendium.sqlite`, the same content in tables a SQL consumer can query. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
+| Adapters | `extractium/adapters/container.py`, `llmstxt.py`, `sqlite_out.py` | Working, and registered as entry points. The container writer produces the version 4 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`; the SQLite writer produces `compendium.sqlite`, the same content in tables a SQL consumer can query. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
 | Local source | `extractium/sources/local.py` | Working, and registered as an entry point. Reads Markdown, plain text, and HTML from a folder; marks every document `local`; records a path relative to that folder as the URL; refuses a file whose real location is outside it. |
-| Clients | `extractium/search.py`, `clients/js/extractium-client.js` | Working. Each reads the version 3 container, refuses a file that fails any reader check, and runs the same hybrid search: cosine similarity, BM25, reciprocal rank fusion, a corpus-relative relevance cutoff, diversity selection with a per-section cap, and resolution of a matched window to its whole section. The caller supplies the query embedder. A committed golden container and query vector hold both to the same ranking. |
+| Clients | `extractium/search.py`, `clients/js/extractium-client.js` | Working. Each reads the version 4 container, refuses a file that fails any reader check, and runs the same hybrid search: cosine similarity, BM25, reciprocal rank fusion, a corpus-relative relevance cutoff, diversity selection with a per-section cap, and resolution of a matched window to its whole section. The caller supplies the query embedder. A committed golden container and query vector hold both to the same ranking. |
 | Operations | `run.sh`, `run.bat`, `requirements-lock.txt`, `.github/workflows/build-compendium.yml`, `examples/data-repo/` | Working. One command builds locally on either platform from a hash-checked lock file; the workflow runs weekly and on a button press, reuses the crawl cache between runs, and publishes through the official GitHub Pages actions only. The data-repository template is what an organization copies for its own content. |
 | Command line | `extractium/cli.py` | Working. `extractium build --config config.yaml`, with `--out-dir`, `--max-pages`, and `--float32-vecs`; progress on standard error, the summary on standard output, and a distinct exit code for a bad configuration, an empty crawl, and an unwritable output. |
 
@@ -129,13 +129,15 @@ The first loader accepted one `seed_url` and a handful of crawl settings.
 Specification: section 12.
 
 
-### 6. The container is version 3 from the first release
+### 6. The container never carried version 2's waste
 
 Field Station AI's version 2 file duplicates every child's text, heading, URL, and facets. Measured on the real index, that is a third of a 10 MB file, and no search step reads it.
 
-**Decision:** Extractium writes version 3 only: children are column arrays of parent index and character offsets, and everything else is read from the parent. Field Station AI keeps its own version 2 file and is unaffected; moving it to the Extractium client is a later task in that repository.
+**Decision:** Extractium started at version 3 and writes version 4 today: children are column arrays of parent index and character offsets, and everything else is read from the parent. Field Station AI keeps its own version 2 file and is unaffected; moving it to the Extractium client is a later task in that repository.
 
 **Why:** there is no compatibility obligation to carry the waste, and doing it now avoids a migration later.
+
+Version 4 added `source_label` to every parent, which is what lets a client name the collection an answer came from. See the [container format](container-format.md) page for the versioning rule and why adding that field justified a new version.
 
 Specification: section 4 and the [container format](container-format.md) page.
 

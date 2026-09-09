@@ -11,7 +11,7 @@ tests/test_search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -76,7 +76,7 @@ def sample_header(**overrides):
     """A minimal but complete two-window header."""
     header = {
         "format": "extractium-compendium",
-        "v": 3,
+        "v": 4,
         "extractium": "0.1.0",
         "builtAt": "2026-01-02T03:04:05Z",
         "site": "Example Org",

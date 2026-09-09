@@ -11,6 +11,7 @@ tests/test_cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -145,6 +146,7 @@ def test_build_writes_every_configured_output(build_workspace, capsys):
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
         outputs:
           - type: container
           - type: llmstxt
@@ -159,9 +161,40 @@ def test_build_writes_every_configured_output(build_workspace, capsys):
     assert (out_dir / "llms-full.txt").exists()
     header = read_container(out_dir / "kb-index.json")
     assert header["site"] == "Example Org"
-    assert header["v"] == 3
+    assert header["v"] == 4
     assert len(header["parents"]) == 2
     assert capsys.readouterr().out.count("wrote    :") == 3
+
+
+def test_the_label_a_source_is_given_reaches_every_output(build_workspace):
+    """
+    The source itself yields no label, so this proves the build applies the
+    configured one rather than leaving the generic fallback in place.
+    """
+    config = write_config(build_workspace, """
+        name: Example Org
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Peer Program
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    out_dir = build_workspace / "dist"
+    header = read_container(out_dir / "kb-index.json")
+    assert all(p["source_label"] == "Peer Program" for p in header["parents"])
+    assert "## Peer Program" in (out_dir / "llms.txt").read_text(encoding="utf-8")
+
+
+def test_a_source_missing_its_label_stops_the_build_with_a_config_error(build_workspace):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_CONFIG
 
 
 def test_build_defaults_to_the_container_and_llmstxt_outputs(build_workspace):
@@ -169,6 +202,7 @@ def test_build_defaults_to_the_container_and_llmstxt_outputs(build_workspace):
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
@@ -181,6 +215,7 @@ def test_build_names_the_index_after_the_first_page_when_the_file_does_not(build
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     cli.main(["build", "--config", config])
@@ -198,6 +233,7 @@ def test_out_dir_flag_overrides_the_configuration_file(build_workspace):
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     cli.main(["build", "--config", config, "--out-dir", "published"])
@@ -211,6 +247,7 @@ def test_float32_vecs_flag_changes_the_stored_vector_type(build_workspace):
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     cli.main(["build", "--config", config, "--float32-vecs"])
@@ -225,6 +262,7 @@ def test_max_pages_flag_is_validated_like_the_setting_it_overrides(build_workspa
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     code = cli.main(["build", "--config", config, "--max-pages", "0"])
@@ -249,6 +287,7 @@ def test_an_invalid_configuration_file_exits_two(build_workspace, capsys):
         max_page: 10
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     code = cli.main(["build", "--config", config])
@@ -262,6 +301,7 @@ def test_an_unknown_source_type_exits_two(build_workspace, capsys):
         cache_dir: .cache
         sources:
           - type: not_installed
+            label: Missing Source
     """)
 
     code = cli.main(["build", "--config", config])
@@ -275,8 +315,10 @@ def test_an_unknown_output_type_exits_two(build_workspace, capsys):
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
         outputs:
           - type: not_installed
+            label: Missing Source
     """)
 
     code = cli.main(["build", "--config", config])
@@ -292,6 +334,7 @@ def test_a_build_with_no_indexable_content_exits_three_and_writes_nothing(
         cache_dir: .cache
         sources:
           - type: empty
+            label: Empty Source
     """)
 
     code = cli.main(["build", "--config", config])
@@ -306,6 +349,7 @@ def test_an_unwritable_output_exits_four(build_workspace, monkeypatch, capsys):
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
         outputs:
           - type: container
     """)
@@ -327,6 +371,7 @@ def test_an_unexpected_failure_exits_one_without_a_traceback(build_workspace, mo
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
     monkeypatch.setattr(cli, "build_compendium", lambda *a, **k: 1 / 0)
 
@@ -365,6 +410,7 @@ def test_a_local_source_reaches_no_output_that_did_not_opt_in(build_workspace, c
         cache_dir: .cache
         sources:
           - type: local
+            label: Internal Notes
             path: notes
         outputs:
           - type: container
@@ -388,6 +434,7 @@ def test_an_output_that_opts_in_gets_the_local_content_and_is_named_in_the_summa
         cache_dir: .cache
         sources:
           - type: local
+            label: Internal Notes
             path: notes
         outputs:
           - type: container
@@ -415,6 +462,7 @@ def test_a_build_writes_both_review_reports_to_the_working_folder(build_workspac
         cache_dir: .cache
         sources:
           - type: local
+            label: Internal Notes
             path: notes
     """)
 
@@ -434,6 +482,7 @@ def test_the_review_summary_reports_what_was_found_without_claiming_what_was_not
         cache_dir: .cache
         sources:
           - type: local
+            label: Internal Notes
             path: notes
     """)
 
@@ -456,6 +505,7 @@ def test_turning_the_check_off_writes_no_report(build_workspace, capsys):
         phi_lint: 'off'
         sources:
           - type: local
+            label: Internal Notes
             path: notes
     """)
 
@@ -471,6 +521,7 @@ def test_a_report_that_cannot_be_written_exits_four(build_workspace, monkeypatch
         cache_dir: .cache
         sources:
           - type: local
+            label: Internal Notes
             path: notes
     """)
 
@@ -494,6 +545,7 @@ def test_progress_goes_to_standard_error_and_the_summary_to_standard_output(
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
     """)
 
     cli.main(["build", "--config", config])
@@ -532,7 +584,9 @@ def test_the_summary_calls_out_an_output_that_includes_local_content(build_works
         cache_dir: .cache
         sources:
           - type: fixed
+            label: Fixed Source
           - type: localfixture
+            label: Local Fixture
         outputs:
           - type: container
             include_local: true
@@ -589,6 +643,7 @@ def test_the_summary_says_how_completely_each_repository_was_read(build_workspac
         cache_dir: .cache
         sources:
           - type: reporting
+            label: Reporting Source
         outputs:
           - type: container
     """)
@@ -608,6 +663,7 @@ def test_the_accounts_a_build_may_read_come_from_its_own_sources(build_workspace
           - some-collaborator
         sources:
           - type: web
+            label: Example Website
             seed_url: https://github.com/example-org/example-tools
         outputs:
           - type: container
