@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -35,7 +35,10 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
 * [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
 * [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
-* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, planned for Phase 13.
+* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, planned for Phase 9.
+* [Reading a Site Behind Bot Protection](bot-protection-transport.md) — why some sites refuse the
+  crawler with a challenge, what was measured against three live sites, and the transport planned
+  for Phase 8.
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.

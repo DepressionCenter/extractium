@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -243,7 +243,7 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 | `exclude_repos` | list of text | empty | Repository names to leave out. An exclusion always wins. |
 | `include_forks` | true or false | `false` | Reads forks too. Off by default, because a project and several forks of it fill the index with near-identical copies. |
 | `include_archived` | true or false | `true` | Reads archived repositories. On by default, because archived documentation is still documentation. |
-| `include_code` | true or false | `true` | Reserved for code analysis, which arrives in phase 8. Accepted and reported today; it changes nothing yet. |
+| `include_code` | true or false | `true` | Reserved for code analysis, which arrives in phase 10. Accepted and reported today; it changes nothing yet. |
 | `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. |
 
 Give **exactly one** of `org`, `user`, or `url`. Two is an error, not a request for both.
@@ -291,11 +291,11 @@ A refused token drops to reading GitHub anonymously and says so. A misspelled ac
 
 At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listing a channel or playlist needs `YOUTUBE_API_KEY` in the environment.
 
-**Planned.** The loader accepts this type, but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 11.
+**Planned.** The loader accepts this type, but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 13.
 
 ### `dspace`: read a repository's deposits
 
-**Planned.** This type is not built yet, so a build that uses it stops with `no source named 'dspace'`. It arrives in phase 13.
+**Planned.** This type is not built yet, so a build that uses it stops with `no source named 'dspace'`. It arrives in phase 9.
 
 It will read scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue, through the repository's own interface rather than by crawling its pages. Collections are named in the settings file and never discovered, the same rule that governs GitHub accounts. Each deposit becomes one document carrying its abstract, its authors and subjects, its handle and DOI, and the text of its files, which the repository has already extracted, so no PDF or Word reader is added to this build.
 

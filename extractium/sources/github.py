@@ -2,8 +2,9 @@
 Summary: The GitHub site handler: an on-by-default plugin the web source
 consults for github.com, github.io, and generic git-host URLs. It
 rewrites Markdown and text blob URLs to their raw-content equivalent,
-extracts server-rendered wiki and release-notes pages, treats repository
-root and tree pages as link-discovery hops with no indexable content, and
+extracts server-rendered wiki and release-notes pages, reads an account's
+GitHub Pages site as the static HTML it is, treats repository root and tree
+pages as link-discovery hops with no indexable content, and
 owns the code-host exclude patterns (issues, commits, settings, and the
 like). It also keeps a crawl to the GitHub accounts the operator named,
 and offers the API source when a crawl is seeded at a GitHub address.
@@ -17,7 +18,7 @@ extractium/sources/github.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -43,7 +44,12 @@ import re
 from urllib.parse import urlparse
 
 from extractium.core.models import Extraction
-from extractium.sources.generic import UNTITLED, page_title, select_content
+from extractium.sources.generic import (
+    GENERIC_CONTENT_SELECTORS,
+    UNTITLED,
+    page_title,
+    select_content,
+)
 
 ### Constants ###
 
@@ -251,6 +257,48 @@ def owner_for_url(url):
     return None if owner in GITHUB_RESERVED_ACCOUNT_NAMES else owner
 
 
+def is_account_pages_url(url):
+    """
+    Whether a URL is a page of an account's GitHub Pages site.
+
+    A Pages site is ordinary static HTML that the site's author wrote and
+    the host served whole, so its content is readable. That makes it
+    unlike every other address on a git host, where the page a crawler
+    receives is a shell the browser fills in.
+
+    Args:
+        url (str): any URL.
+
+    Returns:
+        bool: True for an <account>.github.io address. A Pages site served
+        from a custom domain is not recognizable from its address, and is
+        read by the generic handler instead, which reaches the same
+        content.
+    """
+    return bool(_ACCOUNT_PAGES_HOST_RE.match(urlparse(url).netloc.lower()))
+
+
+def pages_categories(url):
+    """
+    The hierarchy a GitHub Pages address sits in, outermost first: the
+    account that publishes the site, then the folders above the page.
+
+    Kept apart from repository_categories because the path of a Pages
+    address holds no repository name. Reading its first two segments as an
+    owner and a repository, which is right for github.com, would file a
+    page under folder names that mean nothing.
+
+    Args:
+        url (str): an <account>.github.io URL.
+
+    Returns:
+        tuple[str, ...]: the account, then each folder above the page.
+    """
+    account = _ACCOUNT_PAGES_HOST_RE.match(urlparse(url).netloc.lower()).group(1)
+    segments = [s for s in urlparse(url).path.split("/") if s]
+    return (account, *segments[:-1])
+
+
 def repository_categories(url):
     """
     The hierarchy a git-host URL sits in, outermost first: the owner and
@@ -318,12 +366,14 @@ def accounts_named_by(sources):
 class GitHubHandler:
     """
     Reads the server-rendered parts of a git host: wiki pages, release
-    notes, and Markdown or text files through their raw URLs. Repository
-    root, tree, and every other view is a link-discovery hop only.
+    notes, Markdown or text files through their raw URLs, and the pages of
+    an account's GitHub Pages site. Repository root, tree, and every other
+    view is a link-discovery hop only.
 
-    TODO: a GitHub Pages site (<owner>.github.io) is plain static HTML
-    that the generic selectors could read; this handler still treats it
-    as a link hop, the behaviour of the original script.
+    A Pages site is read with the same selectors as any other website,
+    because that is what it is: static HTML its author wrote. The handler
+    still claims those addresses rather than leaving them to the generic
+    handler, so the account rule below applies to them.
     """
 
     name = "github"
@@ -460,10 +510,22 @@ class GitHubHandler:
 
         A raw file arrives already converted to a clean document (see
         extractium.core.chunk.markdown_text_to_soup), so its body is
-        returned whole. Wiki and release-notes pages are read through
-        their selectors with boilerplate stripped. Everything else on a
-        git host is a client-hydrated shell with nothing to read.
+        returned whole. A GitHub Pages address is static HTML and is read
+        with the ordinary website selectors. Wiki and release-notes pages
+        are read through their own selectors with boilerplate stripped.
+        Everything else on a git host is a client-hydrated shell with
+        nothing to read.
         """
+        if is_account_pages_url(url):
+            node = select_content(soup, GENERIC_CONTENT_SELECTORS, require_text=False)
+            if node is None:
+                return None
+            return Extraction(
+                title=page_title(soup) or UNTITLED,
+                node=node,
+                categories=pages_categories(url),
+            )
+
         categories = repository_categories(url)
         if is_git_blob_text_url(url):
             body = soup.find("body")

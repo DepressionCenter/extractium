@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: How the Extractium codebase is put together today, which parts
 are finished, and the design decisions that have been settled, each with
 the reason and a pointer to where it is specified.
@@ -55,7 +55,7 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Other adapters | `extractium/adapters/okf.py` | Placeholder file. |
 | Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. The GitHub handler additionally keeps a crawl to the accounts the operator named, and offers the API source for a GitHub seed, through the three optional handler hooks. |
 | GitHub source | `extractium/sources/github_api.py`, `github_client.py`, `github_files.py` | Working, and registered as an entry point. Reads an organization, a user, or one repository through the REST API: complete tree inventory with subtree walking, documentation and project manifests in full, file bodies cached by blob SHA, rate-limit headers obeyed. Three ways of reading GitHub are tried in order, and every repository's tier is reported. See [GitHub repository indexing](github-repository-indexing.md). |
-| Other sources | `extractium/sources/youtube.py` | Placeholder file. It arrives in phase 11. |
+| Other sources | `extractium/sources/youtube.py` | Placeholder file. It arrives in phase 13. |
 | Adapters | `extractium/adapters/container.py`, `llmstxt.py`, `sqlite_out.py` | Working, and registered as entry points. The container writer produces the version 4 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`; the SQLite writer produces `compendium.sqlite`, the same content in tables a SQL consumer can query. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
 | Local source | `extractium/sources/local.py` | Working, and registered as an entry point. Reads Markdown, plain text, and HTML from a folder; marks every document `local`; records a path relative to that folder as the URL; refuses a file whose real location is outside it. |
 | Clients | `extractium/search.py`, `clients/js/extractium-client.js` | Working. Each reads the version 4 container, refuses a file that fails any reader check, and runs the same hybrid search: cosine similarity, BM25, reciprocal rank fusion, a corpus-relative relevance cutoff, diversity selection with a per-section cap, and resolution of a matched window to its whole section. The caller supplies the query embedder. A committed golden container and query vector hold both to the same ranking. |

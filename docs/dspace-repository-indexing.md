@@ -13,13 +13,13 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This page describes a planned source plugin that reads scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue. It explains why the ordinary web crawler cannot read one, what the repository's own interface offers instead, and the shape of the plugin that would use it. It is the design for Phase 13 of the [implementation plan](implementation-plan.md); none of it is built yet.
+This page describes a planned source plugin that reads scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue. It explains why the ordinary web crawler cannot read one, what the repository's own interface offers instead, and the shape of the plugin that would use it. It is the design for Phase 9 of the [implementation plan](implementation-plan.md); none of it is built yet.
 
 Read it before starting that phase. Everything here about the interface was checked against Deep Blue on 2026-09-09, and the results are recorded rather than assumed.
 
 ## Who this page is for
 
-Whoever builds Phase 13, and anyone deciding whether to point Extractium at a repository of their own. You do not need to know DSpace. You do need to know what a knowledge base is for.
+Whoever builds Phase 9, and anyone deciding whether to point Extractium at a repository of their own. You do not need to know DSpace. You do need to know what a knowledge base is for.
 
 ## Why the crawler cannot read this
 
@@ -251,11 +251,11 @@ Optical character recognition on image-only deposits. Parsing PDFs, Word documen
 
 Deep Blue cannot be crawled, and does not need to be. It publishes a plain interface that hands over a collection's deposits with their abstracts, their identifiers, and the text of their files already extracted, and it says when each one last changed so a rebuild reads only what moved. The work is a source plugin, one new `source_type`, and no new dependency. Build it as `dspace` rather than as Deep Blue, because everything here is standard and the next repository somebody asks about will work the same way.
 
-Phase 13 of the [implementation plan](implementation-plan.md) holds the deliverables and the finishing conditions.
+Phase 9 of the [implementation plan](implementation-plan.md) holds the deliverables and the finishing conditions.
 
 ## Additional Resources
 
-- [Implementation plan](implementation-plan.md) — Phase 13 and the order of work.
+- [Implementation plan](implementation-plan.md) — Phase 9 and the order of work.
 - [Extractium specification](extractium-spec.md) — plugin kinds, records, and the source table.
 - [GitHub repository indexing](github-repository-indexing.md) — the earlier case of reading an interface instead of scraping pages.
 - [Configuration reference](configuration.md) — every setting a build accepts.
