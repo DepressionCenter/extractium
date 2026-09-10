@@ -3,10 +3,10 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: The design for reading GitHub repositories: the three-tier
 ingestion ladder in Phase 7, and the lightweight static code analysis in
-Phase 8. Covers URL detection, authentication, repository selection, file
+Phase 10. Covers URL detection, authentication, repository selection, file
 filtering, caching, the Tree-sitter language set, the records produced,
 and what each phase must prove before it is done.
 Notes: See README file for documentation and full license information.
@@ -27,7 +27,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This page explains how Extractium reads a GitHub organization, user, or repository. It covers two phases of work. Phase 7 adds a source that talks to the GitHub API instead of scraping web pages, and it always keeps working: if a token is missing it uses the public API, and if the API cannot be used at all it falls back to a documentation-only crawl. Phase 8 adds fast, local code analysis on top, so a search can find where a function is defined and what calls it.
+This page explains how Extractium reads a GitHub organization, user, or repository. It covers two phases of work. Phase 7 adds a source that talks to the GitHub API instead of scraping web pages, and it always keeps working: if a token is missing it uses the public API, and if the API cannot be used at all it falls back to a documentation-only crawl. Phase 10 adds fast, local code analysis on top, so a search can find where a function is defined and what calls it.
 
 Read this page before starting either phase. The order of work and the "done when" rules live in the [implementation plan](implementation-plan.md); the settled design rules live in the [specification](extractium-spec.md). This page is the detail those two point at.
 
@@ -39,17 +39,17 @@ You are about to build, review, or audit the GitHub parts of Extractium. You kno
 
 ## What changed from the earlier plan
 
-The plan used to put the GitHub API source and the Open Knowledge Format output together in one Phase 7. That has been split three ways.
+Reading a code host is three separate pieces of work, in three separate phases.
 
 | Phase | Work | Why it is on its own |
 |---|---|---|
 | 7 | The GitHub API source: documentation, manifests, and the ingestion ladder | About one week. Useful on its own, with no parser involved. |
-| 8 | Lightweight static code analysis | Larger than one week, and accepted as such. It needs Phase 7's file contents to exist first. |
-| 9 | The Open Knowledge Format output | Nothing to do with GitHub. It is an output format of equal standing to the container file, and it serializes whatever the build produced, whatever the source was. |
+| 10 | Lightweight static code analysis | Larger than one week, and accepted as such. It needs Phase 7's file contents to exist first. |
+| 11 | The Open Knowledge Format output | Nothing to do with GitHub. It is an output format of equal standing to the container file, and it serializes whatever the build produced, whatever the source was. |
 
-Splitting Phase 9 out matters for more than tidiness. An adapter that arrives in a GitHub phase invites the mistake of writing a GitHub-shaped Open Knowledge Format. The format has to work for a TeamDynamix portal and a local folder in exactly the same way.
+Keeping the Open Knowledge Format out of a GitHub phase matters for more than tidiness. An adapter that arrives alongside a code host invites the mistake of writing a GitHub-shaped format. It has to work for a TeamDynamix portal and a local folder in exactly the same way.
 
-Everything after Phase 9 moved down by two: the local MCP servers, the YouTube source, and the remote MCP examples are now Phases 10, 11, and 12.
+Only Phase 7 is built. The [implementation plan](implementation-plan.md) holds the current order of every phase.
 
 
 ## Phase 7: the GitHub API source
@@ -64,8 +64,8 @@ This is the heart of the phase. Extractium tries three ways of reading GitHub, i
 
 | Tier | Name | What it needs | Documentation | Code analysis |
 |---|---|---|---|---|
-| 1 | Authenticated API | `GITHUB_TOKEN` in the environment | Complete | Yes, from Phase 8 |
-| 2 | Unauthenticated API | Nothing | Complete | Yes, from Phase 8 |
+| 1 | Authenticated API | `GITHUB_TOKEN` in the environment | Complete | Yes, from Phase 10 |
+| 2 | Unauthenticated API | Nothing | Complete | Yes, from Phase 10 |
 | 3 | Documentation-only crawl | Nothing | Whatever the crawler can find | **No** |
 
 Three rules govern the ladder. They are the point of the design, so they are stated plainly.
@@ -117,7 +117,7 @@ DepressionCenter/ShareR          tier 2 (public API)            documentation, c
 DepressionCenter/FieldStationAI  tier 3 (documentation crawl)   documentation only; no code analysis
 ```
 
-The same fact is recorded inside the repository-map document that Phase 8 writes, so a person searching the finished index can see the coverage without going back to the build log. A gap the reader cannot see is a gap that will be mistaken for an answer.
+The same fact is recorded inside the repository-map document that Phase 10 writes, so a person searching the finished index can see the coverage without going back to the build log. A gap the reader cannot see is a gap that will be mistaken for an answer.
 
 ### Recognizing a GitHub address
 
@@ -293,7 +293,7 @@ GitHub gives every file body a blob SHA, which is an ideal cache key: the same S
     github/
         repositories/   Repository metadata and trees, keyed by repository and tree SHA
         blobs/          File bodies, keyed by blob SHA
-        analysis/       Phase 8 parser output, keyed by blob SHA and parser signature
+        analysis/       Phase 10 parser output, keyed by blob SHA and parser signature
 ```
 
 Nothing under `.kb_cache/github/` ever contains a token. A cache test checks this rather than assuming it.
@@ -311,7 +311,7 @@ sources:
     exclude_repos: []              # exclusion wins over inclusion
     include_forks: false
     include_archived: true
-    include_code: true             # Phase 8; ignored until then
+    include_code: true             # Phase 10; ignored until then
     max_file_bytes: 2000000
 ```
 
@@ -356,7 +356,7 @@ Every document keeps `source_type = github`, so existing filters keep working. T
 | Value | What it is |
 |---|---|
 | `manifest` | A project or build file indexed as text |
-| `repo_map` | The synthetic per-repository summary (written from Phase 8; a metadata-only version exists in Phase 7) |
+| `repo_map` | The synthetic per-repository summary (written from Phase 10; a metadata-only version exists in Phase 7) |
 
 `readme`, `text`, `wiki`, and `release_notes` are unchanged.
 
@@ -399,7 +399,7 @@ The site-handler protocol gained the three optional hooks: `configure`, `allows`
 - The whole existing test suite still passes.
 
 
-## Phase 8: lightweight static code analysis
+## Phase 10: lightweight static code analysis
 
 ### Goal
 
@@ -624,7 +624,7 @@ extractium/
 
 `github_api.py` contains no language-specific logic. The adapters contain no GitHub-specific logic. **If an adapter ever has to ask whether content came from GitHub in order to work, the separation has been broken and the design is wrong.**
 
-### Phase 8 is done when
+### Phase 10 is done when
 
 - Every language in the table above is either analyzed by Tree-sitter, analyzed by Ctags, or recorded at the file-metadata tier, with the gate result recorded for each.
 - Notebooks, R Markdown, Lua Server Pages, and HTML have their embedded code parsed, and notebook outputs are never read.
@@ -667,12 +667,12 @@ These are unresolved. Each is settled during implementation and the answer is re
 
 | Open item | Why it matters | Where it is decided |
 |---|---|---|
-| Grammar licenses, maintenance, and wheels for every language in the table | Decides which languages ship as requirements and which drop a tier | Phase 8, recorded in the language table |
-| PowerShell, MATLAB, Swift, Kotlin, and Stata grammar quality | These carry the most risk of being asked for and not delivered | Phase 8 |
-| The near-duplicate collapse fix for line fragments | Silently loses real symbols if unhandled | Phase 8, with a test |
-| Whether adding four `content_type` values needs anything of the two search clients | The vocabulary is pinned in the container format and both clients | Phase 8, against the reader checklist |
-| Whether the protected-health-information lint's patterns behave sensibly on code | Notebooks and fixtures can carry real data | Phase 8 |
-| `.m` belonging to both MATLAB and Objective-C | A wrong grammar produces confident nonsense | Phase 8 |
+| Grammar licenses, maintenance, and wheels for every language in the table | Decides which languages ship as requirements and which drop a tier | Phase 10, recorded in the language table |
+| PowerShell, MATLAB, Swift, Kotlin, and Stata grammar quality | These carry the most risk of being asked for and not delivered | Phase 10 |
+| The near-duplicate collapse fix for line fragments | Silently loses real symbols if unhandled | Phase 10, with a test |
+| Whether adding four `content_type` values needs anything of the two search clients | The vocabulary is pinned in the container format and both clients | Phase 10, against the reader checklist |
+| Whether the protected-health-information lint's patterns behave sensibly on code | Notebooks and fixtures can carry real data | Phase 10 |
+| `.m` belonging to both MATLAB and Objective-C | A wrong grammar produces confident nonsense | Phase 10 |
 
 
 ## Out of scope
@@ -684,7 +684,7 @@ Each can be revisited when there is a concrete retrieval benefit worth its cost.
 
 ## Conclusion
 
-Phase 7 makes GitHub an ordinary source rather than a special website, and makes it hard to break: a token helps, its absence costs nothing, and a total API failure still leaves you with the documentation and an honest account of what is missing. Phase 8 adds structure on top — symbols, signatures, imports, calls, and maps — while keeping the index small by linking to code instead of copying it.
+Phase 7 makes GitHub an ordinary source rather than a special website, and makes it hard to break: a token helps, its absence costs nothing, and a total API failure still leaves you with the documentation and an honest account of what is missing. Phase 10 adds structure on top — symbols, signatures, imports, calls, and maps — while keeping the index small by linking to code instead of copying it.
 
 The existing shape is unchanged throughout. Sources produce documents, one build produces one compendium, and every output serializes it without knowing where any of it came from. Start with the phase that follows the last completed note in the [implementation plan](implementation-plan.md).
 
@@ -700,7 +700,7 @@ The existing shape is unchanged throughout. Sources produce documents, one build
 * [Data flow](data-flow.md) — where content goes between a source and an output.
 * [Compliance and posture](compliance.md) — the controls that exist and the gaps that are known.
 * [GitHub REST API documentation](https://docs.github.com/en/rest) — the endpoints this source calls.
-* [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) — the parser library Phase 8 uses.
+* [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) — the parser library Phase 10 uses.
 * [Universal Ctags](https://ctags.io/) — the optional second parser.
 
 

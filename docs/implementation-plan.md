@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and thirteen
 phases of about one week each, with deliverables, tests, documentation,
@@ -58,7 +58,7 @@ Each decision is explained in the specification. They are listed here so a reade
 
 Each phase has a goal, a list of deliverables, the tests that prove them, the documentation that must change in the same phase, and a "done when" rule. A phase is about one week for one developer. A phase that grows past that is split, not stretched. The repository must pass its test suite at the end of every phase.
 
-Phase 8 is the one deliberate exception, and it says so in its own text. Splitting a parser layer in half would leave a release that parses code and renders nothing, which is worse than a longer phase. Every other phase keeps to the rule.
+Phase 10, the code analysis, is the one deliberate exception, and it says so in its own text. Splitting a parser layer in half would leave a release that parses code and renders nothing, which is worse than a longer phase. Every other phase keeps to the rule.
 
 
 ## Phases
@@ -216,93 +216,31 @@ The detailed design for this phase and the next is [GitHub repository indexing](
 
 *Finished 2026-09-09 on branch `phase-7-github-api-source`. The source is three modules rather than one: the REST transport, the path rules, and the source itself, because one file holding all three would have been about nine hundred lines. Two things came out differently from the design. Walking a truncated tree is keyed on each folder's path, not on its tree object: two folders with identical contents share one object name, and keying on that silently loses every file in the second one, which a test now pins. And the file classifier checks manifests before documentation, so `requirements.txt` keeps the label that says what it is instead of being read as prose. Review changed one default: a repository is read as one archive whenever it fits in memory, rather than only when many files are wanted. Requests are what a build runs out of, not bytes. Files taken out of an archive are stored under their blob names, so the archive route and the single-file route share one cache and an unchanged repository downloads nothing. The site-handler protocol gained the three optional hooks the design asked for; the TeamDynamix scope rule could now move out of core and has not, since that is not this phase's work.*
 
-### Phase 8: Lightweight static code analysis
+### Phase 8: Browser-compatible transport for challenged sites
 
-**Goal.** Make code findable — where a symbol is defined, what a file holds, what imports and calls it — with no clone, compiler, Language Server Protocol client, or language model.
+**Goal.** Read a site that sits behind a bot-protection service, without running a browser and without pretending to be a person.
 
-**This phase is larger than one week, and is planned that way.** It is not split further, because a parser layer that produces records nothing renders is worse than no parser layer. The design is in [GitHub repository indexing](github-repository-indexing.md).
+The design is [Reading a site behind bot protection](bot-protection-transport.md). Read it first; the behaviour was measured against three live sites and the findings are recorded there.
 
-**Deliverables.**
-
-- `extractium/code/`: a language registry, a Tree-sitter engine driven by per-language query files, an extractor for code embedded in notebooks, R Markdown, Lua Server Pages, and HTML, a relationship resolver, a deterministic renderer, and an optional Universal Ctags fallback.
-- Language coverage for Python, JavaScript, TypeScript, R, shell, Lua, C#, HTML, Markdown, SQL, Kotlin, Swift, PowerShell, and MATLAB, each subject to a recorded license, maintenance, and cross-platform wheel check. Stata is expected to fall to the file-metadata tier; whatever it does, the reason is recorded.
-- File records and symbol records carrying structure, never source bodies, per the specification, section 5. File summaries come from the file's own documentation, its header `Summary:` line, its directory README, or a template over parser facts — never from a guess.
-- Import edges; call edges labelled `resolved`, `probable`, or `unresolved`; reverse edges computed from the finished graph.
-- One repository map per repository, naming the tier that read it, and one owner map for an owner-level request.
-- Analysis caching keyed on blob SHA, parser, grammar, and schema version.
-- Two `content_type` values: `code_file` and `code_symbol`.
-- The fix for near-duplicate collapse treating two symbols in one file as two pages, which otherwise drops legitimate near-identical symbols.
-
-**Tests.** Per-language fixtures for every supported capture, including a file with recoverable syntax errors; embedded code in `.Rmd`, `.ipynb`, `.lsp`, and HTML, with notebook outputs never read; relationship resolution across a small synthetic repository at all three confidence levels; a fake Ctags executable proving no shell invocation and refusal of malformed output; cache invalidation on each key; a test that near-identical symbols in one file all survive; the security set — archive paths, symbolic links, traversal, shell characters and newlines in filenames, invalid UTF-8, impossible declared sizes.
-
-**Documentation.** `github-repository-indexing.md` records every gate result; `compliance.md` gains the no-execution and untrusted-content posture and the new dependencies; `architecture.md` and the specification's source table are updated; `configuration.md` gains `include_code` and `ctags_fallback`.
-
-**Done when** every listed language is parsed, analyzed by Ctags, or recorded at the metadata tier with the reason written down; symbol records carry structure and links but no bodies; maps name their tier; and the parser set installs and runs on Windows, macOS, and Linux on the oldest and newest supported Python versions.
-
-### Phase 9: Open Knowledge Format output
-
-**Goal.** Write the Open Knowledge Format, as an output of equal standing to the container file.
-
-This has nothing to do with GitHub. It is a serialization of whatever the build produced, and it must work identically for a TeamDynamix portal, a local folder, and a code repository. It is a phase of its own so that it is never built around one source's shape.
+**Why it is needed.** Three of the Eisenberg Family Depression Center's own five sources answer `403` with `cf-mitigated: challenge` to every request the crawler makes. The center cannot change the rule: the service is managed by the university, and a skip rule for a crawler is exactly what such a rule exists to refuse. Measured on 2026-09-10, the refusal has nothing to do with the `User-Agent`, which is what made it look unfixable: a real Chrome `User-Agent` is refused identically. It is the TLS handshake that is being read, and a crawler that completes the handshake the way a browser does is served normally, with no challenge raised and no script run.
 
 **Deliverables.**
 
-- `extractium/adapters/okf.py`: one Markdown file per parent group with OKF v0.2 front matter (`type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`), plus `index.md` and `log.md`. No archive; OKF defines none.
-- Local parents dropped unless the output opts in, through the shared adapter base, as for every other output.
+- A transport layer under `extractium/core/transport.py`: one function that returns the session the fetch layer should use, so the choice of transport is made in one place and every source inherits it.
+- `curl_cffi` as a runtime dependency, pinned in `requirements-lock.txt`, with its bundled native library recorded in `compliance.md`.
+- The crawler keeps its own `User-Agent`. It identifies itself as Extractium, with the project address, on every request. Only the handshake changes.
+- `robots.txt` is still read and still obeyed, and is still fetched before anything else. A site that refuses the crawler in `robots.txt` stays refused; this phase changes what a server will talk to, never what the crawler is allowed to ask for.
+- Conditional requests preserved: `If-None-Match` and `If-Modified-Since` must still produce `304`, or every rebuild becomes a full refetch.
+- A `transport` setting with values `auto`, `browser`, and `plain`. `auto` is the default: a plain request first, and a single retry over the browser transport when a response is a challenge. A build says which transport served each host, once per host, so the choice is never invisible.
+- The three-line explanation a person needs when a site is refused for a reason this phase cannot fix, such as an address-based block.
 
-**Tests.** Front matter validated against the fields above; the same compendium written from a portal crawl, a local folder, and a GitHub source produces the same structure with no source-specific branches; the local-content guardrail holds.
+**Tests.** Every response faked; no test contacts a live site. A challenged response retried once and only once; a plain `403` that is not a challenge left alone; `robots.txt` still obeyed when the browser transport is in use; a conditional request still returning `304`; the per-host report naming the transport; `transport: plain` refusing to retry; the delay between requests still applied on the retry path; no cookie, header, or fingerprint written to the cache or any output.
 
-**Documentation.** `configuration.md` marks the `okf` output as implemented; the specification's output table does the same.
+**Documentation.** `bot-protection-transport.md` records what was measured and when; `configuration.md` gains the `transport` setting; `compliance.md` gains the new dependency and the honest-identification posture; `troubleshooting.md` replaces the "site refuses the crawler" entry; `examples/config.efdc.yaml` loses its warning block.
 
-**Done when** the folder opens in any Markdown viewer and the adapter contains no reference to any particular source.
+**Done when** all five Depression Center sources index from one build, the crawler still names itself Extractium on every request, `robots.txt` is still obeyed, a second build of an unchanged site downloads nothing, and the build reports which transport served each host.
 
-### Phase 10: Local MCP servers
-
-**Goal.** Let an AI assistant on the user's own machine search the index.
-
-**Deliverables.**
-
-- `examples/mcp/local-node/`: a package run with `npx` that downloads and caches the container from its published URL, embeds queries with transformers.js, and exposes one `search_kb` tool over the JavaScript client.
-- `examples/mcp/local-python/`: the same over `extractium.search`.
-
-**Tests.** Tool call round trip against the golden container in each runtime.
-
-**Documentation.** `how-to/connect-an-mcp-client.md`; `SKILLS.md` updated.
-
-**Done when** an MCP client lists the tool and gets ranked parents back.
-
-### Phase 11: YouTube source
-
-**Goal.** Index a channel's captions.
-
-**Deliverables.**
-
-- `extractium/sources/youtube.py`: accepts explicit video ids, playlist ids, and a channel id; lists playlists and channels through the YouTube Data API with a key from the environment; fetches captions with `youtube-transcript-api`; caches each transcript under the cache folder; writes one document per video with parents that deep-link to a timestamp.
-- The data-repository template gains a committed transcript cache, because YouTube blocks requests from cloud runners and the Actions workflow must reuse transcripts fetched locally.
-
-**Tests.** Faked API and transcript responses; caching; the timestamp link format.
-
-**Documentation.** `configuration.md` gains the type; `troubleshooting.md` gains the blocked-IP entry.
-
-**Done when** a playlist indexes locally and the Actions run reuses the cache without touching YouTube.
-
-### Phase 12: Remote MCP examples and platform prompts
-
-**Goal.** Show how the published index is searched from a hosted endpoint, with no server of your own.
-
-**Deliverables.**
-
-- `examples/mcp/valtown/`: loads the container from its published URL, caches it in blob storage, and answers BM25 queries; optional embedding through an external service.
-- `examples/mcp/cloudflare/`: imports the SQLite output into D1 and answers BM25 queries from it, because the free plan's 10 ms CPU budget rules out parsing the container per request; optional query embedding through Workers AI with the same model.
-- `examples/wrappers/`: system prompts for hosted assistants that point at the static files.
-
-**Tests.** Each example runs locally with its platform's development tool against the golden container.
-
-**Documentation.** `how-to/deploy-a-remote-mcp-server.md`; the specification's access-tier table marks the tiers as implemented.
-
-**Done when** both examples answer a query from a fresh deployment.
-
-### Phase 13: DSpace repository source
+### Phase 9: DSpace repository source
 
 **Goal.** Index scholarly deposits held in a DSpace repository, starting with the University of Michigan Library's Deep Blue.
 
@@ -327,7 +265,93 @@ The design is [Indexing a DSpace repository](dspace-repository-indexing.md). Rea
 
 **Done when** both Deep Blue collections index from their identifiers alone, every deposit carries its abstract and its identifiers, a deposit whose file holds no readable text is still indexed and says so, and a second build of an unchanged collection downloads nothing.
 
-### After Phase 13
+### Phase 10: Lightweight static code analysis
+
+**Goal.** Make code findable — where a symbol is defined, what a file holds, what imports and calls it — with no clone, compiler, Language Server Protocol client, or language model.
+
+**This phase is larger than one week, and is planned that way.** It is not split further, because a parser layer that produces records nothing renders is worse than no parser layer. The design is in [GitHub repository indexing](github-repository-indexing.md).
+
+**Deliverables.**
+
+- `extractium/code/`: a language registry, a Tree-sitter engine driven by per-language query files, an extractor for code embedded in notebooks, R Markdown, Lua Server Pages, and HTML, a relationship resolver, a deterministic renderer, and an optional Universal Ctags fallback.
+- Language coverage for Python, JavaScript, TypeScript, R, shell, Lua, C#, HTML, Markdown, SQL, Kotlin, Swift, PowerShell, and MATLAB, each subject to a recorded license, maintenance, and cross-platform wheel check. Stata is expected to fall to the file-metadata tier; whatever it does, the reason is recorded.
+- File records and symbol records carrying structure, never source bodies, per the specification, section 5. File summaries come from the file's own documentation, its header `Summary:` line, its directory README, or a template over parser facts — never from a guess.
+- Import edges; call edges labelled `resolved`, `probable`, or `unresolved`; reverse edges computed from the finished graph.
+- One repository map per repository, naming the tier that read it, and one owner map for an owner-level request.
+- Analysis caching keyed on blob SHA, parser, grammar, and schema version.
+- Two `content_type` values: `code_file` and `code_symbol`.
+- The fix for near-duplicate collapse treating two symbols in one file as two pages, which otherwise drops legitimate near-identical symbols.
+
+**Tests.** Per-language fixtures for every supported capture, including a file with recoverable syntax errors; embedded code in `.Rmd`, `.ipynb`, `.lsp`, and HTML, with notebook outputs never read; relationship resolution across a small synthetic repository at all three confidence levels; a fake Ctags executable proving no shell invocation and refusal of malformed output; cache invalidation on each key; a test that near-identical symbols in one file all survive; the security set — archive paths, symbolic links, traversal, shell characters and newlines in filenames, invalid UTF-8, impossible declared sizes.
+
+**Documentation.** `github-repository-indexing.md` records every gate result; `compliance.md` gains the no-execution and untrusted-content posture and the new dependencies; `architecture.md` and the specification's source table are updated; `configuration.md` gains `include_code` and `ctags_fallback`.
+
+**Done when** every listed language is parsed, analyzed by Ctags, or recorded at the metadata tier with the reason written down; symbol records carry structure and links but no bodies; maps name their tier; and the parser set installs and runs on Windows, macOS, and Linux on the oldest and newest supported Python versions.
+
+### Phase 11: Open Knowledge Format output
+
+**Goal.** Write the Open Knowledge Format, as an output of equal standing to the container file.
+
+This has nothing to do with GitHub. It is a serialization of whatever the build produced, and it must work identically for a TeamDynamix portal, a local folder, and a code repository. It is a phase of its own so that it is never built around one source's shape.
+
+**Deliverables.**
+
+- `extractium/adapters/okf.py`: one Markdown file per parent group with OKF v0.2 front matter (`type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`), plus `index.md` and `log.md`. No archive; OKF defines none.
+- Local parents dropped unless the output opts in, through the shared adapter base, as for every other output.
+
+**Tests.** Front matter validated against the fields above; the same compendium written from a portal crawl, a local folder, and a GitHub source produces the same structure with no source-specific branches; the local-content guardrail holds.
+
+**Documentation.** `configuration.md` marks the `okf` output as implemented; the specification's output table does the same.
+
+**Done when** the folder opens in any Markdown viewer and the adapter contains no reference to any particular source.
+
+### Phase 12: Local MCP servers
+
+**Goal.** Let an AI assistant on the user's own machine search the index.
+
+**Deliverables.**
+
+- `examples/mcp/local-node/`: a package run with `npx` that downloads and caches the container from its published URL, embeds queries with transformers.js, and exposes one `search_kb` tool over the JavaScript client.
+- `examples/mcp/local-python/`: the same over `extractium.search`.
+
+**Tests.** Tool call round trip against the golden container in each runtime.
+
+**Documentation.** `how-to/connect-an-mcp-client.md`; `SKILLS.md` updated.
+
+**Done when** an MCP client lists the tool and gets ranked parents back.
+
+### Phase 13: YouTube source
+
+**Goal.** Index a channel's captions.
+
+**Deliverables.**
+
+- `extractium/sources/youtube.py`: accepts explicit video ids, playlist ids, and a channel id; lists playlists and channels through the YouTube Data API with a key from the environment; fetches captions with `youtube-transcript-api`; caches each transcript under the cache folder; writes one document per video with parents that deep-link to a timestamp.
+- The data-repository template gains a committed transcript cache, because YouTube blocks requests from cloud runners and the Actions workflow must reuse transcripts fetched locally.
+
+**Tests.** Faked API and transcript responses; caching; the timestamp link format.
+
+**Documentation.** `configuration.md` gains the type; `troubleshooting.md` gains the blocked-IP entry.
+
+**Done when** a playlist indexes locally and the Actions run reuses the cache without touching YouTube.
+
+### Phase 14: Remote MCP examples and platform prompts
+
+**Goal.** Show how the published index is searched from a hosted endpoint, with no server of your own.
+
+**Deliverables.**
+
+- `examples/mcp/valtown/`: loads the container from its published URL, caches it in blob storage, and answers BM25 queries; optional embedding through an external service.
+- `examples/mcp/cloudflare/`: imports the SQLite output into D1 and answers BM25 queries from it, because the free plan's 10 ms CPU budget rules out parsing the container per request; optional query embedding through Workers AI with the same model.
+- `examples/wrappers/`: system prompts for hosted assistants that point at the static files.
+
+**Tests.** Each example runs locally with its platform's development tool against the golden container.
+
+**Documentation.** `how-to/deploy-a-remote-mcp-server.md`; the specification's access-tier table marks the tiers as implemented.
+
+**Done when** both examples answer a query from a fresh deployment.
+
+### After Phase 14
 
 Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; speech-to-text for videos without captions; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one.
 
@@ -366,8 +390,9 @@ You now know the order of work and what "done" means for each phase. Start with 
 * [Extractium™ specification](extractium-spec.md) — the design each phase builds toward.
 * [Architecture and Current State](architecture.md) — what exists in the repository today.
 * [Container format](container-format.md) — the file written in Phase 3 and read from Phase 4 on.
-* [GitHub repository indexing](github-repository-indexing.md) — the detailed design for Phases 7 and 8.
-* [Indexing a DSpace repository](dspace-repository-indexing.md) — the detailed design for Phase 13.
+* [GitHub repository indexing](github-repository-indexing.md) — the detailed design for Phases 7 and 10.
+* [Indexing a DSpace repository](dspace-repository-indexing.md) — the detailed design for Phase 9.
+* [Reading a site behind bot protection](bot-protection-transport.md) — the detailed design for Phase 8, with what was measured against three live sites.
 * [Configuration reference](configuration.md) — the settings file as it exists now.
 * [Field Station AI](https://github.com/DepressionCenter/FieldStationAI) — the project the engine was extracted from and its bundled version 2 index.
 

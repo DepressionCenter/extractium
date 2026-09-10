@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -177,9 +177,9 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 
 | Field | Values |
 |---|---|
-| `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`; `repository` from phase 13 |
+| `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`; `repository` from phase 9 |
 | `source_label` | The name a reader sees for the source, from its required `label` setting. At most 60 characters, never empty. Groups the sections of `llms.txt` |
-| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`; `manifest` and `repo_map` from phase 7; `code_file` and `code_symbol` from phase 8 |
+| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`; `manifest` and `repo_map` from phase 7; `code_file` and `code_symbol` from phase 10 |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
 | `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
@@ -349,7 +349,7 @@ sources:
     exclude_repos: []               # an exclusion always wins
     include_forks: false
     include_archived: true
-    include_code: true              # reserved for phase 8; carried and reported today
+    include_code: true              # reserved for phase 10; carried and reported today
     max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
   - type: youtube
     label: Example Video Library

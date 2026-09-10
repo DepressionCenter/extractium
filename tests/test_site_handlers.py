@@ -14,7 +14,7 @@ tests/test_site_handlers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -49,6 +49,8 @@ RELEASE_URL = "https://github.com/example-org/example-repo/releases/tag/v1.0.0"
 MD_BLOB_URL = "https://github.com/example-org/example-repo/blob/main/docs/setup.md"
 TXT_BLOB_URL = "https://github.com/example-org/example-repo/blob/main/docs/release-notes.txt"
 GENERIC_URL = "https://example.org/about"
+PAGES_URL = "https://example-org.github.io/tools/catalogue"
+PAGES_ROOT_URL = "https://example-org.github.io/"
 
 BUILT_IN_HANDLERS = (generic.GenericHandler, tdx.TdxHandler, github.GitHubHandler)
 
@@ -56,6 +58,12 @@ BUILT_IN_HANDLERS = (generic.GenericHandler, tdx.TdxHandler, github.GitHubHandle
 def _soup_from_fixture(fixtures_dir, name):
     text = (fixtures_dir / name).read_text(encoding="utf-8")
     return BeautifulSoup(text, "html.parser")
+
+
+def _flat_text(node):
+    """A node's text with every run of whitespace collapsed, so an assertion
+    does not have to know where the fixture's source lines wrap."""
+    return " ".join(node.get_text(" ", strip=True).split())
 
 
 def _raw_soup_from_fixture(fixtures_dir, name, url):
@@ -252,6 +260,79 @@ def test_github_release_tag_content_selected_via_markdown_body(fixtures_dir):
     extraction = handler.extract(soup, RELEASE_URL)
     assert "Highlights" in extraction.node.get_text(" ", strip=True)
     assert handler.content_type(RELEASE_URL) == "release_notes"
+
+
+# ---------------------------------------------------------------------------
+# GitHub: an account's Pages site
+# ---------------------------------------------------------------------------
+
+def test_github_pages_site_is_read_as_static_html(fixtures_dir):
+    """
+    A Pages site is the one address on a git host whose HTML holds its own
+    content, so it is indexed rather than followed and discarded.
+    """
+    soup = _soup_from_fixture(fixtures_dir, "github_pages_site.html")
+    handler = github.GitHubHandler()
+
+    extraction = handler.extract(soup, PAGES_URL)
+
+    assert "fabricated catalogue of research software" in _flat_text(extraction.node)
+    # page_title drops the "| Site name" suffix, as it does for any site.
+    assert extraction.title == "Open Source Hub"
+    assert handler.content_type(PAGES_URL) == "page"
+
+
+def test_github_pages_content_is_taken_from_the_main_element(fixtures_dir):
+    """Site navigation and footer are boilerplate, not content."""
+    soup = _soup_from_fixture(fixtures_dir, "github_pages_site.html")
+
+    text = _flat_text(github.GitHubHandler().extract(soup, PAGES_URL).node)
+
+    assert "Synthetic footer boilerplate" not in text
+
+
+def test_github_pages_categories_are_the_account_then_its_folders():
+    """
+    A Pages path holds no repository name, so the first two segments are
+    folders rather than an owner and a repository.
+    """
+    assert github.pages_categories(PAGES_URL) == ("example-org", "tools")
+    assert github.pages_categories(PAGES_ROOT_URL) == ("example-org",)
+
+
+def test_a_pages_address_is_told_apart_from_every_other_git_host_address():
+    assert github.is_account_pages_url(PAGES_URL) is True
+    assert github.is_account_pages_url(PAGES_ROOT_URL) is True
+    assert github.is_account_pages_url(REPO_ROOT_URL) is False
+    assert github.is_account_pages_url(WIKI_URL) is False
+    assert github.is_account_pages_url(GENERIC_URL) is False
+
+
+def test_a_pages_site_on_a_custom_domain_is_left_to_the_generic_handler(fixtures_dir):
+    """
+    A custom domain says nothing about what serves it, so the GitHub
+    handler does not claim it. The generic handler reads the same markup
+    and reaches the same content.
+    """
+    custom = "https://code.example.org/tools/catalogue"
+    soup = _soup_from_fixture(fixtures_dir, "github_pages_site.html")
+
+    assert github.GitHubHandler().matches(custom) is False
+
+    text = _flat_text(generic.GenericHandler().extract(soup, custom).node)
+    assert "fabricated catalogue of research software" in text
+
+
+def test_a_pages_site_still_answers_to_the_account_rule():
+    """
+    Reading a Pages site does not loosen the deny-by-default account rule:
+    an account nobody named is still not followed there.
+    """
+    handler = github.GitHubHandler()
+    handler.allowed_accounts = frozenset({"example-org"})
+
+    assert handler.allows(PAGES_URL) is True
+    assert handler.allows("https://other-org.github.io/their-site/") is False
 
 
 # ---------------------------------------------------------------------------

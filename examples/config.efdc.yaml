@@ -2,7 +2,7 @@
 # examples/config.efdc.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-09
-# Last Modified: 2026-09-09
+# Last Modified: 2026-09-10
 # Summary: A build configuration for the Eisenberg Family Depression Center at
 # the University of Michigan. It gathers the center's public documentation --
 # the U-M Health Research Resource Library, the Open Source Hub, the GitHub
@@ -27,20 +27,24 @@ name: Eisenberg Family Depression Center Resource Library
 
 
 # ---------------------------------------------------------------------------
-# BEFORE THE FIRST RUN: the depressioncenter.org sites answer 403
+# BEFORE THE FIRST RUN: three of these sites answer 403 today
 #
-# As of 2026-09-09, depressioncenter.org, p2p.depressioncenter.org, and
-# code.depressioncenter.org all answer 403 to this crawler, with the header
-# "cf-mitigated: challenge". That is Cloudflare's interstitial, which asks a
-# visitor's browser to run a script before it will serve the page. A crawler
-# runs no scripts, so it cannot pass, and no change to this file can make it.
+# As of 2026-09-10, depressioncenter.org, p2p.depressioncenter.org, and
+# code.depressioncenter.org answer 403 to this crawler, with the header
+# "cf-mitigated: challenge". Sources 2, 4, and 5 therefore contribute
+# nothing, and the build says so page by page rather than failing. Sources 1
+# and 3 work today.
 #
-# The center owns those sites, so the fix belongs in Cloudflare: add a WAF
-# skip rule for the build, matched on its User-Agent or on the address it runs
-# from. Until then those three sources contribute nothing, and the build says
-# so page by page rather than failing.
+# This is not about the crawler's name. A real browser User-Agent is refused
+# in exactly the same way. What is being read is the TLS handshake, and a
+# crawler that opens its connections the way a browser does is served
+# normally, with no challenge raised. Those three sites were read that way on
+# 2026-09-10, at 200, with the crawler still identifying itself as
+# Extractium.
 #
-# teamdynamix.umich.edu serves the crawler normally, so source 1 works today.
+# Phase 8 of the implementation plan builds that transport. Until it ships,
+# nothing in this file can reach those three sites. See
+# docs/bot-protection-transport.md for what was measured.
 # ---------------------------------------------------------------------------
 
 
@@ -114,7 +118,7 @@ sources:
 
   # 6. EFDC YouTube channel: https://www.youtube.com/@DepressionCenter
   #
-  #    NOT YET AVAILABLE. The youtube source arrives in phase 11 of the
+  #    NOT YET AVAILABLE. The youtube source arrives in phase 13 of the
   #    implementation plan. Uncommenting this today stops the build with
   #    "no source named 'youtube'". It will also need YOUTUBE_API_KEY in the
   #    environment, and the channel id rather than the @handle.
@@ -137,7 +141,7 @@ sources:
   #
   #    Deep Blue publishes a machine interface instead, which already holds
   #    the text of every deposited file. Reading it is the dspace source,
-  #    which arrives in phase 13 of the implementation plan. Uncommenting
+  #    which arrives in phase 9 of the implementation plan. Uncommenting
   #    this today stops the build with "no source named 'dspace'".
   #
   #    Both collections belong to one source, because they are one thing:
