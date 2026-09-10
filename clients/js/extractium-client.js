@@ -1,5 +1,5 @@
 /*
- * Summary: The JavaScript client for a version 3 compendium: reads the
+ * Summary: The JavaScript client for a version 4 compendium: reads the
  * binary container back, checks it against the reader checklist, and runs
  * the hybrid search over it -- cosine similarity, BM25, reciprocal rank
  * fusion, a corpus-relative relevance threshold, diversity selection, and
@@ -15,7 +15,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-08
+ * Last Modified: 2026-09-09
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -39,7 +39,7 @@
 // anything else is read, so a file of some other shape that happens to
 // carry a .json name is refused rather than half-parsed.
 export const CONTAINER_FORMAT = 'extractium-compendium';
-export const CONTAINER_VERSION = 3;
+export const CONTAINER_VERSION = 4;
 
 // Width in bytes of one stored vector component, by container dtype.
 const DTYPE_WIDTHS = { int8: 1, float32: 4 };
@@ -93,7 +93,7 @@ export const RRF_K = 60;
 export const RRF_VECTOR_WEIGHT = 0.5;
 export const RRF_BM25_WEIGHT = 0.5;
 
-/** Thrown when a file is not a readable version 3 compendium. */
+/** Thrown when a file is not a readable version 4 compendium. */
 export class ContainerError extends Error {
     constructor(message) {
         super(message);
@@ -600,7 +600,7 @@ export class SearchIndex {
 /* ### Loading ### */
 
 /**
- * Reads a version 3 container and returns an index ready to search.
+ * Reads a version 4 container and returns an index ready to search.
  *
  * Every check in the container format's reader checklist runs here, so a
  * truncated, altered, or foreign file is refused with a message that
@@ -612,7 +612,7 @@ export class SearchIndex {
  *     When given, a file built with another model or width is refused,
  *     because vectors from two models are not comparable.
  * @returns {SearchIndex} The loaded compendium.
- * @throws {ContainerError} If the file is not a readable version 3
+ * @throws {ContainerError} If the file is not a readable version 4
  *     compendium, or does not match the embedder named above.
  */
 export function loadContainer(source, expected = {}) {

@@ -305,6 +305,7 @@ The options an explicit source takes. All of them are implemented; [configuratio
 ```yaml
 sources:
   - type: github_api
+    label: Example Repositories
     org: DepressionCenter          # exactly one of org, user, or url
     include_repos: []              # empty means all matching repositories
     exclude_repos: []              # exclusion wins over inclusion
@@ -325,6 +326,7 @@ Automatic handling needs no configuration at all, and that is the user-facing po
 ```yaml
 sources:
   - type: web
+    label: Example Website
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 

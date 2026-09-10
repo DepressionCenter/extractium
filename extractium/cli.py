@@ -35,6 +35,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-09"
 
 import argparse
+import dataclasses
 import sys
 
 import requests
@@ -142,7 +143,14 @@ def run_sources(config, registry, session, cache, progress):
         if hasattr(source, "configure"):
             source.configure(registry, settings)
         sources.append(source)
-        documents.extend(source.fetch(session, cache, progress))
+        # The configuration owns the display name, not the source: only the
+        # person who wrote the file knows which web source is the main site
+        # and which is a program microsite. Applying it here means no
+        # source, built-in or plugin, has to carry the setting itself.
+        documents.extend(
+            dataclasses.replace(document, source_label=entry.label)
+            for document in source.fetch(session, cache, progress)
+        )
     return documents, collect_notes(sources)
 
 

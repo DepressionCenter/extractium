@@ -71,6 +71,7 @@ Every request carries the User-Agent from your settings, and every site's `robot
 | `title` | The page title. |
 | `content` | The content node, or plain text. |
 | `source_type` | `kb`, `github`, `web`, `youtube`, or `local`. |
+| `source_label` | The name a reader sees for the source this came from, such as `Peer-to-Peer Program`. Taken from the `label` every source gives itself in the settings file. Two sources of the same `source_type` are told apart by this and nothing else. |
 | `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, or `video_transcript`. |
 | `categories` | The hierarchy from the source, outermost first. Empty when there is none. |
 | `local` | True when it was read from a folder on this machine. |

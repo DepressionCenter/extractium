@@ -11,7 +11,7 @@ extractium/adapters/llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,16 +40,6 @@ from extractium.adapters.base import output_compendium, prepare_out_dir
 
 INDEX_FILE = "llms.txt"
 FULL_FILE = "llms-full.txt"
-
-# Headings for the index file's sections, and the order they appear in.
-# A source type with no pages gets no heading rather than an empty one.
-SECTION_TITLES = (
-    ("kb", "Knowledge base articles"),
-    ("github", "Code repositories"),
-    ("web", "Web pages"),
-    ("youtube", "Video transcripts"),
-    ("local", "Local documents"),
-)
 
 # Longest excerpt shown after a page's link in the index file. Long enough
 # to tell two similarly named pages apart, short enough that the index
@@ -83,9 +73,9 @@ HOSTS_SHOWN = 3
 INDEX_ORIENTATION = (
     "This file is an index, not the content itself. Each entry below names one "
     "page, links to it, and quotes the opening of its text, so you can judge "
-    "whether a page answers your question before fetching it. Entries are "
-    "grouped by the kind of source they came from, in the order the pages were "
-    "found.",
+    "whether a page answers your question before fetching it. Each heading "
+    "names one of the sources this knowledge base was built from, and the "
+    "entries under it are the pages that came from that source.",
     f"{FULL_FILE}, written alongside this file, holds the complete text of every "
     f"page listed here, in the same order. Read that instead if you want "
     f"everything at once rather than following links.",
@@ -145,8 +135,8 @@ def pages_in_order(parents):
             output may write, in build order.
 
     Returns:
-        list[dict]: url, title, source_type, and the first section's text,
-        in first-appearance order.
+        list[dict]: url, title, source_label, and the first section's
+        text, in first-appearance order.
     """
     pages = {}
     for parent in parents:
@@ -155,10 +145,32 @@ def pages_in_order(parents):
         pages[parent.u] = {
             "url": parent.u,
             "title": page_title(parent.t),
-            "source_type": parent.source_type,
+            "source_label": parent.source_label,
             "text": parent.x,
         }
     return list(pages.values())
+
+
+def labels_in_order(pages):
+    """
+    The source names to head the index file's sections with.
+
+    Order is first appearance, which is the order the configuration lists
+    its sources, so a reader sees the collections in the order whoever
+    built the index thought of them. Two sources sharing a label are one
+    section on purpose: two sibling collections of the same repository
+    read as one place to a person looking for an answer.
+
+    Args:
+        pages (Iterable[dict]): the records pages_in_order returned.
+
+    Returns:
+        list[str]: distinct labels, in first-appearance order.
+    """
+    labels = {}
+    for page in pages:
+        labels.setdefault(page["source_label"], None)
+    return list(labels)
 
 
 ### File Bodies ###
@@ -242,7 +254,11 @@ def _preamble(compendium, page_count, orientation):
 def render_index(compendium):
     """
     The llms.txt body: a heading, a summary, and one link per page grouped
-    by the kind of source it came from.
+    under the name of the source it came from.
+
+    Grouping by the source's name rather than by its kind is what lets a
+    reader tell a main website from a program microsite, since both are
+    of kind "web". A source that contributed no page gets no heading.
 
     Args:
         compendium (extractium.core.models.Compendium): the build result,
@@ -253,10 +269,8 @@ def render_index(compendium):
     """
     pages = pages_in_order(compendium.parents)
     lines = _preamble(compendium, len(pages), INDEX_ORIENTATION)
-    for source_type, title in SECTION_TITLES:
-        group = [page for page in pages if page["source_type"] == source_type]
-        if not group:
-            continue
+    for title in labels_in_order(pages):
+        group = [page for page in pages if page["source_label"] == title]
         lines.append(f"## {title}")
         lines.append("")
         for page in group:

@@ -158,7 +158,7 @@ The original script crawls TeamDynamix, GitHub, and ordinary pages with one loop
 
 ### 3.1 Documents
 
-A source yields `Document` records: the source URL, a title, the content (a parsed HTML node or plain text), `source_type`, `content_type`, `categories`, and `local`. The core engine never sees a source's fetch details.
+A source yields `Document` records: the source URL, a title, the content (a parsed HTML node or plain text), `source_type`, `source_label`, `content_type`, `categories`, and `local`. The core engine never sees a source's fetch details.
 
 ### 3.2 Parents and children
 
@@ -178,6 +178,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | Field | Values |
 |---|---|
 | `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`; `repository` from phase 13 |
+| `source_label` | The name a reader sees for the source, from its required `label` setting. At most 60 characters, never empty. Groups the sections of `llms.txt` |
 | `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`; `manifest` and `repo_map` from phase 7; `code_file` and `code_symbol` from phase 8 |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
@@ -311,6 +312,7 @@ Minimal file:
 ```yaml
 sources:
   - type: web
+    label: Example Website
     seed_url: https://example.edu/TDClient/000/ExampleOrg/Home/
 ```
 
@@ -330,15 +332,18 @@ github_owners: []                   # extra GitHub accounts this build may follo
 
 sources:
   - type: web
+    label: Example Website
     seed_url: https://example.edu/TDClient/000/ExampleOrg/Home/
     include_patterns: []            # empty = scope from the seed URL
     crawl_exclude_patterns: []      # omit = handler defaults + asset extensions
     index_exclude_patterns: []
     site_handlers: [tdx, github]    # omit = all installed; [] = generic only
   - type: local
+    label: Internal Notes
     path: ./internal-docs
     include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
   - type: github_api
+    label: Example Repositories
     org: example-org                # exactly one of org, user, or url
     include_repos: []               # empty = every repository that matches
     exclude_repos: []               # an exclusion always wins
@@ -347,6 +352,7 @@ sources:
     include_code: true              # reserved for phase 8; carried and reported today
     max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
   - type: youtube
+    label: Example Video Library
     channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # needs YOUTUBE_API_KEY in the environment
     playlist_ids: []
     video_ids: []

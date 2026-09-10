@@ -9,6 +9,7 @@ tests/test_adapter_llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,9 +30,48 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-08"
 
+import dataclasses
+
 from extractium.adapters import llmstxt
 from extractium.adapters.llmstxt import LlmsTxtAdapter
-from tests.test_adapter_container import mixed_compendium, sample_compendium
+from tests.test_adapter_container import (
+    FIXED_BUILT_AT,
+    mixed_compendium,
+    sample_compendium,
+)
+from tests.test_build import document_from_fixture
+
+from extractium.core import build
+
+
+def two_website_compendium(fixtures_dir, embedder, second_label="Peer Program"):
+    """
+    Two pages from two sources that are both websites, so only the label
+    separates them.
+
+    Args:
+        fixtures_dir (pathlib.Path): the tests/fixtures folder.
+        embedder (Callable): the deterministic test embedder.
+        second_label (str): label for the second source. Passing the first
+            source's label proves two sources can share one heading.
+    """
+    documents = [
+        dataclasses.replace(
+            document_from_fixture(
+                fixtures_dir, "page_boilerplate_a.html", "https://example.org/team"
+            ),
+            source_label="Main Website",
+        ),
+        dataclasses.replace(
+            document_from_fixture(
+                fixtures_dir, "page_boilerplate_b.html", "https://peer.example.org/about"
+            ),
+            source_label=second_label,
+        ),
+    ]
+    return build.build_compendium(
+        documents, name="Example Org", embedder=embedder, built_at=FIXED_BUILT_AT
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -200,29 +240,71 @@ def test_index_starts_with_one_heading_and_a_summary(fixtures_dir, fake_embed_ch
     assert body.count("\n# ") == 0  # exactly one first-level heading
 
 
-def test_index_groups_pages_under_a_heading_for_their_kind_of_source(
+def test_index_groups_pages_under_the_name_of_the_source_they_came_from(
     fixtures_dir, fake_embed_chunks_core
 ):
     """
     The renderers describe whatever compendium they are handed; the
     local-content guardrail runs once in write() and hands them the
-    filtered result. Both source types are present here because this
-    renders the unfiltered build directly.
+    filtered result. Both sources are present here because this renders
+    the unfiltered build directly.
     """
     body = llmstxt.render_index(mixed_compendium(fixtures_dir, fake_embed_chunks_core))
 
-    assert "## Web pages" in body
-    assert "## Local documents" in body
-    assert body.index("## Web pages") < body.index("## Local documents")
+    assert "## Website" in body
+    assert "## Local Files" in body
+    assert body.index("## Website") < body.index("## Local Files")
 
 
-def test_index_omits_a_heading_for_a_source_type_with_no_pages(
+def test_index_heads_only_the_sources_that_contributed_a_page(
     fixtures_dir, fake_embed_chunks_core
 ):
     body = llmstxt.render_index(sample_compendium(fixtures_dir, fake_embed_chunks_core))
 
-    assert "## Web pages" in body
-    assert "## Knowledge base articles" not in body
+    assert "## Website" in body
+    assert "## Local Files" not in body
+
+
+def test_index_tells_two_sources_of_the_same_kind_apart(fixtures_dir, fake_embed_chunks_core):
+    """
+    The reason a label exists. Both of these are web sources, so grouping
+    by source_type would pile them under one heading and a reader could
+    not tell the main site from the program microsite.
+    """
+    compendium = two_website_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    body = llmstxt.render_index(compendium)
+
+    assert "## Main Website" in body
+    assert "## Peer Program" in body
+    assert body.index("## Main Website") < body.index("## Peer Program")
+
+
+def test_index_orders_its_sections_the_way_the_sources_were_listed(
+    fixtures_dir, fake_embed_chunks_core
+):
+    """First appearance, which is configuration order, not alphabetical."""
+    compendium = two_website_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    assert llmstxt.labels_in_order(
+        llmstxt.pages_in_order(compendium.parents)
+    ) == ["Main Website", "Peer Program"]
+
+
+def test_index_keeps_two_sources_sharing_a_label_in_one_section(
+    fixtures_dir, fake_embed_chunks_core
+):
+    """
+    Two sibling collections of one repository are one place to a person
+    looking for an answer, so one label means one heading.
+    """
+    compendium = two_website_compendium(
+        fixtures_dir, fake_embed_chunks_core, second_label="Main Website"
+    )
+
+    body = llmstxt.render_index(compendium)
+
+    assert body.count("## Main Website") == 1
 
 
 def test_full_file_gives_every_section_its_own_heading_and_source_line(

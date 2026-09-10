@@ -63,6 +63,7 @@ The file has three parts. Only `sources` is required.
 ```yaml
 sources:                 # required: at least one source
   - type: web
+    label: Example Knowledge Base
     seed_url: 'https://example.edu/TDClient/000/ExampleOrg/Home/'
 
 outputs:                 # optional: defaults to container + llmstxt
@@ -73,6 +74,8 @@ max_pages: 500           # optional global settings
 ```
 
 Each entry in `sources` and `outputs` names a `type` and then that type's own options. The type is the name of a plugin. The built-in types are listed below. A plugin you drop into the `plugins/` folder can add more.
+
+Every source also needs a `label`. See "Naming your sources" below.
 
 
 ## Global settings
@@ -130,7 +133,35 @@ The rule covers `github.com`, `raw.githubusercontent.com`, and `<account>.github
 
 ## Sources
 
-Every entry needs a `type`. The options below are per type. An option you leave out takes its default.
+Every entry needs a `type` and a `label`. The options below are per type. An option you leave out takes its default.
+
+
+### Naming your sources
+
+Every source must give itself a name:
+
+```yaml
+sources:
+  - type: web
+    label: Depression Center Website
+    seed_url: 'https://example.org/'
+
+  - type: web
+    label: Peer-to-Peer Program
+    seed_url: 'https://peer.example.org/'
+```
+
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `label` | text | none (required) | The name a reader sees for this source. At most 60 characters. |
+
+The label travels with every section the source produces. It heads a section in `llms.txt`, it is stored in the index as `source_label`, and a search client uses it to say where an answer came from.
+
+**Why it is required rather than guessed.** Both sources above are of type `web`. Nothing in the address or the page says which is the main site and which is a program microsite. Only you know that. Without a label, a search result could say no more than "web", and a reader could not tell the two apart.
+
+Keep it short and use the name people actually say. "Video Library" is better than "YouTube channel for the center".
+
+Two sources may share a label on purpose. Two sibling collections of one repository are one place to a person looking for an answer, so giving both the same label puts them under one heading.
 
 ### `web`: crawl a website
 
@@ -148,6 +179,7 @@ A short entry is normal:
 ```yaml
 sources:
   - type: web
+    label: Example Website
     seed_url: 'https://example.edu/TDClient/000/ExampleOrg/Home/'
 ```
 
@@ -158,6 +190,7 @@ Some sites have sections that do not link to one another: two sibling collection
 ```yaml
 sources:
   - type: web
+    label: Example Website
     seed_urls:
       - 'https://library.example/collections/first-collection'
       - 'https://library.example/collections/second-collection'
@@ -218,6 +251,7 @@ Give **exactly one** of `org`, `user`, or `url`. Two is an error, not a request 
 ```yaml
 sources:
   - type: github_api
+    label: Example Repositories
     org: DepressionCenter
     exclude_repos:
       - old-prototype
@@ -228,6 +262,7 @@ Most of the time you do not need this type at all. Point a `web` source at a Git
 ```yaml
 sources:
   - type: web
+    label: Example Website
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 
@@ -401,6 +436,7 @@ Leaving a list out gives you the default. Writing an empty list turns the defaul
 ```yaml
 sources:
   - type: web
+    label: Example Website
     seed_url: 'https://example.edu/docs/'
     crawl_exclude_patterns: []   # fetch everything in scope, with no exclusions
 ```

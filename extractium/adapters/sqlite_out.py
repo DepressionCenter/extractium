@@ -80,6 +80,7 @@ CREATE TABLE parents (
     host         TEXT NOT NULL,
     source_type  TEXT NOT NULL,
     content_type TEXT NOT NULL,
+    source_label TEXT NOT NULL,
     categories   TEXT NOT NULL,
     local        INTEGER NOT NULL,
     weight       REAL NOT NULL
@@ -186,7 +187,7 @@ def parent_rows(compendium):
     return [
         (
             pid, parent.id, parent.t, parent.x, parent.u, parent.host,
-            parent.source_type, parent.content_type,
+            parent.source_type, parent.content_type, parent.source_label,
             json.dumps(list(parent.categories), ensure_ascii=False),
             int(parent.local), parent.weight,
         )
@@ -286,7 +287,8 @@ class SqliteAdapter:
                                    meta_rows(compendium))
             connection.executemany(
                 "INSERT INTO parents (pid, id, t, x, u, host, source_type, content_type, "
-                "categories, local, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                "source_label, categories, local, weight) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 parent_rows(compendium),
             )
             connection.executemany(

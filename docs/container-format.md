@@ -3,8 +3,8 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-08
-Summary: Specification of the Extractium™ binary container (version 3):
+Last Modified: 2026-09-09
+Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
 for anyone writing a client that reads the file.
@@ -19,7 +19,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 # Extractium™
 
-## Container Format (version 3)
+## Container Format (version 4)
 
 [← Back to README](../README.md)
 
@@ -31,7 +31,7 @@ The container is the one file every Extractium client reads: a search index with
 
 ## Status of this format
 
-**Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v3_header.json` pins the header against a committed snapshot. The clients that read the file are scheduled in the [implementation plan](implementation-plan.md), Phase 4.
+**Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v4_header.json` pins the header against a committed snapshot. The clients that read the file are scheduled in the [implementation plan](implementation-plan.md), Phase 4.
 
 Version 3 replaces the version 2 layout that Field Station AI's `build-kb-index.py` writes. Field Station AI keeps its own version 2 file and is not affected by anything on this page. The differences are listed near the end, under "Changes from version 2".
 
@@ -66,7 +66,7 @@ A reader copies the vector bytes into a fresh buffer before viewing them as a ty
 | `site` | text | Display name of the knowledge base. Defaults to the title of the first page crawled. |
 | `sourceCount` | whole number | Number of distinct source URLs that contributed at least one parent. Pages visited but not indexed do not count. |
 | `embedding` | object | How the vectors were made. See the next table. |
-| `offsetUnit` | text | Unit of the child `start` and `end` columns. Always `utf16` in version 3. |
+| `offsetUnit` | text | Unit of the child `start` and `end` columns. Always `utf16` in version 4. |
 | `parents` | list | One record per section of text. See "Parents". |
 | `children` | object | Column arrays, one entry per search window. See "Children". |
 | `bm25` | object | Keyword statistics. See "BM25 statistics". |
@@ -102,6 +102,7 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `u` | text | Source URL. For local files, `local:` followed by the path relative to the source folder. |
 | `host` | text | Host name of `u`, lowercase. Empty for local files. |
 | `source_type` | text | Which kind of source the parent came from. One of: `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`. |
+| `source_label` | text | The name a reader sees for the source this parent came from, such as `Peer-to-Peer Program`. Never empty, and at most 60 characters. Set from the `label` each source must give itself in the configuration. Two sources of the same `source_type` are told apart by this and nothing else. |
 | `content_type` | text | What the page is. One of: `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`. |
 | `categories` | list of text | Hierarchy taken from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when the source has none. |
 | `local` | true or false | `true` when the parent came from a local-filesystem source. |
@@ -114,7 +115,7 @@ Field names `t`, `x`, and `u` are short on purpose: with thousands of parents, k
 
 A child is a small window of a parent: the unit that is embedded and searched. Searching small windows and returning the whole parent ("small to big" retrieval) gives precise matches with enough context to answer from.
 
-In version 3 a child carries no text of its own. `children` is an object of parallel arrays, all the same length:
+In version 4 a child carries no text of its own. `children` is an object of parallel arrays, all the same length:
 
 | Column | Type | Required | Meaning |
 |---|---|---|---|
@@ -202,6 +203,13 @@ Children have no stored id. When a client or a cache needs one, it is the parent
 Ids survive a rebuild as long as the page URL and heading are unchanged. A changed heading changes the id; that is intended, because the section is then a different section.
 
 
+## Changes from version 3
+
+- Parents gained `source_label`, the name a reader sees for the source a section came from.
+
+This bumped `v` even though it only adds a field, because the field is present on every parent of a version 4 file and absent from every parent of a version 3 one. A client that groups results by source would quietly produce a wrong page against the older file rather than failing, and a silent wrong answer is worse than a refusal.
+
+
 ## Changes from version 2
 
 Version 2 is the layout Field Station AI's `build-kb-index.py` writes. Readers of that format will notice:
@@ -211,12 +219,14 @@ Version 2 is the layout Field Station AI's `build-kb-index.py` writes. Readers o
 - Parents gained `id`, `source_type`, `content_type`, `categories`, and `local`. The `kind` field is replaced by `source_type`.
 - The query prefix convention is stated in the file instead of assumed.
 
-Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910 children, 418 sources), the version 2 file is 10.0 MB, of which the children list alone is 3.3 MB. The same corpus in version 3 is expected to be about 6.9 MB: parents 2.4 MB, children under 0.1 MB, BM25 statistics 2.1 MB, vectors 2.3 MB.
+Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910 children, 418 sources), the version 2 file is 10.0 MB, of which the children list alone is 3.3 MB. The same corpus in version 3 was expected to be about 6.9 MB: parents 2.4 MB, children under 0.1 MB, BM25 statistics 2.1 MB, vectors 2.3 MB.
 
 
 ## Versioning rule
 
-`v` changes only when the layout changes in a way a reader cannot ignore: a moved or removed field, a new meaning for an old field, a different vector encoding. Adding an optional field does not bump `v`. Readers ignore fields they do not know.
+`v` changes only when the layout changes in a way a reader cannot ignore: a moved or removed field, a new meaning for an old field, a different vector encoding. Adding a field readers may ignore does not bump `v`. Readers ignore fields they do not know.
+
+A field that is always present, and that a reader would use if it knew about it, is not one of those. `source_label` is the example: a client grouping results by source needs it on every parent, so version 4 exists rather than leaving a reader to guess whether a file has it. Ask which is worse for the reader, a refusal or a wrong answer, and bump when the answer is a wrong answer.
 
 
 ## Checklist for a reader

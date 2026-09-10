@@ -12,7 +12,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -53,7 +53,7 @@ DEFAULT_SITE_NAME = "Knowledge Base"
 # dataclass declares them.
 PARENT_FIELDS = (
     "id", "t", "x", "u", "host", "source_type", "content_type",
-    "categories", "local", "weight",
+    "source_label", "categories", "local", "weight",
 )
 
 

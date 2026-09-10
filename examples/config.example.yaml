@@ -23,9 +23,15 @@
 # ---------------------------------------------------------------------------
 # Required: the sources list
 #
-# Each entry names a source type and its options. One web source with a
-# seed URL is enough to start. Keys and API tokens never go in this file;
-# sources that need one read it from the environment.
+# Each entry names a source type, a label, and its options. One web source
+# with a seed URL is enough to start. Keys and API tokens never go in this
+# file; sources that need one read it from the environment.
+#
+# Every source needs a label: the name a reader sees for the collection it
+# came from, such as "Staff Handbook" or "Video Library". It heads a section
+# in llms.txt and travels with every section in the index, so a search
+# result can say where its answer came from. Two web sources cannot be told
+# apart without it, which is why it is required rather than guessed.
 # ---------------------------------------------------------------------------
 
 sources:
@@ -41,6 +47,7 @@ sources:
   # is not allowed to follow, the build refuses that seed and names the
   # address to use instead.
   - type: web
+    label: Example Knowledge Base
     seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 
     # Pages the crawl is allowed to visit. A URL must match at least one
@@ -77,6 +84,7 @@ sources:
   # a local source stays out of every output unless that output sets
   # include_local: true (see the outputs list).
   #- type: local
+  #  label: Internal Notes
   #  path: ./internal-docs
   #  include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
 
@@ -88,6 +96,7 @@ sources:
   # You often do not need this type at all: a web source whose seed_url is
   # a GitHub address reads the API by itself.
   #- type: github_api
+  #  label: Example Repositories
   #  org: example-org
   #  #user: example-person          # instead of org, for a person's own repositories
   #  #url: https://github.com/example-org/example-tools   # or one repository
@@ -101,6 +110,7 @@ sources:
   # Captions from a YouTube channel, playlists, or single videos. Listing a
   # channel or playlist needs YOUTUBE_API_KEY in the environment.
   #- type: youtube
+  #  label: Example Video Library
   #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
   #  playlist_ids: []
   #  video_ids: []

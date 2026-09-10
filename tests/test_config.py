@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -47,7 +47,7 @@ SEED = "https://example.edu/TDClient/000/ExampleOrg/Home/"
 
 def web(**options):
     """One web source entry with the standard seed URL."""
-    return {"type": "web", "seed_url": SEED, **options}
+    return {"type": "web", "label": "Example Portal", "seed_url": SEED, **options}
 
 
 def minimal(**extra):
@@ -149,7 +149,10 @@ def test_every_global_setting_can_be_supplied():
 
 
 def test_setting_written_with_no_value_falls_back_to_the_default(tmp_path):
-    path = write_config(tmp_path, f"max_pages:\nout_dir:\nsources:\n  - type: web\n    seed_url: {SEED}\n")
+    path = write_config(
+        tmp_path,
+        f"max_pages:\nout_dir:\nsources:\n  - type: web\n    label: Example Portal\n    seed_url: {SEED}\n",
+    )
     cfg = config.load_config(path)
     assert cfg.max_pages == config.DEFAULT_MAX_PAGES
     assert cfg.out_dir == config.DEFAULT_OUT_DIR
@@ -261,19 +264,19 @@ def test_source_entry_needs_a_type():
 
 def test_source_type_must_be_a_plain_name():
     with pytest.raises(config.ConfigError, match="sources entry 1: type must be a short name"):
-        config.config_from_mapping({"sources": [{"type": "web source!"}]})
+        config.config_from_mapping({"sources": [{"type": "web source!", "label": "Example Portal"}]})
 
 
 def test_errors_name_the_source_position_and_type():
     with pytest.raises(config.ConfigError, match=r"sources entry 2 \(web\): seed_url is required"):
-        config.config_from_mapping({"sources": [web(), {"type": "web"}]})
+        config.config_from_mapping({"sources": [web(), {"type": "web", "label": "Example Portal"}]})
 
 
 def test_several_sources_keep_their_order():
     cfg = config.config_from_mapping({"sources": [
         web(),
-        {"type": "local", "path": "./internal-docs"},
-        {"type": "github_api", "org": "example-org"},
+        {"type": "local", "label": "Internal Notes", "path": "./internal-docs"},
+        {"type": "github_api", "label": "Example Repositories", "org": "example-org"},
     ]})
     assert [s.type for s in cfg.sources] == ["web", "local", "github_api"]
 
@@ -326,12 +329,12 @@ def test_site_handlers_must_be_a_list_of_names():
 
 def test_web_source_rejects_unknown_option():
     with pytest.raises(config.ConfigError, match=r"sources entry 1 \(web\): unrecognized setting\(s\): seed"):
-        config.config_from_mapping({"sources": [{"type": "web", "seed": SEED}]})
+        config.config_from_mapping({"sources": [{"type": "web", "label": "Example Portal", "seed": SEED}]})
 
 
 def test_missing_seed_url_is_rejected():
     with pytest.raises(config.ConfigError, match="seed_url is required"):
-        config.config_from_mapping({"sources": [{"type": "web"}]})
+        config.config_from_mapping({"sources": [{"type": "web", "label": "Example Portal"}]})
 
 
 def test_blank_seed_url_is_rejected():
@@ -376,47 +379,47 @@ def test_invalid_regular_expression_is_reported_with_its_position():
 # ---------------------------------------------------------------------------
 
 def test_local_source_defaults_and_options():
-    source = config.config_from_mapping({"sources": [{"type": "local", "path": "./internal-docs"}]}).sources[0]
+    source = config.config_from_mapping({"sources": [{"type": "local", "label": "Internal Notes", "path": "./internal-docs"}]}).sources[0]
     assert source.options["path"] == "./internal-docs"
     assert source.options["include_globs"] == config.DEFAULT_LOCAL_INCLUDE_GLOBS
     custom = config.config_from_mapping({"sources": [
-        {"type": "local", "path": "docs", "include_globs": ["**/*.md"]},
+        {"type": "local", "label": "Internal Notes", "path": "docs", "include_globs": ["**/*.md"]},
     ]}).sources[0]
     assert custom.options["include_globs"] == ("**/*.md",)
 
 
 def test_local_source_requires_a_path():
     with pytest.raises(config.ConfigError, match=r"sources entry 1 \(local\): path is required"):
-        config.config_from_mapping({"sources": [{"type": "local"}]})
+        config.config_from_mapping({"sources": [{"type": "local", "label": "Internal Notes"}]})
 
 
 def test_local_source_globs_must_be_a_list_of_text():
     with pytest.raises(config.ConfigError, match="include_globs must be a list"):
-        config.config_from_mapping({"sources": [{"type": "local", "path": "docs", "include_globs": "**/*.md"}]})
+        config.config_from_mapping({"sources": [{"type": "local", "label": "Internal Notes", "path": "docs", "include_globs": "**/*.md"}]})
 
 
 def test_github_api_source_takes_exactly_one_selector():
-    source = config.config_from_mapping({"sources": [{"type": "github_api", "org": "example-org"}]}).sources[0]
+    source = config.config_from_mapping({"sources": [{"type": "github_api", "label": "Example Repositories", "org": "example-org"}]}).sources[0]
     assert source.options["org"] == "example-org"
     assert source.options["user"] is None and source.options["url"] is None
 
     with pytest.raises(config.ConfigError, match="give exactly one of org, user, or url"):
-        config.config_from_mapping({"sources": [{"type": "github_api"}]})
+        config.config_from_mapping({"sources": [{"type": "github_api", "label": "Example Repositories"}]})
     # Two selectors is a contradiction, not a request for both.
     with pytest.raises(config.ConfigError, match="got org and user"):
-        config.config_from_mapping({"sources": [{"type": "github_api", "org": "a", "user": "b"}]})
+        config.config_from_mapping({"sources": [{"type": "github_api", "label": "Example Repositories", "org": "a", "user": "b"}]})
 
 
 def test_github_api_source_refuses_an_address_in_the_account_setting():
     """A pasted URL under org would be sent to GitHub as an account name and fail there."""
     with pytest.raises(config.ConfigError, match="Write a repository or owner address under url"):
         config.config_from_mapping({
-            "sources": [{"type": "github_api", "org": "https://github.com/example-org"}],
+            "sources": [{"type": "github_api", "label": "Example Repositories", "org": "https://github.com/example-org"}],
         })
 
 
 def test_github_api_source_fills_in_its_defaults():
-    source = config.config_from_mapping({"sources": [{"type": "github_api", "user": "example-user"}]}).sources[0]
+    source = config.config_from_mapping({"sources": [{"type": "github_api", "label": "Example Repositories", "user": "example-user"}]}).sources[0]
 
     assert source.options["include_forks"] is False       # forks fill the index with near-copies
     assert source.options["include_archived"] is True     # archived documentation is documentation
@@ -427,13 +430,13 @@ def test_github_api_source_fills_in_its_defaults():
 def test_github_owners_is_a_global_allowlist_of_exact_names():
     cfg = config.config_from_mapping({
         "github_owners": ["some-collaborator"],
-        "sources": [{"type": "web", "seed_url": "https://example.org/"}],
+        "sources": [{"type": "web", "label": "Example Website", "seed_url": "https://example.org/"}],
     })
     assert cfg.github_owners == ("some-collaborator",)
 
 
 def test_github_owners_defaults_to_reading_no_extra_account():
-    cfg = config.config_from_mapping({"sources": [{"type": "web", "seed_url": "https://example.org/"}]})
+    cfg = config.config_from_mapping({"sources": [{"type": "web", "label": "Example Website", "seed_url": "https://example.org/"}]})
 
     assert cfg.github_owners == ()
 
@@ -447,13 +450,13 @@ def test_github_owners_refuses_anything_but_an_exact_account_name(entry):
     with pytest.raises(config.ConfigError, match="must be an exact GitHub account name"):
         config.config_from_mapping({
             "github_owners": [entry],
-            "sources": [{"type": "web", "seed_url": "https://example.org/"}],
+            "sources": [{"type": "web", "label": "Example Website", "seed_url": "https://example.org/"}],
         })
 
 
 def test_youtube_source_defaults_and_options():
     source = config.config_from_mapping({"sources": [
-        {"type": "youtube", "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx"},
+        {"type": "youtube", "label": "Example Channel", "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx"},
     ]}).sources[0]
     assert source.options["channel_id"] == "UCxxxxxxxxxxxxxxxxxxxxxx"
     assert source.options["playlist_ids"] == ()
@@ -463,15 +466,17 @@ def test_youtube_source_defaults_and_options():
 
 def test_youtube_source_needs_at_least_one_id():
     with pytest.raises(config.ConfigError, match=r"\(youtube\): give at least one of channel_id, playlist_ids, video_ids"):
-        config.config_from_mapping({"sources": [{"type": "youtube"}]})
+        config.config_from_mapping({"sources": [{"type": "youtube", "label": "Example Channel"}]})
 
 
 def test_unknown_source_type_passes_its_options_through_unchecked():
     """A plugin in plugins/ can add a type; its options are checked by the plugin, not here."""
     source = config.config_from_mapping({"sources": [
-        {"type": "confluence", "space": "DOCS", "depth": 3},
+        {"type": "confluence", "label": "Team Wiki", "space": "DOCS", "depth": 3},
     ]}).sources[0]
     assert source.type == "confluence"
+    # A plugin source is labelled like any other, and never sees the setting.
+    assert source.label == "Team Wiki"
     assert dict(source.options) == {"space": "DOCS", "depth": 3}
 
 
@@ -550,7 +555,8 @@ def test_load_config_reads_a_file(tmp_path):
     path = write_config(tmp_path, (
         "max_pages: 12\n"
         "sources:\n"
-        f"  - type: web\n    seed_url: '{SEED}'\n    include_patterns:\n      - '/docs/'\n"
+        f"  - type: web\n    label: Example Portal\n    seed_url: '{SEED}'\n"
+        "    include_patterns:\n      - '/docs/'\n"
         "outputs:\n  - type: container\n    file: kb.json\n"
     ))
     cfg = config.load_config(path)
@@ -584,7 +590,10 @@ def test_top_level_list_is_rejected(tmp_path):
 
 
 def test_error_messages_name_the_configuration_file(tmp_path):
-    path = write_config(tmp_path, f"max_pages: 0\nsources:\n  - type: web\n    seed_url: '{SEED}'\n")
+    path = write_config(
+        tmp_path,
+        f"max_pages: 0\nsources:\n  - type: web\n    label: Example Portal\n    seed_url: '{SEED}'\n",
+    )
     with pytest.raises(config.ConfigError) as excinfo:
         config.load_config(path)
     assert path in str(excinfo.value)
@@ -604,7 +613,10 @@ def test_shipped_example_config_has_one_web_source_and_two_outputs():
 # ---------------------------------------------------------------------------
 
 def test_overrides_win_over_the_file(tmp_path):
-    path = write_config(tmp_path, f"max_pages: 12\nsources:\n  - type: web\n    seed_url: '{SEED}'\n")
+    path = write_config(
+        tmp_path,
+        f"max_pages: 12\nsources:\n  - type: web\n    label: Example Portal\n    seed_url: '{SEED}'\n",
+    )
     cfg = config.load_config(path, overrides={"max_pages": 3, "out_dir": "elsewhere"})
     assert cfg.max_pages == 3
     assert cfg.out_dir == "elsewhere"
@@ -612,14 +624,20 @@ def test_overrides_win_over_the_file(tmp_path):
 
 def test_overrides_that_are_none_are_ignored(tmp_path):
     """An argument the user did not supply must leave the file's value alone."""
-    path = write_config(tmp_path, f"max_pages: 12\nsources:\n  - type: web\n    seed_url: '{SEED}'\n")
+    path = write_config(
+        tmp_path,
+        f"max_pages: 12\nsources:\n  - type: web\n    label: Example Portal\n    seed_url: '{SEED}'\n",
+    )
     cfg = config.load_config(path, overrides={"max_pages": None, "out_dir": None})
     assert cfg.max_pages == 12
     assert cfg.out_dir == config.DEFAULT_OUT_DIR
 
 
 def test_overrides_are_validated_like_file_settings(tmp_path):
-    path = write_config(tmp_path, f"sources:\n  - type: web\n    seed_url: '{SEED}'\n")
+    path = write_config(
+        tmp_path,
+        f"sources:\n  - type: web\n    label: Example Portal\n    seed_url: '{SEED}'\n",
+    )
     with pytest.raises(config.ConfigError, match="max_pages must be 1 or greater"):
         config.load_config(path, overrides={"max_pages": -1})
 

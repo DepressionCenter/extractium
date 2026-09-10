@@ -10,6 +10,7 @@ tests/test_adapter_container.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -92,7 +93,7 @@ def test_header_matches_the_committed_snapshot(fixtures_dir, golden_dir, fake_em
 
     header = build_header(compendium)
 
-    expected = json.loads((golden_dir / "container_v3_header.json").read_text(encoding="utf-8"))
+    expected = json.loads((golden_dir / "container_v4_header.json").read_text(encoding="utf-8"))
     assert header == expected
 
 
@@ -102,7 +103,7 @@ def test_header_declares_the_format_the_version_and_the_offset_unit(
     header = build_header(sample_compendium(fixtures_dir, fake_embed_chunks_core))
 
     assert header["format"] == "extractium-compendium"
-    assert header["v"] == 3
+    assert header["v"] == 4
     assert header["offsetUnit"] == "utf16"
     assert header["_license"].startswith("This file was produced by Extractium.")
 

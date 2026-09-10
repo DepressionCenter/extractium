@@ -12,7 +12,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-08
+ * Last Modified: 2026-09-09
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -66,6 +66,7 @@ function parent(id, fields = {}) {
         host: 'example.org',
         source_type: 'web',
         content_type: 'page',
+        source_label: 'Example Website',
         categories: [],
         local: false,
         weight: fields.weight === undefined ? 1 : fields.weight,
@@ -90,7 +91,7 @@ function containerBytes(header, vectors, { dtype = 'float32', headerLength } = {
 function sampleHeader(overrides = {}) {
     return {
         format: 'extractium-compendium',
-        v: 3,
+        v: 4,
         extractium: '0.1.0',
         builtAt: '2026-01-02T03:04:05Z',
         site: 'Example Org',

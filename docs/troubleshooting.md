@@ -92,6 +92,21 @@ uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashe
 
 **Fix.** Wait. Later builds reuse the model. If it fails, check that the machine can reach `huggingface.co`; some networks block it.
 
+### The build stops with `label is required`
+
+**Cause.** A source in your settings file has no `label`. Every source must give itself the name a reader sees, because two sources of the same type cannot be told apart without one.
+
+**Fix.** Add one line to the entry the message names. The message suggests a name for that type:
+
+```yaml
+sources:
+  - type: web
+    label: Peer-to-Peer Program
+    seed_url: 'https://peer.example.org/'
+```
+
+Keep it under 60 characters. See [configuration reference](configuration.md).
+
 ### The build ends with exit code 3 and writes nothing
 
 **Cause.** The crawl found nothing worth indexing. Usually the seed URL is wrong, the include patterns exclude everything, or the site refused the crawler.
@@ -211,9 +226,15 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### `container version 2 is not supported`
 
-**Cause.** The file is a version 2 index, the format Field Station AI ships. The clients here read version 3 only.
+**Cause.** The file is a version 2 index, the format Field Station AI ships. The clients here read version 4 only.
 
 **Fix.** Rebuild the index with Extractium, or use that project's own reader for its own file.
+
+### `container version 3 is not supported`
+
+**Cause.** The index was built by an earlier Extractium, before every section carried the name of the source it came from. A version 3 file has no `source_label`, so a client that groups results by source cannot read it correctly.
+
+**Fix.** Rebuild the index. Nothing else is needed: the settings file only has to gain a `label` on each source, which the build will ask for.
 
 ### `file was built with ... the vectors are not comparable`
 

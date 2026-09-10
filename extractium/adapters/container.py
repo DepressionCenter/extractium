@@ -10,7 +10,7 @@ extractium/adapters/container.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-08
+Last Modified: 2026-09-09
 Notes: See README file for documentation and full license information.
 """
 
@@ -46,7 +46,7 @@ from extractium.adapters.base import output_compendium, prepare_out_dir
 CONTAINER_FORMAT = "extractium-compendium"
 
 # Layout version. Bumped only when a reader cannot ignore the change.
-CONTAINER_VERSION = 3
+CONTAINER_VERSION = 4
 
 # Unit of the child start and end columns. UTF-16 code units, because
 # browsers are the first consumer and JavaScript strings index that way.
@@ -139,6 +139,7 @@ def build_header(compendium):
                 "host": parent.host,
                 "source_type": parent.source_type,
                 "content_type": parent.content_type,
+                "source_label": parent.source_label,
                 "categories": list(parent.categories),
                 "local": parent.local,
                 "weight": parent.weight,
