@@ -23,7 +23,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
-name: Eisenberg Family Depression Center Knowledge Base
+name: Eisenberg Family Depression Center Resource Library
 
 
 # ---------------------------------------------------------------------------
@@ -47,11 +47,11 @@ name: Eisenberg Family Depression Center Knowledge Base
 # ---------------------------------------------------------------------------
 # Sources
 #
-# Every source carries a label: the name a reader sees for it. Five of the
-# sources below are websites, so without one a search result could only say
-# "web", and nobody could tell the main site from the Peer-to-Peer program.
-# These labels head the sections of dist/llms.txt, so keep them the names the
-# center actually uses.
+# Every source carries a label: the name a reader sees for it. Four of the
+# five sources below are websites, so without one a search result could say
+# no more than "web", and nobody could tell the main site from the
+# Peer-to-Peer program. These labels head the sections of dist/llms.txt, so
+# keep them the names the center actually uses.
 #
 # A page two sources both reach is indexed once, by whichever reached it
 # first, and the build says how many pages that happened to. So an overlap
@@ -68,24 +68,24 @@ sources:
   #    The crawl keeps itself inside this portal's own folder rather than
   #    wandering into the rest of teamdynamix.umich.edu.
   #    Short link: https://michmed.org/efdc-kb
-  - type: web
-    label: Research Resource Library
+  - label: U-M Health Research Resource Library
+    type: web
     seed_url: https://teamdynamix.umich.edu/TDClient/210/DepressionCenter/Home/
 
-  # 2. EFDC Open Source Hub. This site links out to many repositories under
+  # 2. Depression Center Open Source Hub. This site links out to many repositories under
   #    other people's GitHub accounts, in its curated list of research tools
   #    built elsewhere. Those accounts are NOT read: only accounts this file
   #    names are. The build counts them and names them once at the end, which
   #    is the guardrail working rather than an error. See github_owners below.
-  - type: web
-    label: Open Source Hub
+  - label: Depression Center Open Source Hub
+    type: web
     seed_url: https://code.depressioncenter.org/
 
   # 3. The center's own GitHub repositories, read through the GitHub API
   #    rather than scraped page by page. Set GITHUB_TOKEN in the environment
   #    to raise the request limit; the same content is read without one.
-  - type: github_api
-    label: Code Repositories
+  - label: Depression Center Open Source Hub
+    type: github_api
     org: DepressionCenter
     include_forks: false        # a fork and its original are near-identical
     include_archived: true      # archived documentation is still documentation
@@ -100,16 +100,16 @@ sources:
   #    One crawl, so one list of pages already visited: anything reachable
   #    from both addresses is fetched once and indexed once. One page
   #    budget, and one set of patterns, too.
-  - type: web
-    label: Depression Center Website
+  - label: Depression Center Website
+    type: web
     seed_urls:
       - https://depressioncenter.org/
       - https://depressioncenter.org/outreach-education/depression-center-toolkit
 
   # 5. Peer-to-Peer Depression Awareness Program Resource Center. Its own
   #    host, so it cannot overlap with source 4.
-  - type: web
-    label: Peer-to-Peer Program
+  - label: Peer-to-Peer Depression Awareness Program Resource Center
+    type: web
     seed_url: https://p2p.depressioncenter.org/
 
   # 6. EFDC YouTube channel: https://www.youtube.com/@DepressionCenter
@@ -119,8 +119,8 @@ sources:
   #    "no source named 'youtube'". It will also need YOUTUBE_API_KEY in the
   #    environment, and the channel id rather than the @handle.
   #
-  #- type: youtube
-  #  label: Video Library
+  #- label: Depression Center Video Library
+  #  type: youtube
   #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
   #  languages: [en]
 
@@ -143,8 +143,8 @@ sources:
   #    Both collections belong to one source, because they are one thing:
   #    the Depression Center's deposits in Deep Blue.
   #
-  #- type: dspace
-  #  label: Deep Blue Documents
+  #- label: Depression Center Deep Blue Documents Collections
+  #  type: dspace
   #  api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
   #  site_url: https://deepblue.lib.umich.edu
   #  collections:
@@ -158,8 +158,8 @@ sources:
   #    On the center's own list of resources, but a site for students rather
   #    than project documentation. Add it if you want it in the index.
   #
-  #- type: web
-  #  label: Campus Mind Works
+  #- label: Campus Mind Works
+  #  type: web
   #  seed_url: https://campusmindworks.org/
 
 
@@ -170,7 +170,7 @@ sources:
 outputs:
   # The search index every client reads.
   - type: container
-    file: kb-index.json
+    file: efdc-compendium.json
   # llms.txt and llms-full.txt, for language models that browse the web.
   - type: llmstxt
   # The same content as tables, for anyone who would rather write SQL.
@@ -215,4 +215,4 @@ phi_lint: all
 # Then add only the accounts you actually want. Exact names; patterns are
 # refused. Allowing an account lets links into it be followed. It does not
 # index everything that account has ever published.
-github_owners: []
+github_owners: [DepressionCenter]
