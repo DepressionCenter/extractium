@@ -47,10 +47,12 @@ name: Eisenberg Family Depression Center Resource Library
 # ---------------------------------------------------------------------------
 # Sources
 #
-# IMPORTANT: no two sources may reach the same page. A page indexed twice in
-# one build stops it with "parent id ... appears more than once". That is why
-# the Depression Center Toolkit is not its own entry below: it is a section of
-# depressioncenter.org, so source 4 already covers it.
+# A page two sources both reach is indexed once, by whichever reached it
+# first, and the build says how many pages that happened to. So an overlap
+# costs duplicated fetching rather than a failed build. It is still worth
+# avoiding: that is why the Depression Center Toolkit is not a source of its
+# own below. It is a section of depressioncenter.org, so it belongs to the
+# same crawl, as a second place for that crawl to start.
 # ---------------------------------------------------------------------------
 
 sources:
@@ -79,28 +81,20 @@ sources:
     include_forks: false        # a fork and its original are near-identical
     include_archived: true      # archived documentation is still documentation
 
-  # 4. The main website. This includes the Depression Center Toolkit at
-  #    /outreach-education/depression-center-toolkit, so the toolkit needs no
-  #    entry of its own.
+  # 4. The main website, including the Depression Center Toolkit.
   #
-  #    If the toolkit turns out not to be reachable by links from the site,
-  #    give it one -- but then BOTH of these must be set together, or the two
-  #    sources overlap and the build stops:
+  #    The Toolkit is a section of this site rather than a site of its own,
+  #    so it is not a separate source. It is a second place for this one
+  #    crawl to start, which covers it even if the main navigation does not
+  #    link to every part of it.
   #
-  #      - type: web
-  #        seed_url: https://depressioncenter.org/
-  #        crawl_exclude_patterns:
-  #          - "/outreach-education/depression-center-toolkit"
-  #      - type: web
-  #        seed_url: https://depressioncenter.org/outreach-education/depression-center-toolkit
-  #        include_patterns:
-  #          - "^https://depressioncenter\\.org/outreach-education/depression-center-toolkit"
-  #
-  #    Writing crawl_exclude_patterns replaces the built-in exclusions rather
-  #    than adding to them, so copy the ones you still want from
-  #    docs/configuration.md before using that form.
+  #    One crawl, so one list of pages already visited: anything reachable
+  #    from both addresses is fetched once and indexed once. One page
+  #    budget, and one set of patterns, too.
   - type: web
-    seed_url: https://depressioncenter.org/
+    seed_urls:
+      - https://depressioncenter.org/
+      - https://depressioncenter.org/outreach-education/depression-center-toolkit
 
   # 5. Peer-to-Peer Depression Awareness Program Resource Center. Its own
   #    host, so it cannot overlap with source 4.
@@ -122,25 +116,31 @@ sources:
   #      EFDC:   https://hdl.handle.net/2027.42/195355
   #      MeTRIC: https://hdl.handle.net/2027.42/195645
   #
-  #    LEFT OUT ON PURPOSE, for two reasons.
+  #    NOT A WEB CRAWL, and not yet available.
   #
   #    Deep Blue builds its pages in the browser. A collection page is about
-  #    650 KB of markup holding roughly 2,000 characters of navigation text,
-  #    and the list of items in the collection is not in it. Crawling it would
-  #    add the collection's name and nothing else.
+  #    650 KB of markup holding roughly 2,300 characters of navigation text,
+  #    and the list of deposits is not in it. Crawling it would add the
+  #    collection's name and nothing else.
   #
-  #    A handle address also redirects to deepblue.lib.umich.edu, and a crawl
-  #    seeded there would scope itself to that whole host, which is the entire
-  #    University of Michigan institutional repository rather than these two
-  #    collections. If Deep Blue ever serves its item lists as plain HTML,
-  #    seed the resolved collection address and pin the scope, for example:
+  #    Deep Blue publishes a machine interface instead, which already holds
+  #    the text of every deposited file. Reading it is the dspace source,
+  #    which arrives in phase 13 of the implementation plan. Uncommenting
+  #    this today stops the build with "no source named 'dspace'".
   #
-  #      - type: web
-  #        seed_url: https://deepblue.lib.umich.edu/collections/3acf951c-e107-4b8d-8f7d-ced171665b11
-  #        include_patterns:
-  #          - "3acf951c-e107-4b8d-8f7d-ced171665b11"
+  #    Both collections belong to one source, because they are one thing:
+  #    the Depression Center's deposits in Deep Blue.
   #
-  #    Deep Blue's robots.txt allows this; it disallows /search and /admin.
+  #- type: dspace
+  #  api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
+  #  site_url: https://deepblue.lib.umich.edu
+  #  label: Deep Blue Documents
+  #  collections:
+  #    - 3acf951c-e107-4b8d-8f7d-ced171665b11    # Eisenberg Family Depression Center
+  #    - 7503b0dc-27a2-4ce9-bcbc-50b339ecb486    # MeTRIC
+  #
+  #    See docs/dspace-repository-indexing.md. Note the interface is on a
+  #    different host from the site a reader opens; that is not a mistake.
 
   # 8. Campus Mind Works: https://campusmindworks.org/
   #    On the center's own list of resources, but a site for students rather

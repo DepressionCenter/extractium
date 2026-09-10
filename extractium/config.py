@@ -176,7 +176,7 @@ KNOWN_KEYS = frozenset({
 # that plugin to check.
 SOURCE_OPTION_KEYS = {
     "web": frozenset({
-        "seed_url", "include_patterns", "crawl_exclude_patterns",
+        "seed_url", "seed_urls", "include_patterns", "crawl_exclude_patterns",
         "index_exclude_patterns", "site_handlers",
     }),
     "local": frozenset({"path", "include_globs"}),
@@ -559,10 +559,51 @@ def _read_type(entry, source):
     return type_name
 
 
+def _read_seed_urls(entry, source):
+    """
+    Reads where a crawl starts: one address, or several.
+
+    `seed_urls` exists for a site whose sections do not link to one
+    another -- two sibling collections in a repository, say. They are one
+    crawl rather than two sources because one crawl keeps one list of
+    pages it has visited, so anything reachable from both starting points
+    is fetched once and indexed once.
+
+    Returns:
+        tuple[str, ...]: the seeds, in the order written, each once.
+
+    Raises:
+        ConfigError: if neither key is present, both are, the list is
+            empty, or an address is not an absolute http or https URL.
+    """
+    has_one = not _is_missing(entry.get("seed_url"))
+    has_many = not _is_missing(entry.get("seed_urls"))
+    if has_one and has_many:
+        _fail(source, "give either seed_url or seed_urls, not both.")
+    if not has_one and not has_many:
+        _fail(source, "seed_url is required (the URL the crawl starts from).")
+    if has_one:
+        return (_read_url(entry, "seed_url", source, hint=" (the URL the crawl starts from)"),)
+
+    seeds = _read_text_list(entry, "seed_urls", (), source, label="URLs")
+    if not seeds:
+        _fail(source, "seed_urls must list at least one URL.")
+    checked = []
+    for position, seed in enumerate(seeds, start=1):
+        checked.append(_read_url({"seed_urls": seed}, "seed_urls", source,
+                                 hint=f" (entry {position} of seed_urls)"))
+    return tuple(dict.fromkeys(checked))
+
+
 def _read_web_source(entry, source):
     """Validates the options of a web source entry."""
+    seeds = _read_seed_urls(entry, source)
     return {
-        "seed_url": _read_url(entry, "seed_url", source, hint=" (the URL the crawl starts from)"),
+        # Both are filled in: `seed_urls` is the whole list, and `seed_url`
+        # is the first, so a caller that wants one address does not have to
+        # reach into a list for it.
+        "seed_urls": seeds,
+        "seed_url": seeds[0],
         "include_patterns": _read_patterns(entry, "include_patterns", DEFAULT_INCLUDE_PATTERNS, source),
         # None for either exclude list means "asset patterns plus the
         # enabled handlers' defaults", completed by the web source.

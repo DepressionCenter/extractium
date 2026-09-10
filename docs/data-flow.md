@@ -75,6 +75,8 @@ Every request carries the User-Agent from your settings, and every site's `robot
 | `categories` | The hierarchy from the source, outermost first. Empty when there is none. |
 | `local` | True when it was read from a folder on this machine. |
 
+One page is indexed once, however many sources reached it. Two sources can cover overlapping ground without meaning to: a website and a section of it, a portal and a short link into one of its articles. The first source to produce a page keeps it, the later ones are told they were too late, and the build says how many pages that happened to. Pages are compared by their address in normalised form, so two addresses differing only by a trailing slash or a fragment count as one page.
+
 ### 3. Sections and windows
 
 The chunker cuts the content at its second- and third-level headings. Each piece is a **section**: at most 1,200 characters, with any longer run split into several sections that share a heading. A section is what a search returns and what an answer cites.

@@ -178,15 +178,29 @@ def normalise(url):
     return url.split("#")[0].strip().rstrip("/")
 
 
+def _as_prefixes(value):
+    """
+    One prefix or several, always as a tuple.
+
+    A crawl may start from more than one address, so scope is a set of
+    prefixes rather than a single one. Callers that have only one may pass
+    the string itself.
+    """
+    return (value,) if isinstance(value, str) else tuple(value)
+
+
 def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
     """
     Decides whether a discovered link should be crawled.
 
     Args:
         url (str): the candidate URL.
-        auto_prefix (str): the default scope prefix from derive_auto_prefix,
-            used only when include_res is empty.
-        origin (str): the seed URL's origin (scheme://host).
+        auto_prefix (str | Sequence[str]): the default scope prefix from
+            derive_auto_prefix, or one per seed when a crawl starts from
+            several addresses. Used only when include_res is empty; a URL
+            inside any of them is in scope.
+        origin (str | Sequence[str]): the seed URL's origin
+            (scheme://host), or one per seed.
         include_res (list[re.Pattern]): explicit include patterns; if
             non-empty, a URL must match at least one, and same-origin URLs
             no longer fall back to being allowed automatically.
@@ -197,9 +211,12 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
     Returns:
         bool: True if url should be queued for crawling.
     """
-    # Default rule: keep the crawl within the seed origin unless an explicit
+    origins = _as_prefixes(origin)
+    prefixes = _as_prefixes(auto_prefix)
+
+    # Default rule: keep the crawl within a seed origin unless an explicit
     # include pattern opts into a different host (e.g. GitHub/GitLab repo pages).
-    if not url.startswith(origin):
+    if not any(url.startswith(o) for o in origins):
         if not include_res or not any(r.search(url) for r in include_res):
             return False
 
@@ -212,8 +229,8 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
         if not any(r.search(url) for r in include_res):
             return False
     else:
-        # Auto default: must start with derived prefix
-        if not url.startswith(auto_prefix):
+        # Auto default: must start with the prefix derived from some seed
+        if not any(url.startswith(p) for p in prefixes):
             return False
 
     # Crawl exclude check (after include, so excludes win)
@@ -381,7 +398,7 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html):
 
 
 def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AGENT,
-          progress=None, fallback_user_agent=None):
+          progress=None, fallback_user_agent=None, note_final_url=None):
     """
     Fetches one URL through the local page cache. If a cache entry exists,
     sends a single conditional GET with If-None-Match / If-Modified-Since
@@ -411,6 +428,12 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
             to user_agent. None, the default, never retries and never
             sends anything but user_agent. Both attempts are reported, so
             a log always shows that the second identity was used.
+        note_final_url (Callable[[str], None] | None): called with the
+            address the request actually landed on, once, when the server
+            answered. It differs from `url` when the request was
+            redirected. A caller that needs to know where a redirect led
+            supplies this; everything else leaves it None, because the
+            content is the same either way.
 
     Returns:
         BeautifulSoup | str | None: the fetched content, or None if the
@@ -443,6 +466,12 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
                 headers=request_headers(fallback_user_agent, conditional_headers),
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
+
+        if note_final_url is not None:
+            # Where the request landed, which is not where it was sent when
+            # the server redirected. A test double may not report it; then
+            # nothing was redirected as far as this build can tell.
+            note_final_url(getattr(r, "url", None) or url)
 
         if conditional_headers and r.status_code == 304:
             try:

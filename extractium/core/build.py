@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from extractium.core.bm25 import build_bm25_index
 from extractium.core.calibration import compute_calibration_stats
 from extractium.core.chunk import chunk_document
+from extractium.core.fetch import normalise
 from extractium.core.dedup import drop_near_duplicates, remap_parents_after_dedup
 from extractium.core.embed import quantize_int8
 from extractium.core.models import Children, Compendium, EmbeddingInfo, Parent
@@ -97,11 +98,24 @@ def chunk_documents(documents, progress):
     parents, so each page's `pid` values are shifted by however many
     parents had already accumulated when the page was reached.
 
+    One page is indexed once, however many sources reached it. Two sources
+    can cover overlapping ground -- a site and a section of it, a portal
+    and a short link to one of its articles -- and a page they both reach
+    would otherwise be chunked twice into sections with identical
+    identifiers, which is not a document the container format can hold.
+    The first source to produce a page keeps it and the later ones are
+    told they were too late, because the alternative is a build that stops
+    on a configuration a person could reasonably write.
+
+    Pages are compared by their normalised address, the same form the
+    identifiers are built from, so two addresses differing only by a
+    trailing slash or a fragment count as one page.
+
     Args:
         documents (Iterable[extractium.core.models.Document]): what the
             sources produced, in the order they produced them.
         progress (Callable[[str], None]): receives one line per document
-            that contributed content.
+            that contributed content, and one per page already indexed.
 
     Returns:
         tuple[list[dict], list[dict], str]: (parents, children, site_name),
@@ -110,12 +124,22 @@ def chunk_documents(documents, progress):
     parents = []
     children = []
     site_name = ""
+    indexed_pages = set()
+    repeated = 0
     for position, document in enumerate(documents):
         if position == 0:
             site_name = document.title
+        page = normalise(document.url)
+        if page in indexed_pages:
+            repeated += 1
+            progress(f"  already indexed by an earlier source, skipped: {document.url}")
+            continue
         page_parents, page_children = chunk_document(document)
         if not page_parents:
+            # Nothing was indexed, so the page is not spoken for: another
+            # source reaching it later still gets its chance.
             continue
+        indexed_pages.add(page)
         pid_offset = len(parents)
         for child in page_children:
             child["pid"] += pid_offset
@@ -124,6 +148,11 @@ def chunk_documents(documents, progress):
         progress(
             f"  +{len(page_parents)} section(s), +{len(page_children)} window(s): "
             f"{document.title[:70]}"
+        )
+    if repeated:
+        progress(
+            f"Skipped {repeated} page(s) an earlier source had already indexed. "
+            "Two sources are covering the same ground."
         )
     return parents, children, site_name
 
