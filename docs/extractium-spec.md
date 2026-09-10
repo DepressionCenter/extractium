@@ -77,7 +77,7 @@ config.yaml (one per organization)
 | SOURCES (plugins)  produce Documents                         |
 |   web (core crawler) -> consults SITE HANDLERS per URL:      |
 |       generic (core) | tdx | github        (on by default)   |
-|   local | github_api | youtube                               |
+|   local | github_api | dspace | youtube                      |
 +-------------------------------------------------------------+
         |
         v
@@ -177,7 +177,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 
 | Field | Values |
 |---|---|
-| `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`; `repository` from phase 9 |
+| `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`, `repository` (a scholarly repository such as a DSpace instance) |
 | `source_label` | The name a reader sees for the source, from its required `label` setting. At most 60 characters, never empty. Groups the sections of `llms.txt` |
 | `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`; `manifest` and `repo_map` from phase 7; `code_file` and `code_symbol` from phase 10 |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
@@ -218,7 +218,7 @@ Reading OKF bundles produced by other tools, as a source, is possible future wor
 | Source | `github_api` | 7, built | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget; it never widens what may be published. Only accounts the operator named are read, whatever links to them (section 6). See [GitHub repository indexing](github-repository-indexing.md). |
 | Source | `youtube` | 11 | Captions only. Explicit video ids need no key; playlists and channels are listed through the YouTube Data API with `YOUTUBE_API_KEY` from the environment. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and cached; a CI run reuses the cache. Parents deep-link to a timestamp. |
 | Source | GitHub code structure | 8 | Tree-sitter analysis of repository code: signatures, documentation, imports, calls, and repository maps. Never raw code bodies, and no language model; a symbol record links to its lines on GitHub instead of copying them. Universal Ctags is an optional second parser; an unsupported language still gets a file-level record. See [GitHub repository indexing](github-repository-indexing.md). |
-| Source | `dspace` | 13 | Scholarly deposits in a DSpace 7 repository, such as the University of Michigan Library's Deep Blue. Named collections only, never discovered. One document per deposit: abstract, authors, date, subjects, rights, and the handle, DOI, and any other address the depositor gave, all kept apart. File contents come from the repository's own extracted-text bundle, so no PDF, Word, or archive reader is added. Incremental from the per-deposit modification stamp the listing carries. No fall back to crawling: the pages a crawler reaches hold no deposits. See [Indexing a DSpace repository](dspace-repository-indexing.md). |
+| Source | `dspace` | 9, built | Scholarly deposits in a DSpace 7 repository, such as the University of Michigan Library's Deep Blue. Named collections only, never discovered. One document per deposit: abstract, authors, date, subjects, rights, and the handle, DOI, and any other address the depositor gave, all kept apart. File contents come from the repository's own extracted-text bundle, so no PDF, Word, or archive reader is added. Incremental from the per-deposit modification stamp the listing carries, which arrives with the files in one request per hundred deposits. No fall back to crawling: the pages a crawler reaches hold no deposits. A collection is confirmed to exist before it is searched, because a scope the interface does not recognize is answered with the whole repository rather than refused. See [Indexing a DSpace repository](dspace-repository-indexing.md). |
 | Source | Speech-to-text fallback | future | For videos without captions. External, optional plugin. |
 | Source | OKF bundles from other tools | future | Maybe. |
 
@@ -380,7 +380,7 @@ extractium/
 │   ├── core/                    # fetch, cache, chunk, embed, bm25, dedup, calibration,
 │   │                            # phi_lint, registry, models, build
 │   ├── sources/                 # web (core crawler); site handlers generic, tdx, github;
-│   │                            # sources local, github_api, youtube
+│   │                            # sources local, github_api, dspace, youtube
 │   ├── code/                    # Tree-sitter registry, engine, query files, embedded-code
 │   │                            # extraction, relationships, rendering, ctags fallback
 │   ├── adapters/                # container, llmstxt, sqlite_out, okf

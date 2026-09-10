@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-10"
 
 import dataclasses
 import pathlib
@@ -425,6 +425,80 @@ def test_github_api_source_fills_in_its_defaults():
     assert source.options["include_archived"] is True     # archived documentation is documentation
     assert source.options["include_repos"] == ()
     assert source.options["max_file_bytes"] == config.DEFAULT_GITHUB_MAX_FILE_BYTES
+
+
+def dspace(**options):
+    """One dspace source entry with the two addresses a repository source needs."""
+    return {
+        "type": "dspace",
+        "label": "Example Repository",
+        "api_url": "https://repository.example.edu/server/api",
+        "site_url": "https://repository.example.edu",
+        "collections": ["https://hdl.handle.net/9999.1/1001"],
+        **options,
+    }
+
+
+def test_dspace_source_reads_a_collection_written_as_a_handle_or_an_identifier():
+    source = config.config_from_mapping({"sources": [dspace(collections=[
+        "https://hdl.handle.net/9999.1/1001",
+        "11111111-1111-4111-8111-111111111111",
+        "https://repository.example.edu/collections/22222222-2222-4222-8222-222222222222",
+    ])]}).sources[0]
+
+    assert source.options["collections"] == (
+        "hdl:9999.1/1001",
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
+    )
+
+
+def test_dspace_source_needs_both_addresses():
+    """The interface and the reader site are different hosts, so neither implies the other."""
+    entry = dspace()
+    del entry["api_url"]
+    with pytest.raises(config.ConfigError, match="api_url is required"):
+        config.config_from_mapping({"sources": [entry]})
+
+    entry = dspace()
+    del entry["site_url"]
+    with pytest.raises(config.ConfigError, match="site_url is required"):
+        config.config_from_mapping({"sources": [entry]})
+
+
+def test_dspace_source_needs_at_least_one_collection():
+    """A repository holds everybody's deposits, so nothing is read by default."""
+    entry = dspace()
+    del entry["collections"]
+    with pytest.raises(config.ConfigError, match="collections must list at least one"):
+        config.config_from_mapping({"sources": [entry]})
+
+    with pytest.raises(config.ConfigError, match="collections must list at least one"):
+        config.config_from_mapping({"sources": [dspace(collections=[])]})
+
+
+def test_dspace_source_refuses_a_collection_it_cannot_look_up():
+    with pytest.raises(config.ConfigError, match="names no collection"):
+        config.config_from_mapping({"sources": [dspace(collections=["everything"])]})
+
+
+def test_dspace_source_refuses_one_deposit_in_place_of_a_collection():
+    with pytest.raises(config.ConfigError, match="one deposit, not a collection"):
+        config.config_from_mapping({"sources": [dspace(collections=[
+            "https://repository.example.edu/items/aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+        ])]})
+
+
+def test_dspace_source_fills_in_its_defaults():
+    source = config.config_from_mapping({"sources": [dspace()]}).sources[0]
+
+    assert source.options["include_full_text"] is True
+    assert source.options["max_file_bytes"] == config.DEFAULT_DSPACE_MAX_FILE_BYTES
+
+
+def test_dspace_source_refuses_a_setting_it_does_not_recognize():
+    with pytest.raises(config.ConfigError, match="unrecognized setting"):
+        config.config_from_mapping({"sources": [dspace(communities=["everything"])]})
 
 
 def test_github_owners_is_a_global_allowlist_of_exact_names():

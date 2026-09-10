@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-10"
 
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -56,8 +56,11 @@ from extractium.core.embed import (
 
 # Every value a parent's source_type may hold. "kb" is a TeamDynamix
 # portal, because that is what the original index called it and the
-# search clients key display rules on it.
-SOURCE_TYPES = frozenset({"kb", "github", "web", "youtube", "local"})
+# search clients key display rules on it. "repository" is a scholarly
+# repository such as a DSpace instance: its records are deposits with
+# abstracts, authors, and permanent identifiers, which is neither a
+# website nor a code host nor a help-desk article.
+SOURCE_TYPES = frozenset({"kb", "github", "web", "youtube", "local", "repository"})
 
 # The display name used when a record is built without one. A build reads
 # its labels from the configuration, where every source must name itself;
@@ -75,6 +78,7 @@ DEFAULT_SOURCE_LABELS = {
     "web": "Website",
     "youtube": "YouTube Channel",
     "local": "Local Files",
+    "repository": "Repository",
 }
 
 # Longest a source label may be. Long enough for a program or center name,

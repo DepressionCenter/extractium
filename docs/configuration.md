@@ -42,7 +42,7 @@ settings = load_config("config.yaml")
 print(settings.sources[0].options["seed_url"], settings.max_pages)
 ```
 
-The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
+The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py), and reading a DSpace repository is [extractium/sources/dspace.py](../extractium/sources/dspace.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
 
 
 ## Where the file goes
@@ -295,15 +295,55 @@ At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listin
 
 ### `dspace`: read a repository's deposits
 
-**Planned.** This type is not built yet, so a build that uses it stops with `no source named 'dspace'`. It arrives in phase 9.
+Reads scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue, through the repository's own interface rather than by crawling its pages.
 
-It will read scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue, through the repository's own interface rather than by crawling its pages. Collections are named in the settings file and never discovered, the same rule that governs GitHub accounts. Each deposit becomes one document carrying its abstract, its authors and subjects, its handle and DOI, and the text of its files, which the repository has already extracted, so no PDF or Word reader is added to this build.
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `api_url` | text | none (required) | Where the repository's interface lives, such as `https://repository.example.edu/server/api`. |
+| `site_url` | text | none (required) | Where a reader opens a deposit. Recorded on every document, so a search result is a link a person can follow. |
+| `collections` | list of text | none (at least one) | Which collections to read. See "Naming a collection" below. |
+| `include_full_text` | true or false | `true` | Indexes the text the repository extracted from each deposit's files. `false` indexes each deposit's description alone. |
+| `max_file_bytes` | whole number | `2000000` | Largest extracted text file to read. Anything larger is skipped, and every skipped file is named in the log. |
 
-See [Indexing a DSpace repository](dspace-repository-indexing.md) for the settings it will take and why.
+```yaml
+sources:
+  - type: dspace
+    label: Deep Blue Documents
+    api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
+    site_url: https://deepblue.lib.umich.edu
+    collections:
+      - https://hdl.handle.net/2027.42/195355
+      - https://hdl.handle.net/2027.42/195645
+```
+
+**The two addresses are different hosts, and neither one implies the other.** `site_url` is the site a person opens. `api_url` is the interface behind it, and it is not guessable: it is named in the reader site's own settings, under `dspaceServer`. Point `api_url` at the reader site and the build stops with a message saying the address answered a web page rather than data.
+
+**Naming a collection.** Write each collection whichever way you have it in hand. All four mean the same thing:
+
+| Written as | Example |
+|---|---|
+| The handle link the repository publishes | `https://hdl.handle.net/2027.42/195355` |
+| A handle on its own | `2027.42/195355` |
+| The address a browser shows after following that link | `https://deepblue.lib.umich.edu/collections/3acf951c-e107-4b8d-8f7d-ced171665b11` |
+| The collection's identifier on its own | `3acf951c-e107-4b8d-8f7d-ced171665b11` |
+
+**Collections are listed, never discovered.** A repository holds the deposits of everybody at a university, so a build reads the collections it was given and nothing it merely found a link to. This is the same rule as `github_owners`, and it matters more here: a search scope the repository does not recognize is answered with every deposit it holds rather than refused. Each collection is therefore confirmed to exist before anything is searched, which is also how its name is read. A collection the repository does not have stops the build and is named, because a quiet skip would look like an empty collection.
+
+**What gets read.** One document per deposit: its abstract first, then its authors, date, subjects, rights, publisher, and every address it carries, then the text of its files. A deposit's address list is sorted into three kinds and all three are kept: its handle (the permanent citation), its DOI (how the work is cited in the literature), and any other address, which is often the project's own documentation.
+
+**Where the file text comes from.** The repository extracted it when the file was deposited, and this source reads that. No PDF reader, no Word reader, no archive handling, and no new dependency. A deposit whose files hold no readable text, such as a poster deposited as an image, is still indexed from its description, and the record says plainly that its file contents are not in the index.
+
+**Set `phi_lint: 'all'` for a build with this source.** The default scans only content read from a folder on this machine, because that is the content nobody has published. A deposit in a public repository was published deliberately, but text a machine pulled out of a research poster is exactly where a stray identifier is most likely to sit, and reading it is worth one setting. Expect a long report: a scholarly deposit names its authors, and a poster often prints an email address, so the check flags them. Every line in that report is a question for a person, not a verdict. See "The check for protected health information" above.
+
+**Rebuilds.** The repository reports when each deposit last changed, and that stamp is stored beside the stored text. A collection nobody has touched costs one request per hundred deposits and downloads nothing. The summary says how much of each collection is description alone:
+
+```text
+  Deep Blue Documents  42 deposit(s)  35 with file text  7 description only
+```
 
 ### Source types from plugins
 
-A type that is not one of the five above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.
+A type that is not one of the built-in types above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.
 
 
 ## Outputs
