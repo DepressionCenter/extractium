@@ -6,9 +6,9 @@
 # Summary: A build configuration for the Eisenberg Family Depression Center at
 # the University of Michigan. It gathers the center's public documentation --
 # the U-M Health Research Resource Library, the Open Source Hub, the GitHub
-# repositories, the main website and its Depression Center Toolkit, and the
-# Peer-to-Peer program site -- into one searchable index. Copy it to
-# config.yaml and run it.
+# repositories, the main website and its Depression Center Toolkit, the
+# Peer-to-Peer program site, and the center's Deep Blue collections -- into
+# one searchable index. Copy it to config.yaml and run it.
 # Notes: See README file for documentation and full license information.
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -32,8 +32,8 @@ name: Eisenberg Family Depression Center Resource Library
 # As of 2026-09-10, depressioncenter.org, p2p.depressioncenter.org, and
 # code.depressioncenter.org answer 403 to this crawler, with the header
 # "cf-mitigated: challenge". Sources 2, 4, and 5 therefore contribute
-# nothing, and the build says so page by page rather than failing. Sources 1
-# and 3 work today.
+# nothing, and the build says so page by page rather than failing. Sources 1,
+# 3, and 7 work today.
 #
 # This is not about the crawler's name. A real browser User-Agent is refused
 # in exactly the same way. What is being read is the TLS handshake, and a
@@ -51,11 +51,11 @@ name: Eisenberg Family Depression Center Resource Library
 # ---------------------------------------------------------------------------
 # Sources
 #
-# Every source carries a label: the name a reader sees for it. Four of the
-# five sources below are websites, so without one a search result could say
-# no more than "web", and nobody could tell the main site from the
-# Peer-to-Peer program. These labels head the sections of dist/llms.txt, so
-# keep them the names the center actually uses.
+# Every source carries a label: the name a reader sees for it. Several of the
+# sources below are websites, so without one a search result could say no
+# more than "web", and nobody could tell the main site from the Peer-to-Peer
+# program. These labels head the sections of dist/llms.txt, so keep them the
+# names the center actually uses.
 #
 # A page two sources both reach is indexed once, by whichever reached it
 # first, and the build says how many pages that happened to. So an overlap
@@ -128,35 +128,31 @@ sources:
   #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
   #  languages: [en]
 
-  # 7. The two U-M Library Deep Blue collections:
-  #      EFDC:   https://hdl.handle.net/2027.42/195355
-  #      MeTRIC: https://hdl.handle.net/2027.42/195645
+  # 7. The two U-M Library Deep Blue collections.
   #
-  #    NOT A WEB CRAWL, and not yet available.
-  #
-  #    Deep Blue builds its pages in the browser. A collection page is about
-  #    650 KB of markup holding roughly 2,300 characters of navigation text,
-  #    and the list of deposits is not in it. Crawling it would add the
-  #    collection's name and nothing else.
+  #    NOT A WEB CRAWL. Deep Blue builds its pages in the browser: a
+  #    collection page is about 650 KB of markup holding roughly 2,300
+  #    characters of navigation text, and the list of deposits is not in
+  #    it. Crawling it would add the collection's name and nothing else.
   #
   #    Deep Blue publishes a machine interface instead, which already holds
-  #    the text of every deposited file. Reading it is the dspace source,
-  #    which arrives in phase 9 of the implementation plan. Uncommenting
-  #    this today stops the build with "no source named 'dspace'".
+  #    the text of every deposited file. The dspace source reads that.
   #
   #    Both collections belong to one source, because they are one thing:
   #    the Depression Center's deposits in Deep Blue.
   #
-  #- label: Depression Center Deep Blue Documents Collections
-  #  type: dspace
-  #  api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
-  #  site_url: https://deepblue.lib.umich.edu
-  #  collections:
-  #    - 3acf951c-e107-4b8d-8f7d-ced171665b11    # Eisenberg Family Depression Center
-  #    - 7503b0dc-27a2-4ce9-bcbc-50b339ecb486    # MeTRIC
-  #
-  #    See docs/dspace-repository-indexing.md. Note the interface is on a
-  #    different host from the site a reader opens; that is not a mistake.
+  #    A collection may be named by the handle link it publishes, as here,
+  #    or by the identifier in the address a browser shows after following
+  #    that link. Note that the interface is on a different host from the
+  #    site a reader opens; that is not a mistake. See
+  #    docs/dspace-repository-indexing.md.
+  - label: Depression Center Deep Blue Documents Collections
+    type: dspace
+    api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
+    site_url: https://deepblue.lib.umich.edu
+    collections:
+      - https://hdl.handle.net/2027.42/195355    # Eisenberg Family Depression Center
+      - https://hdl.handle.net/2027.42/195645    # MeTRIC
 
   # 8. Campus Mind Works: https://campusmindworks.org/
   #    On the center's own list of resources, but a site for students rather

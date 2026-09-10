@@ -35,7 +35,7 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
 * [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
 * [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
-* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, planned for Phase 9.
+* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, and what that interface turned out to hold.
 * [Reading a Site Behind Bot Protection](bot-protection-transport.md) — why some sites refuse the
   crawler with a challenge, what was measured against three live sites, and the transport planned
   for Phase 8.

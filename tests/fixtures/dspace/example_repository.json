@@ -1,0 +1,273 @@
+{
+  "_license": "This file is part of Extractium. Copyright (C) 2026 The Regents of the University of Michigan. Licensed under the GNU General Public License v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the README for full license information.",
+  "_summary": "Synthetic DSpace 7 interface responses for one small collection, used by the DSpace source tests. Nothing here was fetched from a repository: every collection, deposit, person, identifier, and file is invented, and the addresses use a repository host that does not exist. No test contacts the network. The records keep the shape a real DSpace 7 answer has, including the bundles and files embedded in a search result, so the tests exercise the parsing a real answer needs.",
+
+  "api_url": "https://repository.example.edu/server/api",
+  "site_url": "https://repository.example.edu",
+
+  "collection": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "uuid": "11111111-1111-4111-8111-111111111111",
+    "name": "Example Research Collection",
+    "handle": "9999.1/1001",
+    "type": "collection"
+  },
+
+  "deposits_page_one": [
+    {
+      "uuid": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+      "name": "Wearable Sleep Tracking in Practice",
+      "handle": "9999.1/2001",
+      "lastModified": "2026-05-16T08:28:18.352+00:00",
+      "inArchive": true,
+      "withdrawn": false,
+      "type": "item",
+      "metadata": {
+        "dc.title": [{"value": "Wearable Sleep Tracking in Practice"}],
+        "dc.description.abstract": [{"value": "A synthetic abstract, written for this fixture, describing an invented guide to choosing sleep measures from wrist-worn devices in a study that never took place."}],
+        "dc.description": [{"value": "Presented at the Example Symposium."}],
+        "dc.description.depositor": [{"value": "Example Depositor (depositor@example.edu)"}],
+        "dc.contributor.author": [{"value": "Example, Ada"}, {"value": "Sample, Bo"}],
+        "dc.date.issued": [{"value": "2026-01-26"}],
+        "dc.subject": [{"value": "sleep-research"}, {"value": "wearables"}],
+        "dc.subject.other": [{"value": "example-topic"}, {"value": "wearables"}],
+        "dc.publisher": [{"value": "Example Research Center"}],
+        "dc.rights": [{"value": "Attribution-ShareAlike 4.0 International"}],
+        "dc.identifier.uri": [
+          {"value": "https://hdl.handle.net/9999.1/2001"},
+          {"value": "https://doi.org/10.9999/example-1"},
+          {"value": "https://docs.example.edu/guides/sleep-measures"}
+        ],
+        "dc.identifier.doi": [{"value": "https://dx.doi.org/10.9999/example-1"}]
+      },
+      "_embedded": {
+        "bundles": {
+          "_embedded": {
+            "bundles": [
+              {
+                "name": "ORIGINAL",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "a1111111-1111-4111-8111-a11111111111",
+                          "name": "Wearable Sleep Tracking in Practice.pdf",
+                          "sizeBytes": 138113,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/a1111111-1111-4111-8111-a11111111111/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "name": "TEXT",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "a2222222-2222-4222-8222-a22222222222",
+                          "name": "Wearable Sleep Tracking in Practice.pdf.txt",
+                          "sizeBytes": 4460,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/a2222222-2222-4222-8222-a22222222222/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "name": "THUMBNAIL",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "a3333333-3333-4333-8333-a33333333333",
+                          "name": "Wearable Sleep Tracking in Practice.pdf.jpg",
+                          "sizeBytes": 5071,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/a3333333-3333-4333-8333-a33333333333/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "name": "LICENSE",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "a4444444-4444-4444-8444-a44444444444",
+                          "name": "license.txt",
+                          "sizeBytes": 1260,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/a4444444-4444-4444-8444-a44444444444/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "uuid": "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
+      "name": "Poster: Example Study Findings",
+      "handle": "9999.1/2002",
+      "lastModified": "2026-04-01T10:00:00.000+00:00",
+      "inArchive": true,
+      "withdrawn": false,
+      "type": "item",
+      "metadata": {
+        "dc.title": [{"value": "Poster: Example Study Findings"}],
+        "dc.description.abstract": [{"value": "A synthetic abstract for an invented poster deposited as an image, so no text can be read out of the file itself."}],
+        "dc.contributor.author": [{"value": "Sample, Bo"}],
+        "dc.date.issued": [{"value": "2025-11-10"}],
+        "dc.identifier.uri": [{"value": "https://hdl.handle.net/9999.1/2002"}]
+      },
+      "_embedded": {
+        "bundles": {
+          "_embedded": {
+            "bundles": [
+              {
+                "name": "ORIGINAL",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "b1111111-1111-4111-8111-b11111111111",
+                          "name": "Example_Poster_2025.png",
+                          "sizeBytes": 2808850,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/b1111111-1111-4111-8111-b11111111111/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "uuid": "cccccccc-1111-4111-8111-cccccccccccc",
+      "name": "Example Dataset Documentation",
+      "handle": "9999.1/2003",
+      "lastModified": "2026-03-02T09:15:00.000+00:00",
+      "inArchive": true,
+      "withdrawn": false,
+      "type": "item",
+      "metadata": {
+        "dc.title": [{"value": "Example Dataset Documentation"}],
+        "dc.description.abstract": [{"value": "A synthetic abstract for an invented deposit whose extracted text file is far larger than a build will read."}],
+        "dc.identifier.uri": [{"value": "https://hdl.handle.net/9999.1/2003"}]
+      },
+      "_embedded": {
+        "bundles": {
+          "_embedded": {
+            "bundles": [
+              {
+                "name": "ORIGINAL",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "c1111111-1111-4111-8111-c11111111111",
+                          "name": "Example Dataset Documentation.pdf",
+                          "sizeBytes": 90000000,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/c1111111-1111-4111-8111-c11111111111/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "name": "TEXT",
+                "_embedded": {
+                  "bitstreams": {
+                    "_embedded": {
+                      "bitstreams": [
+                        {
+                          "uuid": "c2222222-2222-4222-8222-c22222222222",
+                          "name": "Example Dataset Documentation.pdf.txt",
+                          "sizeBytes": 9000000,
+                          "_links": {"content": {"href": "https://repository.example.edu/server/api/core/bitstreams/c2222222-2222-4222-8222-c22222222222/content"}}
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "uuid": "dddddddd-1111-4111-8111-dddddddddddd",
+      "name": "Withdrawn Example Deposit",
+      "handle": "9999.1/2004",
+      "lastModified": "2026-02-02T09:15:00.000+00:00",
+      "inArchive": true,
+      "withdrawn": true,
+      "type": "item",
+      "metadata": {
+        "dc.title": [{"value": "Withdrawn Example Deposit"}],
+        "dc.description.abstract": [{"value": "A synthetic abstract for an invented deposit the repository has withdrawn."}]
+      },
+      "_embedded": {"bundles": {"_embedded": {"bundles": []}}}
+    },
+
+    {
+      "uuid": "eeeeeeee-1111-4111-8111-eeeeeeeeeeee",
+      "name": "Example Deposit Without Identifiers",
+      "lastModified": "2026-01-05T12:00:00.000+00:00",
+      "inArchive": true,
+      "withdrawn": false,
+      "type": "item",
+      "metadata": {
+        "dc.title": [{"value": "Example Deposit Without Identifiers"}],
+        "dc.description.abstract": [{"value": "A synthetic abstract for an invented deposit that carries no handle, no digital object identifier, and no other address at all."}]
+      },
+      "_embedded": {"bundles": {"_embedded": {"bundles": []}}}
+    }
+  ],
+
+  "deposits_page_two": [
+    {
+      "uuid": "ffffffff-1111-4111-8111-ffffffffffff",
+      "name": "Example Deposit On The Second Page",
+      "handle": "9999.1/2006",
+      "lastModified": "2025-12-12T08:00:00.000+00:00",
+      "inArchive": true,
+      "withdrawn": false,
+      "type": "item",
+      "metadata": {
+        "dc.title": [{"value": "Example Deposit On The Second Page"}],
+        "dc.description.abstract": [{"value": "A synthetic abstract for an invented deposit that a paged listing only returns on its second page."}],
+        "dc.identifier.uri": [{"value": "https://hdl.handle.net/9999.1/2006"}]
+      },
+      "_embedded": {"bundles": {"_embedded": {"bundles": []}}}
+    }
+  ],
+
+  "texts": {
+    "https://repository.example.edu/server/api/core/bitstreams/a2222222-2222-4222-8222-a22222222222/content": "  \n \nWearable Sleep Tracking in Practice \nBy Example, Ada \n \n \nSummary \nSynthetic body text standing in for the plain text a repository extracts from a deposited \nfile, padded with the ragged spacing such text really arrives with so the tests exercise \nthe tidying that happens before it is chunked. \n \n \n \nMethods \nNothing here describes real work, real people, or real results. \n",
+    "https://repository.example.edu/server/api/core/bitstreams/a4444444-4444-4444-8444-a44444444444/content": "This deposit agreement text is identical on every deposit and must never reach the index.",
+    "https://repository.example.edu/server/api/core/bitstreams/c2222222-2222-4222-8222-c22222222222/content": "Synthetic text for an oversized file, which a build refuses by name rather than reading."
+  }
+}

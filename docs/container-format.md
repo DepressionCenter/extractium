@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -33,7 +33,7 @@ The container is the one file every Extractium client reads: a search index with
 
 **Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v4_header.json` pins the header against a committed snapshot. The clients that read the file are scheduled in the [implementation plan](implementation-plan.md), Phase 4.
 
-Version 3 replaces the version 2 layout that Field Station AI's `build-kb-index.py` writes. Field Station AI keeps its own version 2 file and is not affected by anything on this page. The differences are listed near the end, under "Changes from version 2".
+This layout replaces the version 2 layout that Field Station AI's `build-kb-index.py` writes. Field Station AI keeps its own version 2 file and is not affected by anything on this page. The differences are listed near the end, under "Changes from version 2".
 
 
 ## Why one binary file
@@ -60,7 +60,7 @@ A reader copies the vector bytes into a fresh buffer before viewing them as a ty
 |---|---|---|
 | `_license` | text | The license notice for the file. Present because the file is a JSON document with no other place for a notice. |
 | `format` | text | Always `extractium-compendium`. A reader refuses any other value. |
-| `v` | whole number | Layout version. This page describes `3`. |
+| `v` | whole number | Layout version. This page describes `4`. |
 | `extractium` | text | Version of the tool that wrote the file, for example `0.1.0`. |
 | `builtAt` | text | Build time in UTC, ISO 8601 with a `Z` suffix, for example `2026-09-04T12:00:00Z`. |
 | `site` | text | Display name of the knowledge base. Defaults to the title of the first page crawled. |
@@ -101,7 +101,7 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `x` | text | The section text. At most `CHUNK_MAX_CHARS` characters; longer sections are split into several parents with the same heading. |
 | `u` | text | Source URL. For local files, `local:` followed by the path relative to the source folder. |
 | `host` | text | Host name of `u`, lowercase. Empty for local files. |
-| `source_type` | text | Which kind of source the parent came from. One of: `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`. |
+| `source_type` | text | Which kind of source the parent came from. One of: `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`, `repository` (a scholarly repository such as a DSpace instance). |
 | `source_label` | text | The name a reader sees for the source this parent came from, such as `Peer-to-Peer Program`. Never empty, and at most 60 characters. Set from the `label` each source must give itself in the configuration. Two sources of the same `source_type` are told apart by this and nothing else. |
 | `content_type` | text | What the page is. One of: `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`. |
 | `categories` | list of text | Hierarchy taken from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when the source has none. |
@@ -226,6 +226,8 @@ Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910
 
 `v` changes only when the layout changes in a way a reader cannot ignore: a moved or removed field, a new meaning for an old field, a different vector encoding. Adding a field readers may ignore does not bump `v`. Readers ignore fields they do not know.
 
+A new value in an existing field is not a layout change either. `source_type` gained `repository` without a bump: a client that does not know the value shows the label it was given, which is what it does with every value it has no special rule for.
+
 A field that is always present, and that a reader would use if it knew about it, is not one of those. `source_label` is the example: a client grouping results by source needs it on every parent, so version 4 exists rather than leaving a reader to guess whether a file has it. Ask which is worse for the reader, a refusal or a wrong answer, and bump when the answer is a wrong answer.
 
 
@@ -233,7 +235,7 @@ A field that is always present, and that a reader would use if it knew about it,
 
 1. Read the first four bytes as a little-endian unsigned 32-bit integer; call it `N`.
 2. Decode bytes `4` to `4 + N` as UTF-8 and parse the JSON object.
-3. Refuse the file unless `format` is `extractium-compendium` and `v` is `3`.
+3. Refuse the file unless `format` is `extractium-compendium` and `v` is `4`.
 4. Refuse the file unless `embedding.model` and `embedding.dims` match the embedder you will use for queries.
 5. Copy the remaining bytes into a fresh buffer and check the length against `len(children.pid) × embedding.dims × width(dtype)`.
 6. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.

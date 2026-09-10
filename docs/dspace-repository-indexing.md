@@ -1,8 +1,22 @@
 <!--
 This file is part of Extractium™
+docs/dspace-repository-indexing.md
+Author(s): Gabriel Mongefranco
+Created: 2026-09-09
+Last Modified: 2026-09-10
+Summary: Why a DSpace repository such as the University of Michigan
+Library's Deep Blue cannot be crawled, what its own interface holds
+instead, and how the dspace source reads a collection's deposits: the
+metadata, the three kinds of address each deposit carries, the text the
+repository extracted from the deposited files, and the change stamp that
+keeps a rebuild from downloading anything.
+Notes: See README file for documentation and full license information.
+
 Copyright © 2026 The Regents of the University of Michigan
+
 Licensed under the GNU Free Documentation License v1.3 or later.
 See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license information.
+
 -->
 
 # Extractium™
@@ -13,13 +27,13 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This page describes a planned source plugin that reads scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue. It explains why the ordinary web crawler cannot read one, what the repository's own interface offers instead, and the shape of the plugin that would use it. It is the design for Phase 9 of the [implementation plan](implementation-plan.md); none of it is built yet.
+This page describes the source that reads scholarly deposits out of a DSpace repository, such as the University of Michigan Library's Deep Blue. It explains why the ordinary web crawler cannot read one, what the repository's own interface holds instead, and how the source uses it. It was the design for Phase 9 of the [implementation plan](implementation-plan.md), and it now records what was built.
 
-Read it before starting that phase. Everything here about the interface was checked against Deep Blue on 2026-09-09, and the results are recorded rather than assumed.
+Everything here about the interface was checked against Deep Blue, first on 2026-09-09 and again on 2026-09-10 while the source was written. The results are recorded rather than assumed, and where a check changed the design, this page says so.
 
 ## Who this page is for
 
-Whoever builds Phase 9, and anyone deciding whether to point Extractium at a repository of their own. You do not need to know DSpace. You do need to know what a knowledge base is for.
+Whoever maintains this source, and anyone deciding whether to point Extractium at a repository of their own. You do not need to know DSpace. You do need to know what a knowledge base is for.
 
 ## Why the crawler cannot read this
 
@@ -38,7 +52,7 @@ This is the same problem GitHub's file viewer has, and it has the same answer. T
 | Where the interface lives | `https://backend.production.deepblue-documents.lib.umich.edu/server/api` |
 | Collections in scope | `3acf951c-e107-4b8d-8f7d-ced171665b11` (Eisenberg Family Depression Center), `7503b0dc-27a2-4ce9-bcbc-50b339ecb486` (MeTRIC) |
 
-**The two addresses are different hosts, and that is the first thing to get right.** `deepblue.lib.umich.edu/server/api` answers with a web page, not data: it is the reader's site, which returns its own shell for any address it does not recognise. A build pointed there would receive HTML that parses as nothing and report a confusing failure.
+**The two addresses are different hosts, and that is the first thing to get right.** `deepblue.lib.umich.edu/server/api` answers with a web page, not data: it is the reader's site, which returns its own shell for any address it does not recognize. A build pointed there stops with a message naming that mistake, rather than failing further along where the cause would be hard to see.
 
 The real address is written into the reader's site as part of its own configuration, under the name `dspaceServer`. That is how it was found, and how to find it for another repository. It is not guessable, so it is a setting rather than something the plugin derives.
 
@@ -117,38 +131,46 @@ That answers "index the content of those files" without adding a single dependen
 | `ORIGINAL` | The deposited files themselves | Recorded: name, size, type, and download address |
 | `TEXT` | Text already extracted from those files | **Indexed** |
 | `THUMBNAIL` | Preview images | No |
-| `LICENSE`, `CC-LICENSE` | Deposit agreements and licence files | No. Boilerplate, identical across deposits |
+| `LICENSE`, `CC-LICENSE` | Deposit agreements and license files | No. Boilerplate, identical across deposits |
 
 ### How complete the extracted text is
 
-Measured across both collections on 2026-09-09, so this is a count and not an estimate:
+Counted across both collections on 2026-09-10, by the source itself:
 
-| Collection | Deposits | With extracted text |
+| Collection | Deposits | With file text in the index |
 |---|---|---|
 | Eisenberg Family Depression Center | 9 | 7 |
-| MeTRIC | 33 | 29 |
-| **Total** | **42** | **36 (86%)** |
+| MeTRIC | 33 | 28 |
+| **Total** | **42** | **35 (83%)** |
 
-Every deposited file in both collections is a PDF or a PNG. There are no Word documents and no archives today, though the plugin should not assume that stays true.
+Every deposited file in both collections is a PDF or a PNG. There are no Word documents and no archives today, though the source does not assume that stays true.
 
-The six deposits with no extracted text divide into two kinds:
+The seven deposits with no file text divide into three kinds:
 
-- **Two are images.** Posters deposited as PNG. There is no text to extract without optical character recognition, which is out of scope.
-- **Four are PDFs that produced nothing.** Most likely they are images inside a PDF wrapper, which is what happens when a poster is exported from design software.
+- **Two are images.** Posters deposited as PNG, with no `TEXT` bundle at all. There is no text to extract without optical character recognition, which is out of scope.
+- **Four are PDFs that produced no `TEXT` bundle.** Most likely they are images inside a PDF wrapper, which is what happens when a poster is exported from design software.
+- **One has a `TEXT` bundle holding a single newline.** The repository tried, and got nothing. This is why the source counts readable text rather than counting bundles: a one-byte file would otherwise be reported as a deposit whose contents are in the index.
 
-Both kinds are still indexed, from their title, abstract, authors, and subjects. **A deposit is never skipped for having no readable file**, and the record says plainly that the file's contents are not in the index, so a search that misses it is explainable.
+All three kinds are still indexed, from their title, abstract, authors, and subjects. **A deposit is never skipped for having no readable file**, and the record says plainly that the file's contents are not in the index, so a search that misses it is explainable.
+
+## One request covers a hundred deposits
+
+The listing takes an `embed` parameter, and `bundles/bitstreams` makes it return each deposit's bundles and files alongside its metadata. This was an open question in the design, and the answer is yes: nothing needs a second request per deposit.
+
+So one request brings back, for a hundred deposits at a time, their metadata, the change stamp that says whether each has moved, and the name, size, and address of every file attached to them.
 
 ## Knowing whether to read it again
 
-The listing carries `lastModified` for every deposit, so one request per hundred deposits is enough to tell what has changed since the last build.
+The listing carries `lastModified` for every deposit, so that one request is enough to tell what has changed since the last build.
 
-That makes the plan for each build:
+That makes each build:
 
-1. Ask for the listing. One request per hundred deposits.
-2. Compare each deposit's `lastModified` with what the cache recorded.
-3. Fetch files and text only for the ones that changed.
+1. Confirm each collection exists, and read its name. One request per collection.
+2. Ask for the listing. One request per hundred deposits.
+3. Compare each deposit's `lastModified` with what the cache recorded.
+4. Download extracted text only for the deposits that changed.
 
-A rebuild of a collection nobody has touched costs one request and downloads nothing.
+A rebuild of a collection nobody has touched costs those first two requests and downloads nothing. Measured against both Deep Blue collections on 2026-09-10: the first build made 37 text downloads, and the second made none.
 
 Two limits are worth writing down rather than discovering later:
 
@@ -174,8 +196,8 @@ sources:
     api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
     site_url: https://deepblue.lib.umich.edu
     collections:
-      - 3acf951c-e107-4b8d-8f7d-ced171665b11    # Eisenberg Family Depression Center
-      - 7503b0dc-27a2-4ce9-bcbc-50b339ecb486    # MeTRIC
+      - https://hdl.handle.net/2027.42/195355    # Eisenberg Family Depression Center
+      - https://hdl.handle.net/2027.42/195645    # MeTRIC
     include_full_text: true
     max_file_bytes: 2000000
 ```
@@ -185,11 +207,24 @@ sources:
 | `api_url` | required | Where the repository's interface lives. Not guessable; see above for how to find it |
 | `site_url` | required | Where a reader opens a deposit. Recorded on every document so a search result is a link a person can follow |
 | `label` | required, as for every source | What this repository is called in the index. See [configuration reference](configuration.md) |
-| `collections` | required, at least one | Which collections to read, by identifier |
+| `collections` | required, at least one | Which collections to read. A handle link, a bare handle, the address a browser shows, or a bare identifier; see below |
 | `include_full_text` | `true` | Whether extracted text is indexed as well as the description |
 | `max_file_bytes` | 2000000 | Largest extracted text file to read. Anything larger is named and skipped |
 
 **Collections are named, never discovered.** A repository holds hundreds of collections belonging to everybody at a university. The same rule that governs GitHub accounts applies here for the same reason: a build reads what its operator asked for, and nothing it merely found a link to.
+
+**Four ways to write one collection.** A repository publishes a handle link beside each collection, and following that link lands on an address carrying the collection's identifier instead. An operator has one or the other in hand, so both are accepted, with or without their scheme and host:
+
+| Written as | Example |
+|---|---|
+| The handle link | `https://hdl.handle.net/2027.42/195355` |
+| A bare handle | `2027.42/195355` |
+| The address a browser shows | `https://deepblue.lib.umich.edu/collections/3acf951c-e107-4b8d-8f7d-ced171665b11` |
+| A bare identifier | `3acf951c-e107-4b8d-8f7d-ced171665b11` |
+
+A handle is resolved through the interface's own `pid/find` address, which answers with a redirect to the record the handle names. The source reads that redirect rather than following it, for two reasons: the address it points at says what kind of record the handle names, so a handle naming one deposit is refused instead of searched as though it were a collection; and an address pointing anywhere other than the configured interface is refused rather than requested.
+
+**Every collection is confirmed before anything is searched.** This turned out to matter far more than "so its name can be read". A search scope the interface does not recognize is not refused: on 2026-09-10, a made-up scope was answered with all 176,555 deposits in Deep Blue. A well-formed identifier for a collection that does not exist answers `500`. Reading the collection first turns both into a plain "the repository has no collection X", and it is why a configured identifier is checked against the shape of a UUID before any request is made.
 
 ### There is no fall back to crawling
 
@@ -202,7 +237,7 @@ One document per deposit, not two. The abstract and the extracted text describe 
 - **URL**: the deposit's page on the reader's site, `<site_url>/items/<uuid>`. Somewhere a person can actually go.
 - **Title**: `dc.title`.
 - **Body**: the abstract first, then authors, date, subjects, rights, and the identifiers, then the extracted text. Abstract first because it is the part a person wrote deliberately.
-- **Categories**: the label, then the collection name.
+- **Categories**: the collection name. Not the source label as well: the configuration applies the label to every record after the source runs, so repeating it here would store the same name twice.
 - **`source_type`**: `repository`, a new value. Deep Blue is not a website, a code host, or a knowledge base, and search clients key display rules on this field.
 - **`content_type`**: `article`, which already exists and fits a scholarly deposit.
 
@@ -212,36 +247,46 @@ Extracted PDF text arrives with heavy, ragged whitespace, so it needs collapsing
 
 - **Nothing is executed and nothing is extracted to disk.** Only the already-extracted plain text is read, so there is no PDF parser and no archive reader to attack.
 - **Identifiers from the interface are checked before use.** A collection or deposit identifier is a UUID; anything else is refused before it reaches a request path, as it is for GitHub blob names.
-- **The check for protected health information must cover this.** Extracted text from a research poster is exactly where a stray identifier could appear, far more so than in prose somebody wrote for the web. Point the lint at what this source produces.
+- **The check for protected health information should be pointed at this.** Extracted text from a research poster is exactly where a stray identifier could appear, far more so than in prose somebody wrote for the web. It is not covered by the default `phi_lint: local`, which scans the content that was never published, and a deposit in a public repository was published deliberately. Set `phi_lint: 'all'` on a build with this source. Recorded as a known gap in [compliance](compliance.md), so the choice is visible rather than assumed.
+- **A file is downloaded only from the configured interface.** A file's address arrives in a response, so it is matched against `api_url` and against the one path shape a deposited file's contents use. A response cannot point a build's requests at another host.
 - **Only what is already public is read.** The interface is read without credentials, so a deposit under embargo is not returned and none is requested.
 - **The build identifies itself truthfully and paces its requests**, as every other source does. There is no `robots.txt` check, because this reads a published interface rather than crawling pages, which is how the GitHub API source behaves too.
 
-## What this needs from the rest of the build
+## What this took from the rest of the build
 
-- `repository` added to the `source_type` vocabulary in `extractium/core/models.py`.
-- A cache area for the interface's answers, under the existing cache folder, keyed by deposit identifier and `lastModified`.
+- `repository` added to the `source_type` vocabulary in `extractium/core/models.py`. A new value in a field that already existed, so the container format did not change version.
+- A cache area under the existing cache folder, `.kb_cache/repository/`, holding each deposit's extracted text under its identifier and the change stamp that text belongs to. Text stored under an older stamp is ignored rather than served.
 - Nothing else. No new dependency, no change to the chunker, and no change to any output format.
+
+## Where the code is
+
+| File | What is in it |
+|---|---|
+| `extractium/sources/dspace_client.py` | The interface: handle resolution, collection lookup, the paged listing, the extracted-text download, and every check applied to an identifier or address that arrived in a response |
+| `extractium/sources/dspace.py` | The source: the collections, the deposits worth a document, the record each becomes, the change stamp, and the coverage report |
+| `tests/test_source_dspace.py` | The tests, over the committed fixture in `tests/fixtures/dspace/` |
 
 ## How this is tested
 
-Every response faked from committed fixtures; no test reaches Deep Blue.
+Every response is scripted from a committed fixture; no test reaches Deep Blue.
 
 | Area | What is checked |
 |---|---|
-| Listing | Paging across more than one page; a collection with no deposits; a collection that does not exist |
-| Identifiers | Handle, DOI, and a third address told apart correctly; a deposit with only some of them; a deposit with none |
-| Files | A deposit with extracted text; one with none; one whose only file is an image; a text file over the size ceiling |
-| Change detection | An unchanged collection downloads nothing; one changed deposit re-reads only that deposit; a withdrawn deposit disappears |
-| Safety | An identifier that is not a UUID is refused; an interface address that answers HTML rather than data is reported clearly |
+| Configured collections | All four ways of writing one; the same collection written twice read once; one deposit refused in place of a collection; a handle read from the redirect rather than followed; a handle naming a deposit, and one pointing at another host, both refused |
+| Listing | Paging across more than one page; a collection with no deposits; a collection that does not exist; the files asked for alongside the metadata |
+| Identifiers | Handle, DOI, and a third address told apart correctly; a deposit with only some of them; a deposit with none; the same address written twice kept once |
+| Files | A deposit with extracted text; one whose only file is an image; a text file over the ceiling by its listed size and by its actual body; an answer that is not plain text; the license and preview bundles never downloaded |
+| Change detection | An unchanged collection downloads nothing; one changed deposit re-reads only that deposit; a withdrawn deposit and one still in a submission workflow both disappear |
+| Safety | An identifier that is not a UUID never reaches a request; a file address on another host is never requested; an interface address that answers a web page is reported clearly; no credential in any request header; who submitted a deposit is never indexed |
 | Records | One document per deposit; the URL opens on the reader's site; whitespace collapsed; a deposit with no readable file still indexed and marked as such |
 
-## Risks and open checks
+## Risks and what is still open
 
-- **The interface address may change.** It names a production host explicitly. If Deep Blue moves it, the setting has to be updated, and the failure will be an interface that answers HTML. That case gets its own error message for exactly this reason.
+- **The interface address may change.** It names a production host explicitly. If Deep Blue moves it, the setting has to be updated, and the failure is an interface that answers a web page. That case has its own error message for exactly this reason.
 - **Extracted text quality varies.** It is machine output from a page layout, so reading order can be wrong on a poster with columns. It is still far better than nothing, and better than anything this build would extract itself.
-- **Four PDFs produced no text**, and whether that is the file's fault or the repository's has not been established. Worth one look during the phase, because if the repository can be asked to re-extract, that is a message to the library rather than code here.
-- **Whether the listing can carry the file information too** has not been tested. If it can, a build costs one request per hundred deposits plus the text, instead of one request per deposit as well. Worth ten minutes at the start of the phase.
-- **Other repositories may differ.** DSpace 7 is a standard, but sites configure their metadata fields. The plugin should read what it recognises and ignore the rest rather than insisting on a shape.
+- **Five deposits produced no text from a PDF**, four with no `TEXT` bundle and one with an empty file, and whether that is the file's fault or the repository's is still not established. If the repository can be asked to extract them again, that is a message to the library rather than a change here.
+- **Other repositories may differ.** DSpace 7 is a standard, but every site configures its own metadata fields. The source reads the fields it recognizes and ignores the rest rather than insisting on a shape, so a repository with a different profile loses detail rather than failing.
+- **A collection of more than five thousand deposits stops at that ceiling**, and says so. Neither Deep Blue collection is close, and the ceiling exists so that a listing which never ends cannot run a build out of time.
 
 ## Out of scope
 
@@ -249,13 +294,14 @@ Optical character recognition on image-only deposits. Parsing PDFs, Word documen
 
 ## Conclusion
 
-Deep Blue cannot be crawled, and does not need to be. It publishes a plain interface that hands over a collection's deposits with their abstracts, their identifiers, and the text of their files already extracted, and it says when each one last changed so a rebuild reads only what moved. The work is a source plugin, one new `source_type`, and no new dependency. Build it as `dspace` rather than as Deep Blue, because everything here is standard and the next repository somebody asks about will work the same way.
+Deep Blue cannot be crawled, and does not need to be. It publishes a plain interface that hands over a collection's deposits with their abstracts, their identifiers, and the text of their files already extracted, and it says when each one last changed so a rebuild reads only what moved. It cost one source plugin, one new `source_type`, and no new dependency. It is built as `dspace` rather than as Deep Blue, because everything here is standard DSpace 7, and the next repository somebody asks about will work the same way.
 
-Phase 9 of the [implementation plan](implementation-plan.md) holds the deliverables and the finishing conditions.
+To point a build at a repository, see the `dspace` section of the [configuration reference](configuration.md). If a build stops on one of the messages above, [troubleshooting](troubleshooting.md) has the fix.
 
 ## Additional Resources
 
 - [Implementation plan](implementation-plan.md) — Phase 9 and the order of work.
+- [Troubleshooting](troubleshooting.md) — what each failure of this source means, and what to do about it.
 - [Extractium specification](extractium-spec.md) — plugin kinds, records, and the source table.
 - [GitHub repository indexing](github-repository-indexing.md) — the earlier case of reading an interface instead of scraping pages.
 - [Configuration reference](configuration.md) — every setting a build accepts.

@@ -13,7 +13,7 @@ tests/test_web_source.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-10"
 
 import importlib
 import pathlib
@@ -804,7 +804,7 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
     """
     with open(PYPROJECT_PATH, "rb") as f:
         entry_points = tomllib.load(f)["project"]["entry-points"]
-    assert set(entry_points["extractium.sources"]) == {"web", "local", "github_api"}
+    assert set(entry_points["extractium.sources"]) == {"web", "local", "github_api", "dspace"}
     assert set(entry_points["extractium.site_handlers"]) == {"generic", "tdx", "github"}
 
     reg = registry.Registry()
@@ -817,5 +817,5 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
             plugin = getattr(importlib.import_module(module_name), attribute)
             assert plugin.name == name
             register(plugin, registry.Tier.BUILTIN)
-    assert reg.source_names() == ("github_api", "local", "web")
+    assert reg.source_names() == ("dspace", "github_api", "local", "web")
     assert reg.site_handler_names() == ("generic", "github", "tdx")

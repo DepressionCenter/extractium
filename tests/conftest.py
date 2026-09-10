@@ -1,15 +1,16 @@
 """
 Summary: Shared pytest fixtures for extractium's characterization test
 suite: a safe (no-network) import of the vendored reference module, fake
-HTTP session/response test doubles for both page fetches and the GitHub
-API, a deterministic embed_chunks stand-in, and cache-directory
-isolation.
+HTTP session/response test doubles for page fetches, the GitHub API, and
+a repository interface, a deterministic embed_chunks stand-in, and
+cache-directory isolation.
 
 This file is part of Extractium™
 tests/conftest.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -28,7 +29,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-10"
 
 import hashlib
 import importlib
@@ -181,6 +182,50 @@ class FakeGitHubSession:
         return any("Authorization" in call["headers"] for call in self.calls)
 
 
+class FakeDSpaceSession:
+    """
+    Stand-in for requests.Session, scripted per repository-interface
+    address.
+
+    `responses` maps a URL, without its query string, to one
+    FakeApiResponse or to a list of them popped in call order, which is
+    how a paged listing is scripted: the same address answers page after
+    page. Every call is recorded in .calls, so a test can assert what was
+    requested, in what order, and whether a redirect was followed rather
+    than read.
+
+    A URL nothing is scripted for answers 404, which is what a repository
+    does for a collection or deposit it does not have.
+    """
+
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def get(self, url, headers=None, params=None, timeout=None, allow_redirects=True):
+        self.calls.append({
+            "url": url, "headers": dict(headers or {}), "params": dict(params or {}),
+            "timeout": timeout, "allow_redirects": allow_redirects,
+        })
+        entry = self.responses.get(url)
+        if entry is None:
+            return FakeApiResponse(status_code=404, payload={"message": "Not Found"})
+        if isinstance(entry, list):
+            return entry.pop(0) if len(entry) > 1 else entry[0]
+        return entry
+
+    @property
+    def urls(self):
+        """Every URL requested, in order."""
+        return [call["url"] for call in self.calls]
+
+
+@pytest.fixture
+def fake_dspace_session_factory():
+    """Returns the FakeDSpaceSession class so tests can script one per scenario."""
+    return FakeDSpaceSession
+
+
 @pytest.fixture
 def fake_github_session_factory():
     """Returns the FakeGitHubSession class so tests can script one per scenario."""
@@ -292,6 +337,9 @@ def isolated_core_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "CACHE_GITHUB_BLOBS_DIR", str(github_dir / "blobs"))
     monkeypatch.setattr(cache, "CACHE_GITHUB_REPOSITORIES_DIR", str(github_dir / "repositories"))
     monkeypatch.setattr(cache, "CACHE_GITHUB_ANALYSIS_DIR", str(github_dir / "analysis"))
+    # So does the repository subtree, which holds text a scholarly
+    # repository extracted from a deposit's files.
+    monkeypatch.setattr(cache, "CACHE_REPOSITORY_DIR", str(cache_dir / "repository"))
     return cache_dir
 
 

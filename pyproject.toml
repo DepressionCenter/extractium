@@ -81,6 +81,7 @@ extractium = "extractium.cli:main"
 web = "extractium.sources.web:WebSource"
 local = "extractium.sources.local:LocalSource"
 github_api = "extractium.sources.github_api:GitHubApiSource"
+dspace = "extractium.sources.dspace:DSpaceSource"
 
 [project.entry-points."extractium.site_handlers"]
 generic = "extractium.sources.generic:GenericHandler"

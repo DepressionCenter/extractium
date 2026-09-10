@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-09
+# Last Modified: 2026-09-10
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -106,6 +106,27 @@ sources:
   #  include_archived: true         # archived documentation is still documentation
   #  include_code: true             # reserved for code analysis; changes nothing yet
   #  max_file_bytes: 2000000        # larger files are skipped, and each one is named
+
+  # Scholarly deposits held in a DSpace repository, such as a university
+  # library's. Read through the repository's own interface, which already
+  # holds the text of every deposited file, so no PDF reader is involved.
+  #
+  # The two addresses are different hosts and neither implies the other:
+  # site_url is where a reader opens a deposit, and api_url is the interface
+  # behind it, named in the reader site's own dspaceServer setting.
+  #
+  # Collections are listed, never discovered: a repository holds everybody's
+  # deposits. Write each one as the handle link the repository publishes, or
+  # as the identifier in the address a browser shows after following it.
+  #- type: dspace
+  #  label: Example Repository
+  #  api_url: https://repository.example.edu/server/api
+  #  site_url: https://repository.example.edu
+  #  collections:
+  #    - https://hdl.handle.net/9999.1/1001      # a handle link
+  #    - 11111111-1111-4111-8111-111111111111    # or a collection identifier
+  #  include_full_text: true         # false indexes each deposit's description alone
+  #  max_file_bytes: 2000000         # larger files are skipped, and each one is named
 
   # Captions from a YouTube channel, playlists, or single videos. Listing a
   # channel or playlist needs YOUTUBE_API_KEY in the environment.

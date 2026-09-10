@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-10"
 
 import pathlib
 import re
@@ -49,6 +49,12 @@ from extractium.core.fetch import DEFAULT_USER_AGENT
 # The label rules belong to the records that carry the label, so the
 # configuration checks against the same limit the records enforce.
 from extractium.core.models import MAX_SOURCE_LABEL_CHARS
+
+# A repository collection may be written four ways, and which one an
+# operator has in hand depends on where they copied it from. The rules for
+# reading them belong with the client that looks a collection up, so the
+# configuration and the source agree on what is accepted.
+from extractium.sources.dspace_client import collection_selectors
 
 
 ### Global Defaults ###
@@ -128,6 +134,17 @@ GITHUB_ACCOUNT_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,
 # sources name. Empty by default: an account nobody asked for is not read.
 DEFAULT_GITHUB_OWNERS = ()
 
+# Whether a repository source indexes the text a repository extracted from
+# each deposit's files, alongside the deposit's own description. On by
+# default: the description of a poster is a paragraph, and the poster
+# itself is the content somebody is searching for.
+DEFAULT_DSPACE_INCLUDE_FULL_TEXT = True
+
+# Largest extracted text file a repository source reads, in bytes. A file
+# far above this is machine output rather than prose worth indexing whole.
+# Every file left out for this reason is named in the progress log.
+DEFAULT_DSPACE_MAX_FILE_BYTES = 2_000_000
+
 # An empty include list is meaningful, not missing: the crawler then scopes
 # itself to the seed URL's origin, or, for a TeamDynamix portal URL, to its
 # /TDClient/<digits>/<slug>/ prefix. See
@@ -183,6 +200,7 @@ SUGGESTED_SOURCE_LABELS = {
     "local": "Local Files",
     "github_api": "GitHub",
     "youtube": "YouTube Channel",
+    "dspace": "Document Repository",
 }
 
 # Option keys per built-in source type, beyond "type" and "label", which
@@ -199,6 +217,9 @@ SOURCE_OPTION_KEYS = {
         "include_forks", "include_archived", "include_code", "max_file_bytes",
     }),
     "youtube": frozenset({"channel_id", "playlist_ids", "video_ids", "languages"}),
+    "dspace": frozenset({
+        "api_url", "site_url", "collections", "include_full_text", "max_file_bytes",
+    }),
 }
 
 # Option keys per built-in output type, beyond "type" and "include_local",
@@ -725,6 +746,51 @@ def _read_github_api_source(entry, source):
     }
 
 
+def _read_dspace_source(entry, source):
+    """
+    Validates the options of a dspace source entry.
+
+    Collections are listed, never discovered: a repository holds the
+    deposits of everybody at a university, and an unrecognized search
+    scope is answered with all of them rather than refused. Each entry may
+    be written as a UUID, as a handle, as the handle link a repository
+    prints beside a collection, or as the collection address a browser
+    shows, because an operator has one of those in hand and should not
+    have to convert it.
+    """
+    collections = _read_text_list(entry, "collections", (), source, label="collections")
+    if not collections:
+        _fail(
+            source,
+            "collections must list at least one collection to read, such as "
+            "https://hdl.handle.net/2027.42/195355. A repository holds everybody's "
+            "deposits, so a build reads only the collections it is given.",
+        )
+    try:
+        selectors = collection_selectors(collections)
+    except ValueError as e:
+        _fail(source, f"collections: {e}")
+
+    return {
+        "api_url": _read_url(
+            entry, "api_url", source,
+            hint=" (where the repository's interface lives, such as "
+                 "https://repository.example.edu/server/api)",
+        ),
+        "site_url": _read_url(
+            entry, "site_url", source,
+            hint=" (where a reader opens a deposit, such as https://repository.example.edu)",
+        ),
+        "collections": selectors,
+        "include_full_text": _read_bool(
+            entry, "include_full_text", DEFAULT_DSPACE_INCLUDE_FULL_TEXT, source
+        ),
+        "max_file_bytes": _read_positive_int(
+            entry, "max_file_bytes", DEFAULT_DSPACE_MAX_FILE_BYTES, source
+        ),
+    }
+
+
 def _read_youtube_source(entry, source):
     """Validates the options of a youtube source entry."""
     options = {
@@ -743,6 +809,7 @@ _SOURCE_READERS = {
     "local": _read_local_source,
     "github_api": _read_github_api_source,
     "youtube": _read_youtube_source,
+    "dspace": _read_dspace_source,
 }
 
 

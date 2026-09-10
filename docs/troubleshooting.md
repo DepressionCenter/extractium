@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -178,6 +178,39 @@ That line is not an error. It is telling you the index has that repository's doc
 **Cause.** Something in the content linked to a GitHub account your configuration never named, and the build did not follow it.
 
 **Fix.** Nothing, if that is what you wanted, which it usually is: the line is there so you can see the guardrail working. If you did want that account's pages, add its exact name to `github_owners`. That lets links into the account be followed; it does not index everything the account has published.
+
+
+## Reading a document repository
+
+### The build stops saying an address `answered a web page rather than data`
+
+**Cause.** `api_url` is pointing at the site a reader opens rather than at the interface behind it. A repository's reader site answers with its own page for any address it does not recognize, so the build received markup where it expected data.
+
+**Fix.** The two are different hosts, and the interface address is not guessable from the reader's. Open the reader site and look for its `dspaceServer` setting; that value is `api_url`. For Deep Blue it is `https://backend.production.deepblue-documents.lib.umich.edu/server/api`, while a reader opens `https://deepblue.lib.umich.edu`.
+
+### The build stops with `the repository has no collection ...`
+
+**Cause.** The collection identifier or handle does not exist in that repository. Usually a typo, or a collection from a different repository.
+
+**Fix.** Open the collection in a browser and copy either the handle link it publishes or the address the browser shows; both are accepted. This failure stops the build on purpose. A search scope a repository does not recognize is answered with every deposit it holds, so a build that carried on would index the whole repository instead of your collection.
+
+### A deposit is in the index but its file contents are not
+
+**Cause.** The repository has no extracted text for that deposit's files. It happens with a poster deposited as an image, with a PDF that is really a picture of a page, and occasionally with a file whose extraction produced nothing at all.
+
+**Fix.** Nothing to fix in the build, and nothing is hidden: the deposit is still indexed from its abstract and metadata, and the record says its file contents are not in the index. If the file does hold selectable text, the repository can be asked to extract it again; that is a message to the library rather than a change here.
+
+### The progress log says an extracted text file is `over the ... byte ceiling`
+
+**Cause.** The text file is larger than `max_file_bytes`, which is two megabytes by default.
+
+**Fix.** Raise `max_file_bytes` if you want that deposit's contents. The next build reads it: a file left out for its size is not stored as read, so raising the ceiling takes effect without waiting for the deposit itself to change.
+
+### A rebuild downloads every deposit's text again
+
+**Cause.** The cache folder was deleted or moved, or `cache_dir` changed between builds. Stored text is kept under the deposit's identifier and the change stamp the repository reported for it, both of which live in that folder.
+
+**Fix.** Keep `cache_dir` pointed at the same folder between builds. A collection nobody has touched then costs one request per hundred deposits and downloads nothing.
 
 
 ## The scheduled build
