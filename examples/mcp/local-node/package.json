@@ -1,0 +1,19 @@
+{
+  "_license": "This file is part of Extractium. Copyright © 2026 The Regents of the University of Michigan. Licensed under the GNU General Public License v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the project README for full license information.",
+  "name": "extractium-kb-mcp",
+  "version": "0.1.0",
+  "description": "Local MCP server that searches a published Extractium compendium from this machine.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "server.js",
+  "exports": "./server.js",
+  "bin": { "extractium-kb-mcp": "server.js" },
+  "files": ["server.js"],
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

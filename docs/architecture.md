@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: How the Extractium codebase is put together today, which parts
 are finished, and the design decisions that have been settled, each with
 the reason and a pointer to where it is specified.
@@ -61,12 +61,13 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Adapters | `extractium/adapters/container.py`, `llmstxt.py`, `sqlite_out.py` | Working, and registered as entry points. The container writer produces the version 4 file; the llms.txt writer produces `llms.txt` and `llms-full.txt`; the SQLite writer produces `compendium.sqlite`, the same content in tables a SQL consumer can query. `extractium/adapters/base.py` holds the output folder helper and the local-content guardrail every adapter goes through. |
 | Local source | `extractium/sources/local.py` | Working, and registered as an entry point. Reads Markdown, plain text, and HTML from a folder; marks every document `local`; records a path relative to that folder as the URL; refuses a file whose real location is outside it. |
 | Clients | `extractium/search.py`, `clients/js/extractium-client.js` | Working. Each reads the version 4 container, refuses a file that fails any reader check, and runs the same hybrid search: cosine similarity, BM25, reciprocal rank fusion, a corpus-relative relevance cutoff, diversity selection with a per-section cap, and resolution of a matched window to its whole section. The caller supplies the query embedder. A committed golden container and query vector hold both to the same ranking. |
+| Local MCP servers | `examples/mcp/local-python/server.py`, `examples/mcp/local-node/server.js` | Working. One file per runtime, over the client library beside it. Each speaks JSON-RPC on standard input and output, answers both eras of the Model Context Protocol, and exposes one tool, `search_kb`, that returns whole sections with their addresses. The index address comes from the environment, must be HTTPS away from the loopback address, and is cached under a digest of itself. Examples, not part of the installed package. See [how to connect an MCP client](how-to/connect-an-mcp-client.md). |
 | Operations | `run.sh`, `run.bat`, `requirements-lock.txt`, `.github/workflows/build-compendium.yml`, `examples/data-repo/` | Working. One command builds locally on either platform from a hash-checked lock file; the workflow runs weekly and on a button press, reuses the crawl cache between runs, and publishes through the official GitHub Pages actions only. The data-repository template is what an organization copies for its own content. |
 | Command line | `extractium/cli.py` | Working. `extractium build --config config.yaml`, with `--out-dir`, `--max-pages`, and `--float32-vecs`; progress on standard error, the summary on standard output, and a distinct exit code for a bad configuration, an empty crawl, and an unwritable output. |
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 1,068 Python tests as of 2026-09-10, plus 36 Node tests for the JavaScript client (`node --test clients/js`).
+The test suite passes: 1,128 Python tests as of 2026-09-11, plus 36 Node tests for the JavaScript client (`node --test clients/js`) and 24 for the local Node MCP server (`node --test examples/mcp/local-node`).
 
 
 ## Settled design decisions
@@ -170,7 +171,7 @@ Specification: section 6.
 
 ## Conclusion
 
-A build now runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; the container and `llms.txt` adapters write it from the command line; the Python and JavaScript clients search the result identically; and one command, locally or on a weekly schedule, does the whole thing and publishes it. A folder on the operator's own machine can be indexed, with every output dropping that content unless it opted in, and every build now checks what it read for likely protected health information and writes two reports for review. GitHub repositories are read through the API, with their code analyzed into records a search can find a definition in, and a DSpace repository's deposits are read through its own interface. What is not built yet is the Open Knowledge Format output, the example MCP servers, and the YouTube source. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md); the GitHub and code-analysis work is designed in detail in [GitHub repository indexing](github-repository-indexing.md).
+A build now runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; the container and `llms.txt` adapters write it from the command line; the Python and JavaScript clients search the result identically; and one command, locally or on a weekly schedule, does the whole thing and publishes it. A folder on the operator's own machine can be indexed, with every output dropping that content unless it opted in, and every build now checks what it read for likely protected health information and writes two reports for review. GitHub repositories are read through the API, with their code analyzed into records a search can find a definition in, and a DSpace repository's deposits are read through its own interface. An assistant on the operator's own machine can search the result through either of two local MCP servers. What is not built yet is the Open Knowledge Format output, the hosted MCP examples, and the YouTube source. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md); the GitHub and code-analysis work is designed in detail in [GitHub repository indexing](github-repository-indexing.md).
 
 
 ## Additional Resources
