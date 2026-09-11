@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-11
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, what each exit code means, and how to try a small run
@@ -112,11 +112,13 @@ Built 'Example Org Knowledge Base' at 2026-09-08T14:30:00Z
   wrote    : dist/kb-index.json (2.71 MB)
   wrote    : dist/llms.txt (0.04 MB)
   wrote    : dist/llms-full.txt (1.12 MB)
+  wrote    : dist/okf (235 files, 1.18 MB)
 ```
 
 - **sections** are the blocks of text a search returns and an answer cites.
 - **windows** are the smaller pieces that are actually searched. There are usually more of them than sections.
 - **sources** is how many pages contributed at least one section. Pages that were visited but held nothing to index do not count.
+- **wrote** names each file and its size. An output that writes a folder of files, such as the Open Knowledge Format output, is named once as a folder with a count, so the summary stays short enough to read.
 
 While the build runs, it prints progress to the error stream and the summary to the output stream. So you can save the summary and still watch the run:
 

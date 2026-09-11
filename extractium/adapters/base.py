@@ -1,5 +1,6 @@
 """
-Summary: What every Extractium adapter shares: preparing the output
+Summary: What every Extractium adapter shares: the text helpers the
+Markdown outputs build links and excerpts with, preparing the output
 folder, and the confidentiality guardrail that keeps content read from a
 local folder out of an output unless that output asked for it. Publishing
 is the normal use of every output, so the safe default is the one that
@@ -10,7 +11,7 @@ extractium/adapters/base.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,6 +34,7 @@ __date__ = "2026-09-08"
 
 import dataclasses
 import pathlib
+import re
 
 import numpy as np
 
@@ -40,6 +42,72 @@ from extractium.core.bm25 import build_bm25_index
 from extractium.core.build import utf16_slice
 from extractium.core.calibration import compute_calibration_stats
 from extractium.core.models import Children
+
+### Constants ###
+
+# A parent heading is "Page title -- Section heading". Outputs that list
+# pages rather than sections keep the part before the separator.
+HEADING_SEPARATOR = " -- "
+
+# Collapses every run of whitespace, including newlines, into one space.
+WHITESPACE_RUN = re.compile(r"\s+")
+
+# Longest one-line excerpt of a page's text. Long enough to tell two
+# similarly named pages apart, short enough to stay a single line.
+EXCERPT_CHARS = 180
+
+
+### Text Helpers ###
+
+def page_title(heading):
+    """The page part of a parent heading, dropping the section part after the separator."""
+    return heading.split(HEADING_SEPARATOR, 1)[0].strip()
+
+
+def section_title(heading):
+    """
+    The section part of a parent heading, or the whole heading when the
+    page contributed a single untitled section.
+
+    Args:
+        heading (str): a parent's `t`, as the build wrote it.
+
+    Returns:
+        str: the text after the separator, or the heading itself.
+    """
+    page, separator, section = heading.partition(HEADING_SEPARATOR)
+    return section.strip() if separator and section.strip() else page.strip()
+
+
+def link(title, url):
+    """
+    One Markdown link, safe to build from a crawled page title and URL.
+
+    Both come from a page nobody here controls. A `]` in a title or a `)`
+    in a URL would end the link early and turn the rest of the line into
+    stray text, so the first is escaped and the second is percent-encoded.
+    """
+    safe_title = title.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    safe_url = url.replace("(", "%28").replace(")", "%29").replace(" ", "%20")
+    return f"[{safe_title}]({safe_url})"
+
+
+def count_of(number, noun):
+    """A counted noun that reads correctly in either number: "1 page", "2 pages"."""
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
+def excerpt(text, limit=EXCERPT_CHARS):
+    """
+    One line of text for a link's description: whitespace collapsed, cut
+    at a word boundary, with an ellipsis when anything was cut.
+    """
+    flat = WHITESPACE_RUN.sub(" ", text).strip()
+    if len(flat) <= limit:
+        return flat
+    cut = flat.rfind(" ", 0, limit)
+    return flat[:cut if cut > 0 else limit].rstrip() + "..."
+
 
 ### Output Folder ###
 

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -286,6 +286,19 @@ That line is not an error. It is telling you the index has that repository's doc
 **Cause.** An include pattern is broader than intended, or a listing page is being indexed rather than only crawled.
 
 **Fix.** Tighten `include_patterns`, add a `crawl_exclude_patterns` entry for pages that should not be fetched at all, or an `index_exclude_patterns` entry for pages worth following links from but not indexing. The [configuration reference](configuration.md) explains all three.
+
+
+### The `okf` folder holds a page that no longer exists on the site
+
+**Cause.** A build writes every page it read and deletes nothing, so a page that has since been taken down stays in the folder from the run that last saw it.
+
+**Fix.** Delete the file, or delete the whole `okf` folder and run the build again. Check `okf/log.md` first: it names the date of the build that last wrote the folder.
+
+### A page appears twice in the `okf` folder under two names
+
+**Cause.** The same page was reached at two addresses, such as one with a trailing slash and one without. Each address is its own page, so each gets its own file.
+
+**Fix.** Look at the `resource` line at the top of each file to see which addresses were read. Add a `crawl_exclude_patterns` entry for the form you do not want.
 
 
 ## Searching a compendium
