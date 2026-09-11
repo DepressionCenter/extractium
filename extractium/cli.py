@@ -13,7 +13,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -36,6 +36,7 @@ __date__ = "2026-09-09"
 
 import argparse
 import dataclasses
+import os
 import sys
 
 import requests
@@ -209,6 +210,12 @@ def run_phi_lint(config, documents, progress):
 
 ### Outputs ###
 
+# The most files one output may name individually in the build summary.
+# Past this it is named as a folder with a count, because an output that
+# writes one document per page writes hundreds of them.
+PATHS_NAMED = 8
+
+
 def run_outputs(config, registry, compendium, progress):
     """
     Writes every configured output and returns what each one wrote.
@@ -235,6 +242,32 @@ def run_outputs(config, registry, compendium, progress):
     return written
 
 
+def wrote_lines(paths, limit=PATHS_NAMED):
+    """
+    What one output wrote, as summary lines.
+
+    An output that wrote a handful of files names each one. An output that
+    wrote a folder of them -- one document per page, which is hundreds --
+    names the folder, how many files are in it, and their total size, so
+    the summary stays readable.
+
+    Args:
+        paths (Sequence[pathlib.Path]): the files that output wrote.
+        limit (int): the most files to name one by one.
+
+    Returns:
+        list[str]: one line per named file, or a single folder line.
+
+    Raises:
+        OSError: if a written file can no longer be read.
+    """
+    if len(paths) <= limit:
+        return [f"{path} ({path.stat().st_size / 1024 / 1024:.2f} MB)" for path in paths]
+    total_mb = sum(path.stat().st_size for path in paths) / 1024 / 1024
+    folder = os.path.commonpath([str(path) for path in paths])
+    return [f"{folder} ({len(paths)} files, {total_mb:.2f} MB)"]
+
+
 def print_summary(compendium, written, notes=()):
     """
     Prints what the build produced, on standard output.
@@ -248,9 +281,8 @@ def print_summary(compendium, written, notes=()):
     write_line(f"  windows  : {len(compendium.children)}", sys.stdout)
     write_line(f"  sources  : {compendium.source_count}", sys.stdout)
     for entry, paths in written:
-        for path in paths:
-            size_mb = path.stat().st_size / 1024 / 1024
-            write_line(f"  wrote    : {path} ({size_mb:.2f} MB)", sys.stdout)
+        for line in wrote_lines(paths):
+            write_line(f"  wrote    : {line}", sys.stdout)
         if entry.include_local and compendium.local_parents():
             write_line(
                 f"  NOTICE   : output {entry.type!r} includes local content; check before publishing.",

@@ -210,6 +210,55 @@ def test_build_defaults_to_the_container_and_llmstxt_outputs(build_workspace):
     assert (build_workspace / "dist" / "llms.txt").exists()
 
 
+def test_build_writes_an_open_knowledge_format_folder(build_workspace):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+        outputs:
+          - type: okf
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+    bundle = build_workspace / "dist" / "okf"
+    assert (bundle / "index.md").exists()
+    assert (bundle / "log.md").exists()
+    assert list(bundle.rglob("*.md"))
+
+
+def test_a_folder_of_files_is_summarized_rather_than_listed_line_by_line(tmp_path):
+    """
+    An output that writes one file per page writes hundreds of them, and a
+    summary nobody can read is a summary nobody checks.
+    """
+    folder = tmp_path / "bundle"
+    folder.mkdir()
+    paths = []
+    for number in range(cli.PATHS_NAMED + 1):
+        path = folder / f"concept-{number}.md"
+        path.write_text("x", encoding="utf-8")
+        paths.append(path)
+
+    lines = cli.wrote_lines(paths)
+
+    assert len(lines) == 1
+    assert str(folder) in lines[0]
+    assert f"{len(paths)} files" in lines[0]
+
+
+def test_a_handful_of_files_is_still_named_one_by_one(tmp_path):
+    paths = []
+    for name in ("first.txt", "second.txt"):
+        path = tmp_path / name
+        path.write_text("x", encoding="utf-8")
+        paths.append(path)
+
+    lines = cli.wrote_lines(paths)
+
+    assert [line.split(" (")[0] for line in lines] == [str(path) for path in paths]
+
+
 def test_build_names_the_index_after_the_first_page_when_the_file_does_not(build_workspace):
     config = write_config(build_workspace, """
         cache_dir: .cache
