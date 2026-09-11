@@ -517,6 +517,35 @@ def test_a_server_started_with_no_index_configured_stops_with_a_usable_message(c
     assert "EXTRACTIUM_INDEX_URL" in capsys.readouterr().err
 
 
+### The Node package's dependency pins ###
+
+# Both packages are reached only through the embedding package's own
+# version ranges, which stop short of the releases that fix their
+# advisories. The overrides below are the only thing holding the tree on
+# a patched version, so a regenerated lock file that lost them would
+# reintroduce the advisories silently.
+PATCHED_VERSIONS = {"sharp": (0, 35, 4), "adm-zip": (0, 6, 1)}
+
+
+def _version_tuple(text):
+    return tuple(int(part) for part in text.split("-")[0].split("."))
+
+
+@pytest.mark.parametrize("package", sorted(PATCHED_VERSIONS))
+def test_the_node_package_overrides_the_package_carrying_advisories(package):
+    manifest = json.loads((NODE_SERVER_DIR / "package.json").read_text(encoding="utf-8"))
+
+    assert package in manifest["overrides"]
+
+
+@pytest.mark.parametrize("package", sorted(PATCHED_VERSIONS))
+def test_the_lock_file_resolves_that_package_to_a_patched_version(package):
+    lock = json.loads((NODE_SERVER_DIR / "package-lock.json").read_text(encoding="utf-8"))
+    entry = lock["packages"][f"node_modules/{package}"]
+
+    assert _version_tuple(entry["version"]) >= PATCHED_VERSIONS[package]
+
+
 ### The Node server against the same contract ###
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node is not installed on this machine")

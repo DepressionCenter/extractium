@@ -36,7 +36,7 @@ Two servers ship with Extractium, one in Python and one in JavaScript. They expo
 | Pick | When |
 |---|---|
 | [Python](../../examples/mcp/local-python/README.md) | You already installed Extractium. It embeds questions with the package Extractium installs, so there is nothing else to add. |
-| [Node](../../examples/mcp/local-node/README.md) | Your assistant runs JavaScript tools, or you have Node and no Python. It installs one package, `@huggingface/transformers`, which brings advisories worth reading first; the folder's README lists them. |
+| [Node](../../examples/mcp/local-node/README.md) | Your assistant runs JavaScript tools, or you have Node and no Python. It installs one package, `@huggingface/transformers`, and everything that package needs. |
 
 Both read the same index file, so you can change your mind later.
 
