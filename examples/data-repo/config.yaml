@@ -39,12 +39,16 @@ sources:
   # A channel's captions. Remove the comment markers to turn it on, and
   # read kb-cache/README.md first: YouTube refuses caption requests from
   # cloud runners, so you build this source once on your own machine and
-  # commit kb-cache/ for the scheduled build to reuse. Listing a channel
-  # needs a Data API key in the YOUTUBE_API_KEY environment variable;
-  # naming videos one by one under video_ids needs no key at all.
+  # commit kb-cache/ for the scheduled build to reuse.
+  #
+  # Name the channel however your browser showed it: a handle, the
+  # address, or the id. No API key is needed. Without one, a listing
+  # longer than a hundred videos stops there, because reading further
+  # means an address YouTube's robots.txt disallows; set YOUTUBE_API_KEY
+  # to read the whole channel.
   # - type: youtube
   #   label: Example Video Library
-  #   channel_id: "UCxxxxxxxxxxxxxxxxxxxxxx"
+  #   channel_id: "https://www.youtube.com/@ExampleChannel"
   #   languages: ["en"]
 
 # The files to write. These two are the defaults; they are listed here so

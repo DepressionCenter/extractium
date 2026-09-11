@@ -35,11 +35,13 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
 import re
+import time
 
 from extractium.core import cache as cache_module
 from extractium.core.fetch import DEFAULT_USER_AGENT
 from extractium.core.models import Document
 from extractium.sources.youtube_client import (
+    CHANNEL_ID_RE,
     TranscriptLibraryMissing,
     TranscriptUnavailable,
     YouTubeBlocked,
@@ -51,6 +53,12 @@ from extractium.sources.youtube_client import (
     fetch_transcript,
     uploads_playlist_id,
     watch_url,
+)
+from extractium.sources.youtube_pages import (
+    YouTubePages,
+    parse_channel_selector,
+    parse_playlist_selector,
+    parse_video_selector,
 )
 
 ### Constants ###
@@ -72,6 +80,15 @@ SEGMENT_MIN_CHARS = 120
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
 
+# Shortest pause between requests to YouTube, whatever the build's own
+# delay is. YouTube is far less tolerant than a documentation site: a
+# run that asked for about 145 transcripts back to back was refused
+# partway through, and everything after that would have been refused
+# too. A build reading a few hundred videos is doing so once and then
+# working from its committed cache, so a second per video costs a few
+# minutes on the first run and nothing afterwards.
+MIN_DELAY_SECONDS = 1.0
+
 # Captions arrive as one line per phrase, often with the speaker's
 # stumbles and the transcriber's markers. These are removed: "[Music]"
 # and "(applause)" describe the soundtrack rather than saying anything,
@@ -90,7 +107,18 @@ class YouTubeSourceError(Exception):
     Raised when this source cannot produce the documents it was asked
     for: a channel or playlist that cannot be listed and has nothing
     stored, or captions that must be fetched from a machine YouTube
-    refuses. The message names the fix and quotes no credential.
+    refuses before anything at all could be read. The message names the
+    fix and quotes no credential.
+    """
+
+
+class _Blocked(Exception):
+    """
+    One caption request was refused because of where it came from.
+
+    Caught inside fetch rather than shown to a caller: whether a block
+    ends the build depends on whether anything was read before it, and
+    only fetch knows that.
     """
 
 
@@ -211,6 +239,20 @@ class YouTubeSource:
         self.playlist_ids = tuple(options.get("playlist_ids") or ())
         self.video_ids = tuple(options.get("video_ids") or ())
         self.languages = tuple(options.get("languages") or ("en",))
+        self.include_playlists = bool(options.get("include_playlists", True))
+        self.configured_delay = options.get("delay_seconds")
+        self.only_channel_videos = bool(options.get("only_channel_videos", True))
+        # Channel ids a video may have been published by, filled in as
+        # the configured channels are resolved. Empty means no channel
+        # was named, so there is nothing to compare a video against and
+        # the publisher rule does not apply.
+        self.allowed_channels = set()
+        self.skipped_other_channels = 0
+        # How many videos were read before YouTube began refusing this
+        # machine, or 0 when it never did.
+        self.blocked_after = 0
+        # Built on first use, and only when there is no API key.
+        self.page_reader = None
         self.settings = None
         # A caller with its own caption reader may set this; a build
         # leaves it alone and one is built on first use. It is the seam
@@ -234,7 +276,9 @@ class YouTubeSource:
             registry (extractium.core.registry.Registry): unused; a
                 caption track needs no site handler.
             settings (extractium.sources.web.CrawlSettings): the build's
-                User-Agent and politeness delay.
+                User-Agent, politeness delay, and robots.txt setting. The
+                last one decides how much of a listing a build with no
+                API key may read; see YouTubePages.
         """
         self.settings = settings
 
@@ -268,7 +312,7 @@ class YouTubeSource:
             progress=progress,
             delay_seconds=self._delay_seconds(),
         )
-        video_ids = self._video_ids(client, progress)
+        video_ids, discovered = self._video_ids(client, progress)
         if not video_ids:
             progress("YouTube:      nothing to read")
             return
@@ -276,18 +320,52 @@ class YouTubeSource:
         progress(f"YouTube:      {len(video_ids)} video(s)")
         titles = self._titles(client, video_ids, progress)
         missing = []
+        produced = 0
         for video_id in video_ids:
-            record, from_store = self._video(client, video_id, titles, progress)
+            # A video the channel published is read as itself. One that
+            # turned up in a playlist is read only if the same channel
+            # published it, so a playlist holding somebody else's talk
+            # does not put their words in this knowledge base.
+            if video_id in discovered and not self._published_by_an_allowed_channel(
+                video_id, titles, client, progress
+            ):
+                continue
+            try:
+                record, from_store = self._video(client, video_id, titles, progress)
+            except _Blocked as e:
+                # YouTube has started refusing this machine. Every later
+                # request would be refused too, so no more are made. What
+                # was already read is kept: a build that indexed a
+                # hundred videos and then got blocked is worth having,
+                # and the report says plainly that it is incomplete.
+                if not produced:
+                    raise YouTubeSourceError(
+                        f"{e} Nothing was read before that, so this build has no "
+                        "video content at all."
+                    ) from e
+                self.blocked_after = produced
+                progress(
+                    f"  YouTube refused this machine after {produced} video(s). "
+                    "Keeping those and reading no more; the rest need a machine "
+                    "YouTube answers, or a stored transcript."
+                )
+                break
             if record is None:
                 missing.append(video_id)
                 continue
             stretches = segments(record["segments"])
             for stretch in stretches:
                 yield self._document(video_id, record["title"], stretch)
+            produced += 1
             self.coverage += ((record["title"], len(stretches), from_store),)
         self.without_captions = tuple(missing)
         if missing:
             progress(f"  {len(missing)} video(s) had no captions to read")
+        if self.skipped_other_channels:
+            progress(
+                f"  {self.skipped_other_channels} video(s) in those playlists were "
+                "published by another channel and were left out"
+            )
 
     ### Choosing What To Read ###
 
@@ -295,57 +373,162 @@ class YouTubeSource:
         """
         Every video this source should read, in configuration order.
 
-        Explicit identifiers come first, then each playlist, then the
-        channel's own uploads. A video named twice is read once.
+        Explicit identifiers come first, then each named playlist, then
+        the channel: everything it published, and then the playlists it
+        shows, which is where a video it did not publish can appear.
 
         Args:
             client (YouTubeClient): the Data API client.
             progress (Callable[[str], None]): receives one line per event.
 
         Returns:
-            tuple[str, ...]: video identifiers, in order, without
-            duplicates.
+            tuple[tuple[str, ...], set]: the video ids in order, and the
+            subset of them that arrived by way of a playlist rather than
+            from the channel's own uploads. The second set is what the
+            publisher rule applies to: the channel's own uploads need no
+            checking, and an operator's explicit list is their own choice.
 
         Raises:
-            YouTubeSourceError: if a configured identifier is malformed,
-                or a listing can be neither read nor recovered.
+            YouTubeSourceError: if a configured value is malformed, or a
+                listing can be neither read nor recovered.
         """
         ordered = []
         seen = set()
+        discovered = set()
 
-        def add(video_id):
+        def add(video_id, from_playlist=False):
             if video_id not in seen:
                 seen.add(video_id)
                 ordered.append(video_id)
+                if from_playlist:
+                    discovered.add(video_id)
 
-        for video_id in self.video_ids:
+        for value in self.video_ids:
             try:
-                add(checked_video_id(video_id))
+                add(parse_video_selector(value))
             except YouTubeError as e:
                 raise YouTubeSourceError(f"video_ids: {e}") from e
 
-        listings = list(self.playlist_ids)
-        if self.channel_id:
+        playlists = []
+        for value in self.playlist_ids:
             try:
-                listings.append(uploads_playlist_id(self.channel_id))
+                playlists.append(parse_playlist_selector(value))
             except YouTubeError as e:
-                raise YouTubeSourceError(f"channel_id: {e}") from e
+                raise YouTubeSourceError(f"playlist_ids: {e}") from e
 
-        for listing_id in listings:
-            for video_id in self._listing(client, listing_id, progress):
+        if self.channel_id:
+            channel_id = self._resolve_channel(client, progress)
+            self.allowed_channels.add(channel_id)
+            for video_id in self._listing(client, uploads_playlist_id(channel_id), progress):
                 add(video_id)
-        return tuple(ordered)
+            if self.include_playlists:
+                playlists.extend(self._channel_playlists(client, channel_id, progress))
+
+        for playlist_id in playlists:
+            for video_id in self._listing(client, playlist_id, progress):
+                add(video_id, from_playlist=True)
+        return tuple(ordered), discovered
+
+    def _resolve_channel(self, client, progress):
+        """
+        The channel id for whatever the settings file named.
+
+        An id costs nothing. A handle or an address costs one request,
+        stored afterwards so later builds cost none: a channel address
+        does not change, and when one does, deleting the stored file is
+        how an operator says so.
+
+        Args:
+            client (YouTubeClient): the Data API client, for its session.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            str: the channel id.
+
+        Raises:
+            YouTubeSourceError: if the value is not a channel, or the
+                address cannot be read.
+        """
+        try:
+            selector = parse_channel_selector(self.channel_id)
+        except YouTubeError as e:
+            raise YouTubeSourceError(f"channel_id: {e}") from e
+        kind, value = selector
+        if kind == "id":
+            return value
+
+        stored = cache_module.load_channel_id(value)
+        if stored and CHANNEL_ID_RE.match(stored):
+            return stored
+        try:
+            channel_id = self._pages(client, progress).resolve_channel(selector)
+        except YouTubeError as e:
+            raise YouTubeSourceError(f"channel_id: {e}") from e
+        try:
+            cache_module.save_channel_id(value, channel_id)
+        except (OSError, ValueError) as e:
+            progress(f"  the channel id could not be stored ({e})")
+        return channel_id
+
+    def _channel_playlists(self, client, channel_id, progress):
+        """
+        The playlists a channel shows, so the videos they hold are read
+        too.
+
+        Queried whether or not the settings file named a playlist,
+        because a channel's playlists are where it gathers the material
+        it wants people to watch, and some of that may be older uploads
+        it no longer lists. Videos it did not publish are held back by
+        the publisher rule rather than by not looking.
+
+        Args:
+            client (YouTubeClient): the Data API client.
+            channel_id (str): the channel id.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            list[str]: playlist ids, empty when they cannot be listed. A
+            channel with no readable playlists is not a failed build.
+        """
+        try:
+            if client.key:
+                return list(client.channel_playlist_ids(channel_id))
+            return list(self._pages(client, progress).channel_playlist_ids(channel_id))
+        except YouTubeError as e:
+            progress(f"  the channel's playlists could not be listed ({e})")
+            return []
+
+    def _pages(self, client, progress):
+        """
+        The page reader, built once per build and only when needed.
+
+        Args:
+            client (YouTubeClient): the client holding the session.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            YouTubePages: the reader.
+        """
+        if self.page_reader is None:
+            self.page_reader = YouTubePages(
+                client.session,
+                user_agent=self._user_agent(),
+                progress=progress,
+                delay_seconds=self._delay_seconds(),
+                respect_robots_txt=getattr(self.settings, "respect_robots_txt", True),
+            )
+        return self.page_reader
 
     def _listing(self, client, listing_id, progress):
         """
-        The videos one playlist holds, from the Data API or from the store.
+        The videos one playlist holds, from the Data API, from YouTube's
+        pages, or from the store.
 
-        A listing is stored after every successful read, so a build that
-        cannot reach the Data API -- no key on this machine, or the API
-        unreachable -- still indexes the same videos it indexed last
-        time. A listing that can be neither read nor recovered ends the
-        build, because silently indexing nothing looks like a channel
-        that went empty.
+        Three ways of reading a listing, tried in order: the Data API
+        when a key is set, YouTube's own pages when none is, and the
+        stored copy when neither answers. A listing that can be read none
+        of those ways ends the build, because silently indexing nothing
+        looks like a channel that went empty.
 
         Args:
             client (YouTubeClient): the Data API client.
@@ -360,14 +543,17 @@ class YouTubeSource:
                 is stored for it.
         """
         try:
-            video_ids = client.playlist_video_ids(listing_id)
+            if client.key:
+                video_ids = client.playlist_video_ids(listing_id)
+            else:
+                video_ids = self._pages(client, progress).playlist_video_ids(listing_id)
         except YouTubeError as e:
             stored = cache_module.load_listing(listing_id)
             if stored is None:
                 raise YouTubeSourceError(
                     f"playlist {listing_id} could not be listed ({e}) and nothing is "
-                    "stored for it. Build once on a machine that can reach the "
-                    "YouTube Data API, then commit the cache folder."
+                    "stored for it. Build once on a machine that can reach YouTube, "
+                    "then commit the cache folder."
                 ) from e
             progress(
                 f"  playlist {listing_id}: using the {len(stored)} stored video(s); "
@@ -380,6 +566,84 @@ class YouTubeSource:
         except (OSError, ValueError) as e:
             progress(f"  playlist {listing_id}: the listing could not be stored ({e})")
         return video_ids
+
+    def _published_by_an_allowed_channel(self, video_id, titles, client, progress):
+        """
+        Whether a video found through a playlist was published by one of
+        the channels this build was pointed at.
+
+        A playlist is a list of whatever its owner chose, so a channel's
+        own playlists routinely hold other people's videos: a conference
+        talk, a partner organization's explainer, something the owner
+        simply liked. Indexing those would put another organization's
+        words into this knowledge base under this organization's name.
+
+        The publisher is already known for every video that needed
+        naming, so this costs no extra request in the ordinary case: the
+        Data API reports it beside the title, and the public endpoint
+        reports the channel's address, which resolves the way a
+        configured channel does.
+
+        Args:
+            video_id (str): the video.
+            titles (Mapping): what _titles learned, keyed by video id.
+            client (YouTubeClient): the Data API client.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            bool: True when the video may be indexed. True also when the
+            publisher cannot be determined at all: holding a video back
+            on a failed lookup would quietly shrink a knowledge base, and
+            what was held back is reported either way.
+        """
+        if not self.only_channel_videos or not self.allowed_channels:
+            return True
+        record = titles.get(video_id) or {}
+        channel_id = (record.get("channel_id") or "").strip()
+        if not channel_id:
+            author_url = (record.get("author_url") or "").strip()
+            if not author_url:
+                return True
+            channel_id = self._channel_for_author(author_url, client, progress)
+        if not channel_id:
+            return True
+        if channel_id in self.allowed_channels:
+            return True
+        self.skipped_other_channels += 1
+        return False
+
+    def _channel_for_author(self, author_url, client, progress):
+        """
+        The channel id one channel address belongs to, stored so a
+        playlist full of another organization's videos costs one request
+        rather than one per video.
+
+        Args:
+            author_url (str): the channel address a video reported.
+            client (YouTubeClient): the Data API client.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            str: the channel id, or "" when the address cannot be read.
+        """
+        try:
+            kind, value = parse_channel_selector(author_url)
+        except YouTubeError:
+            return ""
+        if kind == "id":
+            return value
+        stored = cache_module.load_channel_id(value)
+        if stored and CHANNEL_ID_RE.match(stored):
+            return stored
+        try:
+            channel_id = self._pages(client, progress).resolve_channel((kind, value))
+        except YouTubeError:
+            return ""
+        try:
+            cache_module.save_channel_id(value, channel_id)
+        except (OSError, ValueError):
+            pass
+        return channel_id
 
     def _titles(self, client, video_ids, progress):
         """
@@ -449,6 +713,7 @@ class YouTubeSource:
 
         title = (titles.get(video_id) or {}).get("title") or video_id
         published_at = (titles.get(video_id) or {}).get("published_at") or ""
+        self._pace()
         try:
             language, lines = fetch_transcript(
                 video_id,
@@ -462,7 +727,9 @@ class YouTubeSource:
         except YouTubeNotFound as e:
             progress(f"  {video_id}: {e}")
             return None, False
-        except (YouTubeBlocked, TranscriptLibraryMissing) as e:
+        except YouTubeBlocked as e:
+            raise _Blocked(str(e)) from e
+        except TranscriptLibraryMissing as e:
             raise YouTubeSourceError(
                 f"{e} Nothing is stored for {video_id}, so this build cannot read it."
             ) from e
@@ -511,8 +778,35 @@ class YouTubeSource:
         return self.settings.user_agent if self.settings else DEFAULT_USER_AGENT
 
     def _delay_seconds(self):
-        """The pause between requests, taken from the build's crawl settings."""
-        return getattr(self.settings, "delay_seconds", 0.0) or 0.0
+        """
+        The pause between requests to YouTube.
+
+        The source's own `delay_seconds` wins, then the build's, and
+        MIN_DELAY_SECONDS is a floor under both: a delay that is fine for
+        a website gets this source refused partway through a channel.
+
+        Returns:
+            float: seconds to wait between requests.
+        """
+        if self.configured_delay is not None:
+            chosen = float(self.configured_delay)
+        else:
+            chosen = float(getattr(self.settings, "delay_seconds", 0.0) or 0.0)
+        return max(chosen, MIN_DELAY_SECONDS)
+
+    def _pace(self):
+        """
+        Waits before a caption request.
+
+        The caption library is called directly rather than through this
+        project's client, so it is paced here. Without this the API and
+        page requests were spaced out and the transcript requests -- by
+        far the most numerous -- were not, which is what got a real run
+        refused partway through a channel.
+        """
+        delay = self._delay_seconds()
+        if delay > 0:
+            time.sleep(delay)
 
     def summary_lines(self):
         """
@@ -541,5 +835,22 @@ class YouTubeSource:
         )
         if self.without_captions:
             lines.append(f"{len(self.without_captions)} video(s) had no captions to read")
+        if self.skipped_other_channels:
+            lines.append(
+                f"{self.skipped_other_channels} video(s) left out: another channel "
+                "published them"
+            )
+        if self.blocked_after:
+            lines.append(
+                f"INCOMPLETE: YouTube refused this machine after {self.blocked_after} "
+                "video(s). Raise delay_seconds, or build where YouTube answers, then "
+                "commit the cache and build again to pick up the rest."
+            )
+        capped = getattr(self.page_reader, "capped_listings", ())
+        if capped:
+            lines.append(
+                f"{len(capped)} listing(s) read only as far as robots.txt allows; set "
+                "an API key, or respect_robots_txt to false, for the whole listing"
+            )
         return lines
 

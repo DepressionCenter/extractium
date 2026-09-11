@@ -405,11 +405,35 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** Set the variable, or name the videos individually under `video_ids`, which needs no key. If the listing was read before and stored, the build uses the stored copy and says so instead of stopping.
 
-### `a channel id must start with 'UC'`
+### `is not a handle` or `does not look like a channel`
 
-**Cause.** A channel's `@handle` or custom address was used as its id. They are different things, and a handle cannot be turned into an id without asking YouTube.
+**Cause.** The value in `channel_id` is not a channel. A handle, a channel address, a custom address, and the id itself are all accepted, so this usually means an address for something else: a search results page, a watch page, or a different site.
 
-**Fix.** Open any video on the channel and copy the channel id from the page, then use that.
+**Fix.** Open the channel in a browser and copy the address from the bar. `https://www.youtube.com/@ExampleChannel` and `.../@ExampleChannel/videos` both work.
+
+### The build says a listing stopped at its first page
+
+**Cause.** Not an error. YouTube's `robots.txt` disallows `/youtubei/`, the address a page calls for its next batch, and this build honors `robots.txt`. So a listing longer than one page gives its newest 100 videos and stops.
+
+**Fix.** Set `YOUTUBE_API_KEY` to read the whole listing through the documented API. Failing that, `respect_robots_txt: false` pages the way the page itself does, for content you own or have permission to read. See the [configuration reference](configuration.md).
+
+### A video in one of the channel's playlists was left out
+
+**Cause.** Another channel published it. A playlist holds whatever its owner chose, which often includes other people's videos, and indexing those would put another organization's words in your knowledge base under your name. The build counts what it left out.
+
+**Fix.** Nothing, if that is what you wanted. To index them anyway, set `only_channel_videos: false`. To name another organization's channel as one you do index, add it as its own `youtube` source.
+
+### The build says YouTube refused this machine after N videos
+
+**Cause.** Rate limiting. YouTube starts refusing a machine that has asked for a lot of transcripts in a short time. The build keeps what it read and stops asking, rather than throwing the work away.
+
+**Fix.** Wait, then build again: the transcripts already stored are reused and it carries on from there. Repeat until the channel is covered. To make it less likely, raise the source's `delay_seconds` above the one-second floor. Each run is cheaper than the last, because what is stored is never fetched twice.
+
+### YouTube answered 403 for a channel page
+
+**Cause.** A filter refused this machine rather than saying the page is missing. Cloud runners see this most.
+
+**Fix.** Set an API key, which uses a different host altogether. Or set `respect_robots_txt: false`, which allows one retry with a browser identity, the same fallback a challenged web page gets. If neither is possible, build on a machine YouTube answers and commit the cache.
 
 ### The Data API answered 403
 

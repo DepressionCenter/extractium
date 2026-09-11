@@ -99,6 +99,18 @@ DEFAULT_LOCAL_INCLUDE_GLOBS = ("**/*.md", "**/*.txt", "**/*.html")
 # Caption languages a YouTube source asks for when none are given.
 DEFAULT_YOUTUBE_LANGUAGES = ("en",)
 
+# Whether a channel's own playlists are read as well as its uploads. On,
+# because a playlist is where a channel gathers what it wants watched,
+# and a video it did not publish is held back by the publisher rule
+# rather than by not looking for it.
+DEFAULT_YOUTUBE_INCLUDE_PLAYLISTS = True
+
+# Whether a video found through a playlist is indexed only when one of
+# the configured channels published it. On, because a playlist routinely
+# holds other people's videos, and indexing those would put another
+# organization's words in this knowledge base under this one's name.
+DEFAULT_YOUTUBE_ONLY_CHANNEL_VIDEOS = True
+
 # Which repositories a GitHub source reads when the entry says nothing.
 # Forks are left out because indexing a project and several near-identical
 # copies of it fills the index with duplicates. Archived repositories are
@@ -223,7 +235,10 @@ SOURCE_OPTION_KEYS = {
         "include_forks", "include_archived", "include_code", "ctags_fallback",
         "max_file_bytes",
     }),
-    "youtube": frozenset({"channel_id", "playlist_ids", "video_ids", "languages"}),
+    "youtube": frozenset({
+        "channel_id", "playlist_ids", "video_ids", "languages",
+        "include_playlists", "only_channel_videos", "delay_seconds",
+    }),
     "dspace": frozenset({
         "api_url", "site_url", "collections", "include_full_text", "max_file_bytes",
     }),
@@ -802,15 +817,56 @@ def _read_dspace_source(entry, source):
 
 
 def _read_youtube_source(entry, source):
-    """Validates the options of a youtube source entry."""
+    """
+    Validates the options of a youtube source entry.
+
+    A channel, a playlist, and a video may each be written as an
+    identifier or as any address that names one, because an operator has
+    whichever form their browser showed them. Each is read here rather
+    than at fetch time, so a mistyped address fails while somebody is
+    still looking at the settings file.
+    """
     options = {
         "channel_id": _read_text(entry, "channel_id", None, source),
         "playlist_ids": _read_text_list(entry, "playlist_ids", (), source, label="ids"),
         "video_ids": _read_text_list(entry, "video_ids", (), source, label="ids"),
         "languages": _read_text_list(entry, "languages", DEFAULT_YOUTUBE_LANGUAGES, source, label="language codes"),
+        "include_playlists": _read_bool(
+            entry, "include_playlists", DEFAULT_YOUTUBE_INCLUDE_PLAYLISTS, source
+        ),
+        "only_channel_videos": _read_bool(
+            entry, "only_channel_videos", DEFAULT_YOUTUBE_ONLY_CHANNEL_VIDEOS, source
+        ),
+        # None means "use the build's delay". The source applies its own
+        # floor either way, because YouTube tolerates far less than a
+        # website does.
+        "delay_seconds": _read_non_negative_number(entry, "delay_seconds", None, source),
     }
     if not (options["channel_id"] or options["playlist_ids"] or options["video_ids"]):
         _fail(source, "give at least one of channel_id, playlist_ids, video_ids.")
+
+    # Imported here rather than at module scope: the loader is imported
+    # by everything, and a source module importing it back would be a
+    # cycle.
+    from extractium.sources.youtube_client import YouTubeError
+    from extractium.sources.youtube_pages import (
+        parse_channel_selector,
+        parse_playlist_selector,
+        parse_video_selector,
+    )
+
+    for key, read_one in (
+        ("channel_id", parse_channel_selector),
+        ("playlist_ids", parse_playlist_selector),
+        ("video_ids", parse_video_selector),
+    ):
+        value = options[key]
+        written_values = (value,) if isinstance(value, str) else (value or ())
+        for written in written_values:
+            try:
+                read_one(written)
+            except YouTubeError as e:
+                _fail(source, f"{key}: {e}")
     return options
 
 

@@ -438,6 +438,48 @@ class YouTubeClient:
                 break
         return tuple(video_ids)
 
+    def channel_playlist_ids(self, channel_id):
+        """
+        Every playlist a channel owns.
+
+        Args:
+            channel_id (str): the channel id.
+
+        Returns:
+            tuple[str, ...]: playlist ids, in the order the API lists them.
+
+        Raises:
+            YouTubeError: if channel_id is not a channel id.
+            YouTubeNoApiKey, YouTubeNotFound, YouTubeUnavailable: as
+                _get raises them.
+        """
+        if not CHANNEL_ID_RE.match(channel_id or ""):
+            raise YouTubeError(
+                f"a channel id must start with 'UC' and run 24 characters; got {channel_id!r}."
+            )
+        playlist_ids = []
+        seen = set()
+        page_token = None
+        for _ in range(MAX_PAGES):
+            params = {"part": "id", "channelId": channel_id, "maxResults": PAGE_SIZE}
+            if page_token:
+                params["pageToken"] = page_token
+            document = self._get("playlists", params)
+            for item in document.get("items") or ():
+                if not isinstance(item, dict):
+                    continue
+                playlist_id = item.get("id")
+                if not isinstance(playlist_id, str) or not LISTING_ID_RE.match(playlist_id):
+                    continue
+                if playlist_id in seen:
+                    continue
+                seen.add(playlist_id)
+                playlist_ids.append(playlist_id)
+            page_token = document.get("nextPageToken")
+            if not page_token:
+                break
+        return tuple(playlist_ids)
+
     def video_details(self, video_ids):
         """
         The title and publication stamp of each video named.
@@ -470,9 +512,14 @@ class YouTubeClient:
                     continue
                 if not VIDEO_ID_RE.match(video_id):
                     continue
+                channel_id = str(snippet.get("channelId") or "").strip()
                 details[video_id] = {
                     "title": str(snippet.get("title") or "").strip(),
                     "published_at": str(snippet.get("publishedAt") or "").strip(),
+                    # Who published it, so a video discovered through a
+                    # playlist can be told from one the channel uploaded.
+                    "channel_id": channel_id if CHANNEL_ID_RE.match(channel_id) else "",
+                    "author_url": "",
                 }
         return details
 
@@ -489,8 +536,9 @@ class YouTubeClient:
             video_ids (Sequence[str]): video identifiers.
 
         Returns:
-            dict[str, dict]: identifier to a record holding `title` and
-            an empty `published_at`. A video the endpoint will not
+            dict[str, dict]: identifier to a record holding `title`, an
+            empty `published_at`, and `author_url`, the address of the
+            channel that published it. A video the endpoint will not
             describe -- private, deleted, or embedding disabled -- is
             absent rather than reported as an error.
 
@@ -524,7 +572,14 @@ class YouTubeClient:
                 continue
             title = str(document.get("title") or "").strip()
             if title:
-                details[video_id] = {"title": title, "published_at": ""}
+                details[video_id] = {
+                    "title": title,
+                    "published_at": "",
+                    "channel_id": "",
+                    # The channel's own address, which is how a video's
+                    # publisher is known without an API key.
+                    "author_url": str(document.get("author_url") or "").strip(),
+                }
         return details
 
 

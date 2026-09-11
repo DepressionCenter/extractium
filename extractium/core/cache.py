@@ -580,3 +580,79 @@ def save_listing(listing_id, video_ids):
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump({"video_ids": list(video_ids)}, f)
     os.replace(tmp_path, path)
+
+
+def channel_id_path(selector):
+    """
+    The on-disk path for the channel id one channel address resolved to.
+
+    The address is hashed rather than used as a name. A handle or a
+    custom address is somebody else's text: it can hold a slash, a
+    parent-directory step, or characters no file system accepts, and a
+    digest has none of those problems while still naming one address
+    exactly.
+
+    Args:
+        selector (str): the channel address, as it was resolved.
+
+    Returns:
+        str: path under CACHE_YOUTUBE_LISTINGS_DIR.
+
+    Raises:
+        ValueError: if selector is not a non-empty string.
+    """
+    if not isinstance(selector, str) or not selector.strip():
+        raise ValueError(f"a channel address must be a non-empty string; got {selector!r}.")
+    digest = hashlib.sha256(selector.strip().encode("utf-8")).hexdigest()
+    return os.path.join(CACHE_YOUTUBE_LISTINGS_DIR, f"channel-{digest}.json")
+
+
+def load_channel_id(selector):
+    """
+    Reads the channel id one address resolved to last time.
+
+    Stored so a handle costs one request once rather than once per build.
+    A handle can in principle be moved to another channel, which is why
+    deleting this file is how an operator forces it to be looked up
+    again; nothing here expires on its own, for the reason load_video
+    gives.
+
+    Args:
+        selector (str): the channel address.
+
+    Returns:
+        str | None: the channel id, or None when nothing is stored or the
+        file cannot be read.
+
+    Raises:
+        ValueError: if selector is not a non-empty string.
+    """
+    try:
+        with open(channel_id_path(selector), "r", encoding="utf-8") as f:
+            stored = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(stored, dict):
+        return None
+    channel_id = stored.get("channel_id")
+    return channel_id if isinstance(channel_id, str) else None
+
+
+def save_channel_id(selector, channel_id):
+    """
+    Stores the channel id one address resolved to.
+
+    Args:
+        selector (str): the channel address.
+        channel_id (str): the id it resolved to.
+
+    Raises:
+        ValueError: if selector is not a non-empty string.
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_YOUTUBE_LISTINGS_DIR, exist_ok=True)
+    path = channel_id_path(selector)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump({"selector": selector, "channel_id": channel_id}, f)
+    os.replace(tmp_path, path)

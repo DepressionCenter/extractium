@@ -149,10 +149,12 @@ sources:
   # the default .kb_cache is usually ignored.
   #- type: youtube
   #  label: Example Video Library
-  #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # the id, not an @handle
-  #  playlist_ids: []
-  #  video_ids: []
+  #  channel_id: "https://www.youtube.com/@ExampleChannel"   # handle, address, or id
+  #  playlist_ids: []          # ids, or addresses with list= in them
+  #  video_ids: []             # ids, watch addresses, or youtu.be links
   #  languages: [en]
+  #  include_playlists: true   # read the channel's playlists as well as its uploads
+  #  only_channel_videos: true # skip playlist videos another channel published
 
 
 # ---------------------------------------------------------------------------

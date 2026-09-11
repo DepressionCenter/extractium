@@ -45,6 +45,7 @@ from extractium.core import cache as cache_module
 from extractium.core.models import Source
 from extractium.sources import youtube as youtube_source
 from extractium.sources import youtube_client as yc
+from extractium.sources import youtube_pages as yp
 from extractium.sources.youtube import YouTubeSource, YouTubeSourceError
 
 # The synthetic videos, playlist, and channel every test reads. The
@@ -82,6 +83,20 @@ def _no_api_key_unless_a_test_asks(monkeypatch):
     everybody else -- and the suite would reach the real API.
     """
     monkeypatch.delenv(yc.API_KEY_ENV, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_waiting(monkeypatch):
+    """
+    Stops the politeness delay from actually sleeping.
+
+    The source paces every request to YouTube by at least a second,
+    which is right for a build and absurd for a test suite. The tests
+    that care about pacing patch this themselves and assert on what was
+    asked for.
+    """
+    for module in (youtube_source, yp, yc):
+        monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
 
 
 @pytest.fixture
@@ -141,12 +156,20 @@ class FakeYouTubeSession:
         self.calls = []
 
     def get(self, url, headers=None, params=None, timeout=None, allow_redirects=True):
-        resource = url.rstrip("/").rsplit("/", 1)[-1]
+        return self._answer("get", url, headers, params, timeout)
+
+    def post(self, url, headers=None, params=None, json=None, timeout=None):
+        return self._answer("post", url, headers, params, timeout, body=json)
+
+    def _answer(self, method, url, headers, params, timeout, body=None):
+        resource = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
         self.calls.append({
+            "method": method,
             "url": url,
             "resource": resource,
             "headers": dict(headers or {}),
             "params": dict(params or {}),
+            "body": body,
             "timeout": timeout,
         })
         if resource in self.raise_for:
@@ -601,11 +624,16 @@ def test_a_video_the_api_will_not_describe_is_simply_absent():
 
 
 def test_a_title_is_read_without_a_key_through_the_public_endpoint():
-    session = FakeYouTubeSession({"oembed": FakeResponse(body={"title": "A Public Talk"})})
+    session = FakeYouTubeSession({"oembed": FakeResponse(body={
+        "title": "A Public Talk",
+        "author_url": "https://www.youtube.com/@ExampleChannel",
+    })})
 
     details = yc.YouTubeClient(session, key=None).public_video_details([VIDEO_A])
 
-    assert details[VIDEO_A] == {"title": "A Public Talk", "published_at": ""}
+    assert details[VIDEO_A]["title"] == "A Public Talk"
+    assert details[VIDEO_A]["published_at"] == ""
+    assert details[VIDEO_A]["author_url"] == "https://www.youtube.com/@ExampleChannel"
     assert session.calls[0]["params"]["url"] == yc.watch_url(VIDEO_A)
 
 
@@ -887,6 +915,7 @@ def test_a_channel_is_read_through_its_uploads_playlist(api_key_set):
     reader = FakeReader({VIDEO_A: caption_lines(6)})
     session = FakeYouTubeSession({
         "playlistItems": playlist_page([VIDEO_A]),
+        "playlists": FakeResponse(body={"items": []}),
         "videos": videos_page({VIDEO_A: "A Talk"}),
     })
 
@@ -908,14 +937,17 @@ def test_a_listing_is_stored_so_a_later_build_indexes_the_same_videos(api_key_se
 
 
 def test_a_build_with_no_key_falls_back_to_the_stored_listing():
-    """The listing was read on an operator's machine; a runner reuses it."""
+    """
+    The listing was read on an operator's machine; a runner that can
+    reach neither the API nor the pages reuses it.
+    """
     cache_module.save_listing(PLAYLIST, [VIDEO_A])
     cache_module.save_video(VIDEO_A, "A Talk", "", "en",
                             [{"text": "a stored phrase about measuring mood", "start": 0.0}])
     lines = []
+    session = FakeYouTubeSession({"playlist": FakeResponse(status_code=404, body={})})
 
-    documents = list(source(playlist_ids=(PLAYLIST,)).fetch(
-        FakeYouTubeSession(), {}, lines.append))
+    documents = list(source(playlist_ids=(PLAYLIST,)).fetch(session, {}, lines.append))
 
     assert [document.title for document in documents] == ["A Talk -- 0:00"]
     assert any("stored" in line for line in lines)
@@ -924,9 +956,10 @@ def test_a_build_with_no_key_falls_back_to_the_stored_listing():
 def test_a_listing_that_cannot_be_read_with_nothing_stored_ends_the_build():
     """Indexing nothing looks exactly like a channel that went empty, so it is refused."""
     built = source(playlist_ids=(PLAYLIST,))
+    session = FakeYouTubeSession({"playlist": FakeResponse(status_code=404, body={})})
 
     with pytest.raises(YouTubeSourceError, match="commit the cache folder"):
-        list(built.fetch(FakeYouTubeSession(), {}, quiet))
+        list(built.fetch(session, {}, quiet))
 
 
 def test_a_blocked_caption_request_with_nothing_stored_ends_the_build(api_key_set, caption_library):
@@ -979,8 +1012,15 @@ def test_a_malformed_video_id_in_the_configuration_is_refused_by_name():
         list(built.fetch(FakeYouTubeSession(), {}, quiet))
 
 
-def test_a_malformed_channel_id_in_the_configuration_is_refused_by_name():
-    built = source(channel_id="@examplechannel")
+def test_a_channel_written_as_someone_elses_address_is_refused_by_name():
+    built = source(channel_id="https://vimeo.com/examplechannel")
+
+    with pytest.raises(YouTubeSourceError, match="channel_id"):
+        list(built.fetch(FakeYouTubeSession(), {}, quiet))
+
+
+def test_a_channel_written_as_a_youtube_page_that_is_not_a_channel_is_refused():
+    built = source(channel_id="https://www.youtube.com/results?search_query=x")
 
     with pytest.raises(YouTubeSourceError, match="channel_id"):
         list(built.fetch(FakeYouTubeSession(), {}, quiet))
@@ -1159,3 +1199,621 @@ def test_grouping_by_page_leaves_every_other_source_untouched(fixtures_dir, fake
     )
 
     assert page_address(web) == "https://example.org/g?t=9&page=2"
+
+
+### Naming A Channel Every Way A Browser Shows It ###
+
+@pytest.mark.parametrize("written", [
+    CHANNEL,
+    f"https://www.youtube.com/channel/{CHANNEL}",
+    f"https://www.youtube.com/channel/{CHANNEL}/videos",
+    f"http://youtube.com/channel/{CHANNEL}",
+    f"https://m.youtube.com/channel/{CHANNEL}/playlists",
+])
+def test_a_channel_written_as_its_id_needs_no_request(written):
+    assert yp.parse_channel_selector(written) == ("id", CHANNEL)
+
+
+@pytest.mark.parametrize("written, expected", [
+    ("@ExampleChannel", "https://www.youtube.com/@ExampleChannel"),
+    ("https://www.youtube.com/@ExampleChannel", "https://www.youtube.com/@ExampleChannel"),
+    ("https://www.youtube.com/@ExampleChannel/videos", "https://www.youtube.com/@ExampleChannel"),
+    ("https://www.youtube.com/@ExampleChannel/playlists", "https://www.youtube.com/@ExampleChannel"),
+    ("https://www.youtube.com/examplechannel", "https://www.youtube.com/@examplechannel"),
+    ("https://www.youtube.com/c/ExampleChannel", "https://www.youtube.com/@ExampleChannel"),
+    ("https://www.youtube.com/user/ExampleChannel", "https://www.youtube.com/@ExampleChannel"),
+    ("youtube.com/@ExampleChannel", "https://www.youtube.com/@ExampleChannel"),
+    ("ExampleChannel", "https://www.youtube.com/@ExampleChannel"),
+])
+def test_a_channel_written_any_other_way_becomes_a_page_to_read(written, expected):
+    """
+    An operator has whichever form the browser showed them. A trailing
+    tab is dropped, because the address copied while looking at a
+    channel's videos is the address they will paste.
+    """
+    assert yp.parse_channel_selector(written) == ("page", expected)
+
+
+@pytest.mark.parametrize("written", [
+    "https://vimeo.com/examplechannel",
+    "https://example.org/@ExampleChannel",
+    "https://www.youtube.com/watch?v=" + VIDEO_A,
+    "https://www.youtube.com/results?search_query=depression",
+    "https://www.youtube.com/feed/subscriptions",
+    "watch",
+    "",
+    None,
+])
+def test_something_that_is_not_a_channel_is_refused(written):
+    with pytest.raises(yc.YouTubeError):
+        yp.parse_channel_selector(written)
+
+
+@pytest.mark.parametrize("written", [
+    VIDEO_A,
+    f"https://www.youtube.com/watch?v={VIDEO_A}",
+    f"https://www.youtube.com/watch?v={VIDEO_A}&t=90s",
+    f"https://youtu.be/{VIDEO_A}",
+    f"https://youtu.be/{VIDEO_A}?t=5",
+    f"https://www.youtube.com/shorts/{VIDEO_A}",
+    f"https://www.youtube.com/live/{VIDEO_A}",
+    f"https://www.youtube.com/embed/{VIDEO_A}",
+])
+def test_a_video_is_read_from_any_address_that_names_one(written):
+    assert yp.parse_video_selector(written) == VIDEO_A
+
+
+@pytest.mark.parametrize("written", [
+    "https://example.org/watch?v=" + VIDEO_A,
+    "https://www.youtube.com/@ExampleChannel",
+    "https://www.youtube.com/playlist?list=" + PLAYLIST,
+    "tooshort",
+    "far-too-long-to-be-a-video-id",
+    "",
+])
+def test_something_that_is_not_a_video_is_refused(written):
+    """
+    A bare eleven characters of the base64url alphabet is a video id and
+    cannot be told from one, so the values here are wrong in length or in
+    shape rather than merely unlikely.
+    """
+    with pytest.raises(yc.YouTubeError):
+        yp.parse_video_selector(written)
+
+
+def test_a_link_that_is_not_a_video_is_simply_not_one():
+    """
+    For a link found in crawled content, "not a video" is an ordinary
+    answer rather than a mistake worth raising over.
+    """
+    assert yp.video_id_in("https://example.org/a-page") is None
+    assert yp.video_id_in(f"https://youtu.be/{VIDEO_A}") == VIDEO_A
+
+
+@pytest.mark.parametrize("written, expected", [
+    (PLAYLIST, PLAYLIST),
+    (f"https://www.youtube.com/playlist?list={PLAYLIST}", PLAYLIST),
+    (f"https://www.youtube.com/watch?v={VIDEO_A}&list={PLAYLIST}", PLAYLIST),
+])
+def test_a_playlist_is_read_from_its_id_or_its_address(written, expected):
+    assert yp.parse_playlist_selector(written) == expected
+
+
+@pytest.mark.parametrize("written", [
+    "https://vimeo.com/x?list=PLx",
+    "https://www.youtube.com/watch?v=" + VIDEO_A,
+    "https://www.youtube.com/@ExampleChannel",
+    "",
+])
+def test_something_that_is_not_a_playlist_is_refused(written):
+    """
+    As with a video, a bare token is taken to be an id: only an address
+    that names no playlist, or one on another host, is refusable.
+    """
+    with pytest.raises(yc.YouTubeError):
+        yp.parse_playlist_selector(written)
+
+
+### Resolving A Handle Without A Key ###
+
+def channel_page(channel_id=CHANNEL, videos=(), playlists=(), token=None):
+    """
+    A stand-in for a YouTube page: the canonical link, the parameters the
+    page hands out for its own scrolling, and the identifiers on it.
+    """
+    body = [
+        f'<link rel="canonical" href="https://www.youtube.com/channel/{channel_id}">',
+        '"INNERTUBE_API_KEY":"EXAMPLE_PAGE_PARAMETER"',
+        '"INNERTUBE_CONTEXT_CLIENT_VERSION":"2.20260911.01.00"',
+    ]
+    body += [f'"videoId":"{v}"' for v in videos]
+    body += [f'"playlistId":"{p}"' for p in playlists]
+    if token:
+        body.append('"continuationCommand":{"token":"' + token + '"}')
+    return FakeResponse(text="".join(body), body=None)
+
+
+def full_page_videos(count=yp.LIKELY_MORE_THRESHOLD):
+    """
+    Enough synthetic video ids to look like a full first page.
+
+    A listing shorter than LIKELY_MORE_THRESHOLD is treated as complete,
+    because a YouTube page carries continuation tokens for shelves that
+    have nothing to do with the listing. A test about paging therefore
+    has to return a full page, or there is nothing to page.
+    """
+    return tuple(f"VID{index:08d}" for index in range(count))
+
+
+def test_a_handle_resolves_to_a_channel_id_in_one_request():
+    session = FakeYouTubeSession({"@ExampleChannel": channel_page()})
+    pages = yp.YouTubePages(session)
+
+    resolved = pages.resolve_channel(("page", "https://www.youtube.com/@ExampleChannel"))
+
+    assert resolved == CHANNEL
+    assert pages.request_count == 1
+
+
+def test_a_resolved_channel_id_is_stored_so_a_later_build_asks_nothing():
+    cache_module.save_channel_id("https://www.youtube.com/@ExampleChannel", CHANNEL)
+
+    assert cache_module.load_channel_id("https://www.youtube.com/@ExampleChannel") == CHANNEL
+
+
+def test_a_stored_channel_id_is_keyed_by_the_address_and_not_by_its_text():
+    """
+    A handle is somebody else's text and can hold characters no file
+    system accepts, so the address is hashed rather than used as a name.
+    """
+    path = cache_module.channel_id_path("https://www.youtube.com/@a/../../b")
+
+    assert ".." not in path
+    assert path.endswith(".json")
+
+
+def test_a_page_naming_no_channel_says_the_handle_may_be_wrong():
+    session = FakeYouTubeSession({"@Missing": FakeResponse(text="<html>nothing</html>", body=None)})
+
+    with pytest.raises(yc.YouTubeError, match="names no channel id"):
+        yp.YouTubePages(session).resolve_channel(("page", "https://www.youtube.com/@Missing"))
+
+
+def test_the_page_reader_refuses_an_address_off_youtube():
+    """
+    A canonical link and a configured address both arrive as somebody
+    else's text, so neither may send a build's requests off the host.
+    """
+    session = FakeYouTubeSession({})
+
+    with pytest.raises(yc.YouTubeError, match="refusing to request"):
+        yp.YouTubePages(session).resolve_channel(("page", "https://evil.example.org/@x"))
+    assert session.calls == []
+
+
+### Listing Without A Key ###
+
+def test_a_channel_is_listed_from_its_uploads_playlist():
+    """
+    The uploads playlist holds everything the channel published,
+    including its shorts and past streams, and lists more per request
+    than the videos tab does.
+    """
+    session = FakeYouTubeSession({"playlist": channel_page(videos=(VIDEO_A, VIDEO_B))})
+    pages = yp.YouTubePages(session)
+
+    assert pages.channel_video_ids(CHANNEL) == (VIDEO_A, VIDEO_B)
+    assert session.calls[0]["url"].endswith(f"list={UPLOADS}")
+
+
+def test_a_listing_stops_at_the_first_page_while_robots_txt_is_respected():
+    """
+    Reading further means the continuation endpoint, which YouTube's
+    robots.txt disallows. The build says what it did not read rather than
+    returning a partial list as though it were the whole one.
+    """
+    lines = []
+    first = full_page_videos()
+    session = FakeYouTubeSession({"playlist": channel_page(videos=first, token="MORE")})
+    pages = yp.YouTubePages(session, progress=lines.append, respect_robots_txt=True)
+
+    found = pages.channel_video_ids(CHANNEL)
+
+    assert found == first
+    assert len(pages.capped_listings) == 1
+    assert any("robots.txt disallows" in line for line in lines)
+    assert all(call["method"] == "get" for call in session.calls)
+
+
+def test_a_listing_short_enough_to_be_complete_says_nothing_about_robots():
+    """
+    A four-video playlist is the whole playlist. Warning about it, or
+    spending a request to prove it, would both be wrong.
+    """
+    lines = []
+    session = FakeYouTubeSession({"playlist": channel_page(videos=(VIDEO_A, VIDEO_B), token="MORE")})
+    pages = yp.YouTubePages(session, progress=lines.append, respect_robots_txt=True)
+
+    assert pages.channel_video_ids(CHANNEL) == (VIDEO_A, VIDEO_B)
+    assert pages.capped_listings == ()
+    assert not any("robots.txt" in line for line in lines)
+
+
+def test_the_robots_cap_is_explained_once_and_then_counted():
+    """A channel has dozens of playlists; the same paragraph thirty times buries the build."""
+    lines = []
+    first = full_page_videos()
+    session = FakeYouTubeSession({"playlist": channel_page(videos=first, token="MORE")})
+    pages = yp.YouTubePages(session, progress=lines.append, respect_robots_txt=True)
+
+    pages.channel_video_ids(CHANNEL)
+    pages.playlist_video_ids(PLAYLIST)
+
+    explained = [line for line in lines if "robots.txt disallows" in line]
+    assert len(explained) == 1
+    assert any("again the first page only" in line for line in lines)
+    assert len(pages.capped_listings) == 2
+
+
+def test_turning_robots_txt_off_pages_past_the_first_page():
+    first = full_page_videos()
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=first, token="MORE"),
+        "browse": FakeResponse(text='"videoId": "' + VIDEO_B + '"', body=None),
+    })
+    pages = yp.YouTubePages(session, respect_robots_txt=False)
+
+    found = pages.channel_video_ids(CHANNEL)
+
+    assert found == first + (VIDEO_B,)
+    assert pages.capped_listings == ()
+    assert [call["method"] for call in session.calls] == ["get", "post"]
+
+
+def test_a_continuation_hands_back_the_token_it_was_given():
+    """The token is never composed here, only returned."""
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=full_page_videos(), token="THE-TOKEN"),
+        "browse": FakeResponse(text='"videoId": "' + VIDEO_B + '"', body=None),
+    })
+
+    yp.YouTubePages(session, respect_robots_txt=False).channel_video_ids(CHANNEL)
+
+    post = [call for call in session.calls if call["method"] == "post"][0]
+    assert post["body"]["continuation"] == "THE-TOKEN"
+    assert post["params"]["key"] == "EXAMPLE_PAGE_PARAMETER"
+
+
+def test_paging_stops_when_a_batch_adds_nothing_new():
+    """A token that keeps answering the same batch must not page forever."""
+    first = full_page_videos()
+    repeated = "".join(f'"videoId": "{v}"' for v in first)
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=first, token="LOOP"),
+        "browse": FakeResponse(
+            text=repeated + '"continuationCommand": {"token": "LOOP"}', body=None
+        ),
+    })
+    pages = yp.YouTubePages(session, respect_robots_txt=False)
+
+    assert pages.channel_video_ids(CHANNEL) == first
+    assert len([c for c in session.calls if c["method"] == "post"]) == 1
+
+
+def test_a_refused_page_is_retried_once_as_a_browser_only_with_robots_off():
+    session = FakeYouTubeSession({"playlist": [
+        FakeResponse(status_code=403, body={}),
+        channel_page(videos=(VIDEO_A,)),
+    ]})
+    lines = []
+    pages = yp.YouTubePages(session, progress=lines.append, respect_robots_txt=False)
+
+    assert pages.channel_video_ids(CHANNEL) == (VIDEO_A,)
+    assert pages.request_count == 2
+    assert session.calls[1]["headers"]["User-Agent"].startswith("Mozilla/")
+    assert any("retrying once as a browser" in line for line in lines)
+
+
+def test_a_refused_page_is_not_retried_while_robots_txt_is_respected():
+    session = FakeYouTubeSession({"playlist": FakeResponse(status_code=403, body={})})
+
+    with pytest.raises(yc.YouTubeUnavailable, match="respect_robots_txt"):
+        yp.YouTubePages(session, respect_robots_txt=True).channel_video_ids(CHANNEL)
+    assert len(session.calls) == 1
+
+
+def test_an_identifier_of_the_wrong_shape_on_a_page_is_dropped():
+    """These reach a request and a cache file name, so a page cannot steer them."""
+    session = FakeYouTubeSession({"playlist": FakeResponse(
+        text='"videoId":"../../etc/pass""videoId":"' + VIDEO_A + '"', body=None)})
+
+    assert yp.YouTubePages(session).playlist_video_ids(PLAYLIST) == (VIDEO_A,)
+
+
+def test_a_channels_playlists_are_listed_from_its_playlists_tab():
+    session = FakeYouTubeSession({"playlists": channel_page(playlists=(PLAYLIST,))})
+
+    assert yp.YouTubePages(session).channel_playlist_ids(CHANNEL) == (PLAYLIST,)
+
+
+### The Publisher Rule ###
+
+def test_a_channel_with_no_key_is_listed_from_its_pages_and_indexed():
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "@DepressionCenter": channel_page(),
+        "playlist": channel_page(videos=(VIDEO_A,)),
+        "playlists": channel_page(playlists=()),
+        "oembed": FakeResponse(body={
+            "title": "A Talk",
+            "author_url": f"https://www.youtube.com/channel/{CHANNEL}",
+        }),
+    })
+    built = source(reader=reader, channel_id="https://www.youtube.com/@DepressionCenter")
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert documents
+    assert documents[0].title.startswith("A Talk -- ")
+
+
+def test_a_playlist_video_from_another_channel_is_left_out():
+    """
+    A channel's playlists routinely hold other people's videos. Indexing
+    those would put another organization's words in this knowledge base
+    under this organization's name.
+    """
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    other = "UCbbbbbbbbbbbbbbbbbbbbbb"
+    session = FakeYouTubeSession({
+        "playlist": [
+            channel_page(videos=(VIDEO_A,)),          # the channel's uploads
+            channel_page(videos=(VIDEO_A, VIDEO_B)),  # a playlist it curated
+        ],
+        "playlists": channel_page(playlists=(PLAYLIST,)),
+        "oembed": [
+            FakeResponse(body={"title": "Our Talk",
+                               "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+            FakeResponse(body={"title": "Someone Else's Talk",
+                               "author_url": f"https://www.youtube.com/channel/{other}"}),
+        ],
+    })
+    built = source(reader=reader, channel_id=CHANNEL)
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    titles = {d.title.split(" -- ")[0] for d in documents}
+    assert titles == {"Our Talk"}
+    assert built.skipped_other_channels == 1
+    assert "another channel" in "\n".join(built.summary_lines())
+
+
+def test_a_playlist_video_from_the_same_channel_is_kept():
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": [
+            channel_page(videos=(VIDEO_A,)),
+            channel_page(videos=(VIDEO_A, VIDEO_B)),
+        ],
+        "playlists": channel_page(playlists=(PLAYLIST,)),
+        "oembed": FakeResponse(body={
+            "title": "Our Talk",
+            "author_url": f"https://www.youtube.com/channel/{CHANNEL}",
+        }),
+    })
+    built = source(reader=reader, channel_id=CHANNEL)
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert len({d.url.split("&")[0] for d in documents}) == 2
+    assert built.skipped_other_channels == 0
+
+
+def test_the_publisher_rule_can_be_turned_off():
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    other = "UCbbbbbbbbbbbbbbbbbbbbbb"
+    session = FakeYouTubeSession({
+        "playlist": [
+            channel_page(videos=(VIDEO_A,)),
+            channel_page(videos=(VIDEO_A, VIDEO_B)),
+        ],
+        "playlists": channel_page(playlists=(PLAYLIST,)),
+        "oembed": [
+            FakeResponse(body={"title": "Our Talk",
+                               "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+            FakeResponse(body={"title": "Someone Else's Talk",
+                               "author_url": f"https://www.youtube.com/channel/{other}"}),
+        ],
+    })
+    built = source(reader=reader, channel_id=CHANNEL, only_channel_videos=False)
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert len({d.title.split(" -- ")[0] for d in documents}) == 2
+    assert built.skipped_other_channels == 0
+
+
+def test_a_video_the_operator_named_is_never_held_back_by_the_publisher_rule():
+    """Naming a video is the operator's own choice and overrides nothing else."""
+    reader = FakeReader({VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=()),
+        "playlists": channel_page(playlists=()),
+        "oembed": FakeResponse(body={
+            "title": "Someone Else's Talk",
+            "author_url": "https://www.youtube.com/channel/UCbbbbbbbbbbbbbbbbbbbbbb",
+        }),
+    })
+    built = source(reader=reader, channel_id=CHANNEL, video_ids=(VIDEO_B,))
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert documents
+    assert built.skipped_other_channels == 0
+
+
+def test_the_channels_playlists_are_not_queried_when_turned_off():
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=(VIDEO_A,)),
+        "oembed": FakeResponse(body={"title": "A Talk", "author_url": ""}),
+    })
+    built = source(reader=reader, channel_id=CHANNEL, include_playlists=False)
+
+    list(built.fetch(session, {}, quiet))
+
+    assert not any(call["resource"] == "playlists" for call in session.calls)
+
+
+def test_a_video_whose_publisher_cannot_be_read_is_still_indexed():
+    """
+    Holding a video back on a failed lookup would quietly shrink a
+    knowledge base, so the benefit of the doubt goes to indexing it.
+    """
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": [
+            channel_page(videos=(VIDEO_A,)),
+            channel_page(videos=(VIDEO_A, VIDEO_B)),
+        ],
+        "playlists": channel_page(playlists=(PLAYLIST,)),
+        "oembed": FakeResponse(body={"title": "A Talk", "author_url": ""}),
+    })
+    built = source(reader=reader, channel_id=CHANNEL)
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert len({d.title.split(" -- ")[0] for d in documents}) >= 1
+    assert built.skipped_other_channels == 0
+
+
+### A Block Partway Through ###
+
+def test_a_block_after_some_videos_keeps_what_was_read(api_key_set, caption_library):
+    """
+    YouTube starts refusing a machine that has asked a lot of questions.
+    A build that indexed most of a channel and then got refused is worth
+    having: every later request would be refused too, so none are made,
+    and the report says plainly that it is incomplete.
+    """
+    reader = FakeReader(
+        tracks={VIDEO_A: caption_lines(6)},
+        errors={VIDEO_B: caption_library.RequestBlocked(VIDEO_B)},
+    )
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "First", VIDEO_B: "Second"})})
+    built = source(reader=reader, video_ids=(VIDEO_A, VIDEO_B))
+
+    lines = []
+    documents = list(built.fetch(session, {}, lines.append))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"First"}
+    assert built.blocked_after == 1
+    assert any("refused this machine after 1 video" in line for line in lines)
+    assert "INCOMPLETE" in "\n".join(built.summary_lines())
+
+
+def test_a_block_before_anything_was_read_still_ends_the_build(api_key_set, caption_library):
+    """An index with no video content in it is not a knowledge base worth publishing."""
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "First"})})
+
+    with pytest.raises(YouTubeSourceError, match="no video content at all"):
+        list(source(reader=reader, video_ids=(VIDEO_A,)).fetch(session, {}, quiet))
+
+
+def test_no_further_captions_are_requested_after_a_block(api_key_set, caption_library):
+    reader = FakeReader(
+        tracks={VIDEO_A: caption_lines(6)},
+        errors={VIDEO_B: caption_library.RequestBlocked(VIDEO_B)},
+    )
+    third = "VIDEOCCCCCC"
+    session = FakeYouTubeSession({"videos": videos_page(
+        {VIDEO_A: "First", VIDEO_B: "Second", third: "Third"})})
+
+    list(source(reader=reader, video_ids=(VIDEO_A, VIDEO_B, third)).fetch(session, {}, quiet))
+
+    assert [call["video_id"] for call in reader.calls] == [VIDEO_A, VIDEO_B]
+
+
+def test_a_stored_transcript_is_unaffected_by_a_block(api_key_set, caption_library):
+    """A build reading its own committed cache never asks YouTube anything."""
+    cache_module.save_video(VIDEO_A, "Stored", "", "en",
+                            [{"text": "a stored phrase about measuring mood", "start": 0.0}])
+    reader = FakeReader(errors={VIDEO_B: caption_library.RequestBlocked(VIDEO_B)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_B: "Second"})})
+    built = source(reader=reader, video_ids=(VIDEO_A, VIDEO_B))
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"Stored"}
+    assert built.blocked_after == 1
+
+
+### Pacing ###
+
+class FakeSettings:
+    """The two crawl settings this source reads."""
+
+    def __init__(self, delay_seconds=0.0, respect_robots_txt=True):
+        self.delay_seconds = delay_seconds
+        self.respect_robots_txt = respect_robots_txt
+        self.user_agent = "Extractium/test (+https://example.org)"
+
+
+def test_youtube_is_paced_no_faster_than_its_own_floor():
+    """
+    A delay that is polite to a website gets this source refused partway
+    through a channel, so the build's own value is a lower bound and not
+    the final word.
+    """
+    built = source(video_ids=(VIDEO_A,))
+    built.configure(None, FakeSettings(delay_seconds=0.01))
+
+    assert built._delay_seconds() == youtube_source.MIN_DELAY_SECONDS
+
+
+def test_a_build_asking_for_a_longer_pause_gets_it():
+    built = source(video_ids=(VIDEO_A,))
+    built.configure(None, FakeSettings(delay_seconds=5.0))
+
+    assert built._delay_seconds() == 5.0
+
+
+def test_the_source_can_set_its_own_pause():
+    built = YouTubeSource(options(video_ids=(VIDEO_A,), delay_seconds=4.0))
+    built.configure(None, FakeSettings(delay_seconds=0.5))
+
+    assert built._delay_seconds() == 4.0
+
+
+def test_a_caption_request_waits_before_it_is_made(api_key_set, monkeypatch):
+    """
+    The caption library is called directly rather than through this
+    project's client, so it is paced here or not at all. Transcripts are
+    by far the most numerous requests a build makes.
+    """
+    waits = []
+    monkeypatch.setattr(youtube_source.time, "sleep", waits.append)
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "First", VIDEO_B: "Second"})})
+    built = source(reader=reader, video_ids=(VIDEO_A, VIDEO_B))
+    built.configure(None, FakeSettings(delay_seconds=0.0))
+
+    list(built.fetch(session, {}, quiet))
+
+    assert len(waits) == 2
+    assert all(wait >= youtube_source.MIN_DELAY_SECONDS for wait in waits)
+
+
+def test_a_stored_transcript_costs_no_pause(api_key_set, monkeypatch):
+    """A build working from its committed cache should finish at disk speed."""
+    waits = []
+    monkeypatch.setattr(youtube_source.time, "sleep", waits.append)
+    cache_module.save_video(VIDEO_A, "Stored", "", "en",
+                            [{"text": "a stored phrase about measuring mood", "start": 0.0}])
+    built = source(video_ids=(VIDEO_A,))
+    built.configure(None, FakeSettings())
+
+    list(built.fetch(FakeYouTubeSession(), {}, quiet))
+
+    assert waits == []
