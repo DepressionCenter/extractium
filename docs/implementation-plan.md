@@ -5,7 +5,7 @@ Author(s): Gabriel Mongefranco
 Created: 2026-09-04
 Last Modified: 2026-09-11
 Summary: The phased plan for building Extractium™: why the project is
-worth building, the design decisions the plan relies on, and thirteen
+worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
 and a done-when rule for each.
 Notes: See README file for documentation and full license information.
@@ -365,7 +365,68 @@ Still not built: following a YouTube link found while crawling something else an
 
 **Done when** both examples answer a query from a fresh deployment.
 
-### After Phase 14
+### Phase 15: Documentation pass
+
+**Goal.** Bring the README, every page under `docs/`, the example settings files, and the repository's metadata files into agreement with the code as it stands after Phase 14, and add the guides an adopter is missing.
+
+**Why it is needed.** Each phase updated the pages it touched and no phase read the whole set against the code. An audit on 2026-09-11, after Phase 13 merged, found the defects listed below. Most are small: a page says a thing is planned when it was built, or built when it was built differently. Together they would mislead a new hire who reads the documentation first, which is the reader the documentation is for. The audit also found no page at all on installing, on the deployment choices, or on the plugin architecture as one picture.
+
+**Order of work.** Corrections first, the README second, new pages last: a new page that cites a stale one inherits its defect. If the week runs out, the new pages move to a phase of their own rather than being rushed.
+
+**What the audit found: the README.**
+
+| Where | What is wrong | What to do |
+|---|---|---|
+| Description | The project-status sentence says a build writes the index and the two clients search it, which was true after Phase 4. | Say what exists: five source types, four outputs, two clients, two local search servers, and the hosted examples once Phase 14 lands. |
+| Quick start | Installs `[dev,code]` and says nothing about the one-command scripts, the `youtube` extra, or the two optional environment variables. | Show the two ways in: `run.sh` or `run.bat` for a person, `pip install -e` for a developer. Name the three extras and when each is needed. Say that `GITHUB_TOKEN` and `YOUTUBE_API_KEY` are optional and come from the environment only. |
+| Description | No picture of the whole. | Add a Mermaid diagram of sources, the engine, the outputs, and who consumes them: a browser search page, a script, a local assistant through the Model Context Protocol, a hosted assistant reading `llms.txt`, and a hosted endpoint once Phase 14 exists. Put the same information in a paragraph beside it, because the diagram carries nothing to a screen reader. |
+| Preview image | `images/Repo-preview.png` is the template's own placeholder, byte for byte. | Replace it with a real image of a build or the diagram, or remove the commented-out line. |
+| Documentation | The page list omits the architecture, compliance, and publishing pages, the three design pages, and the new guides. | List every page, one line each, as the README template asks; the detail stays in `docs/README.md`. |
+| Credits | No library or external project is listed. | List each one the way the [EFDC repository template](https://github.com/DepressionCenter/EFDC-Repo-Template) does: name, what it does, how this project uses it, license, link. Runtime: `requests`, `beautifulsoup4`, `sentence-transformers`, `numpy`, `Markdown`, `PyYAML`. Optional: `tree-sitter` and the thirteen grammars, `youtube-transcript-api`, Universal Ctags. Development: `pytest`, `pytest-cov`, `uv` for the lock file. Examples: `@huggingface/transformers` and the ONNX runtime it brings. Also the `BAAI/bge-small-en-v1.5` model, the Open Knowledge Format, the `llms.txt` convention, and Field Station AI. Read each license from the package's own metadata when writing the line; the audit read them from the installed versions and found Apache-2.0, MIT, and BSD-3-Clause, and nothing incompatible with GPL v3 or later. |
+| Citation | The DOI is still the template placeholder. | Fill it in or leave it; the maintainer's call. |
+
+**What the audit found: `docs/`.**
+
+| Page | What is wrong | What to do |
+|---|---|---|
+| `README.md` | The bot-protection line says the transport is planned for Phase 8; the architecture line says the page lists placeholders, and none remain. New pages are not listed. | Rewrite the two lines, add the new pages, and group the two maintainer-only pages (the page template and the session prompt) under their own heading so a reader looking for user documentation does not open them first. |
+| `architecture.md` | The registry row lists the built-in sources, handlers, and adapters and omits `youtube` from both plugin kinds and `okf` from the adapters. The summary still mentions placeholder modules. The fetch row does not mention the browser-identity retry that `respect_robots_txt: false` allows. The settled decisions stop at eight, and every later decision lives only in a phase note on this page. The conclusion is one paragraph of two hundred words. | Correct the rows. Add the decisions made since Phase 5 as numbered entries, each with its reason and its specification section, as the first eight are: optional installs for the parsers and the caption library, the committed YouTube store, one page indexed once across sources, and a video as one document per stretch. Break the conclusion into short paragraphs. |
+| `extractium-spec.md` | Still "Draft v0.2 (2026-09-04)" with no list of what changed since. The architecture diagram and section 4 say container version 3; the file is version 4. Sections 4 and 5 mark some built rows "built" and leave others unmarked. Section 6 says the handler protocol has no scope hook; it has had one since Phase 7. Section 3.4 dates content types by phase number. Section 8 omits the `repository/` and `github/analysis/` cache folders. Section 9.3 describes the Val Town, Cloudflare, and wrapper examples as if they existed. Section 12's example says a channel needs `YOUTUBE_API_KEY`, marks `include_code` as reserved, and omits `dspace`, `seed_urls`, `ctags_fallback`, `include_playlists`, `only_channel_videos`, and the per-source `delay_seconds`. Section 14's YouTube line is superseded. The page carries the code header rather than the documentation header. | Bump to v0.3 with a section listing the changes. Correct every item above. Mark every built row the same way, or drop the marks and let the architecture page say what is built. Regenerate the section 12 example from `examples/config.example.yaml` and keep the two in step. |
+| `configuration.md` | Current, and the largest page in the folder at about seven hundred lines. | Read it once against `extractium/config.py` for any default that drifted, and check that every key in `SOURCE_OPTION_KEYS` and `OUTPUT_OPTION_KEYS` has a row. Consider moving the four-part "how the URL patterns work" section to the new crawling guide and leaving a pointer. |
+| `data-flow.md` | The content-type list stops at `video_transcript` and omits `manifest`, `repo_map`, `code_file`, and `code_symbol`. The diagram's output list omits the SQLite file. The cache section omits the repository text cache. Code analysis, which produces records from a file rather than from a page, is not in the flow at all. | Add the missing types, the missing folder, and one paragraph on where a code file's records enter the flow. |
+| `compliance.md` | The known gap saying the scheduled workflow has never been observed running is dated 2026-09-08 and may no longer be true. There is no control row for the browser-identity retry, which Phase 8 said this page would gain. The test counts and the review date will be stale by the time this phase runs. | Confirm whether a scheduled run has completed and record the date or keep the gap. Add the retry row, stating that it sits behind `respect_robots_txt: false` and reports both attempts. Refresh the counts and dates in the same change. |
+| `container-format.md` | The status paragraph says the clients that read the file are scheduled for Phase 4. They were built in Phase 4. | Say the clients exist and name them. |
+| `usage.md` | The install line differs from the README's, and neither mentions the extras. The environment variables and the run scripts are absent. The cache paragraph tells the reader to ignore the cache folder without the YouTube exception. | Keep this page as the command reference: point installation at the new installation guide, add the two variables, and add the exception. |
+| `troubleshooting.md` | Current. | Add entries only for failures the new guides turn up while being checked. |
+| `bot-protection-transport.md` | Says the transport is planned and not built. That is true: there is no `transport` setting, no `curl_cffi` dependency, and no `core/transport.py`. What was built instead, in the same pull request, is the browser-identity retry behind `respect_robots_txt: false`. Phase 8 above carries no finished note, and `examples/config.efdc.yaml` still opens with the "before the first run" warning the phase was meant to remove. | The maintainer decides whether the handshake transport is still wanted. Either way, add a status note to Phase 8 and to this page saying what was built instead and what was not, and take the warning block out of the settings file or bring it up to date. |
+| `github-repository-indexing.md` | A design record, and mostly right to keep as one. But its configuration example still says `include_code: true  # Phase 10; ignored until then`, and its tier table and record table date things by phase. | Leave the history sections. Correct every line that states the present. |
+| `dspace-repository-indexing.md` | Current. | Nothing beyond the link check. |
+| `doc-template.md` | Its heading form, the project title and the page title on one H1, disagrees with `AGENTS.md` section 16 and with every page in the folder, which use the title as H1 and the page name as H2. | Make the template match the pages. |
+| `session-prompt-template.md` | The reading list mentions placeholder modules with `TODO` comments. None remain. | Drop that clause. Check the rest against the workflow the maintainer actually uses. |
+| `how-to/run-a-weekly-build.md`, `how-to/publish-to-github-pages.md`, `how-to/search-a-compendium.md`, `how-to/connect-an-mcp-client.md` | Current. | Link check, and cross-links to the new guides. |
+| `SKILLS.md` | Current until Phase 14, which adds the hosted tier it says is not built. | Update in Phase 14; confirm here. |
+
+**What the audit found: examples and metadata.**
+
+| File | What is wrong | What to do |
+|---|---|---|
+| `examples/config.example.yaml` | The YouTube comment says listing a channel needs a key. It has not since Phase 13 was extended. The per-source `delay_seconds` is not shown. | Correct the comment and add the setting. |
+| `examples/config.efdc.yaml` | Opens with a Phase 8 warning block about three sites answering 403. The YouTube entry says the source is "not yet available" and "arrives in phase 13", and that it will need a key. | Bring the whole file up to date and turn the YouTube source on, since the channel resolves without a key. |
+| `CITATION.cff`, `.zenodo.json` | Two placeholder co-authors with placeholder ORCID identifiers, left from the template. | Remove them, or replace them with real people. |
+| `examples/data-repo/README.md`, `examples/mcp/*/README.md` | Current. | Link check. |
+
+**New pages.** Four, each following the page structure in `AGENTS.md` section 16.
+
+- `how-to/install.md`: the supported Python versions; the three extras and what each one is for; the one-command scripts against `pip install -e`; what the lock file pins, how to regenerate it, and that it lists CUDA packages which install on Linux only, so a Linux install downloads far more than a Windows one; what the first build downloads; how to check an install with `--version` and the test suite.
+- `how-to/crawl-a-site.md`: how to choose a source type for each kind of content; the trial run and how to read `llms.txt`; tuning the include and exclude patterns, moved here from the configuration reference or summarised from it; the two optional environment variables; what a build reports and what each notice means; when a build has to run on your own machine. `usage.md` stays the command reference this page points at.
+- `how-to/deploy.md`: the deployment choices side by side. Build on your own machine and publish nowhere; build on GitHub and publish to Pages; publish the output folder to any static host; the separate data repository. For each, what it needs (secrets, the crawl cache, the committed YouTube store), what it costs, and what it cannot reach. Then how the outputs are consumed in each case: the browser client, a script, a local assistant, a hosted assistant reading `llms.txt`, and the hosted endpoints from Phase 14.
+- `plugin-architecture.md`: the three plugin kinds, the registry's resolution order, the three protocols with every member and every optional hook, and how a source, a site handler, and an adapter each fit into a build. One Mermaid diagram of the whole and one of a build's sequence, each with the same information in prose beside it. A minimal working example of each kind, dropped into `plugins/`, and a pointer to the built-in that serves as the reference implementation for each. Written for a plugin author who has read nothing else.
+
+**Tests.** A test over `docs/`, the README, `SKILLS.md`, and the example READMEs that every relative link resolves to a file, every page carries the license comment, one H1, an H2 subtitle, the two back links, and the Summary, Conclusion, and Additional Resources headings, and no heading level is skipped. A test that every YAML block in `configuration.md`, the specification's section 12, and `examples/` loads through `load_config`, so a documented setting that does not exist fails the build rather than misleading a reader. The existing suite still passes.
+
+**Done when** a new hire can install, build, publish, and connect an assistant from the README and `docs/` alone, without opening the code; every YAML example in the documentation loads; and a search of `docs/` for "planned", "not yet", "placeholder", and "phase" outside this page and the three design pages finds nothing that is no longer true.
+
+### After Phase 15
 
 What is left is listed here so a reader of this page knows what was deferred and what was ruled out, and why. A decision recorded here is meant to save somebody proposing the same thing again from first principles.
 
