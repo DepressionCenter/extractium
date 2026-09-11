@@ -11,7 +11,7 @@ extractium/adapters/llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,26 +32,19 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
-import re
-
-from extractium.adapters.base import output_compendium, prepare_out_dir
+from extractium.adapters.base import (
+    count_of,
+    excerpt,
+    link,
+    output_compendium,
+    page_title,
+    prepare_out_dir,
+)
 
 ### Constants ###
 
 INDEX_FILE = "llms.txt"
 FULL_FILE = "llms-full.txt"
-
-# Longest excerpt shown after a page's link in the index file. Long enough
-# to tell two similarly named pages apart, short enough that the index
-# stays an index.
-EXCERPT_CHARS = 180
-
-# A parent heading is "Page title -- Section heading". The page title is
-# what the index file lists, because the index is one line per page.
-HEADING_SEPARATOR = " -- "
-
-# Collapses every run of whitespace, including newlines, into one space.
-WHITESPACE_RUN = re.compile(r"\s+")
 
 # Named in both files so a reader knows what produced them and under what
 # terms. The indexed text keeps whatever license its own site carries.
@@ -91,37 +84,7 @@ FULL_ORIENTATION = (
 )
 
 
-### Text Helpers ###
-
-def page_title(heading):
-    """The page part of a parent heading, dropping the section part after the separator."""
-    return heading.split(HEADING_SEPARATOR, 1)[0].strip()
-
-
-def link(title, url):
-    """
-    One Markdown link, safe to build from a crawled page title and URL.
-
-    Both come from a page nobody here controls. A `]` in a title or a `)`
-    in a URL would end the link early and turn the rest of the line into
-    stray text, so the first is escaped and the second is percent-encoded.
-    """
-    safe_title = title.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
-    safe_url = url.replace("(", "%28").replace(")", "%29").replace(" ", "%20")
-    return f"[{safe_title}]({safe_url})"
-
-
-def excerpt(text, limit=EXCERPT_CHARS):
-    """
-    One line of text for a link's description: whitespace collapsed, cut
-    at a word boundary, with an ellipsis when anything was cut.
-    """
-    flat = WHITESPACE_RUN.sub(" ", text).strip()
-    if len(flat) <= limit:
-        return flat
-    cut = flat.rfind(" ", 0, limit)
-    return flat[:cut if cut > 0 else limit].rstrip() + "..."
-
+### Page Grouping ###
 
 def pages_in_order(parents):
     """
@@ -211,11 +174,6 @@ def name_sites(hosts, limit=HOSTS_SHOWN):
     if len(shown) == 1:
         return shown[0]
     return f"{', '.join(shown[:-1])} and {shown[-1]}"
-
-
-def count_of(number, noun):
-    """A counted noun that reads correctly in either number: "1 page", "2 pages"."""
-    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
 
 
 def summary(compendium, page_count):

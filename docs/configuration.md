@@ -370,7 +370,7 @@ Leave `outputs` out to write the two defaults: the container file and the `llms.
 | `container` | `file` | `kb-index.json` | The binary index every search client reads. See the [container format](container-format.md). |
 | `llmstxt` | none | | `llms.txt` and `llms-full.txt`. |
 | `sqlite` | `file` | `compendium.sqlite` | A SQLite database with the same content. |
-| `okf` | none | | An Open Knowledge Format folder of Markdown files. |
+| `okf` | none | | An Open Knowledge Format folder of Markdown files, written as `okf/` under `out_dir`. |
 
 | Option on every output | Type | Default | What it does |
 |---|---|---|---|
@@ -387,7 +387,21 @@ outputs:
     include_local: true      # this file stays on your machine, so local content is fine
 ```
 
-The container, `llmstxt`, and `sqlite` writers exist today. The `okf` writer is built in a later phase of the [implementation plan](implementation-plan.md). An output type that is not one of the four above is passed to the registry as written, like a plugin source type.
+All four writers exist today. An output type that is not one of the four above is passed to the registry as written, like a plugin source type.
+
+The `okf` output writes a folder rather than a file. Inside `out_dir/okf/` you get:
+
+| File | What it holds |
+|---|---|
+| `index.md` | Every page as a link, grouped under the name of the source it came from. |
+| `log.md` | One dated entry naming the build that wrote the folder. |
+| `<source name>/<page>.md` | One page: what it is, where it was read from, and its text. |
+
+Each file is named after the page's title, plus a short code taken from its address so two pages with the same title stay two files. Many sites give every page the same first heading, so when a title is shared the end of the address is added to it as well: `Extractium (configuration.md)`.
+
+Any Markdown viewer opens the folder. A program that reads Open Knowledge Format v0.2 sees each page as a concept, using the block at the top of each file.
+
+The folder holds the text of every page, so decide what to publish exactly as you would for the container. A build never deletes what an earlier build wrote. A page that has since disappeared from its source therefore stays in the folder until you remove it.
 
 The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
 

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/data-flow.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: What happens to content between the site it is read from and the
 files a build writes: the stages, the shape of the data at each one, the
 units and time zones every field uses, and the two places where content
@@ -48,11 +48,11 @@ flowchart TD
     F --> G[Compact sections with no windows left]
     G --> H[Keyword and calibration statistics]
     H -->|one Compendium| I[Adapters]
-    I --> J[out_dir: kb-index.json, llms.txt, llms-full.txt]
+    I --> J[out_dir: kb-index.json, llms.txt, llms-full.txt, okf/]
     C -.reads and updates.-> K[(.kb_cache)]
 ```
 
-The same thing in words, for anyone whose reader does not show the diagram: the settings file names the sources and the outputs. The registry finds the matching plugins. Each source fetches pages, using and updating the cache folder, and hands back document records. The chunker cuts each document into sections and then into smaller windows. Every window is embedded once. Near-identical windows are dropped, and any section left with no windows is removed with them. The keyword and calibration statistics are then built over what survives. That single result, the compendium, goes to each adapter, and each adapter writes it into the output folder in its own format.
+The same thing in words, for anyone whose reader does not show the diagram: the settings file names the sources and the outputs. The registry finds the matching plugins. Each source fetches pages, using and updating the cache folder, and hands back document records. The chunker cuts each document into sections and then into smaller windows. Every window is embedded once. Near-identical windows are dropped, and any section left with no windows is removed with them. The keyword and calibration statistics are then built over what survives. That single result, the compendium, goes to each adapter, and each adapter writes it into the output folder in its own format: the index file, the two llms.txt files, a database, or a folder of Markdown.
 
 
 ## What the data looks like at each stage
@@ -118,6 +118,8 @@ One record holding the sections, the window columns, the vectors, how the vector
 ### 8. The output folder
 
 See [Running a Build](usage.md) for what each file is. Adapters never fetch a URL and never run the model; if one did, the promise of one crawl and one embedding pass would be gone.
+
+The Open Knowledge Format output writes a folder, `okf/`, rather than a single file. Names inside it are built from an allowlist of lowercase letters, digits, and hyphens, plus a short digest of the page address, so a page title cannot decide where a file lands. The block at the top of each file is written by a YAML library rather than assembled by hand, because a title holding a colon or a quotation mark would otherwise stop the file parsing.
 
 
 ## Where private content could reach a published file

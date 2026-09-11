@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-10
+# Last Modified: 2026-09-11
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -161,7 +161,7 @@ sources:
 #  - type: sqlite
 #    file: compendium.sqlite
 #    include_local: true
-#  - type: okf
+#  - type: okf         # a folder of Markdown, one file per page, under out_dir/okf
 
 
 # ---------------------------------------------------------------------------

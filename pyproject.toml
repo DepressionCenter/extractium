@@ -2,7 +2,7 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
-# Last Modified: 2026-09-10
+# Last Modified: 2026-09-11
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
 # (single package; runtime deps, dev/code/parquet/duckdb extras, console
@@ -116,6 +116,7 @@ github = "extractium.sources.github:GitHubHandler"
 container = "extractium.adapters.container:ContainerAdapter"
 llmstxt = "extractium.adapters.llmstxt:LlmsTxtAdapter"
 sqlite = "extractium.adapters.sqlite_out:SqliteAdapter"
+okf = "extractium.adapters.okf:OkfAdapter"
 
 [tool.setuptools.packages.find]
 include = ["extractium*"]
