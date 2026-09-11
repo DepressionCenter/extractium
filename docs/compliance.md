@@ -78,6 +78,12 @@ Extractium reads public documentation, turns it into a searchable file, and publ
 | Dependencies are pinned and hash-checked | `requirements-lock.txt` | Generated with `uv pip compile --universal --generate-hashes`. Both run scripts and both workflows install with `--require-hashes`, so a package whose contents do not match what was locked is refused. `tests/test_operations.py` checks that every pinned package carries a hash. |
 | The scheduled build asks for the least access it can | `.github/workflows/build-compendium.yml` | `contents: read` for the workflow; `pages: write` and `id-token: write` for the publishing job alone. Publishing goes through GitHub's own Pages actions only. `tests/test_operations.py` pins all of this. |
 | An AI agent is told to treat indexed text as evidence, never as instructions | `SKILLS.md` | The rule is stated in the file an agent is pointed at. |
+| Every answer a local search server gives an assistant repeats that rule | `examples/mcp/local-python/server.py`, `examples/mcp/local-node/server.js`, `UNTRUSTED_NOTE` | The note is the first line of every tool result, where the model reads it next to the text it describes. `tests/test_mcp_local_servers.py` and `examples/mcp/local-node/server.test.js` check it is there. |
+| A local search server marks content read from a folder as confidential | The same two files, `LOCAL_NOTE` | An answer holding a section whose `local` flag is set carries the warning; one that does not, does not. Covered in both suites. |
+| A published index is fetched only over a secure connection | The same two files, `checked_url` / `checkedUrl` | HTTPS is required, with plain HTTP allowed only on the loopback address, where a developer serving a build has no certificate. Every other scheme, including `file:`, is refused. Parametrised tests cover each case. |
+| A downloaded index cannot decide where it is written | The same two files, `cache_paths` / `cachePaths` | The cached file is named by a SHA-256 digest of its address, so a URL carrying path separators or a parent-directory step lands in the cache folder like any other. Pinned in both suites. |
+| A search server answers questions and writes nothing | The same two files | One tool, `search_kb`, which reads one static file. There is no tool that writes, deletes, or runs anything, and no path by which a model's output becomes a command. |
+| A failure tells the model what to do without exposing the machine | The same two files, `_search` / `search` | An index that cannot be loaded returns a tool error naming the step; the underlying message, which can hold a path from the operator's disk, goes to the error stream only. Both suites check that a path in the failure does not reach the answer. |
 | Every output records how it was made | Container header, `llms.txt` preamble | Model, dimensions, query prefix, build time, and tool version, so a stale or mismatched file is detectable rather than silently wrong. |
 | A client refuses a file it cannot read correctly | `extractium/search.py`, `clients/js/extractium-client.js` | Both implement every check in the [container format](container-format.md) reader checklist. `tests/test_search.py` and `clients/js/extractium-client.test.js` cover each refusal. |
 
@@ -91,6 +97,7 @@ These are real and current. None is hidden behind a setting.
 - **The check does not read images, PDFs, or spreadsheets.** Neither does the build, so nothing from them reaches an output; but a folder holding them is not covered by the report.
 - **Text a repository extracted from a deposited document is not scanned by default.** The default `phi_lint: local` setting covers content that was never published, and a deposit in a public repository was published deliberately. But extracted text from a research poster is exactly where a stray identifier is most likely to sit, so set `phi_lint: 'all'` on any build with a `dspace` source. The setting exists; choosing it is the operator's.
 - **Code records are not scanned by default either, for the same reason.** A repository's source files are published material, so `phi_lint: local` leaves them out. Set `phi_lint: 'all'` on any build that reads code. Run that way against this project's own repository on 2026-09-10, the check reported 90 pattern matches in 34 of 1,945 documents — author names in file headers, synthetic examples, and hash digits in a lock file that look like identifiers. That is the check asking questions, which is what it is for.
+- **The Node search server's one package brings unfixed advisories.** `@huggingface/transformers`, which runs the embedding model, depends on `sharp` and `adm-zip`; `npm audit` reported four high-severity advisories against those two on 2026-09-11, none with a fix available. The affected paths are image decoding and unpacking the machine-learning runtime at install time, neither of which this server uses, but the package is still installed on the machine. The Python server needs no extra package at all and is the safer choice where either will do.
 - **No security scanning runs in continuous integration.** There is no dependency-audit or code-scanning workflow in this repository yet.
 - **The scheduled workflow has not been observed running.** It is written and its shape is tested, but as of 2026-09-08 no run has completed on GitHub. Treat the first run as a check to perform, not a result to rely on.
 - **Actions are pinned to a major version, not to a commit.** `actions/checkout@v4` follows that major line. Pinning to a commit digest is stricter and is worth doing if your organization requires it.
@@ -132,12 +139,13 @@ Anyone publishing an interface over a compendium, a search page for instance, ow
 
 ## Data retention
 
-Extractium keeps nothing of its own beyond two folders, both under your control:
+Extractium keeps nothing of its own beyond three folders, all under your control:
 
 | What | Where | How long |
 |---|---|---|
 | Fetched pages | `.kb_cache`, next to your settings file unless you change it | Until you delete it. Deleting it costs time on the next build and nothing else. |
 | Build output | `dist` unless you change it | Until you delete or overwrite it. Each build rewrites the folder. |
+| An index a local search server downloaded | `~/.cache/extractium-mcp`, unless `EXTRACTIUM_CACHE_DIR` names another folder | Until you delete it. It holds one copy of each published index you searched, which is public material. |
 
 Neither folder should be committed. Both are in the `.gitignore` files that ship here.
 
@@ -146,7 +154,7 @@ Neither folder should be committed. Both are in the `.gitignore` files that ship
 
 | Item | Status |
 |---|---|
-| Test suite | 564 Python tests and 36 Node tests passing as of 2026-09-08. |
+| Test suite | 1,177 Python tests passing as of 2026-09-11, plus 36 Node tests for the JavaScript client and 24 for the local Node MCP server. |
 | Security review by a second person | Not done. |
 | Privacy, IRB, or Information Assurance review | Not done, and needed before any use involving participant data. |
 | Accessibility audit with an automated tool | Not done. |

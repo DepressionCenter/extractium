@@ -278,15 +278,17 @@ The compendium on a static host is the single source of truth; every access meth
 | Tier | Method | Search quality | Hosting cost | Plan phase |
 |---|---|---|---|---|
 | 0 | Static files (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | Model-dependent; no ranking | None | 3 |
-| 1 | Local MCP server on the user's machine (Node via `npx`, or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | 10 |
-| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | 12 |
-| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | 12 |
+| 1 | Local MCP server on the user's machine (Node or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | 12, built |
+| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | 14 |
+| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | 14 |
 
 Tier 2 detail, from the hosts' published limits: a Cloudflare Worker on the free plan has 10 milliseconds of CPU per request and a 3 MB script limit, so it cannot parse a multi-megabyte JSON header on every call; the example imports the SQLite output into D1 and answers BM25 queries from it, with optional query embedding through Workers AI, which serves the same `bge-small-en-v1.5` model. A Val Town HTTP val has 4 GiB of memory and a one-minute wall-clock limit on the free plan, so it can hold the whole container in memory after fetching it from the published URL.
 
 ### 9.3 MCP servers are examples, not core
 
 They live under `examples/mcp/`: `local-node/` and `local-python/` (Tier 1), `valtown/` and `cloudflare/` (Tier 2). Each is a small program over a client library and the published compendium. Hosted assistant prompts (Tier 3) live under `examples/wrappers/` as plain text. `SKILLS.md` at the repository root tells AI agents how to use every tier.
+
+The two Tier 1 servers are built. Each is one file that speaks JSON-RPC over standard input and output, exposes one tool named `search_kb`, and answers both eras of the protocol: the stateless revision, which declares its version in every request's `_meta`, and the older `initialize` handshake that most clients still open with. The index address comes from the environment and must be HTTPS, except on the loopback address; the downloaded file is cached under a digest of its address and revalidated with a conditional request. Neither server writes anything anywhere, and neither embeds a model into the repository: the Python one uses the package Extractium already installs, and the Node one loads transformers.js when a search first runs. The Node example runs from a checkout rather than through `npx`, because the JavaScript client it imports is not published to a package registry.
 
 
 ## 10. Enrichment (deferred; schema-ready now)

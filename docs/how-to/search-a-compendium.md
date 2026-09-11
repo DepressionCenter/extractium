@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/search-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-11
 Summary: How to search a built compendium with the two client libraries:
 loading the container in Python and in JavaScript, supplying a query
 embedder, reading the results, and what the search does behind the two
@@ -143,7 +143,7 @@ node --test clients/js
 
 ## Conclusion
 
-You can now search a published index from either language, with your own embedder, and read the sections that come back. To publish an index on a schedule, read [how to run a weekly build](run-a-weekly-build.md). To understand the file itself, read the [container format](../container-format.md).
+You can now search a published index from either language, with your own embedder, and read the sections that come back. To hand the same search to an AI assistant as a tool instead, read [how to connect an MCP client](connect-an-mcp-client.md). To publish an index on a schedule, read [how to run a weekly build](run-a-weekly-build.md). To understand the file itself, read the [container format](../container-format.md).
 
 
 ## Additional Resources
@@ -152,6 +152,7 @@ You can now search a published index from either language, with your own embedde
 * [Container Format](../container-format.md) — the byte layout both clients read, and the reader checklist they implement.
 * [Running a Build](../usage.md) — how the file you are searching is produced.
 * [How to Run a Weekly Build](run-a-weekly-build.md) — keeping a published index current.
+* [How to Connect an MCP Client](connect-an-mcp-client.md) — the two local servers built on these clients.
 * [SKILLS.md](../../SKILLS.md) — how an AI agent uses the published files and these clients.
 * [BAAI/bge-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5) — the embedding model, including the query prefix the clients apply for you.
 * [transformers.js](https://huggingface.co/docs/transformers.js) — running the same model in a browser.

@@ -334,6 +334,51 @@ That line is not an error. It is telling you the index has that repository's doc
 **Fix.** Download it again as binary. In a browser, use `response.arrayBuffer()`, never `response.text()`.
 
 
+## A local search server
+
+### The server prints one line and then seems to hang
+
+**Cause.** That is what it is supposed to do. The server waits for a client to write requests to its standard input, and prints nothing else until one does.
+
+**Fix.** Nothing. Drive it from an assistant, or send it a request yourself as [the how-to page](how-to/connect-an-mcp-client.md) shows.
+
+### The server exits at once with code 2
+
+**Cause.** Neither `EXTRACTIUM_INDEX_URL` nor `EXTRACTIUM_INDEX_PATH` is set, so the server does not know which index to search. A client that starts the server with its own environment often does not pass yours through.
+
+**Fix.** Set one of them in the client's own configuration, in the `env` block beside the command.
+
+### `EXTRACTIUM_INDEX_URL must be an https:// address`
+
+**Cause.** The address is plain HTTP somewhere other than this machine, or is not an address at all. An index fetched over an open connection can be replaced in transit, and the assistant would read the replacement as your organization's documentation.
+
+**Fix.** Publish over HTTPS and use that address. While testing a build you are serving yourself, `http://localhost:...` is accepted.
+
+### The assistant lists no tools
+
+**Cause.** The client could not start the command. A relative path is the usual reason: the client starts the server from a folder you did not choose.
+
+**Fix.** Use a full path to `server.py` or `server.js` in the client configuration, and check the same command runs in a terminal.
+
+### The first search takes minutes
+
+**Cause.** The embedding model, about 130 MB, is downloaded the first time a search runs. The index may be downloading too.
+
+**Fix.** Wait once. Later searches reuse both. Run one search from a terminal before adding the server to an assistant, so the wait does not look like a failure.
+
+### The answer is older than the published index
+
+**Cause.** The host could not be reached, so the server used its cached copy rather than failing. The reason is on its error stream, which most clients show as the server's log.
+
+**Fix.** Check the address answers, then restart the server. To start from nothing, delete the cache folder: `~/.cache/extractium-mcp`, or whatever `EXTRACTIUM_CACHE_DIR` names.
+
+### `npm install` reports high-severity advisories
+
+**Cause.** The Node server's one package, `@huggingface/transformers`, depends on `sharp` and `adm-zip`, which carry advisories with no fix available. Neither path is used by this server, but the packages are installed.
+
+**Fix.** Decide deliberately. The [Python server](../examples/mcp/local-python/README.md) does the same work with no extra package, and both expose the same tool.
+
+
 ## Conclusion
 
 Most failures come down to three things: a pattern that is broader or narrower than you meant, a file that did not arrive intact, or a mismatch between the model that built an index and the model searching it. If you hit something that is not here and work out the cause, add it to this page in the same change.
@@ -347,6 +392,7 @@ Most failures come down to three things: a pattern that is broader or narrower t
 * [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the local and scheduled builds.
 * [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — publishing settings and checks.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — using the index from Python or JavaScript.
+* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md) — running the search as a tool an assistant calls.
 * [Container Format](container-format.md) — the reader checks the error messages come from.
 
 
