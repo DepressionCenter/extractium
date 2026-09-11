@@ -451,7 +451,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Cause.** Most often it has no captions, or none in the languages asked for. The build counts these and says how many were skipped.
 
-**Fix.** Add the language to `languages` if the captions exist in another one. A video with captions turned off cannot be indexed from captions; speech-to-text is named as future work in [the specification](extractium-spec.md).
+**Fix.** Add the language to `languages` if the captions exist in another one, which is the usual cause: `languages: ["en", "es"]` covers a channel that publishes in both. A video with captions genuinely turned off cannot be indexed, and there is no fallback: reading speech from the audio is [not planned](extractium-spec.md), because sampling a real channel found captions on every video.
 
 ### A corrected transcript is not picked up
 
