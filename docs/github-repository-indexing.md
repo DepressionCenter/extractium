@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: The design for reading GitHub repositories: the three-tier
 ingestion ladder in Phase 7, and the lightweight static code analysis in
 Phase 10. Covers URL detection, authentication, repository selection, file
@@ -49,7 +49,7 @@ Reading a code host is three separate pieces of work, in three separate phases.
 
 Keeping the Open Knowledge Format out of a GitHub phase matters for more than tidiness. An adapter that arrives alongside a code host invites the mistake of writing a GitHub-shaped format. It has to work for a TeamDynamix portal and a local folder in exactly the same way.
 
-Only Phase 7 is built. The [implementation plan](implementation-plan.md) holds the current order of every phase.
+Phases 7 and 10 are built. The [implementation plan](implementation-plan.md) holds the current order of every phase.
 
 
 ## Phase 7: the GitHub API source
@@ -241,12 +241,14 @@ Dependency lock files are excluded by default. They are long, they are mostly pa
 
 ### What gets skipped
 
-Whole directories that hold generated or third-party code:
+Whole directories that hold generated code, third-party code, or data files:
 
 ```text
-.git/  node_modules/  vendor/  dist/  build/  target/
-coverage/  .venv/  venv/  __pycache__/  .cache/  renv/library/
+.git/  node_modules/  vendor/  dist/  build/  bin/  target/  obj/
+coverage/  .venv/  venv/  __pycache__/  .cache/  renv/library/  data/
 ```
+
+`bin/` and `data/` are worth naming. A `bin/` folder holds what a build produced, which is a copy of source that is already in the repository. A `data/` folder holds the files a project reads and writes rather than anything written to be read, and skipping it also keeps a folder of participant records out of an index by default. Both are matched as whole path segments, so a folder called `binder/` or a file called `database-notes.md` is unaffected. The cost is the occasional README inside one of them, which is a good trade in this field.
 
 And these files, wherever they are: binaries, images, audio, video, archives, compiled objects, source maps, minified JavaScript and CSS, Git LFS pointer content, private keys and certificates, and `.env` files.
 
@@ -428,38 +430,36 @@ The first three are quotations. The fourth is arithmetic. None of them is a gues
 
 ### Languages
 
-The following are wanted. Every one of them is subject to the same gate before it becomes a dependency, and **the results of that gate are not yet recorded** — this table lists intent and known risk, not verified fact.
+Here is what each wanted language got, after the gate below was run against every candidate on 2026-09-10. This is a record of what was checked, not a plan.
 
-| Language | Files | Confidence a suitable grammar exists |
-|---|---|---|
-| Python | `.py`, `.pyi` | High |
-| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` | High |
-| TypeScript | `.ts`, `.tsx` | High |
-| R | `.R`, `.r` | High |
-| Bash and shell | `.sh`, `.bash`, `.zsh` | High |
-| Lua | `.lua`, and Lua embedded in `.lsp` | High |
-| C# | `.cs` | High |
-| HTML | `.html`, `.htm` | High |
-| Markdown | `.md` | High |
-| SQL | `.sql` | Medium; several competing grammars, pick one and record why |
-| Kotlin | `.kt`, `.kts` | Medium |
-| Swift | `.swift` | Medium |
-| PowerShell | `.ps1`, `.psm1`, `.psd1` | Medium; community grammar, maintenance must be checked |
-| MATLAB | `.m` | Medium; also collides with Objective-C on the extension |
-| Stata | `.do`, `.ado` | **Low.** See below. |
+| Language | Files | How it is read | Grammar package and license |
+|---|---|---|---|
+| Python | `.py`, `.pyi` | Parsed | `tree-sitter-python`, MIT |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` | Parsed | `tree-sitter-javascript`, MIT |
+| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts` | Parsed | `tree-sitter-typescript`, MIT |
+| Shell | `.sh`, `.bash`, `.zsh`, `.ksh` | Parsed | `tree-sitter-bash`, MIT |
+| Lua | `.lua`, and Lua inside `.lsp` | Parsed | `tree-sitter-lua`, MIT |
+| C# | `.cs` | Parsed | `tree-sitter-c-sharp`, MIT |
+| HTML | `.html`, `.htm` | Parsed for the code inside it | `tree-sitter-html`, MIT |
+| Markdown | `.md` | Indexed as documentation, not as code | `tree-sitter-markdown`, MIT |
+| SQL | `.sql` | Parsed | `tree-sitter-sql`, MIT |
+| Kotlin | `.kt`, `.kts` | Parsed | `tree-sitter-kotlin`, MIT |
+| Swift | `.swift` | Parsed | `tree-sitter-swift`, MIT |
+| PowerShell | `.ps1`, `.psm1`, `.psd1` | Parsed | `tree-sitter-powershell`, MIT |
+| MATLAB | `.m` | Parsed, unless the file opens like Objective-C | `tree-sitter-matlab`, MIT |
+| **R** | `.R`, `.r` | **Universal Ctags, or its outline** | **None published** |
+| Stata | `.do`, `.ado` | Its outline | None published |
 
-Two extra languages beyond the requested set are proposed for this field:
+Two extra languages beyond the requested set are included for this field:
 
 - **SQL**, because registry pulls, REDCap exports, and cohort definitions in health research are written in it, and they encode the study definitions people most often need to look up.
 - **MATLAB**, because behavioral and physiological analysis code — Psychtoolbox tasks, actigraphy, continuous glucose monitoring signal processing — is still commonly MATLAB, and that work is exactly what a diabetes or mental-health repository holds.
 
-**Stata is the honest problem in this list.** There is no well-maintained Tree-sitter grammar for it, and Universal Ctags does not cover it either. Three options, to be settled in-phase and recorded:
+**R is the gap, and it is a bigger one than Stata.** A great deal of the analysis code in health research is written in R, and the design expected a grammar for it. There is none on the Python package index: a search of the whole index on 2026-09-10 found 289 packages whose name starts with `tree-sitter`, and not one of them is R. So an R file is read by Universal Ctags where that is installed, and recorded with its path, language, length, and link where it is not. Publishing an R grammar, or installing Universal Ctags, is what closes this.
 
-1. Index Stata files at the file-metadata tier only: path, size, language, link. Truthful, cheap, and shallow.
-2. Write a small deterministic reader for `program define`, `capture program drop`, and top-level comment blocks. A regex reader is a parser that lies at the edges, so it would be limited to what it can defend and labeled as pattern-matched, not parsed.
-3. Leave Stata out and say so.
+**Stata was settled as expected.** There is no maintained grammar and no Ctags parser, so a Stata file carries its path, language, length, and link and nothing more. The pattern-matching reader the design allowed as a second option was not written: it would be a parser that lies at the edges of the language, and a file honestly labelled as unparsed is better than a file described wrongly.
 
-Option 1 is the recommendation. Option 2 is acceptable only with the labeling.
+MATLAB and Objective-C share the `.m` extension. A file opening with `#import`, `@interface`, `@implementation`, or `@protocol` is Objective-C, and it keeps its outline rather than being parsed by the MATLAB grammar into confident nonsense.
 
 ### Files that hold another language inside them
 
@@ -472,7 +472,18 @@ Several formats in this field are containers, not languages. Handle them by pull
 | HTML | JavaScript | Parse the document, index the text, parse `<script>` contents with the JavaScript grammar |
 | Lua Server Pages (`.lsp`) | Lua | Parse the surrounding HTML, index the text, parse each embedded Lua block with the Lua grammar |
 
-Lua Server Pages works the way PHP does: an HTML page with blocks of Lua inside it. Nothing runs to read one. The reader finds the delimiters, hands each block to the Lua grammar, and hands the rest to the HTML path, so a `.lsp` file yields both its page text and its Lua symbols. The exact delimiter set is confirmed against a working implementation before this ships rather than assumed from memory.
+Lua Server Pages works the way PHP does: an HTML page with blocks of Lua inside it. Nothing runs to read one. The reader finds the delimiters, hands each block to the Lua grammar, and hands the rest to the HTML path, so a `.lsp` file yields both its page text and its Lua symbols.
+
+Two implementations spell the opening delimiter differently, and both are read:
+
+| Written as | Where it comes from |
+|---|---|
+| `<?lua … ?>` | The Kepler project's Lua Pages, which CGILua serves |
+| `<? … ?>` and `<?= … ?>` | The same, short forms |
+| `<% … %>` and `<%= … %>` | The same, the alternative pair |
+| `<?lsp … ?>` and `<?lsp= … ?>` | RealTime Logic's Barracuda Application Server |
+
+An equals sign after the opening delimiter means "print this expression", which is still Lua and is read as Lua. `<?xml … ?>` is the one processing instruction that is not: an LSP page serving XHTML opens with it, and it is left alone.
 
 Notebooks matter more than their place in this table suggests. In this field a great deal of real analysis lives in `.ipynb` and `.Rmd` files and nowhere else. They also carry the greatest privacy risk in the whole phase: **a notebook's stored outputs can contain printed rows of real participant data.** That is why outputs are never read, and why the existing protected-health-information lint has to be pointed at whatever this phase produces before any of it is published.
 
@@ -503,6 +514,12 @@ Where a query is adapted from a grammar's own tag queries, its license and attri
 Before any grammar becomes a required dependency, check and **record**: the license is compatible with GPL v3 or later; it installs from a wheel on Windows, macOS, and Linux with no compiler; it supports the project's Python range; it is maintained; it has no known critical vulnerability; and it can be pinned through the existing lock process.
 
 A grammar that fails the gate does not ship as a requirement. It either becomes optional or the language falls to a lower tier. Bundles that ship many grammars at once are worth evaluating, but a bundle's convenience does not replace the license check on what is inside it.
+
+**What the gate found, on 2026-09-10.** Every grammar in the table above is published under the MIT license, which is compatible with GPL v3 or later. Each ships wheels for Windows, macOS, and Linux that need no compiler, and each declares Python 3.9 or 3.10 as its floor, covering this project's range. Every version is pinned in `pyproject.toml` under the `code` extra, so the existing lock process holds them.
+
+**The whole set is an optional extra, not a requirement.** A build that only indexes documentation needs none of it, and a machine without it still records every code file with its path, language, length, and link. Install it with `pip install "extractium[code]"`.
+
+**A bundle was evaluated and rejected.** `tree-sitter-language-pack` ships 371 languages, including R, under one MIT license, and it looked like the answer to the R gap. From version 1.0.0 it stopped shipping the grammars: the package is two megabytes, and it **downloads compiled grammars from the network the first time a language is used**. That is a build quietly fetching native code mid-crawl, which is the same supply-chain risk this project refused when it removed the reference script's install-at-import helper (`pyproject.toml` says so where the dependencies are declared). The version that still bundled its grammars is a year old and on a line nobody maintains. So the individual grammar packages were taken instead: fourteen packages, each pinned, each auditable, and none of them fetches anything at run time.
 
 ### What is extracted
 
@@ -542,12 +559,11 @@ This is safe for identifiers. Parent identifiers hash a normalized URL, and `nor
 
 **It is not safe for near-duplicate collapse, and this has to be handled.** `drop_near_duplicates` in [core/dedup.py](../extractium/core/dedup.py) decides whether two chunks came from the same page by comparing the raw URL string, fragment included. Two symbols in one file therefore look like two different pages, and the rule that protects a page's own repetitions stops protecting them. In code that is a real loss: near-identical small functions, repeated test setup, and generated accessors are common and legitimate, and they would be silently dropped as if they were shared web-page boilerplate.
 
-Two candidate fixes, to be decided in-phase with a test that proves the behavior either way:
+**The fix chosen was the first of the two considered:** the collapse step now takes a page key that ignores the fragment, so one file counts as one page again and its own definitions can never collapse into each other. Boilerplate shared between different files is still collapsed, because those are different pages. A test holds both halves of that.
 
-1. Give the collapse step a page key that ignores the fragment, so one file is one page again.
-2. Keep the fragment out of the stored URL and carry the line range in the record text and the heading instead.
+**A second place had the same trap, and it was worse.** The step that indexes a page once however many sources reached it compares normalised addresses, and a normalised address has no fragment. Every definition in a file therefore looked like a repeat of the file itself. Measured against this project's own repository before the fix: 1,809 of 1,944 records were thrown away, and only the first definition of each file survived. That step now compares the address and the heading together for code records, and the address alone for everything else, so two sources reaching one web page still index it once.
 
-Whichever is chosen, the phase must include a test with several near-identical symbols in one file that asserts they all survive.
+One more collision was possible and is closed. Two definitions in a file can share a name — an overloaded method, a function declared twice for two platforms — and with the fragment normalised away they would share an identifier as well. The second occurrence of a heading in a repository is numbered, so the records stay distinct.
 
 ### Relationships between files
 
@@ -588,6 +604,8 @@ Running it safely matters, because everything involved comes from a repository n
 
 Parser output is cached against everything that could change it: blob SHA, parser, parser version, grammar, grammar version, and the code-analysis schema version. If all six match, do not parse again. A repository map is cached against the repository, the default-branch tree SHA, and the schema version, so a changed tree rebuilds it.
 
+A seventh part was added while this was built: **a fingerprint of the language's own query file**. The extraction rules are this project's code, not the grammar's, and editing one changes what a parse finds. Without the fingerprint an edited query file reads back what the old one found, which is a stale answer that looks fresh. The Ctags version travels in the key for the same reason.
+
 ### Effect on the container and the clients
 
 No new container version. The parent record's shape does not change. Structure lives in the indexed text and in fields that already exist: title, URL, categories, source type, content type.
@@ -604,23 +622,42 @@ Repository content is untrusted input, and this phase reads a great deal of it.
 
 Beyond that: filenames with shell characters, newlines, or traversal sequences are handled as data; invalid UTF-8 is handled rather than crashing; archive entries claiming impossible sizes are refused; symbolic links are not followed out of the tree; and no credential reaches a log, an output, or a cache.
 
-### Proposed layout
+### Where the code is
 
 ```text
 extractium/
     sources/
         github.py            Site handler; also offers the API source for a GitHub seed
         github_api.py        Accounts, enumeration, trees, blobs, archives, cache keys, Documents
+        github_files.py      What each path in a repository is: documentation, manifest, or code
     code/
         indexer.py           Coordinates analysis for one repository
         languages.py         Registry: paths to grammars, plus the license record
         tree_sitter.py       Loads grammars, runs queries
+        records.py           What a symbol record and a file record hold
         embedded.py          Pulls code out of notebooks, R Markdown, Lua Server Pages, and HTML
         relationships.py     Symbol table, imports, calls, reverse edges
         render.py            Turns records into deterministic text
         ctags.py             Detects and safely invokes Universal Ctags
         queries/*.scm        One query file per language
 ```
+
+`records.py` is one file more than the design listed. The records are produced by two readers and consumed by three more, so they belong to none of them.
+
+`github_api.py` contains no language-specific logic. The adapters contain no GitHub-specific logic. **If an adapter ever has to ask whether content came from GitHub in order to work, the separation has been broken and the design is wrong.**
+
+### What Phase 10 built, and where it differs from this plan
+
+Everything above is built. Six things are worth naming, because they differ from the plan or were settled inside it.
+
+1. **R has no grammar to install.** The plan gave R "high" confidence. Nothing is published, so R falls to Universal Ctags or to its outline. This is the largest gap in the phase, and it is visible in the repository map rather than silent.
+2. **The parser set is an optional extra.** Nothing in the plan required it to be, and making it one keeps a documentation-only build small while leaving every code file recorded.
+3. **A language bundle was rejected for fetching grammars at run time.** See the dependency gate above.
+4. **One more place collapsed a file's definitions into one record**, and it lost 1,809 of 1,944 records on a real repository before it was found. See the trap in the identifier, above.
+5. **A repository's code multiplies the size of an index.** Reading this project's own repository produced 1,944 records and a 10.2 MB container, against 135 documentation records on its own. `include_code: false` is the lever, and the size is worth knowing before pointing a build at a large account.
+6. **The Lua Server Pages delimiters cover two implementations, not one.** The plan said to confirm the set against a working implementation rather than assume it, and that was worth doing: alongside the Kepler project's Lua Pages forms, RealTime Logic's Barracuda Application Server writes `<?lsp … ?>`, which the first draft would have missed entirely. Both are read, and `<?xml … ?>` is excluded so an XHTML page's opening line is not parsed as Lua. See the container table above.
+
+`content_type` gained `code_file` and `code_symbol`. Both search clients were read rather than assumed about: neither branches on `content_type`, so neither needs a code-specific mode.
 
 `github_api.py` contains no language-specific logic. The adapters contain no GitHub-specific logic. **If an adapter ever has to ask whether content came from GitHub in order to work, the separation has been broken and the design is wrong.**
 

@@ -103,7 +103,7 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `host` | text | Host name of `u`, lowercase. Empty for local files. |
 | `source_type` | text | Which kind of source the parent came from. One of: `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`, `repository` (a scholarly repository such as a DSpace instance). |
 | `source_label` | text | The name a reader sees for the source this parent came from, such as `Peer-to-Peer Program`. Never empty, and at most 60 characters. Set from the `label` each source must give itself in the configuration. Two sources of the same `source_type` are told apart by this and nothing else. |
-| `content_type` | text | What the page is. One of: `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`. |
+| `content_type` | text | What the record is. One of: `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest` (a project or build file, such as a `pyproject.toml`), `repo_map` (a synthetic summary of one repository or one account), `code_file` (what one source file defines, imports, and is reached by), `code_symbol` (one definition: its signature, its documentation, and a link to its lines). A `code_file` and every `code_symbol` in it share one address and differ by the lines they point at. Neither ever holds a source body. |
 | `categories` | list of text | Hierarchy taken from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when the source has none. |
 | `local` | true or false | `true` when the parent came from a local-filesystem source. |
 | `weight` | number | Per-document multiplier applied after rank fusion. `1.0` unless a source or plugin sets otherwise. |
@@ -241,6 +241,7 @@ A field that is always present, and that a reader would use if it knew about it,
 6. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
 7. Treat `calibration` as optional: if `sampleSize` is `0`, fall back to a fixed threshold.
 8. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
+9. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Both reference clients were read against this rule when `code_file` and `code_symbol` were added: neither branches on `content_type`, so neither needed changing.
 
 
 ## Conclusion

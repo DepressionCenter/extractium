@@ -12,7 +12,7 @@ extractium/sources/github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -35,6 +35,8 @@ __date__ = "2026-09-09"
 
 import re
 
+from extractium.code import render as code_render
+from extractium.code.indexer import CodeIndexer
 from extractium.core import cache as caching
 from extractium.core.fetch import DEFAULT_USER_AGENT, normalise
 from extractium.core.models import Document
@@ -100,7 +102,7 @@ class GitHubSourceError(Exception):
 
 class GitHubApiSource:
     """
-    Reads documentation out of an account's repositories, or one
+    Reads documentation and code out of an account's repositories, or one
     repository, through the GitHub API.
 
     The source takes the HTTP session, the fetch cache, and the progress
@@ -111,11 +113,13 @@ class GitHubApiSource:
         options (Mapping): the validated options of a `github_api` entry:
             exactly one of org, user, or url; include_repos,
             exclude_repos, include_forks, include_archived, include_code,
-            and max_file_bytes.
+            ctags_fallback, and max_file_bytes.
 
     Attributes:
         coverage (dict[str, int]): repository full name to the tier that
             read it, in the order they were read.
+        analyzed (dict[str, int]): repository full name to how many code
+            files were analyzed in it, for the report at the end.
         acquired (set[str]): every URL already turned into a document, so
             a fall back to crawling neither loses a repository nor fetches
             one twice.
@@ -133,7 +137,10 @@ class GitHubApiSource:
         self.exclude_repos = tuple(options.get("exclude_repos") or ())
         self.include_forks = bool(options.get("include_forks", False))
         self.include_archived = bool(options.get("include_archived", True))
+        self.include_code = bool(options.get("include_code", True))
+        self.ctags_fallback = bool(options.get("ctags_fallback", True))
         self.max_file_bytes = int(options.get("max_file_bytes") or 2_000_000)
+        self.analyzed = {}
         self.registry = None
         self.settings = None
         self.coverage = {}
@@ -224,7 +231,8 @@ class GitHubApiSource:
         that failed partway through does not fetch the same repository
         twice when it tries again lower down.
         """
-        for repository in self._selected_repositories(client, progress):
+        selected = self._selected_repositories(client, progress)
+        for repository in selected:
             full_name = repository.get("full_name") or f"{self.owner}/{repository.get('name')}"
             if full_name in self.coverage:
                 continue
@@ -235,6 +243,10 @@ class GitHubApiSource:
                 # read must not destroy an organization-wide build.
                 progress(f"  {full_name}: skipped ({e})")
             self.coverage[full_name] = tier
+
+        owner_map = self._owner_map(selected)
+        if owner_map is not None:
+            yield owner_map
 
     def _selected_repositories(self, client, progress):
         """
@@ -319,9 +331,14 @@ class GitHubApiSource:
         bodies = self._download(client, owner, name, branch, repository, wanted, progress)
 
         indexed = 0
-        for path in wanted:
+        records = 0
+        code = []
+        for path, entry in wanted.items():
             text = bodies.get(path)
             if text is None:
+                continue
+            if files.classify(path) == "code":
+                code.append((path, text, entry.get("sha") or ""))
                 continue
             document = self._document_for(owner, name, branch, path, text)
             if document is None:
@@ -329,12 +346,108 @@ class GitHubApiSource:
                 continue
             self.acquired.add(normalise(document.url))
             indexed += 1
+            records += 1
             yield document
 
-        progress(f"  {full_name}: indexed {indexed} file(s) of {len(entries)}")
+        code_lines = []
+        if code:
+            analyzed, code_lines = self._read_code(
+                owner, name, branch, full_name, code, bodies, progress,
+            )
+            indexed += len(code)
+            for document in analyzed:
+                self.acquired.add(normalise(document.url))
+                records += 1
+                yield document
+
+        # Files and records are counted separately because they are not
+        # the same number: one code file yields a record of its own and
+        # one more for every definition in it.
+        progress(
+            f"  {full_name}: indexed {indexed} file(s) of {len(entries)}, "
+            f"as {records} record(s)"
+        )
         if full_name not in self.mapped:
             self.mapped.add(full_name)
-            yield self._repository_map(repository, full_name, owner, name, branch, indexed, tier)
+            yield self._repository_map(
+                repository, full_name, owner, name, branch, indexed, tier, code_lines,
+            )
+
+    ### Reading The Code ###
+
+    def _read_code(self, owner, name, branch, full_name, code, bodies, progress):
+        """
+        Analyzes one repository's code and turns the records into
+        documents.
+
+        Nothing here runs, installs, or imports anything the repository
+        holds: the files are parsed as bytes. What comes back is
+        structure -- signatures, documentation somebody wrote, imports,
+        calls, and line links -- and never a source body.
+
+        Args:
+            owner (str), name (str), branch (str): where the files live.
+            full_name (str): "owner/name".
+            code (list[tuple[str, str, str]]): path, content, and Git
+                object name for every code file.
+            bodies (dict): every file body read for this repository, used
+                to find the README beside a file that documents itself
+                nowhere.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            tuple[list[Document], list[str]]: the documents, and the
+            lines the repository summary adds about its code.
+        """
+        progress(f"  {full_name}: analyzing {len(code)} code file(s)")
+        indexer = CodeIndexer(progress=progress, use_ctags=self.ctags_fallback)
+        indexer.with_readmes(_readmes_by_folder(bodies))
+        analysis, prose = indexer.analyze(full_name, code)
+
+        documents = []
+        headings = _Headings()
+        for facts in analysis.files:
+            url = self._url_for(owner, name, branch, facts.path)
+            documents.append(Document(
+                url=url,
+                title=headings.unique(f"{full_name}: {facts.path}"),
+                content=code_render.file_text(facts, full_name, url),
+                source_type="github",
+                content_type="code_file",
+                categories=files.categories_for(owner, name, facts.path),
+            ))
+            for symbol in facts.symbols:
+                lines = f"#L{symbol.start_line}-L{symbol.end_line}"
+                documents.append(Document(
+                    url=url + lines,
+                    title=headings.unique(
+                        f"{full_name}: {symbol.qualified_name} ({symbol.kind} in {facts.path})"
+                    ),
+                    content=code_render.symbol_text(symbol, facts, full_name, url + lines),
+                    source_type="github",
+                    content_type="code_symbol",
+                    categories=files.categories_for(owner, name, facts.path),
+                ))
+
+        # A notebook, an R Markdown file, and a page are prose as well as
+        # code, and the prose is what most readers are searching for.
+        for path, (title, text) in sorted(prose.items()):
+            url = self._url_for(owner, name, branch, path)
+            documents.append(Document(
+                url=url,
+                title=f"{full_name}: {path} ({title})" if title else f"{full_name}: {path} (text)",
+                content=text,
+                source_type="github",
+                content_type="text",
+                categories=files.categories_for(owner, name, path),
+            ))
+
+        for skipped in analysis.skipped:
+            progress(f"  {full_name}/{skipped}")
+        self.analyzed[full_name] = len(analysis.files)
+        return documents, code_render.repository_lines(
+            analysis.files, indexer.engine.unavailable.values(),
+        )
 
     def _files_to_read(self, full_name, entries, progress):
         """
@@ -347,7 +460,8 @@ class GitHubApiSource:
         wanted = {}
         for entry in entries:
             path = entry.get("path") or ""
-            if files.classify(path) is None:
+            kind = files.classify(path)
+            if kind is None or (kind == "code" and not self.include_code):
                 continue
             size = entry.get("size")
             if size is not None and size > self.max_file_bytes:
@@ -480,7 +594,8 @@ class GitHubApiSource:
             categories=files.categories_for(owner, name, path),
         )
 
-    def _repository_map(self, repository, full_name, owner, name, branch, indexed, tier):
+    def _repository_map(self, repository, full_name, owner, name, branch, indexed, tier,
+                        code_lines=()):
         """
         The per-repository summary document.
 
@@ -504,8 +619,9 @@ class GitHubApiSource:
             "",
             f"Read through the {TIER_NAMES[tier]}.",
             f"Coverage: {TIER_COVERAGE[tier]}.",
-            f"Documentation files indexed: {indexed}.",
+            f"Files indexed: {indexed}.",
         ]
+        lines += list(code_lines)
         return Document(
             url=f"{GITHUB_WEB_ROOT}/{owner}/{name}",
             title=f"{full_name}: repository summary",
@@ -513,6 +629,53 @@ class GitHubApiSource:
             source_type="github",
             content_type="repo_map",
             categories=(owner, name),
+        )
+
+    def _owner_map(self, repositories):
+        """
+        One record listing everything an account publishes.
+
+        It answers the question a reader asks before they can search
+        inside anything: which of these projects is the one I want. A
+        request for a single repository gets none, because a list of one
+        is the repository's own summary written twice.
+
+        Only the repositories this build actually read are listed. A map
+        naming work nobody indexed would send a reader looking for
+        records that are not there.
+
+        Args:
+            repositories (Sequence[Mapping]): the repositories this
+                source selected, as GitHub described them.
+
+        Returns:
+            Document | None: the account's map, or None for a
+            single-repository request or an account nothing was read from.
+        """
+        read = [
+            repository for repository in repositories
+            if (repository.get("full_name") or f"{self.owner}/{repository.get('name')}")
+            in self.mapped
+        ]
+        if self.repository or not read or self.owner in self.mapped:
+            return None
+        self.mapped.add(self.owner)
+        lines = [f"Repositories published by {self.owner} on GitHub.", ""]
+        for repository in read:
+            name = repository.get("name") or ""
+            description = repository.get("description") or "no description given"
+            language = repository.get("language") or "not stated"
+            topics = ", ".join(repository.get("topics") or ()) or "none listed"
+            archived = " Archived." if repository.get("archived") else ""
+            lines.append(f"{name}: {description}")
+            lines.append(f"  Main language: {language}. Topics: {topics}.{archived}")
+        return Document(
+            url=f"{GITHUB_WEB_ROOT}/{self.owner}",
+            title=f"{self.owner}: what this account publishes",
+            content="\n".join(lines),
+            source_type="github",
+            content_type="repo_map",
+            categories=(self.owner,),
         )
 
     ### Falling Back To A Crawl ###
@@ -625,10 +788,60 @@ class GitHubApiSource:
         if not self.coverage:
             return []
         width = max(len(name) for name in self.coverage)
-        return [
-            f"{name:<{width}}  {TIER_NAMES[tier]:<30}  {TIER_COVERAGE[tier]}"
-            for name, tier in self.coverage.items()
-        ]
+        lines = []
+        for name, tier in self.coverage.items():
+            analyzed = self.analyzed.get(name)
+            coverage = TIER_COVERAGE[tier]
+            if analyzed:
+                coverage = f"{coverage}; {analyzed} code file(s) analyzed"
+            lines.append(f"{name:<{width}}  {TIER_NAMES[tier]:<30}  {coverage}")
+        return lines
+
+
+class _Headings:
+    """
+    Keeps every heading in one repository distinct.
+
+    A record's identifier is built from its address and its heading, and
+    a code file's definitions all share one address. Two definitions in
+    one file that also share a name -- an overloaded method, a function
+    declared for two platforms -- would therefore carry one identifier
+    between them, and the container format holds one record per
+    identifier. The second occurrence is numbered instead.
+    """
+
+    def __init__(self):
+        self._seen = {}
+
+    def unique(self, heading):
+        """The heading, numbered when this repository has used it already."""
+        count = self._seen.get(heading, 0) + 1
+        self._seen[heading] = count
+        return heading if count == 1 else f"{heading} ({count})"
+
+
+def _readmes_by_folder(bodies):
+    """
+    The README in each folder of a repository, by folder.
+
+    A file that documents itself nowhere may quote the README beside it,
+    and this is where that README is found. The repository root is the
+    empty string, which is what posixpath.dirname gives for a file at the
+    top of the tree.
+
+    Args:
+        bodies (Mapping[str, str]): path to file body, for everything
+            read in this repository.
+
+    Returns:
+        dict[str, str]: folder path to README text.
+    """
+    readmes = {}
+    for path, text in (bodies or {}).items():
+        name = path.rsplit("/", 1)[-1].lower()
+        if name.startswith("readme") and text:
+            readmes.setdefault(path.rsplit("/", 1)[0] if "/" in path else "", text)
+    return readmes
 
 
 def _cached_body(blob_sha):

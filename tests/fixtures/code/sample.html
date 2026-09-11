@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Search the compendium</title>
+  <script type="application/json" id="settings">{"endpoint": "/search"}</script>
+  <script src="./vendor/client.js"></script>
+</head>
+<body>
+  <h1>Search the compendium</h1>
+  <p>Type a question and press Enter. Invented for the test suite.</p>
+  <script>
+    // Sends one query to the search endpoint.
+    async function runSearch(term) {
+      const response = await fetch(`/search?q=${encodeURIComponent(term)}`);
+      return response.json();
+    }
+  </script>
+</body>
+</html>

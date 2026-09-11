@@ -12,7 +12,7 @@ tests/test_source_github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -255,9 +255,35 @@ def test_every_repository_gets_a_summary_naming_how_it_was_read(fixture, fake_gi
     assert [d.url for d in maps] == [
         "https://github.com/example-org/example-tools",
         "https://github.com/example-org/example-notes",
+        "https://github.com/example-org",
     ]
     assert "tier 2 (public API)" in maps[0].content
     assert "code analysis" in maps[0].content
+
+
+def test_an_account_gets_one_map_naming_everything_it_publishes(
+    fixture, fake_github_session_factory,
+):
+    """
+    A reader asks which project holds the answer before they can search
+    inside it. The account's own map is what answers that.
+    """
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(), session)
+
+    owner_map = next(d for d in documents if d.url == "https://github.com/example-org")
+    assert "example-tools: Shared analysis helpers" in owner_map.content
+    assert "example-notes" in owner_map.content
+    assert "Main language: Python" in owner_map.content
+
+
+def test_a_request_for_one_repository_gets_no_account_map(fixture, fake_github_session_factory):
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(org=None, url="https://github.com/example-org/example-tools"), session)
+
+    assert not [d for d in documents if d.url == "https://github.com/example-org"]
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +323,8 @@ def test_include_repos_narrows_the_listing(fixture, fake_github_session_factory)
 
     documents = read(make_source(include_repos=("example-notes",)), session)
 
-    assert {d.url.split("/")[4] for d in documents} == {"example-notes"}
+    repositories = {d.url.split("/")[4] for d in documents if len(d.url.split("/")) > 4}
+    assert repositories == {"example-notes"}
 
 
 def test_exclude_repos_wins_over_include_repos(fixture, fake_github_session_factory):
@@ -346,9 +373,25 @@ def test_source_files_third_party_folders_and_secrets_are_never_downloaded(
 
     urls = [d.url for d in read(make_source(), session)]
 
-    assert not any(url.endswith("src/app.py") for url in urls)
     assert not any("node_modules" in url for url in urls)
     assert not any(url.endswith("/.env") for url in urls)
+
+
+def test_folders_holding_build_output_or_data_files_are_never_read():
+    """
+    A folder of build output is a copy of source that is already in the
+    repository, and a folder of data files is what a project reads and
+    writes rather than anything written to be read. Skipping the second
+    also keeps a folder of participant records out of an index by
+    default.
+    """
+    for path in ("bin/tool.exe", "bin/report.md", "data/participants.csv",
+                 "data/README.md", "dist/app.js", "build/index.html"):
+        assert github_files.classify(path) is None, path
+
+    # A file whose own name begins that way is not a folder of that name.
+    assert github_files.classify("binder/setup.md") == "documentation"
+    assert github_files.classify("database-notes.md") == "documentation"
 
 
 def test_an_env_example_is_kept_because_it_documents_what_a_project_needs(

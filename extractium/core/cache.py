@@ -310,3 +310,78 @@ def save_deposit_text(deposit_id, last_modified, text):
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump({"last_modified": last_modified, "text": text}, f)
     os.replace(tmp_path, path)
+
+
+### Code Analysis Cache ###
+
+def analysis_path(blob_sha):
+    """
+    The on-disk path for what the parsers found in one file.
+
+    Args:
+        blob_sha (str): the Git object name of the file that was read.
+
+    Returns:
+        str: path under CACHE_GITHUB_ANALYSIS_DIR.
+
+    Raises:
+        ValueError: if blob_sha is not forty lowercase hexadecimal
+            characters, for the same reason a blob body's name is
+            checked: it arrived in an API response.
+    """
+    if not isinstance(blob_sha, str) or not _BLOB_SHA_RE.match(blob_sha):
+        raise ValueError(f"a blob SHA must be 40 lowercase hexadecimal characters; got {blob_sha!r}.")
+    return os.path.join(CACHE_GITHUB_ANALYSIS_DIR, blob_sha + ".json")
+
+
+def load_analysis(blob_sha, key):
+    """
+    Reads stored analysis for one file, but only while every part of it
+    still applies.
+
+    A parse depends on more than the file: the engine, its version, the
+    grammar, the grammar's version, and the shape of the records
+    themselves. All of that travels in the key, and a stored result under
+    a different key is ignored, so upgrading a grammar reparses rather
+    than serving what the old one said.
+
+    Args:
+        blob_sha (str): the file's Git object name.
+        key (Mapping): what the analysis depended on.
+
+    Returns:
+        dict | None: the stored records, or None when nothing applies.
+        Anything unreadable degrades to parsing again.
+    """
+    try:
+        with open(analysis_path(blob_sha), "r", encoding="utf-8") as f:
+            stored = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(stored, dict) or stored.get("key") != dict(key):
+        return None
+    records = stored.get("records")
+    return records if isinstance(records, dict) else None
+
+
+def save_analysis(blob_sha, key, records):
+    """
+    Stores what the parsers found in one file, with everything the result
+    depended on.
+
+    Args:
+        blob_sha (str): the file's Git object name.
+        key (Mapping): the engine, versions, and schema the result
+            belongs to.
+        records (Mapping): the file's records, as plain data.
+
+    Raises:
+        ValueError: if blob_sha is not a Git object name.
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_GITHUB_ANALYSIS_DIR, exist_ok=True)
+    path = analysis_path(blob_sha)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump({"key": dict(key), "records": dict(records)}, f)
+    os.replace(tmp_path, path)

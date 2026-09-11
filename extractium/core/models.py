@@ -91,10 +91,13 @@ MAX_SOURCE_LABEL_CHARS = 60
 # a DESCRIPTION, a Dockerfile): short, and often a faster explanation of a
 # project than its prose. "repo_map" is the synthetic per-repository
 # summary a code source writes, which also records how completely that
-# repository could be read.
+# repository could be read. "code_file" is what one source file holds --
+# its definitions, what it brings in, and what reaches into it -- and
+# "code_symbol" is one definition, with its signature, its documentation,
+# and a link to its lines. Neither ever carries a source body.
 CONTENT_TYPES = frozenset({
     "article", "readme", "wiki", "release_notes", "page", "text", "video_transcript",
-    "manifest", "repo_map",
+    "manifest", "repo_map", "code_file", "code_symbol",
 })
 
 # A local document's URL is "local:" plus a path relative to the source

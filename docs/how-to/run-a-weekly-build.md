@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-10
 Summary: How to keep a knowledge index current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
@@ -53,6 +53,14 @@ You need Python 3.10 or newer and a copy of this repository.
 3. Read the summary it prints, then follow the three lines it gives you to commit and push the result.
 
 The script creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes. Later runs reuse it.
+
+The lock file holds the runtime dependencies only, so a scheduled build reads a repository's documentation and records its source files by name without reading what is inside them. To analyze code on a schedule as well, regenerate the lock with the optional parser set included:
+
+```bash
+uv pip compile pyproject.toml --extra code --universal --python-version 3.11 --generate-hashes -o requirements-lock.txt
+```
+
+Keep the header at the top of the file when you do; the command that produced the list is recorded on the line below it.
 
 ### Changing what it builds
 

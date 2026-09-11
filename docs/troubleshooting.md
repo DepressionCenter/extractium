@@ -180,6 +180,39 @@ That line is not an error. It is telling you the index has that repository's doc
 **Fix.** Nothing, if that is what you wanted, which it usually is: the line is there so you can see the guardrail working. If you did want that account's pages, add its exact name to `github_owners`. That lets links into the account be followed; it does not index everything the account has published.
 
 
+## Reading a repository's code
+
+### The log says `the parser set is not installed`
+
+**Cause.** Code analysis is an optional install, and this machine does not have it.
+
+**Fix.** `pip install "extractium[code]"`. Until then every source file is still indexed, with its path, language, length, and link — just not what is inside it.
+
+### No definitions were found in your R files
+
+**Cause.** No R grammar is published for Python. This is the one language in the wanted set with nothing to install, and it is a real gap rather than a setting you got wrong.
+
+**Fix.** Install Universal Ctags, which reads R, and leave `ctags_fallback` on. Without it, R files are recorded by name and nothing more. The repository's own summary record says which of the two happened.
+
+### The log says `the ctags on this machine is not Universal Ctags`
+
+**Cause.** Several unrelated programs have been called `ctags`. The one on your path is one of the others, and reading its output as if it were Universal Ctags would put invented records into the index.
+
+**Fix.** Install Universal Ctags, or ignore the line: unparsed files keep their outline either way. Set `ctags_fallback: false` if you would rather the build never launched another program at all.
+
+### The index file is much larger than it used to be
+
+**Cause.** Code analysis writes a record per source file and a record per definition in it, so a code-heavy repository multiplies the record count. Reading this project's own repository produces about 135 records without it and about 1,900 with it.
+
+**Fix.** Set `include_code: false` on sources where the code is not what people search for. There is no partial setting: a repository's code is read or it is not.
+
+### A definition you can see in a file is not in the index
+
+**Cause.** One of a few deliberate limits. A definition nested more than three levels deep is skipped as a helper inside a helper; a name like `__author__` is skipped as header boilerplate; a file over about 1.5 million characters is not parsed at all; and a file whose language has no grammar keeps its outline only.
+
+**Fix.** Read the progress log, which names every file left out and why, and the repository summary record, which says how many files each reader handled. If the file is one the parser met a syntax error in, its record says so, and the definitions on either side of the error are still there.
+
+
 ## Reading a document repository
 
 ### The build stops saying an address `answered a web page rather than data`
