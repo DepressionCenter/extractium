@@ -66,7 +66,7 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 
 A placeholder file holds the license header, a summary of what it will contain, and a `TODO` comment describing the capability, and nothing else. It is not a partly finished module.
 
-The test suite passes: 1,177 Python tests as of 2026-09-11, plus 36 Node tests for the JavaScript client (`node --test clients/js`) and 24 for the local Node MCP server (`node --test examples/mcp/local-node`).
+The test suite passes: 1,181 Python tests as of 2026-09-11, plus 36 Node tests for the JavaScript client (`node --test clients/js`) and 24 for the local Node MCP server (`node --test examples/mcp/local-node`).
 
 
 ## Settled design decisions

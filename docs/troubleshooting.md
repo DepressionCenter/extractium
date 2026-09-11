@@ -374,9 +374,9 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### `npm install` reports high-severity advisories
 
-**Cause.** The Node server's one package, `@huggingface/transformers`, depends on `sharp` and `adm-zip`, which carry advisories with no fix available. Neither path is used by this server, but the packages are installed.
+**Cause.** You are installing without the lockfile, or with an older copy of it. The embedding package reaches `sharp` and `adm-zip` through version ranges that stop short of the releases that fix them.
 
-**Fix.** Decide deliberately. The [Python server](../examples/mcp/local-python/README.md) does the same work with no extra package, and both expose the same tool.
+**Fix.** Install from this folder, so npm reads both `package.json` and `package-lock.json`. The `overrides` block in `package.json` lifts those two packages to patched versions, and `npm audit` then reports nothing. If you see advisories anyway, check that you ran `npm install` inside `examples/mcp/local-node` rather than copying `server.js` elsewhere and installing by hand.
 
 
 ## Conclusion
