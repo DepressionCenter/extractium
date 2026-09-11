@@ -107,10 +107,16 @@ DEFAULT_YOUTUBE_LANGUAGES = ("en",)
 DEFAULT_GITHUB_INCLUDE_FORKS = False
 DEFAULT_GITHUB_INCLUDE_ARCHIVED = True
 
-# Whether a GitHub source analyses code structure alongside documentation.
-# The analysis itself is not built yet, so the setting is carried and
-# reported but changes nothing today.
+# Whether a GitHub source reads the structure of a repository's code
+# alongside its documentation. On by default: knowing where a function is
+# defined and what calls it is most of what anybody asks a code index.
 DEFAULT_GITHUB_INCLUDE_CODE = True
+
+# Whether Universal Ctags may read the languages no published grammar
+# covers, R above all. On by default, and it changes nothing on a machine
+# where Ctags is not installed. Switch it off to keep a build from
+# launching any other program at all.
+DEFAULT_GITHUB_CTAGS_FALLBACK = True
 
 # Largest single file a GitHub source downloads, in bytes. Documentation
 # files are small; a file above this is far more often generated output or
@@ -214,7 +220,8 @@ SOURCE_OPTION_KEYS = {
     "local": frozenset({"path", "include_globs"}),
     "github_api": frozenset({
         "org", "user", "url", "include_repos", "exclude_repos",
-        "include_forks", "include_archived", "include_code", "max_file_bytes",
+        "include_forks", "include_archived", "include_code", "ctags_fallback",
+        "max_file_bytes",
     }),
     "youtube": frozenset({"channel_id", "playlist_ids", "video_ids", "languages"}),
     "dspace": frozenset({
@@ -740,6 +747,9 @@ def _read_github_api_source(entry, source):
         "include_forks": _read_bool(entry, "include_forks", DEFAULT_GITHUB_INCLUDE_FORKS, source),
         "include_archived": _read_bool(entry, "include_archived", DEFAULT_GITHUB_INCLUDE_ARCHIVED, source),
         "include_code": _read_bool(entry, "include_code", DEFAULT_GITHUB_INCLUDE_CODE, source),
+        "ctags_fallback": _read_bool(
+            entry, "ctags_fallback", DEFAULT_GITHUB_CTAGS_FALLBACK, source
+        ),
         "max_file_bytes": _read_positive_int(
             entry, "max_file_bytes", DEFAULT_GITHUB_MAX_FILE_BYTES, source
         ),

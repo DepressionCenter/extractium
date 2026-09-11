@@ -88,11 +88,19 @@ sources:
   # 3. The center's own GitHub repositories, read through the GitHub API
   #    rather than scraped page by page. Set GITHUB_TOKEN in the environment
   #    to raise the request limit; the same content is read without one.
+  #
+  #    include_code reads the structure of the code as well as the prose:
+  #    what each file defines, what it brings in, and where each definition
+  #    can be read, never the code itself. It needs the optional parser set
+  #    (pip install "extractium[code]"), and it multiplies how many records
+  #    an account produces, so set it to false if this index is meant for
+  #    readers rather than for developers.
   - label: Depression Center Open Source Hub
     type: github_api
     org: DepressionCenter
     include_forks: false        # a fork and its original are near-identical
     include_archived: true      # archived documentation is still documentation
+    include_code: true          # index what the code defines, not the code
 
   # 4. The main website, including the Depression Center Toolkit.
   #

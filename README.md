@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -37,11 +37,11 @@ Project status: a build runs end to end and writes the search index and the `llm
 ```bash
 git clone https://github.com/DepressionCenter/extractium.git
 cd extractium
-pip install -e ".[dev]"
+pip install -e ".[dev,code]"
 cp examples/config.example.yaml config.yaml   # then change the seed URL to your own site
 python -m extractium.cli build --config config.yaml --max-pages 25
 ```
-Needs Python 3.10 or newer. The first build downloads the embedding model, about 130 MB; later builds reuse it.
+Needs Python 3.10 or newer. The first build downloads the embedding model, about 130 MB; later builds reuse it. The `code` extra adds the parsers that read a repository's code; leave it out for a documentation-only build.
 
 That writes `dist/kb-index.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Drop the page cap once the page list in `dist/llms.txt` looks right. `extractium build` is the shorter form of the last line, once Python's scripts folder is on your `PATH`. See [docs/usage.md](docs/usage.md) for every option and what each exit code means, and [docs/troubleshooting.md](docs/troubleshooting.md) if a step above did not work.
 

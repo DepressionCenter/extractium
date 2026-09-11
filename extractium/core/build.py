@@ -12,7 +12,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -89,6 +89,27 @@ def utc_now():
 
 ### Chunk Documents ###
 
+# Content types where one address carries several records: a code file
+# and every definition inside it. They are told apart by their heading,
+# which is also how their identifiers are told apart.
+MULTI_RECORD_CONTENT_TYPES = frozenset({"code_file", "code_symbol"})
+
+
+def _page_key(document):
+    """
+    What counts as "the same page already indexed" for one document.
+
+    Args:
+        document (extractium.core.models.Document): the record.
+
+    Returns:
+        tuple[str, str]: the normalised address, and the heading for the
+        content types that put several records at one address.
+    """
+    heading = document.title if document.content_type in MULTI_RECORD_CONTENT_TYPES else ""
+    return normalise(document.url), heading
+
+
 def chunk_documents(documents, progress):
     """
     Chunks every document into one flat parent list and one flat child
@@ -109,7 +130,11 @@ def chunk_documents(documents, progress):
 
     Pages are compared by their normalised address, the same form the
     identifiers are built from, so two addresses differing only by a
-    trailing slash or a fragment count as one page.
+    trailing slash or a fragment count as one page. Code records are the
+    exception, and are compared by address and heading together: each
+    definition in a file is a record of its own, pointing at the lines it
+    was read from, and comparing addresses alone would throw away every
+    definition after the first.
 
     Args:
         documents (Iterable[extractium.core.models.Document]): what the
@@ -129,7 +154,7 @@ def chunk_documents(documents, progress):
     for position, document in enumerate(documents):
         if position == 0:
             site_name = document.title
-        page = normalise(document.url)
+        page = _page_key(document)
         if page in indexed_pages:
             repeated += 1
             progress(f"  already indexed by an earlier source, skipped: {document.url}")

@@ -7,7 +7,7 @@ extractium/core/dedup.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,6 +40,26 @@ NEAR_DUP_COSINE_THRESHOLD = 0.95
 
 
 ### Near-Duplicate Collapse ###
+
+def _page_key(url):
+    """
+    Which page a chunk came from, for the rule that a page's own
+    repetitions are never collapsed into each other.
+
+    The fragment is dropped, so several records pointing at different
+    line ranges of one source file count as that one file. Without this,
+    near-identical small functions, repeated test setup, and generated
+    accessors -- all of them legitimate, and all of them common in code --
+    would be discarded as if they were boilerplate shared between pages.
+
+    Args:
+        url (str): the record's address.
+
+    Returns:
+        str: the address without its fragment.
+    """
+    return url.split("#", 1)[0] if isinstance(url, str) else url
+
 
 def drop_near_duplicates(chunks, vecs, threshold=NEAR_DUP_COSINE_THRESHOLD):
     """
@@ -78,7 +98,7 @@ def drop_near_duplicates(chunks, vecs, threshold=NEAR_DUP_COSINE_THRESHOLD):
     # compare per candidate.
     page_numbers = {}
     page_of = np.fromiter(
-        (page_numbers.setdefault(chunk["u"], len(page_numbers)) for chunk in chunks),
+        (page_numbers.setdefault(_page_key(chunk["u"]), len(page_numbers)) for chunk in chunks),
         dtype=np.int64, count=len(chunks),
     )
 

@@ -12,7 +12,7 @@ extractium/sources/github_files.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-10
 Notes: See README file for documentation and full license information.
 """
 
@@ -35,6 +35,8 @@ __date__ = "2026-09-09"
 
 import posixpath
 import re
+
+from extractium.code import languages as code_languages
 
 ### What Counts As Documentation ###
 
@@ -211,10 +213,10 @@ def classify(path):
         path (str): a repository-relative path, with forward slashes.
 
     Returns:
-        str | None: "documentation", "manifest", or None when the file is
-        not indexed as text. None covers both skipped paths and ordinary
-        source files, which carry no prose to chunk; reading their
-        structure is a separate capability.
+        str | None: "documentation", "manifest", "code", or None when the
+        file is not read at all. A code file is not chunked as prose:
+        what is indexed for one is the structure the parsers find in it,
+        which is why it carries a label of its own.
     """
     if not path or path.endswith("/") or is_skipped_path(path):
         return None
@@ -225,6 +227,8 @@ def classify(path):
         return "manifest"
     if is_documentation(path):
         return "documentation"
+    if code_languages.is_code_path(path):
+        return "code"
     return None
 
 

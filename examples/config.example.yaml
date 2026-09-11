@@ -104,8 +104,16 @@ sources:
   #  exclude_repos: []              # an exclusion always wins
   #  include_forks: false           # forks fill the index with near-identical copies
   #  include_archived: true         # archived documentation is still documentation
-  #  include_code: true             # reserved for code analysis; changes nothing yet
+  #  include_code: true             # read the structure of the code, not only the docs
+  #  ctags_fallback: true           # let Universal Ctags read languages no grammar covers
   #  max_file_bytes: 2000000        # larger files are skipped, and each one is named
+  #
+  # Code analysis needs the optional parser set: pip install "extractium[code]".
+  # Without it every source file is still recorded by name, with its language,
+  # its length, and a link. A record holds signatures, documentation, imports,
+  # and calls -- never a source body. It also multiplies how many records a
+  # repository produces, so set include_code: false where the code is not what
+  # people are searching for.
 
   # Scholarly deposits held in a DSpace repository, such as a university
   # library's. Read through the repository's own interface, which already

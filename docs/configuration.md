@@ -243,7 +243,8 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 | `exclude_repos` | list of text | empty | Repository names to leave out. An exclusion always wins. |
 | `include_forks` | true or false | `false` | Reads forks too. Off by default, because a project and several forks of it fill the index with near-identical copies. |
 | `include_archived` | true or false | `true` | Reads archived repositories. On by default, because archived documentation is still documentation. |
-| `include_code` | true or false | `true` | Reserved for code analysis, which arrives in phase 10. Accepted and reported today; it changes nothing yet. |
+| `include_code` | true or false | `true` | Reads the structure of the repository's code as well as its documentation. See "Reading the code" below. |
+| `ctags_fallback` | true or false | `true` | Lets Universal Ctags read the languages no grammar covers, when it is installed. Set it to `false` to keep a build from launching any other program at all. |
 | `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. |
 
 Give **exactly one** of `org`, `user`, or `url`. Two is an error, not a request for both.
@@ -266,7 +267,21 @@ sources:
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 
-**What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`. Source files, generated folders, binaries, lock files, and anything holding a credential are never downloaded. `.env.example` is kept, because it documents what a project needs.
+**What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. `.env.example` is kept, because it documents what a project needs.
+
+**Reading the code.** With `include_code` on, each source file gets a record naming what it defines, what it brings in, and which files reach into it, and each definition in it gets a record of its own: the signature, the documentation somebody wrote for it, what it calls, and a link to its exact lines on GitHub. **No source body is ever indexed.** To read the implementation you follow the link.
+
+Code analysis needs the parser set, which is an optional install:
+
+```bash
+pip install "extractium[code]"
+```
+
+Without it a build still reads every source file and records its path, language, length, and link — just not what is inside it. The same is true of a language nobody has published a grammar for. Python, JavaScript, TypeScript, shell, Lua, C#, SQL, Kotlin, Swift, PowerShell, and MATLAB are parsed. **R is not**: no R grammar is published for Python, so an R file is read by Universal Ctags where that is installed and recorded by name where it is not. Stata is recorded by name everywhere. The repository's own summary record names which of these happened, so a reader can see the gap.
+
+Notebooks, R Markdown, Quarto, Lua Server Pages, and HTML pages are read twice over: their prose is indexed as documentation, and the code inside them is parsed with the language it is written in. **A notebook's saved outputs are never read**, because they can hold printed rows of real data.
+
+**Code multiplies the size of an index.** Reading this project's own repository produces about 135 documentation records, or about 1,900 records with `include_code` on, and a 10 MB index file rather than a 4 MB one. That is worth knowing before pointing a build at a whole account. Set `include_code: false` on sources where the code is not what people are searching for.
 
 **How files are downloaded.** A repository is normally downloaded once, as a single archive, and the wanted files are read out of it in memory. Nothing is ever extracted to disk. This spends one request per repository instead of one per file, which matters because reading GitHub anonymously allows only about sixty requests an hour in total. A repository too large to hold in memory has its files requested one at a time instead. Either way, each file is stored under its blob name, so the next build downloads nothing that has not changed.
 

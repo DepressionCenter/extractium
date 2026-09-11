@@ -1,0 +1,25 @@
+---
+title: "Wave summary"
+output: html_document
+---
+
+# Wave summary
+
+Counts the participants in each wave. Invented for the test suite.
+
+```{r setup, include=FALSE}
+library(dplyr)
+
+# Counts the participants in one wave.
+wave_size <- function(enrollments, wave) {
+  nrow(dplyr::filter(enrollments, wave_id == wave))
+}
+```
+
+The same count, written in Python for comparison.
+
+```{python}
+def wave_size(enrollments, wave):
+    """Counts the participants in one wave."""
+    return len([row for row in enrollments if row["wave_id"] == wave])
+```

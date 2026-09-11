@@ -424,7 +424,31 @@ def test_github_api_source_fills_in_its_defaults():
     assert source.options["include_forks"] is False       # forks fill the index with near-copies
     assert source.options["include_archived"] is True     # archived documentation is documentation
     assert source.options["include_repos"] == ()
+    assert source.options["include_code"] is True         # a code index is most of the point
+    assert source.options["ctags_fallback"] is True       # and it changes nothing without Ctags
     assert source.options["max_file_bytes"] == config.DEFAULT_GITHUB_MAX_FILE_BYTES
+
+
+def test_github_api_source_can_be_told_to_leave_the_code_alone():
+    """
+    A repository's code multiplies how many records it produces, so an
+    index meant for readers rather than developers can switch it off.
+    """
+    source = config.config_from_mapping({"sources": [{
+        "type": "github_api", "label": "Example Repositories", "org": "example-org",
+        "include_code": False, "ctags_fallback": False,
+    }]}).sources[0]
+
+    assert source.options["include_code"] is False
+    assert source.options["ctags_fallback"] is False
+
+
+def test_github_api_source_refuses_a_setting_it_does_not_have():
+    with pytest.raises(config.ConfigError, match="ctags-fallback"):
+        config.config_from_mapping({"sources": [{
+            "type": "github_api", "label": "Example Repositories", "org": "example-org",
+            "ctags-fallback": True,
+        }]})
 
 
 def dspace(**options):
