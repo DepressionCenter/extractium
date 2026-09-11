@@ -2,10 +2,11 @@
 # examples/data-repo/config.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-09
-# Summary: Settings file for a data repository: one web source, the two
-# default outputs, and a name for the published knowledge base. Change the
-# seed URL to your own site and the name to your own organization.
+# Last Modified: 2026-09-11
+# Summary: Settings file for a data repository: one web source, an
+# optional YouTube source, the two default outputs, and a name for the
+# published knowledge base. Change the seed URL to your own site and the
+# name to your own organization.
 # Notes: See README file for documentation and full license information.
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -35,6 +36,21 @@ sources:
     label: Example Knowledge Base
     seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 
+  # A channel's captions. Remove the comment markers to turn it on, and
+  # read kb-cache/README.md first: YouTube refuses caption requests from
+  # cloud runners, so you build this source once on your own machine and
+  # commit kb-cache/ for the scheduled build to reuse.
+  #
+  # Name the channel however your browser showed it: a handle, the
+  # address, or the id. No API key is needed. Without one, a listing
+  # longer than a hundred videos stops there, because reading further
+  # means an address YouTube's robots.txt disallows; set YOUTUBE_API_KEY
+  # to read the whole channel.
+  # - type: youtube
+  #   label: Example Video Library
+  #   channel_id: "https://www.youtube.com/@ExampleChannel"
+  #   languages: ["en"]
+
 # The files to write. These two are the defaults; they are listed here so
 # it is obvious what gets published.
 outputs:
@@ -48,3 +64,9 @@ max_pages: 500
 
 # Seconds between requests, so the crawl stays polite to the site it reads.
 delay_seconds: 0.5
+
+# Where fetched content is kept between builds. Named here rather than
+# left at the default, because a YouTube build commits part of it: see
+# kb-cache/README.md. The rest of the folder is a convenience you can
+# delete whenever you like.
+cache_dir: kb-cache

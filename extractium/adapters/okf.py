@@ -46,6 +46,7 @@ from extractium.adapters.base import (
     excerpt,
     link,
     output_compendium,
+    page_address,
     page_title,
     prepare_out_dir,
     section_title,
@@ -166,9 +167,11 @@ def pages_with_sections(parents):
     The indexed content as pages, each holding the sections it was split
     into.
 
-    Grain: one entry per source address. A page that ran long became
-    several parents at build time, and the format asks for one document
-    per concept, so those sections are gathered back into one file.
+    Grain: one entry per page. A page that ran long became several
+    parents at build time, and the format asks for one document per
+    concept, so those sections are gathered back into one file. A video
+    is one concept too: every stretch of its transcript becomes a section
+    of the one file, in time order, rather than a file each.
 
     Args:
         parents (Iterable[extractium.core.models.Parent]): the parents this
@@ -181,10 +184,11 @@ def pages_with_sections(parents):
     """
     pages = {}
     for parent in parents:
-        page = pages.get(parent.u)
+        address = page_address(parent)
+        page = pages.get(address)
         if page is None:
-            page = pages[parent.u] = {
-                "url": parent.u,
+            page = pages[address] = {
+                "url": address,
                 "title": page_title(parent.t),
                 "source_label": parent.source_label,
                 "content_type": parent.content_type,

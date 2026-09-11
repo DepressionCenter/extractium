@@ -97,6 +97,8 @@ If your client speaks the Model Context Protocol, you do not have to write eithe
 
 Cite the section's URL, not the index file. A reader must be able to open the page and see the sentence you used. When several sections support one statement, cite the ones you actually used and no others.
 
+A section read from a video already carries the moment it was said, as `&t=134s` on the end of its address. Cite that address unchanged and the reader lands on the words you quoted. Do not trim the moment off, and do not say a video "discusses" something when what you have is one stretch of its transcript: quote the stretch.
+
 State the build date when it matters. Every file records it: `builtAt` in the container header, and the first lines of `llms.txt`. A weekly build means an answer can be up to a week behind the site.
 
 

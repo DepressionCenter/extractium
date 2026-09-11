@@ -42,7 +42,7 @@ settings = load_config("config.yaml")
 print(settings.sources[0].options["seed_url"], settings.max_pages)
 ```
 
-The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py), and reading a DSpace repository is [extractium/sources/dspace.py](../extractium/sources/dspace.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
+The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py), reading a DSpace repository is [extractium/sources/dspace.py](../extractium/sources/dspace.py), and reading a channel's captions is [extractium/sources/youtube.py](../extractium/sources/youtube.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
 
 
 ## Where the file goes
@@ -84,7 +84,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 |---|---|---|---|
 | `name` | text | title of the first page crawled | Display name of the knowledge base, recorded in every output. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
-| `cache_dir` | text | `.kb_cache` | Folder for fetched pages between builds. |
+| `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
 | `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
@@ -297,16 +297,144 @@ A refused token drops to reading GitHub anonymously and says so. A misspelled ac
 
 ### `youtube`: read captions
 
+Indexes what is said in a video, not the video itself. Each stretch of a transcript becomes a section addressed at the moment it begins, so an answer can cite a link that opens the video at the words it quoted.
+
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `channel_id` | text | none | A channel to list. |
-| `playlist_ids` | list of text | empty | Playlists to list. |
-| `video_ids` | list of text | empty | Single videos. |
-| `languages` | list of text | `en` | Caption languages to ask for, in order of preference. |
+| `channel_id` | text | none | A channel to read. Any way of naming it works; see below. |
+| `playlist_ids` | list of text | empty | Playlists to read, as ids or as addresses. |
+| `video_ids` | list of text | empty | Single videos, as ids or as any address that names one. |
+| `languages` | list of text | `en` | Caption languages to ask for, in order of preference. The first track that exists is used. |
+| `include_playlists` | true or false | `true` | Whether the channel's own playlists are read as well as its uploads. |
+| `only_channel_videos` | true or false | `true` | Whether a video found through a playlist is indexed only when the channel published it. |
+| `delay_seconds` | number | the build's own | Seconds between requests to YouTube. Never less than 1; see below. |
 
-At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listing a channel or playlist needs `YOUTUBE_API_KEY` in the environment.
+At least one of `channel_id`, `playlist_ids`, or `video_ids` is required.
 
-**Planned.** The loader accepts this type, but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 13.
+```yaml
+sources:
+  - type: youtube
+    label: Example Video Library
+    channel_id: "https://www.youtube.com/@ExampleChannel"
+    languages: ["en"]
+```
+
+#### Naming a channel
+
+Use whichever form your browser showed you. All of these mean the same channel, and a trailing `/videos` or `/playlists` is ignored:
+
+| Written as | Example |
+|---|---|
+| A handle | `@ExampleChannel` |
+| A handle's address | `https://www.youtube.com/@ExampleChannel` |
+| A custom address | `https://www.youtube.com/examplechannel` |
+| The id | `UCxxxxxxxxxxxxxxxxxxxxxx` |
+| The id's address | `https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxx` |
+
+Anything but the last two costs one request, once: the channel page states its own id, and that answer is stored so later builds cost nothing. A value that is not a channel at all is refused when the settings file is read, not halfway through a build.
+
+Playlists and videos work the same way. A playlist may be its id or any address with `list=` in it; a video may be its id, a `watch?v=` address, a `youtu.be` short link, or a `/shorts/`, `/live/`, or `/embed/` address.
+
+#### What gets read from a channel
+
+Both of these, every time, whether or not you asked for a playlist:
+
+1. **Everything the channel published**, read from its uploads playlist. That includes its shorts and its past live streams, which the "Videos" tab on the site leaves out.
+2. **The playlists the channel shows**, and the videos in them. Turn this off with `include_playlists: false`.
+
+A playlist is a list of whatever its owner chose, so a channel's playlists routinely hold other people's videos: a conference talk, a partner's explainer, something the owner simply liked. By default those are left out, because indexing them would put another organization's words in your knowledge base under your name. The build says how many it left out. Set `only_channel_videos: false` to index them anyway.
+
+A video you named yourself under `video_ids` is always indexed. Naming it is your decision and this rule does not second-guess it.
+
+#### The API key, and when you need one
+
+You do not need one. Without a key, channels and playlists are listed by reading YouTube's own pages, and titles come from a public endpoint that needs no key either.
+
+A key gets you one thing: the whole of a long listing. See the next section.
+
+The key is read from the `YOUTUBE_API_KEY` environment variable, never from this file. A key is a credential, and this file is committed to a repository beside the output it produced.
+
+```bash
+export YOUTUBE_API_KEY=EXAMPLE_API_KEY      # macOS, Linux
+$env:YOUTUBE_API_KEY = 'EXAMPLE_API_KEY'    # PowerShell
+```
+
+#### Why a long listing stops at 100 videos without a key
+
+YouTube's `robots.txt` allows the channel and playlist pages this build reads. It disallows `/youtubei/`, which is the address a page calls for its next batch when you scroll. Extractium honors `robots.txt` by default, so one allowed request gets the newest 100 videos of a listing and stops there. The build says so, once, and says which listings it stopped short on.
+
+You have two ways past it:
+
+| Do this | And you get |
+|---|---|
+| Set `YOUTUBE_API_KEY` | The whole listing, through the documented API, with no rule bent. This is the recommended path. |
+| Set `respect_robots_txt: false` | The whole listing, by paging the way the page itself does. This is the same switch that lets a challenged page be retried as a browser, and it applies to every source in the build, not just this one. Use it only for content you own or have permission to read. |
+
+A listing that came back with fewer than 30 items is the whole listing, and nothing is said about it: a four-video playlist has no second page.
+
+#### Why a YouTube build has to run on your own machine
+
+YouTube refuses caption requests that come from cloud-provider addresses, and GitHub Actions runs on a cloud provider. A scheduled build therefore cannot read a transcript, however it is configured.
+
+Extractium works around this by storing everything it reads under `cache_dir`:
+
+| Path | What it holds |
+|---|---|
+| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, caption language, and timed caption lines. |
+| `<cache_dir>/youtube/listings/<playlist id>.json` | The videos a playlist held when it was last listed. |
+
+Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your knowledge base is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
+
+A stored transcript has no expiry date. A build uses it because it exists, not because it was checked against YouTube, since checking is exactly what a cloud runner cannot do. To pick up corrected captions, delete that video's file and build again on a machine YouTube answers.
+
+The [data repository template](../examples/data-repo/kb-cache/README.md) shows the folder with its files in place.
+
+#### Pointing a build straight at YouTube
+
+You can skip the `youtube` source entirely and put a YouTube address in a `web` source's `seed_url`. The build recognises it and reads captions instead of crawling:
+
+```yaml
+sources:
+  - type: web
+    label: Example Video Library
+    seed_url: "https://www.youtube.com/@ExampleChannel"
+```
+
+A channel address reads that channel, a `playlist?list=` address reads that playlist, and a watch address, a `youtu.be` link, or a `/shorts/` address reads that one video. Use the `youtube` source itself when you want to set `languages` or any of the options above.
+
+YouTube addresses are never crawled as pages, wherever they turn up. A video's words are in its caption track, so a crawled YouTube page gives a title and nothing else. If a build finds YouTube links while crawling your site, it says how many and leaves them alone; add a `youtube` source to index them.
+
+#### How fast it asks
+
+YouTube tolerates far less than a documentation site does. A run that asked for about 145 transcripts back to back was refused partway through, and everything after that would have been refused too.
+
+So this source waits at least **one second** between requests, whatever the build's `delay_seconds` says. Set the source's own `delay_seconds` higher if you are reading a large channel and would rather be sure:
+
+```yaml
+sources:
+  - type: youtube
+    label: Example Video Library
+    channel_id: "https://www.youtube.com/@ExampleChannel"
+    delay_seconds: 2
+```
+
+A few hundred videos therefore takes a few minutes on the first run. It costs nothing afterwards: stored transcripts are read from disk with no pause at all.
+
+If YouTube does refuse the machine partway through, the build keeps every video it had already read, stops asking for more, and says the result is incomplete. Build again later, or on another machine, and it picks up where it left off from the stored transcripts.
+
+#### What you need installed
+
+Fetching captions needs one extra package:
+
+```bash
+pip install "extractium[youtube]"
+```
+
+A build that reads only stored transcripts does not need it, which is what makes a scheduled run work on a plain install.
+
+#### What a video without captions does
+
+Nothing stops. The video is skipped, the build says how many were skipped, and the rest are indexed. A video whose owner turned captions off has nothing to read, and that is a normal thing to meet rather than a broken build.
 
 ### `dspace`: read a repository's deposits
 

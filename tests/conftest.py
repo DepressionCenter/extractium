@@ -340,6 +340,13 @@ def isolated_core_cache(tmp_path, monkeypatch):
     # So does the repository subtree, which holds text a scholarly
     # repository extracted from a deposit's files.
     monkeypatch.setattr(cache, "CACHE_REPOSITORY_DIR", str(cache_dir / "repository"))
+    # And so does the YouTube subtree. A test that asserts a build fetched
+    # no transcript would otherwise be satisfied by a transcript another
+    # test had already stored.
+    youtube_dir = cache_dir / "youtube"
+    monkeypatch.setattr(cache, "CACHE_YOUTUBE_DIR", str(youtube_dir))
+    monkeypatch.setattr(cache, "CACHE_YOUTUBE_VIDEOS_DIR", str(youtube_dir / "videos"))
+    monkeypatch.setattr(cache, "CACHE_YOUTUBE_LISTINGS_DIR", str(youtube_dir / "listings"))
     return cache_dir
 
 

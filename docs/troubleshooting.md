@@ -379,6 +379,93 @@ That line is not an error. It is telling you the index has that repository's doc
 **Fix.** Install from this folder, so npm reads both `package.json` and `package-lock.json`. The `overrides` block in `package.json` lifts those two packages to patched versions, and `npm audit` then reports nothing. If you see advisories anyway, check that you ran `npm install` inside `examples/mcp/local-node` rather than copying `server.js` elsewhere and installing by hand.
 
 
+## A YouTube source
+
+### `no source named 'youtube'`
+
+**Cause.** An older Extractium. The source arrived in phase 13; before that the settings file accepted the type and no code answered to it.
+
+**Fix.** Update Extractium, or pin `EXTRACTIUM_REF` to a version that has it.
+
+### The build stops saying YouTube refused the request
+
+**Cause.** You are building somewhere YouTube blocks, which means almost any cloud runner, including GitHub Actions. YouTube refuses caption requests from cloud-provider addresses. This is not a setting you can change and not a key you can buy.
+
+**Fix.** Build on your own machine, then commit the cache folder so the scheduled run reads the transcripts instead of asking for them. [The cache README](../examples/data-repo/kb-cache/README.md) says what to commit. The message appears only when nothing is stored for that video yet.
+
+### `fetching captions needs youtube-transcript-api`
+
+**Cause.** A transcript has to be fetched and the caption package is not installed.
+
+**Fix.** `pip install "extractium[youtube]"`. You need this on the machine that fetches transcripts, not on one that only reads stored ones.
+
+### `listing a channel or playlist needs a YouTube Data API key`
+
+**Cause.** The source names a `channel_id` or `playlist_ids`, and `YOUTUBE_API_KEY` is not set. Only the Data API can say what a channel holds.
+
+**Fix.** Set the variable, or name the videos individually under `video_ids`, which needs no key. If the listing was read before and stored, the build uses the stored copy and says so instead of stopping.
+
+### `is not a handle` or `does not look like a channel`
+
+**Cause.** The value in `channel_id` is not a channel. A handle, a channel address, a custom address, and the id itself are all accepted, so this usually means an address for something else: a search results page, a watch page, or a different site.
+
+**Fix.** Open the channel in a browser and copy the address from the bar. `https://www.youtube.com/@ExampleChannel` and `.../@ExampleChannel/videos` both work.
+
+### The build says YouTube links were not crawled
+
+**Cause.** Not an error. A crawl found links to YouTube and left them alone, because a video's words are in its caption track and a crawled YouTube page gives a title and nothing else.
+
+**Fix.** Nothing, if you did not want those videos. To index them, add a `youtube` source naming the channel, or put the YouTube address in a `web` source's `seed_url` and the build will read captions from it.
+
+### The build says a listing stopped at its first page
+
+**Cause.** Not an error. YouTube's `robots.txt` disallows `/youtubei/`, the address a page calls for its next batch, and this build honors `robots.txt`. So a listing longer than one page gives its newest 100 videos and stops.
+
+**Fix.** Set `YOUTUBE_API_KEY` to read the whole listing through the documented API. Failing that, `respect_robots_txt: false` pages the way the page itself does, for content you own or have permission to read. See the [configuration reference](configuration.md).
+
+### A video in one of the channel's playlists was left out
+
+**Cause.** Another channel published it. A playlist holds whatever its owner chose, which often includes other people's videos, and indexing those would put another organization's words in your knowledge base under your name. The build counts what it left out.
+
+**Fix.** Nothing, if that is what you wanted. To index them anyway, set `only_channel_videos: false`. To name another organization's channel as one you do index, add it as its own `youtube` source.
+
+### The build says YouTube refused this machine after N videos
+
+**Cause.** Rate limiting. YouTube starts refusing a machine that has asked for a lot of transcripts in a short time. The build keeps what it read and stops asking, rather than throwing the work away.
+
+**Fix.** Wait, then build again: the transcripts already stored are reused and it carries on from there. Repeat until the channel is covered. To make it less likely, raise the source's `delay_seconds` above the one-second floor. Each run is cheaper than the last, because what is stored is never fetched twice.
+
+### YouTube answered 403 for a channel page
+
+**Cause.** A filter refused this machine rather than saying the page is missing. Cloud runners see this most.
+
+**Fix.** Set an API key, which uses a different host altogether. Or set `respect_robots_txt: false`, which allows one retry with a browser identity, the same fallback a challenged web page gets. If neither is possible, build on a machine YouTube answers and commit the cache.
+
+### The Data API answered 403
+
+**Cause.** Usually one of three things: the key is expired, the YouTube Data API v3 is not enabled for the key's project, or the project is over its daily quota.
+
+**Fix.** Check the key in the Google Cloud console. Quota resets daily; a build that only needs stored transcripts is unaffected by it.
+
+### A video is in the channel but not in the knowledge base
+
+**Cause.** Most often it has no captions, or none in the languages asked for. The build counts these and says how many were skipped.
+
+**Fix.** Add the language to `languages` if the captions exist in another one, which is the usual cause: `languages: ["en", "es"]` covers a channel that publishes in both. A video with captions genuinely turned off cannot be indexed, and there is no fallback: reading speech from the audio is [not planned](extractium-spec.md), because sampling a real channel found captions on every video.
+
+### A corrected transcript is not picked up
+
+**Cause.** A stored transcript has no expiry date, by design. A build uses it because it exists, since checking it against YouTube is what a cloud runner cannot do.
+
+**Fix.** Delete that video's file from `<cache_dir>/youtube/videos/` and build again on a machine YouTube answers. To pick up videos newly added to a playlist, delete the playlist's file from `<cache_dir>/youtube/listings/`.
+
+### The cache folder is not in the repository
+
+**Cause.** `cache_dir` is at its default, `.kb_cache`, and that folder is ignored by most projects, this one included.
+
+**Fix.** Set `cache_dir` to a visible folder such as `kb-cache` and commit it. A YouTube build is the one case where the cache is content rather than a convenience.
+
+
 ## Conclusion
 
 Most failures come down to three things: a pattern that is broader or narrower than you meant, a file that did not arrive intact, or a mismatch between the model that built an index and the model searching it. If you hit something that is not here and work out the cause, add it to this page in the same change.

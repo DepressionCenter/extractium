@@ -1,0 +1,12 @@
+{
+  "_license": "This file is part of Extractium. Copyright © 2026 The Regents of the University of Michigan. Licensed under the GNU General Public License v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the project README for full license information. Synthetic example content: no real video, channel, or transcript is named here.",
+  "title": "Example Talk: Measuring Mood With A Phone",
+  "published_at": "2026-01-02T03:04:05Z",
+  "language": "en",
+  "segments": [
+    {"text": "Welcome. Today we are going to walk through how a study measures mood using a phone, and what the data looks like when it comes back.", "start": 0.0},
+    {"text": "A daily survey is the simplest instrument. It asks the same few questions at the same time each day, so answers can be compared across weeks.", "start": 18.0},
+    {"text": "Passive sensing is the other half. Step count, screen time, and sleep estimates arrive without anybody answering anything.", "start": 41.5},
+    {"text": "Together they give two views of the same week. When the two disagree, that disagreement is usually the interesting part of the record.", "start": 63.0}
+  ]
+}

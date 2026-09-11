@@ -37,6 +37,8 @@ A knowledge index goes stale as the pages behind it change, so it should be rebu
 
 You can use both. Many groups run the weekly build on GitHub and rebuild by hand after a large content change.
 
+YouTube needs both, in a set order. YouTube refuses caption requests from cloud-provider addresses, so you build once on your own machine, commit the folder `cache_dir` names, and the weekly build on GitHub reads the transcripts from there without asking YouTube for anything. [The cache README](../../examples/data-repo/kb-cache/README.md) says what to commit and when to refresh it.
+
 
 ## Build on your own machine
 

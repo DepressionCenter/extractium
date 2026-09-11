@@ -3,10 +3,10 @@ This file is part of Extractium™
 examples/data-repo/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-11
 Summary: README for the data-repository template: what the folder is, how
-to turn it into your own repository, how the weekly build runs, and what
-gets published.
+to turn it into your own repository, how the weekly build runs, what gets
+published, and why the YouTube cache is committed rather than ignored.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -34,6 +34,7 @@ This folder is a template. Copy it into a new repository of your own, change two
 |---|---|
 | `config.yaml` | What to crawl and what to write. The one file you edit. |
 | `.github/workflows/build-compendium.yml` | The weekly build. Runs on a schedule and on a button press, and publishes the result. |
+| `kb-cache/` | Content the weekly build cannot fetch for itself, chiefly video captions. Committed on purpose; see [its README](kb-cache/README.md). |
 
 
 ## Set it up
@@ -67,6 +68,8 @@ The workflow's `EXTRACTIUM_REF` setting names the version of Extractium to build
 ## Building on your own machine instead
 
 Some sources cannot be reached from a cloud runner: a folder of local files, and YouTube captions. For those, clone the Extractium repository, put your `config.yaml` beside it, and run `run.sh` (macOS, Linux) or `run.bat` (Windows). The script builds and then prints what to commit. [How to run a weekly build](../../docs/how-to/run-a-weekly-build.md) covers both paths.
+
+YouTube is the one source where this is not a preference. YouTube refuses caption requests from cloud-provider addresses, so a scheduled run cannot read a transcript at all. You build once on your own machine, commit `kb-cache/`, and every later build reads the transcripts from there. [The cache README](kb-cache/README.md) explains what to commit and when to refresh it.
 
 
 ## A note on private content

@@ -1,8 +1,9 @@
 """
 Summary: Local caches for content a build has already fetched: the
 page cache for crawled URLs, the GitHub cache for content read through
-the API, and the repository cache for text a scholarly repository
-extracted from a deposit's files. Reads and writes
+the API, the repository cache for text a scholarly repository
+extracted from a deposit's files, and the YouTube cache for video
+listings and caption transcripts. Reads and writes
 .kb_cache/meta.json (per-URL conditional-GET validators: ETag,
 Last-Modified, fetch timestamp, content sha256), and derives the on-disk
 file path for a cached page body from its URL.
@@ -12,7 +13,7 @@ extractium/core/cache.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -69,6 +70,18 @@ CACHE_GITHUB_ANALYSIS_DIR = os.path.join(CACHE_GITHUB_DIR, "analysis")
 # back with the listing that says whether the deposit moved at all.
 CACHE_REPOSITORY_DIR = os.path.join(CACHE_DIR, "repository")
 
+# Video listings and caption transcripts. This subtree is the one cache
+# a build may be unable to refill: YouTube answers requests from
+# cloud-provider address ranges with a block, so a scheduled run on a
+# hosted runner cannot fetch a transcript at all. What an operator
+# fetched on their own machine is therefore committed to the data
+# repository and read back here, which is why nothing under this tree is
+# keyed by a validator: a stored transcript is used because it exists,
+# not because it was checked against the server.
+CACHE_YOUTUBE_DIR = os.path.join(CACHE_DIR, "youtube")
+CACHE_YOUTUBE_VIDEOS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "videos")
+CACHE_YOUTUBE_LISTINGS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "listings")
+
 # A blob SHA is a Git object name: forty hexadecimal characters and
 # nothing else. Checked before it is used in a path, because the SHA
 # arrives in an API response, which is untrusted input like any other.
@@ -79,6 +92,15 @@ _BLOB_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 # response, and an unchecked value in a path could reach outside the cache
 # directory.
 _DEPOSIT_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+# A YouTube video is named by eleven characters from the base64url
+# alphabet, and a playlist or channel by a longer run of the same. Both
+# arrive either from configuration or from an API response, so both are
+# checked before they are used in a path: an unchecked identifier
+# holding a path separator or a parent-directory step would decide where
+# a cache file lands.
+_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_LISTING_ID_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
 
 # How many successful fetches (200s or 304 cache hits) accumulate between
 # meta.json writes -- rewriting after every single page dominates
@@ -105,6 +127,7 @@ def use_cache_dir(path):
     global CACHE_GITHUB_DIR, CACHE_GITHUB_BLOBS_DIR
     global CACHE_GITHUB_REPOSITORIES_DIR, CACHE_GITHUB_ANALYSIS_DIR
     global CACHE_REPOSITORY_DIR
+    global CACHE_YOUTUBE_DIR, CACHE_YOUTUBE_VIDEOS_DIR, CACHE_YOUTUBE_LISTINGS_DIR
     CACHE_DIR = str(path)
     CACHE_META_PATH = os.path.join(CACHE_DIR, "meta.json")
     CACHE_PAGES_DIR = os.path.join(CACHE_DIR, "pages")
@@ -113,6 +136,9 @@ def use_cache_dir(path):
     CACHE_GITHUB_REPOSITORIES_DIR = os.path.join(CACHE_GITHUB_DIR, "repositories")
     CACHE_GITHUB_ANALYSIS_DIR = os.path.join(CACHE_GITHUB_DIR, "analysis")
     CACHE_REPOSITORY_DIR = os.path.join(CACHE_DIR, "repository")
+    CACHE_YOUTUBE_DIR = os.path.join(CACHE_DIR, "youtube")
+    CACHE_YOUTUBE_VIDEOS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "videos")
+    CACHE_YOUTUBE_LISTINGS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "listings")
 
 
 ### Cache Metadata ###
@@ -384,4 +410,249 @@ def save_analysis(blob_sha, key, records):
     tmp_path = path + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump({"key": dict(key), "records": dict(records)}, f)
+    os.replace(tmp_path, path)
+
+
+### YouTube Cache ###
+
+def video_path(video_id):
+    """
+    The on-disk path for one video's title and caption transcript.
+
+    Args:
+        video_id (str): YouTube's identifier for the video, eleven
+            characters from the base64url alphabet.
+
+    Returns:
+        str: path under CACHE_YOUTUBE_VIDEOS_DIR.
+
+    Raises:
+        ValueError: if video_id is not a YouTube video identifier. The
+            identifier arrives from configuration or from an API
+            response, so it is checked rather than trusted: an unchecked
+            value used in a path could reach outside the cache directory.
+    """
+    if not isinstance(video_id, str) or not _VIDEO_ID_RE.match(video_id):
+        raise ValueError(
+            f"a YouTube video identifier must be eleven characters of "
+            f"letters, digits, hyphen, or underscore; got {video_id!r}."
+        )
+    return os.path.join(CACHE_YOUTUBE_VIDEOS_DIR, video_id + ".json")
+
+
+def load_video(video_id):
+    """
+    Reads one video's stored title and transcript.
+
+    There is no freshness check, and that is deliberate. YouTube blocks
+    requests from cloud-provider address ranges, so a scheduled build
+    cannot refetch a transcript even to confirm one it already holds. A
+    stored transcript is therefore authoritative until somebody deletes
+    it. Captions that changed after they were stored are picked up by
+    deleting the file and building again on a machine YouTube answers.
+
+    Args:
+        video_id (str): the video's identifier.
+
+    Returns:
+        dict | None: a record holding `title`, `published_at`,
+        `language`, and `segments`, or None when nothing is stored or
+        the stored file cannot be read. Anything unreadable degrades to
+        a fresh fetch rather than failing the build.
+
+    Raises:
+        ValueError: if video_id is not a YouTube video identifier.
+    """
+    try:
+        with open(video_path(video_id), "r", encoding="utf-8") as f:
+            stored = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(stored, dict) or not isinstance(stored.get("segments"), list):
+        return None
+    return stored
+
+
+def save_video(video_id, title, published_at, language, segments):
+    """
+    Stores one video's title and caption transcript.
+
+    Args:
+        video_id (str): the video's identifier.
+        title (str): the video's title, as YouTube reported it.
+        published_at (str): when the video was published, as YouTube
+            reported it: an ISO 8601 stamp in UTC.
+        language (str): the caption track's language code.
+        segments (Sequence[Mapping]): the caption lines, each holding
+            `text` and `start` in seconds from the beginning.
+
+    Raises:
+        ValueError: if video_id is not a YouTube video identifier.
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_YOUTUBE_VIDEOS_DIR, exist_ok=True)
+    path = video_path(video_id)
+    tmp_path = path + ".tmp"
+    record = {
+        "title": title,
+        "published_at": published_at,
+        "language": language,
+        "segments": [
+            {"text": segment["text"], "start": float(segment["start"])}
+            for segment in segments
+        ],
+    }
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(record, f)
+    os.replace(tmp_path, path)
+
+
+def listing_path(listing_id):
+    """
+    The on-disk path for the video identifiers one playlist or channel
+    held the last time it was listed.
+
+    Args:
+        listing_id (str): a playlist or channel identifier.
+
+    Returns:
+        str: path under CACHE_YOUTUBE_LISTINGS_DIR.
+
+    Raises:
+        ValueError: if listing_id is not a YouTube playlist or channel
+            identifier. Checked for the same reason a video identifier
+            is: it reaches a file path.
+    """
+    if not isinstance(listing_id, str) or not _LISTING_ID_RE.match(listing_id):
+        raise ValueError(
+            f"a YouTube playlist or channel identifier must be 2 to 64 characters "
+            f"of letters, digits, hyphen, or underscore; got {listing_id!r}."
+        )
+    return os.path.join(CACHE_YOUTUBE_LISTINGS_DIR, listing_id + ".json")
+
+
+def load_listing(listing_id):
+    """
+    Reads the video identifiers stored for one playlist or channel.
+
+    Stored without a freshness check, for the reason load_video gives: a
+    build that cannot reach YouTube still has to produce the same
+    knowledge base it produced last time.
+
+    Args:
+        listing_id (str): the playlist or channel identifier.
+
+    Returns:
+        tuple[str, ...] | None: the stored video identifiers in listing
+        order, or None when nothing is stored or the file cannot be read.
+
+    Raises:
+        ValueError: if listing_id is not a playlist or channel identifier.
+    """
+    try:
+        with open(listing_path(listing_id), "r", encoding="utf-8") as f:
+            stored = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(stored, dict):
+        return None
+    video_ids = stored.get("video_ids")
+    if not isinstance(video_ids, list):
+        return None
+    return tuple(v for v in video_ids if isinstance(v, str))
+
+
+def save_listing(listing_id, video_ids):
+    """
+    Stores the video identifiers one playlist or channel holds.
+
+    Args:
+        listing_id (str): the playlist or channel identifier.
+        video_ids (Sequence[str]): the video identifiers, in listing order.
+
+    Raises:
+        ValueError: if listing_id is not a playlist or channel identifier.
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_YOUTUBE_LISTINGS_DIR, exist_ok=True)
+    path = listing_path(listing_id)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump({"video_ids": list(video_ids)}, f)
+    os.replace(tmp_path, path)
+
+
+def channel_id_path(selector):
+    """
+    The on-disk path for the channel id one channel address resolved to.
+
+    The address is hashed rather than used as a name. A handle or a
+    custom address is somebody else's text: it can hold a slash, a
+    parent-directory step, or characters no file system accepts, and a
+    digest has none of those problems while still naming one address
+    exactly.
+
+    Args:
+        selector (str): the channel address, as it was resolved.
+
+    Returns:
+        str: path under CACHE_YOUTUBE_LISTINGS_DIR.
+
+    Raises:
+        ValueError: if selector is not a non-empty string.
+    """
+    if not isinstance(selector, str) or not selector.strip():
+        raise ValueError(f"a channel address must be a non-empty string; got {selector!r}.")
+    digest = hashlib.sha256(selector.strip().encode("utf-8")).hexdigest()
+    return os.path.join(CACHE_YOUTUBE_LISTINGS_DIR, f"channel-{digest}.json")
+
+
+def load_channel_id(selector):
+    """
+    Reads the channel id one address resolved to last time.
+
+    Stored so a handle costs one request once rather than once per build.
+    A handle can in principle be moved to another channel, which is why
+    deleting this file is how an operator forces it to be looked up
+    again; nothing here expires on its own, for the reason load_video
+    gives.
+
+    Args:
+        selector (str): the channel address.
+
+    Returns:
+        str | None: the channel id, or None when nothing is stored or the
+        file cannot be read.
+
+    Raises:
+        ValueError: if selector is not a non-empty string.
+    """
+    try:
+        with open(channel_id_path(selector), "r", encoding="utf-8") as f:
+            stored = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(stored, dict):
+        return None
+    channel_id = stored.get("channel_id")
+    return channel_id if isinstance(channel_id, str) else None
+
+
+def save_channel_id(selector, channel_id):
+    """
+    Stores the channel id one address resolved to.
+
+    Args:
+        selector (str): the channel address.
+        channel_id (str): the id it resolved to.
+
+    Raises:
+        ValueError: if selector is not a non-empty string.
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_YOUTUBE_LISTINGS_DIR, exist_ok=True)
+    path = channel_id_path(selector)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump({"selector": selector, "channel_id": channel_id}, f)
     os.replace(tmp_path, path)

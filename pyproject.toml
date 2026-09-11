@@ -90,6 +90,12 @@ code = [
 ]
 # Future output formats (see docs/extractium-spec.md section 4); no packages
 # needed until those adapters are built.
+# Reading a YouTube channel's captions. Optional because most builds index
+# no video at all, and because a build that reads only transcripts an
+# operator already committed never calls this package. MIT-licensed; its
+# only dependency beyond requests is defusedxml, a hardened XML parser.
+youtube = ["youtube-transcript-api>=1.2.4,<2.0.0"]
+
 parquet = []
 duckdb = []
 
@@ -106,11 +112,13 @@ web = "extractium.sources.web:WebSource"
 local = "extractium.sources.local:LocalSource"
 github_api = "extractium.sources.github_api:GitHubApiSource"
 dspace = "extractium.sources.dspace:DSpaceSource"
+youtube = "extractium.sources.youtube:YouTubeSource"
 
 [project.entry-points."extractium.site_handlers"]
 generic = "extractium.sources.generic:GenericHandler"
 tdx = "extractium.sources.tdx:TdxHandler"
 github = "extractium.sources.github:GitHubHandler"
+youtube = "extractium.sources.youtube_site:YouTubeHandler"
 
 [project.entry-points."extractium.adapters"]
 container = "extractium.adapters.container:ContainerAdapter"
