@@ -59,7 +59,7 @@ That writes `dist/kb-index.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Dro
   + [How to run a weekly build](docs/how-to/run-a-weekly-build.md) — the one-command local build and the scheduled one.
   + [Troubleshooting](docs/troubleshooting.md) — known failures, causes, and fixes.
   + [Implementation plan](docs/implementation-plan.md) — the phased order of work.
-+ [SKILLS.md](SKILLS.md) tells an AI agent how to use a published index.
++ [Using a published compendium](docs/using-a-compendium.md) tells an AI agent how to use a published index.
 
 
 
