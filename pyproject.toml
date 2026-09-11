@@ -118,6 +118,7 @@ youtube = "extractium.sources.youtube:YouTubeSource"
 generic = "extractium.sources.generic:GenericHandler"
 tdx = "extractium.sources.tdx:TdxHandler"
 github = "extractium.sources.github:GitHubHandler"
+youtube = "extractium.sources.youtube_site:YouTubeHandler"
 
 [project.entry-points."extractium.adapters"]
 container = "extractium.adapters.container:ContainerAdapter"

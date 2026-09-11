@@ -1817,3 +1817,105 @@ def test_a_stored_transcript_costs_no_pause(api_key_set, monkeypatch):
     list(built.fetch(FakeYouTubeSession(), {}, quiet))
 
     assert waits == []
+
+
+### A YouTube Address As The Seed ###
+
+def handler():
+    """The site handler, fresh, so one test's counts do not reach another."""
+    from extractium.sources.youtube_site import YouTubeHandler
+    return YouTubeHandler()
+
+
+def test_the_handler_satisfies_the_site_handler_protocol():
+    from extractium.core.models import SiteHandler
+    from extractium.sources.youtube_site import YouTubeHandler
+
+    assert isinstance(handler(), SiteHandler)
+    assert YouTubeHandler.name == "youtube"
+
+
+@pytest.mark.parametrize("seed", [
+    "https://www.youtube.com/@DepressionCenter",
+    "https://www.youtube.com/@DepressionCenter/videos",
+    "https://www.youtube.com/@DepressionCenter/playlists",
+    "https://www.youtube.com/depressioncenter",
+    f"https://www.youtube.com/channel/{CHANNEL}",
+    f"https://www.youtube.com/c/Example",
+])
+def test_a_channel_address_as_a_seed_reads_that_channel(seed):
+    """
+    The address stays as written, so the source reads it the same way it
+    would from a settings file.
+    """
+    name, options = handler().offer_source(seed)
+
+    assert name == "youtube"
+    assert options == {"channel_id": seed}
+
+
+@pytest.mark.parametrize("seed", [
+    f"https://www.youtube.com/watch?v={VIDEO_A}",
+    f"https://youtu.be/{VIDEO_A}",
+    f"https://www.youtube.com/shorts/{VIDEO_A}",
+    f"https://www.youtube.com/live/{VIDEO_A}",
+])
+def test_one_video_as_a_seed_reads_that_one_video(seed):
+    assert handler().offer_source(seed) == ("youtube", {"video_ids": (VIDEO_A,)})
+
+
+def test_a_playlist_as_a_seed_reads_that_playlist():
+    seed = f"https://www.youtube.com/playlist?list={PLAYLIST}"
+
+    assert handler().offer_source(seed) == ("youtube", {"playlist_ids": (PLAYLIST,)})
+
+
+def test_a_watch_address_inside_a_playlist_reads_the_video():
+    """The video is the more specific request of the two the address names."""
+    seed = f"https://www.youtube.com/watch?v={VIDEO_A}&list={PLAYLIST}"
+
+    assert handler().offer_source(seed) == ("youtube", {"video_ids": (VIDEO_A,)})
+
+
+@pytest.mark.parametrize("seed", [
+    "https://example.org/page",
+    "https://vimeo.com/12345",
+    "https://github.com/DepressionCenter",
+])
+def test_an_address_somewhere_else_is_not_this_handlers_business(seed):
+    assert handler().offer_source(seed) is None
+    assert handler().allows(seed) is True
+
+
+def test_a_youtube_page_is_never_crawled():
+    """
+    A video's words are in its caption track, so a crawled YouTube page
+    yields a title and nothing else.
+    """
+    built = handler()
+
+    assert built.allows(f"https://www.youtube.com/watch?v={VIDEO_A}") is False
+    assert built.allows(f"https://youtu.be/{VIDEO_A}") is False
+    assert built.skipped == 2
+
+
+def test_the_handler_says_once_how_many_links_it_held_back():
+    built = handler()
+    built.allows(f"https://youtu.be/{VIDEO_A}")
+    built.allows(f"https://www.youtube.com/watch?v={VIDEO_B}")
+
+    report = built.skipped_page_report()
+
+    assert "2 YouTube link(s)" in report
+    assert "youtube source" in report
+
+
+def test_a_handler_that_saw_no_links_reports_nothing():
+    assert handler().skipped_page_report() == ""
+
+
+def test_the_handler_extracts_nothing_from_a_page():
+    """Reached only if something let a YouTube address through anyway."""
+    title, content, categories = handler().extract(None, f"https://www.youtube.com/watch?v={VIDEO_A}")
+
+    assert (title, content, categories) == ("", None, ())

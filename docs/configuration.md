@@ -389,6 +389,21 @@ A stored transcript has no expiry date. A build uses it because it exists, not b
 
 The [data repository template](../examples/data-repo/kb-cache/README.md) shows the folder with its files in place.
 
+#### Pointing a build straight at YouTube
+
+You can skip the `youtube` source entirely and put a YouTube address in a `web` source's `seed_url`. The build recognises it and reads captions instead of crawling:
+
+```yaml
+sources:
+  - type: web
+    label: Example Video Library
+    seed_url: "https://www.youtube.com/@ExampleChannel"
+```
+
+A channel address reads that channel, a `playlist?list=` address reads that playlist, and a watch address, a `youtu.be` link, or a `/shorts/` address reads that one video. Use the `youtube` source itself when you want to set `languages` or any of the options above.
+
+YouTube addresses are never crawled as pages, wherever they turn up. A video's words are in its caption track, so a crawled YouTube page gives a title and nothing else. If a build finds YouTube links while crawling your site, it says how many and leaves them alone; add a `youtube` source to index them.
+
 #### How fast it asks
 
 YouTube tolerates far less than a documentation site does. A run that asked for about 145 transcripts back to back was refused partway through, and everything after that would have been refused too.

@@ -172,9 +172,12 @@ def collect_notes(sources):
             notes.extend(source.summary_lines())
     for source in sources:
         for handler in getattr(source, "handlers", ()):
-            report = handler.skipped_account_report() if hasattr(handler, "skipped_account_report") else ""
-            if report and report not in notes:
-                notes.append(report)
+            # A handler may hold content back for its own reason, and each
+            # says so once for the whole build rather than once per link.
+            for method in ("skipped_account_report", "skipped_page_report"):
+                report = getattr(handler, method)() if hasattr(handler, method) else ""
+                if report and report not in notes:
+                    notes.append(report)
     return notes
 
 

@@ -164,7 +164,7 @@ The exception is the YouTube store. YouTube refuses caption requests from cloud-
 
 | Item | Status |
 |---|---|
-| Test suite | 1,380 Python tests passing as of 2026-09-11, plus 36 Node tests for the JavaScript client and 24 for the local Node MCP server. |
+| Test suite | 1,400 Python tests passing as of 2026-09-11, plus 36 Node tests for the JavaScript client and 24 for the local Node MCP server. |
 | Security review by a second person | Not done. |
 | Privacy, IRB, or Information Assurance review | Not done, and needed before any use involving participant data. |
 | Accessibility audit with an automated tool | Not done. |

@@ -411,6 +411,12 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** Open the channel in a browser and copy the address from the bar. `https://www.youtube.com/@ExampleChannel` and `.../@ExampleChannel/videos` both work.
 
+### The build says YouTube links were not crawled
+
+**Cause.** Not an error. A crawl found links to YouTube and left them alone, because a video's words are in its caption track and a crawled YouTube page gives a title and nothing else.
+
+**Fix.** Nothing, if you did not want those videos. To index them, add a `youtube` source naming the channel, or put the YouTube address in a `web` source's `seed_url` and the build will read captions from it.
+
 ### The build says a listing stopped at its first page
 
 **Cause.** Not an error. YouTube's `robots.txt` disallows `/youtubei/`, the address a page calls for its next batch, and this build honors `robots.txt`. So a listing longer than one page gives its newest 100 videos and stops.

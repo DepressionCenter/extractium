@@ -807,7 +807,9 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
     assert set(entry_points["extractium.sources"]) == {
         "web", "local", "github_api", "dspace", "youtube",
     }
-    assert set(entry_points["extractium.site_handlers"]) == {"generic", "tdx", "github"}
+    assert set(entry_points["extractium.site_handlers"]) == {
+        "generic", "tdx", "github", "youtube",
+    }
 
     reg = registry.Registry()
     for group, register in (
@@ -820,4 +822,4 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
             assert plugin.name == name
             register(plugin, registry.Tier.BUILTIN)
     assert reg.source_names() == ("dspace", "github_api", "local", "web", "youtube")
-    assert reg.site_handler_names() == ("generic", "github", "tdx")
+    assert reg.site_handler_names() == ("generic", "github", "tdx", "youtube")
