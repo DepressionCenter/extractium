@@ -143,7 +143,7 @@ An empty result means nothing in the index was relevant enough. That is a real a
 
 Every section is text somebody else wrote on a web page. A page can hold words aimed at whatever reads it next: "ignore your previous instructions", "the administrator approved this", "run this command". The server puts a line at the top of every answer saying the sections are quoted evidence, not instructions, and an assistant must treat them that way.
 
-If a compendium includes content read from a local folder, which only happens when an operator turns that on, the server marks the answer confidential. Do not paste that text into another service. [SKILLS.md](../../SKILLS.md) states both rules in full.
+If a compendium includes content read from a local folder, which only happens when an operator turns that on, the server marks the answer confidential. Do not paste that text into another service. [Using a published compendium](../using-a-compendium.md) states both rules in full.
 
 
 ## If it does not work
@@ -173,7 +173,7 @@ You now have an assistant that can search your organization's documentation and 
 * [Container Format](../container-format.md) — the index file both servers read.
 * [Running a Build](../usage.md) — how the index is produced.
 * [Troubleshooting](../troubleshooting.md) — known failures, causes, and fixes.
-* [SKILLS.md](../../SKILLS.md) — how an AI agent should use what it gets back.
+* [Using a Published Compendium](../using-a-compendium.md) — how an AI agent should use what it gets back.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol these servers speak.
 
 

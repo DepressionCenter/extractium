@@ -153,7 +153,7 @@ You can now search a published index from either language, with your own embedde
 * [Running a Build](../usage.md) — how the file you are searching is produced.
 * [How to Run a Weekly Build](run-a-weekly-build.md) — keeping a published index current.
 * [How to Connect an MCP Client](connect-an-mcp-client.md) — the two local servers built on these clients.
-* [SKILLS.md](../../SKILLS.md) — how an AI agent uses the published files and these clients.
+* [Using a Published Compendium](../using-a-compendium.md) — how an AI agent uses the published files and these clients.
 * [BAAI/bge-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5) — the embedding model, including the query prefix the clients apply for you.
 * [transformers.js](https://huggingface.co/docs/transformers.js) — running the same model in a browser.
 

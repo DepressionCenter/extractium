@@ -47,8 +47,10 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — turning Pages on, what is published, and what publishing means.
 * [Compliance and Posture](compliance.md) — the controls that exist, the evidence for each, and the known gaps.
 * [Troubleshooting](troubleshooting.md) — failures seen so far: symptom, cause, fix.
+* [Using a Published Compendium](using-a-compendium.md) — how an AI agent uses the published files, searches the index, cites an answer, and what it must never do with retrieved text.
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
 * [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session, phase or not; your request goes on the last line.
+* [Skill Authoring Examples](skill-examples.md) — starter recipes for writing a small agent skill under `skills/`; documentation, not installed skills.
 
 Pages are added as the tool grows. The specification lists what is planned but not yet built.
 
@@ -63,6 +65,7 @@ Pick the page that matches your task. If you cannot find an answer here, the pro
 * [Extractium™ README](../README.md) — project overview, quick start, and contact details.
 * [examples/config.example.yaml](../examples/config.example.yaml) — commented example configuration file.
 * [EFDC Knowledge Base](https://michmed.org/efdc-kb) — the wider documentation site for this group's projects.
+* [Skills index](../SKILLS.md) — the agent skills this repository carries, reached from `AGENTS.md`.
 
 
 [← Back to README](../README.md)

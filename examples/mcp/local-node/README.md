@@ -111,7 +111,7 @@ You can now run a local search server over any published compendium from a JavaS
 * [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md) — the client configuration, step by step.
 * [Local Python MCP Server](../local-python/README.md) — the same tool in Python.
 * [How to Search a Compendium](../../../docs/how-to/search-a-compendium.md) — the client library this server is built on.
-* [SKILLS.md](../../../SKILLS.md) — how an AI agent should use what it gets back.
+* [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.
 * [transformers.js](https://huggingface.co/docs/transformers.js) — the package that runs the embedding model here.
 

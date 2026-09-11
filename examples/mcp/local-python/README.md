@@ -89,7 +89,7 @@ You can now run a local search server over any published compendium. The [Node v
 * [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md) — the client configuration, step by step.
 * [Local Node MCP Server](../local-node/README.md) — the same tool in JavaScript.
 * [How to Search a Compendium](../../../docs/how-to/search-a-compendium.md) — the client library this server is built on.
-* [SKILLS.md](../../../SKILLS.md) — how an AI agent should use what it gets back.
+* [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.
 
 

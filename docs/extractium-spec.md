@@ -287,7 +287,7 @@ Tier 2 detail, from the hosts' published limits: a Cloudflare Worker on the free
 
 ### 9.3 MCP servers are examples, not core
 
-They live under `examples/mcp/`: `local-node/` and `local-python/` (Tier 1), `valtown/` and `cloudflare/` (Tier 2). Each is a small program over a client library and the published compendium. Hosted assistant prompts (Tier 3) live under `examples/wrappers/` as plain text. `SKILLS.md` at the repository root tells AI agents how to use every tier.
+They live under `examples/mcp/`: `local-node/` and `local-python/` (Tier 1), `valtown/` and `cloudflare/` (Tier 2). Each is a small program over a client library and the published compendium. Hosted assistant prompts (Tier 3) live under `examples/wrappers/` as plain text. `docs/using-a-compendium.md` tells AI agents how to use every tier.
 
 The two Tier 1 servers are built. Each is one file that speaks JSON-RPC over standard input and output, exposes one tool named `search_kb`, and answers both eras of the protocol: the stateless revision, which declares its version in every request's `_meta`, and the older `initialize` handshake that most clients still open with. The index address comes from the environment and must be HTTPS, except on the loopback address; the downloaded file is cached under a digest of its address and revalidated with a conditional request. Neither server writes anything anywhere, and neither embeds a model into the repository: the Python one uses the package Extractium already installs, and the Node one loads transformers.js when a search first runs. The Node example runs from a checkout rather than through `npx`, because the JavaScript client it imports is not published to a package registry.
 
@@ -403,7 +403,8 @@ extractium/
 ├── .github/workflows/build-compendium.yml   # template workflow for adopters
 ├── run.bat / run.sh             # double-click entry points
 ├── requirements-lock.txt        # pinned dependencies
-├── SKILLS.md                    # guidance for AI agents consuming a compendium
+├── SKILLS.md                    # index of the agent skills under skills/
+├── skills/                      # agent skills: project preferences and reusable guidance
 ├── AGENTS.md, README.md, LICENSE, NOTICE, pyproject.toml
 ```
 
