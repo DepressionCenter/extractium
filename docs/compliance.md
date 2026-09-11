@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/compliance.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: The security, privacy, and accessibility posture of Extractium as
 it stands today: the controls that exist and where they live in the code,
 the evidence for each, the known gaps, and what still needs institutional
@@ -87,7 +87,6 @@ These are real and current. None is hidden behind a setting.
 - **The check does not read images, PDFs, or spreadsheets.** Neither does the build, so nothing from them reaches an output; but a folder holding them is not covered by the report.
 - **Text a repository extracted from a deposited document is not scanned by default.** The default `phi_lint: local` setting covers content that was never published, and a deposit in a public repository was published deliberately. But extracted text from a research poster is exactly where a stray identifier is most likely to sit, so set `phi_lint: 'all'` on any build with a `dspace` source. The setting exists; choosing it is the operator's.
 - **Code records are not scanned by default either, for the same reason.** A repository's source files are published material, so `phi_lint: local` leaves them out. Set `phi_lint: 'all'` on any build that reads code. Run that way against this project's own repository on 2026-09-10, the check reported 90 pattern matches in 34 of 1,945 documents — author names in file headers, synthetic examples, and hash digits in a lock file that look like identifiers. That is the check asking questions, which is what it is for.
-- **The Lua Server Pages delimiters have not been confirmed against a working implementation.** They follow CGILua's published syntax, which the design asked to have verified against an in-house parser before shipping; no such parser was available to read. A page using a delimiter outside that set has its text indexed and its Lua missed.
 - **No security scanning runs in continuous integration.** There is no dependency-audit or code-scanning workflow in this repository yet.
 - **The scheduled workflow has not been observed running.** It is written and its shape is tested, but as of 2026-09-08 no run has completed on GitHub. Treat the first run as a check to perform, not a result to rely on.
 - **Actions are pinned to a major version, not to a commit.** `actions/checkout@v4` follows that major line. Pinning to a commit digest is stricter and is worth doing if your organization requires it.

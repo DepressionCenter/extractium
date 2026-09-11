@@ -11,7 +11,7 @@ end
 
 for _, visit in ipairs(visits_this_week(calendar)) do
 ?>
-<div class="visit"><%= visit.label %></div>
+<div class="visit"><%= visit.label %> at <?lsp= visit.time ?></div>
 <?lua end ?>
 </body>
 </html>

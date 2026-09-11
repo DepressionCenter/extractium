@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -267,7 +267,7 @@ sources:
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 
-**What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. `.env.example` is kept, because it documents what a project needs.
+**What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. That includes `bin/` and `dist/`, which hold what a build produced, and `data/`, which holds the files a project reads and writes rather than anything written to be read — skipping `data/` also keeps a folder of participant records out of an index by default. `.env.example` is kept, because it documents what a project needs.
 
 **Reading the code.** With `include_code` on, each source file gets a record naming what it defines, what it brings in, and which files reach into it, and each definition in it gets a record of its own: the signature, the documentation somebody wrote for it, what it calls, and a link to its exact lines on GitHub. **No source body is ever indexed.** To read the implementation you follow the link.
 

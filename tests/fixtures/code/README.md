@@ -3,7 +3,7 @@ This file is part of Extractium™
 tests/fixtures/code/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: What the code fixtures in this folder are, why they carry no
 license header of their own, and which test reads each one.
 Notes: See README file for documentation and full license information.

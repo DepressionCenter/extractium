@@ -12,7 +12,7 @@ extractium/sources/github_files.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -82,11 +82,17 @@ WORKFLOW_EXTENSIONS = (".yml", ".yaml")
 # Directories holding generated output, third-party code, or a virtual
 # environment. Matched as a whole path segment, so a project directory
 # named "distribution" is not caught by "dist".
+#
+# "bin" holds what a build produced, and "data" holds the files a project
+# reads and writes rather than anything written to be read. Skipping
+# "data" also keeps a folder of participant records out of an index by
+# default, which matters more here than the occasional README lost with
+# it.
 SKIP_DIRECTORIES = frozenset({
     ".git", ".hg", ".svn", "node_modules", "vendor", "dist", "build", "target",
     "coverage", "htmlcov", ".venv", "venv", "env", "__pycache__", ".cache",
     ".tox", ".mypy_cache", ".pytest_cache", ".idea", ".vscode", ".gradle",
-    "bower_components", "packrat", "site-packages", "obj",
+    "bower_components", "packrat", "site-packages", "obj", "bin", "data",
 })
 
 # renv keeps a project's installed R packages here: thousands of files of

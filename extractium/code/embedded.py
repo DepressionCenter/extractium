@@ -11,7 +11,7 @@ extractium/code/embedded.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -271,11 +271,16 @@ def read_rmarkdown(text):
 ### Lua Server Pages ###
 
 # A Lua Server Page is an HTML page with Lua between delimiters, the way
-# PHP works. Both delimiter families that CGILua documents are read:
-# <?lua ... ?> with its short forms, and the <% ... %> pair. An equals
-# sign after the opening delimiter means "print this expression", which
-# is still Lua and is read as Lua.
-LUA_BLOCK = re.compile(r"<\?(?:lua)?=?(.*?)\?>|<%=?(.*?)%>", re.S)
+# PHP works, and two implementations spell the opening delimiter
+# differently. The Kepler project's Lua Pages, which CGILua serves, uses
+# <?lua ... ?> with the short forms <? ... ?> and <?= ... ?>, and also
+# accepts the <% ... %> pair. RealTime Logic's Barracuda Application
+# Server writes <?lsp ... ?>. All of them are read. An equals sign after
+# the opening delimiter means "print this expression", which is still Lua.
+#
+# <?xml ... ?> is the one processing instruction that is not Lua, and an
+# LSP page serving XHTML opens with it.
+LUA_BLOCK = re.compile(r"<\?(?!xml\b)(?:lua|lsp)?=?(.*?)\?>|<%=?(.*?)%>", re.S)
 
 
 def read_lua_server_pages(text):

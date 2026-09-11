@@ -12,7 +12,7 @@ tests/test_source_github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -375,6 +375,23 @@ def test_source_files_third_party_folders_and_secrets_are_never_downloaded(
 
     assert not any("node_modules" in url for url in urls)
     assert not any(url.endswith("/.env") for url in urls)
+
+
+def test_folders_holding_build_output_or_data_files_are_never_read():
+    """
+    A folder of build output is a copy of source that is already in the
+    repository, and a folder of data files is what a project reads and
+    writes rather than anything written to be read. Skipping the second
+    also keeps a folder of participant records out of an index by
+    default.
+    """
+    for path in ("bin/tool.exe", "bin/report.md", "data/participants.csv",
+                 "data/README.md", "dist/app.js", "build/index.html"):
+        assert github_files.classify(path) is None, path
+
+    # A file whose own name begins that way is not a folder of that name.
+    assert github_files.classify("binder/setup.md") == "documentation"
+    assert github_files.classify("database-notes.md") == "documentation"
 
 
 def test_an_env_example_is_kept_because_it_documents_what_a_project_needs(

@@ -15,7 +15,7 @@ tests/test_code_analysis.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Notes: See README file for documentation and full license information.
 """
 
@@ -317,6 +317,41 @@ def test_a_lua_server_page_yields_both_its_page_text_and_its_lua(parsers_install
 
     assert "Lists the visits booked this week" in contents.prose
     assert named(facts, "visits_this_week").kind == "function"
+
+
+def test_a_lua_server_page_reads_both_implementations_delimiters():
+    """
+    Two implementations spell the opening delimiter differently: the
+    Kepler project's Lua Pages writes `<?lua`, with `<?` and `<?=` as
+    short forms and `<% %>` as an alternative, and RealTime Logic's
+    Barracuda Application Server writes `<?lsp`. All of them are Lua.
+    """
+    page = (
+        "<html><body>\n"
+        "<?lua local a = 1 ?>\n"
+        "<?lsp local b = 2 ?>\n"
+        "<p><?= show(a) ?> and <?lsp= show(b) ?> and <%= show(0) %></p>\n"
+        "<% local c = 3 %>\n"
+        "</body></html>\n"
+    )
+
+    contents = embedded.read("pages/calendar.lsp", page)
+
+    assert [block.text.strip() for block in contents.blocks] == [
+        "local a = 1", "local b = 2", "show(a)", "show(b)", "show(0)", "local c = 3",
+    ]
+
+
+def test_an_xml_declaration_in_a_lua_server_page_is_not_read_as_lua():
+    """
+    A page serving XHTML opens with `<?xml ... ?>`, which looks like a
+    short-form Lua block and is not one.
+    """
+    page = '<?xml version="1.0" encoding="UTF-8"?>\n<html><?lsp show() ?></html>\n'
+
+    contents = embedded.read("pages/calendar.lsp", page)
+
+    assert [block.text.strip() for block in contents.blocks] == ["show()"]
 
 
 def test_an_html_page_yields_its_text_and_its_inline_script_but_not_its_json(parsers_installed):

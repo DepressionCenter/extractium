@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-10
+Last Modified: 2026-09-11
 Summary: The design for reading GitHub repositories: the three-tier
 ingestion ladder in Phase 7, and the lightweight static code analysis in
 Phase 10. Covers URL detection, authentication, repository selection, file
@@ -241,12 +241,14 @@ Dependency lock files are excluded by default. They are long, they are mostly pa
 
 ### What gets skipped
 
-Whole directories that hold generated or third-party code:
+Whole directories that hold generated code, third-party code, or data files:
 
 ```text
-.git/  node_modules/  vendor/  dist/  build/  target/
-coverage/  .venv/  venv/  __pycache__/  .cache/  renv/library/
+.git/  node_modules/  vendor/  dist/  build/  bin/  target/  obj/
+coverage/  .venv/  venv/  __pycache__/  .cache/  renv/library/  data/
 ```
+
+`bin/` and `data/` are worth naming. A `bin/` folder holds what a build produced, which is a copy of source that is already in the repository. A `data/` folder holds the files a project reads and writes rather than anything written to be read, and skipping it also keeps a folder of participant records out of an index by default. Both are matched as whole path segments, so a folder called `binder/` or a file called `database-notes.md` is unaffected. The cost is the occasional README inside one of them, which is a good trade in this field.
 
 And these files, wherever they are: binaries, images, audio, video, archives, compiled objects, source maps, minified JavaScript and CSS, Git LFS pointer content, private keys and certificates, and `.env` files.
 
@@ -470,7 +472,18 @@ Several formats in this field are containers, not languages. Handle them by pull
 | HTML | JavaScript | Parse the document, index the text, parse `<script>` contents with the JavaScript grammar |
 | Lua Server Pages (`.lsp`) | Lua | Parse the surrounding HTML, index the text, parse each embedded Lua block with the Lua grammar |
 
-Lua Server Pages works the way PHP does: an HTML page with blocks of Lua inside it. Nothing runs to read one. The reader finds the delimiters, hands each block to the Lua grammar, and hands the rest to the HTML path, so a `.lsp` file yields both its page text and its Lua symbols. The exact delimiter set is confirmed against a working implementation before this ships rather than assumed from memory.
+Lua Server Pages works the way PHP does: an HTML page with blocks of Lua inside it. Nothing runs to read one. The reader finds the delimiters, hands each block to the Lua grammar, and hands the rest to the HTML path, so a `.lsp` file yields both its page text and its Lua symbols.
+
+Two implementations spell the opening delimiter differently, and both are read:
+
+| Written as | Where it comes from |
+|---|---|
+| `<?lua … ?>` | The Kepler project's Lua Pages, which CGILua serves |
+| `<? … ?>` and `<?= … ?>` | The same, short forms |
+| `<% … %>` and `<%= … %>` | The same, the alternative pair |
+| `<?lsp … ?>` and `<?lsp= … ?>` | RealTime Logic's Barracuda Application Server |
+
+An equals sign after the opening delimiter means "print this expression", which is still Lua and is read as Lua. `<?xml … ?>` is the one processing instruction that is not: an LSP page serving XHTML opens with it, and it is left alone.
 
 Notebooks matter more than their place in this table suggests. In this field a great deal of real analysis lives in `.ipynb` and `.Rmd` files and nowhere else. They also carry the greatest privacy risk in the whole phase: **a notebook's stored outputs can contain printed rows of real participant data.** That is why outputs are never read, and why the existing protected-health-information lint has to be pointed at whatever this phase produces before any of it is published.
 
@@ -642,7 +655,7 @@ Everything above is built. Six things are worth naming, because they differ from
 3. **A language bundle was rejected for fetching grammars at run time.** See the dependency gate above.
 4. **One more place collapsed a file's definitions into one record**, and it lost 1,809 of 1,944 records on a real repository before it was found. See the trap in the identifier, above.
 5. **A repository's code multiplies the size of an index.** Reading this project's own repository produced 1,944 records and a 10.2 MB container, against 135 documentation records on its own. `include_code: false` is the lever, and the size is worth knowing before pointing a build at a large account.
-6. **The Lua Server Pages delimiters follow CGILua's published syntax** — `<?lua … ?>`, `<? … ?>`, `<?= … ?>`, and the `<% … %>` pair. The plan said to confirm the set against a working implementation, and that confirmation has not happened: no in-house parser was available to read. If the in-house format uses a delimiter outside this set, the Lua inside it is missed, and the page text is still indexed.
+6. **The Lua Server Pages delimiters cover two implementations, not one.** The plan said to confirm the set against a working implementation rather than assume it, and that was worth doing: alongside the Kepler project's Lua Pages forms, RealTime Logic's Barracuda Application Server writes `<?lsp … ?>`, which the first draft would have missed entirely. Both are read, and `<?xml … ?>` is excluded so an XHTML page's opening line is not parsed as Lua. See the container table above.
 
 `content_type` gained `code_file` and `code_symbol`. Both search clients were read rather than assumed about: neither branches on `content_type`, so neither needs a code-specific mode.
 
