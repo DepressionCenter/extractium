@@ -37,6 +37,7 @@ from extractium.adapters.base import (
     excerpt,
     link,
     output_compendium,
+    page_address,
     page_title,
     prepare_out_dir,
 )
@@ -88,10 +89,12 @@ FULL_ORIENTATION = (
 
 def pages_in_order(parents):
     """
-    One entry per source URL, in the order that URL first appears.
+    One entry per page, in the order that page first appears.
 
     Grain: one entry per page, not per section. A page contributes several
-    parents and the index file names it once.
+    parents and the index file names it once. A video counts as one page
+    however many stretches of its transcript were indexed, so a long talk
+    is one line here and not one line every couple of minutes.
 
     Args:
         parents (Iterable[extractium.core.models.Parent]): the parents this
@@ -103,10 +106,11 @@ def pages_in_order(parents):
     """
     pages = {}
     for parent in parents:
-        if parent.u in pages:
+        address = page_address(parent)
+        if address in pages:
             continue
-        pages[parent.u] = {
-            "url": parent.u,
+        pages[address] = {
+            "url": address,
             "title": page_title(parent.t),
             "source_label": parent.source_label,
             "text": parent.x,

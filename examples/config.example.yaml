@@ -136,11 +136,20 @@ sources:
   #  include_full_text: true         # false indexes each deposit's description alone
   #  max_file_bytes: 2000000         # larger files are skipped, and each one is named
 
-  # Captions from a YouTube channel, playlists, or single videos. Listing a
-  # channel or playlist needs YOUTUBE_API_KEY in the environment.
+  # Captions from a YouTube channel, playlists, or single videos. Each
+  # stretch of a transcript is cited at the moment it was said. Listing a
+  # channel or playlist needs YOUTUBE_API_KEY in the environment; naming
+  # videos under video_ids needs no key. Fetching captions needs the
+  # optional install: pip install "extractium[youtube]".
+  #
+  # YouTube refuses caption requests from cloud-provider addresses, so a
+  # scheduled build cannot fetch a transcript. Build once on your own
+  # machine and commit the folder cache_dir names; later builds read the
+  # stored transcripts. Set cache_dir to a visible folder for that, since
+  # the default .kb_cache is usually ignored.
   #- type: youtube
   #  label: Example Video Library
-  #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
+  #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # the id, not an @handle
   #  playlist_ids: []
   #  video_ids: []
   #  languages: [en]

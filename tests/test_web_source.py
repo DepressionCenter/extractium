@@ -804,7 +804,9 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
     """
     with open(PYPROJECT_PATH, "rb") as f:
         entry_points = tomllib.load(f)["project"]["entry-points"]
-    assert set(entry_points["extractium.sources"]) == {"web", "local", "github_api", "dspace"}
+    assert set(entry_points["extractium.sources"]) == {
+        "web", "local", "github_api", "dspace", "youtube",
+    }
     assert set(entry_points["extractium.site_handlers"]) == {"generic", "tdx", "github"}
 
     reg = registry.Registry()
@@ -817,5 +819,5 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
             plugin = getattr(importlib.import_module(module_name), attribute)
             assert plugin.name == name
             register(plugin, registry.Tier.BUILTIN)
-    assert reg.source_names() == ("dspace", "github_api", "local", "web")
+    assert reg.source_names() == ("dspace", "github_api", "local", "web", "youtube")
     assert reg.site_handler_names() == ("generic", "github", "tdx")

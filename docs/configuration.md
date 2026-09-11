@@ -42,7 +42,7 @@ settings = load_config("config.yaml")
 print(settings.sources[0].options["seed_url"], settings.max_pages)
 ```
 
-The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py), and reading a DSpace repository is [extractium/sources/dspace.py](../extractium/sources/dspace.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
+The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py), reading a DSpace repository is [extractium/sources/dspace.py](../extractium/sources/dspace.py), and reading a channel's captions is [extractium/sources/youtube.py](../extractium/sources/youtube.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
 
 
 ## Where the file goes
@@ -84,7 +84,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 |---|---|---|---|
 | `name` | text | title of the first page crawled | Display name of the knowledge base, recorded in every output. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
-| `cache_dir` | text | `.kb_cache` | Folder for fetched pages between builds. |
+| `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
 | `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
@@ -297,16 +297,66 @@ A refused token drops to reading GitHub anonymously and says so. A misspelled ac
 
 ### `youtube`: read captions
 
+Indexes what is said in a video, not the video itself. Each stretch of a transcript becomes a section addressed at the moment it begins, so an answer can cite a link that opens the video at the words it quoted.
+
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `channel_id` | text | none | A channel to list. |
+| `channel_id` | text | none | A channel to list. Must be the id YouTube assigns: `UC` and 22 more characters. A channel's `@handle` is not its id. |
 | `playlist_ids` | list of text | empty | Playlists to list. |
-| `video_ids` | list of text | empty | Single videos. |
-| `languages` | list of text | `en` | Caption languages to ask for, in order of preference. |
+| `video_ids` | list of text | empty | Single videos, named by the `v=` part of a watch link. |
+| `languages` | list of text | `en` | Caption languages to ask for, in order of preference. The first track that exists is used. |
 
-At least one of `channel_id`, `playlist_ids`, or `video_ids` is required. Listing a channel or playlist needs `YOUTUBE_API_KEY` in the environment.
+At least one of `channel_id`, `playlist_ids`, or `video_ids` is required.
 
-**Planned.** The loader accepts this type, but the source is not built yet, so a build that uses it stops with `no source named 'youtube'`. It arrives in phase 13.
+```yaml
+sources:
+  - type: youtube
+    label: Example Video Library
+    video_ids: ["EXAMPLEVID1", "EXAMPLEVID2"]
+    languages: ["en"]
+```
+
+#### The API key, and when you need one
+
+Naming videos under `video_ids` needs no key at all. Listing a channel or a playlist does, because only the YouTube Data API can say what a channel holds.
+
+The key is read from the `YOUTUBE_API_KEY` environment variable, never from this file. A key is a credential, and this file is committed to a repository beside the output it produced.
+
+```bash
+export YOUTUBE_API_KEY=EXAMPLE_API_KEY      # macOS, Linux
+$env:YOUTUBE_API_KEY = 'EXAMPLE_API_KEY'    # PowerShell
+```
+
+#### Why a YouTube build has to run on your own machine
+
+YouTube refuses caption requests that come from cloud-provider addresses, and GitHub Actions runs on a cloud provider. A scheduled build therefore cannot read a transcript, however it is configured.
+
+Extractium works around this by storing everything it reads under `cache_dir`:
+
+| Path | What it holds |
+|---|---|
+| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, caption language, and timed caption lines. |
+| `<cache_dir>/youtube/listings/<playlist id>.json` | The videos a playlist held when it was last listed. |
+
+Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your knowledge base is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
+
+A stored transcript has no expiry date. A build uses it because it exists, not because it was checked against YouTube, since checking is exactly what a cloud runner cannot do. To pick up corrected captions, delete that video's file and build again on a machine YouTube answers.
+
+The [data repository template](../examples/data-repo/kb-cache/README.md) shows the folder with its files in place.
+
+#### What you need installed
+
+Fetching captions needs one extra package:
+
+```bash
+pip install "extractium[youtube]"
+```
+
+A build that reads only stored transcripts does not need it, which is what makes a scheduled run work on a plain install.
+
+#### What a video without captions does
+
+Nothing stops. The video is skipped, the build says how many were skipped, and the rest are indexed. A video whose owner turned captions off has nothing to read, and that is a normal thing to meet rather than a broken build.
 
 ### `dspace`: read a repository's deposits
 

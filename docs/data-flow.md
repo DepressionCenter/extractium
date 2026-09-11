@@ -63,6 +63,10 @@ A source visits a URL. The web source asks its site handlers which one reads tha
 
 Every request carries the User-Agent from your settings, and every site's `robots.txt` is checked first. A site whose `robots.txt` cannot be read at all is skipped entirely, not crawled anyway. A page that refuses the crawler outright is reported and skipped, unless you have set `respect_robots_txt: false`, which also allows one retry as a browser for such a page. See the [configuration reference](configuration.md).
 
+Not every source visits a page. A repository's deposits and a channel's videos are read through their own interfaces instead, and arrive at stage 2 the same way.
+
+A video is read from its captions and never from its audio. The caption track comes back as one line per phrase, which is far too small to answer a question with, so consecutive lines are joined into stretches of roughly a thousand characters. Each stretch keeps the start time of its first line, and becomes one document addressed at that moment: `https://www.youtube.com/watch?v=EXAMPLEVID1&t=134s`. That is what lets an answer cite a link which opens the video at the words it quoted. The outputs that list pages group those stretches back into one video, so a long talk is one entry and not one entry every couple of minutes.
+
 ### 2. A document
 
 | Field | Meaning |
@@ -168,7 +172,9 @@ What the parsers found in a code file is stored beside the file body, under the 
 
 Each file read from GitHub is stored under its blob name, which is Git's own name for those exact bytes. The same file is therefore downloaded once however many branches or paths point at it, and however it arrived: a repository is normally read as one archive in memory, and the files taken out of it are stored the same way as files requested one at a time. A rebuild of a repository nobody has changed downloads nothing. Nothing in that folder holds an access token: only the file body is written, never a request header.
 
-Note that the cache holds page bodies as fetched. If you crawl a site that requires a login, the cache holds whatever that login gave you. Extractium sends no credentials of its own, apart from a `GITHUB_TOKEN` you set in the environment, which is sent to GitHub and to nowhere else.
+Video captions are the one part of the cache that is not a convenience. They are stored under `<cache_dir>/youtube/`, one file per video holding its title and timed caption lines, and one file per playlist holding the videos it held when it was last listed. YouTube refuses caption requests from cloud-provider addresses, so a scheduled build cannot fetch a transcript and can only reuse what a person fetched on their own machine. That folder is therefore committed to the data repository, and nothing in it is revalidated: a stored transcript is used because it exists, since checking it is the thing a runner cannot do. Delete a video's file to pick up corrected captions.
+
+Note that the cache holds page bodies as fetched. If you crawl a site that requires a login, the cache holds whatever that login gave you. Extractium sends no credentials of its own, apart from a `GITHUB_TOKEN` and a `YOUTUBE_API_KEY` you set in the environment, each sent to the one service it belongs to and to nowhere else. Neither reaches a cache file.
 
 
 ## Conclusion

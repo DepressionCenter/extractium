@@ -379,6 +379,63 @@ That line is not an error. It is telling you the index has that repository's doc
 **Fix.** Install from this folder, so npm reads both `package.json` and `package-lock.json`. The `overrides` block in `package.json` lifts those two packages to patched versions, and `npm audit` then reports nothing. If you see advisories anyway, check that you ran `npm install` inside `examples/mcp/local-node` rather than copying `server.js` elsewhere and installing by hand.
 
 
+## A YouTube source
+
+### `no source named 'youtube'`
+
+**Cause.** An older Extractium. The source arrived in phase 13; before that the settings file accepted the type and no code answered to it.
+
+**Fix.** Update Extractium, or pin `EXTRACTIUM_REF` to a version that has it.
+
+### The build stops saying YouTube refused the request
+
+**Cause.** You are building somewhere YouTube blocks, which means almost any cloud runner, including GitHub Actions. YouTube refuses caption requests from cloud-provider addresses. This is not a setting you can change and not a key you can buy.
+
+**Fix.** Build on your own machine, then commit the cache folder so the scheduled run reads the transcripts instead of asking for them. [The cache README](../examples/data-repo/kb-cache/README.md) says what to commit. The message appears only when nothing is stored for that video yet.
+
+### `fetching captions needs youtube-transcript-api`
+
+**Cause.** A transcript has to be fetched and the caption package is not installed.
+
+**Fix.** `pip install "extractium[youtube]"`. You need this on the machine that fetches transcripts, not on one that only reads stored ones.
+
+### `listing a channel or playlist needs a YouTube Data API key`
+
+**Cause.** The source names a `channel_id` or `playlist_ids`, and `YOUTUBE_API_KEY` is not set. Only the Data API can say what a channel holds.
+
+**Fix.** Set the variable, or name the videos individually under `video_ids`, which needs no key. If the listing was read before and stored, the build uses the stored copy and says so instead of stopping.
+
+### `a channel id must start with 'UC'`
+
+**Cause.** A channel's `@handle` or custom address was used as its id. They are different things, and a handle cannot be turned into an id without asking YouTube.
+
+**Fix.** Open any video on the channel and copy the channel id from the page, then use that.
+
+### The Data API answered 403
+
+**Cause.** Usually one of three things: the key is expired, the YouTube Data API v3 is not enabled for the key's project, or the project is over its daily quota.
+
+**Fix.** Check the key in the Google Cloud console. Quota resets daily; a build that only needs stored transcripts is unaffected by it.
+
+### A video is in the channel but not in the knowledge base
+
+**Cause.** Most often it has no captions, or none in the languages asked for. The build counts these and says how many were skipped.
+
+**Fix.** Add the language to `languages` if the captions exist in another one. A video with captions turned off cannot be indexed from captions; speech-to-text is named as future work in [the specification](extractium-spec.md).
+
+### A corrected transcript is not picked up
+
+**Cause.** A stored transcript has no expiry date, by design. A build uses it because it exists, since checking it against YouTube is what a cloud runner cannot do.
+
+**Fix.** Delete that video's file from `<cache_dir>/youtube/videos/` and build again on a machine YouTube answers. To pick up videos newly added to a playlist, delete the playlist's file from `<cache_dir>/youtube/listings/`.
+
+### The cache folder is not in the repository
+
+**Cause.** `cache_dir` is at its default, `.kb_cache`, and that folder is ignored by most projects, this one included.
+
+**Fix.** Set `cache_dir` to a visible folder such as `kb-cache` and commit it. A YouTube build is the one case where the cache is content rather than a convenience.
+
+
 ## Conclusion
 
 Most failures come down to three things: a pattern that is broader or narrower than you meant, a file that did not arrive intact, or a mismatch between the model that built an index and the model searching it. If you hit something that is not here and work out the cause, add it to this page in the same change.
