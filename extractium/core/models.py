@@ -485,6 +485,13 @@ class Source(Protocol):
     settings. Those belong to the whole build rather than to one entry in
     the sources list, so they do not travel in the entry's options. A
     source that needs neither omits the method.
+
+    A source may also define `read_found_links(session, cache, progress,
+    links)`, which the caller invokes once every source has run, with the
+    addresses the site handlers collected during the crawls and held back
+    from them. It yields documents like `fetch`, and it applies the
+    source's own rule for what a link found on somebody's page may add to
+    the index.
     """
 
     name: ClassVar[str]

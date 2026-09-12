@@ -133,7 +133,7 @@ def run_sources(config, registry, session, cache, progress):
         )),
     )
     documents = []
-    sources = []
+    ran = []
     for entry in config.sources:
         progress(f"Source: {entry.type}")
         source = registry.get_source(entry.type)(entry.options)
@@ -142,7 +142,7 @@ def run_sources(config, registry, session, cache, progress):
         # here, because neither belongs to its own configuration entry.
         if hasattr(source, "configure"):
             source.configure(registry, settings)
-        sources.append(source)
+        ran.append((entry, source))
         # The configuration owns the display name, not the source: only the
         # person who wrote the file knows which web source is the main site
         # and which is a program microsite. Applying it here means no
@@ -151,7 +151,41 @@ def run_sources(config, registry, session, cache, progress):
             dataclasses.replace(document, source_label=entry.label)
             for document in source.fetch(session, cache, progress)
         )
-    return documents, collect_notes(sources)
+    # Links a crawl found and held back, such as videos linked from a
+    # page, are offered to every source that reads such links, once every
+    # source has run, so the order of the sources list does not decide
+    # whether a link is seen. Each source applies its own rule to them.
+    links = found_links(source for _, source in ran)
+    if links:
+        for entry, source in ran:
+            if hasattr(source, "read_found_links"):
+                progress(f"Source: {entry.type} (links found while crawling)")
+                documents.extend(
+                    dataclasses.replace(document, source_label=entry.label)
+                    for document in source.read_found_links(session, cache, progress, links)
+                )
+    return documents, collect_notes(source for _, source in ran)
+
+
+def found_links(sources):
+    """
+    The addresses the site handlers held back during the crawls, in the
+    order found and without repeats.
+
+    Args:
+        sources (Iterable): the source instances that have already run.
+
+    Returns:
+        tuple[str, ...]: every link a handler collected through its
+        optional `found_links` method.
+    """
+    links = {}
+    for source in sources:
+        for handler in getattr(source, "handlers", ()):
+            if hasattr(handler, "found_links"):
+                for link in handler.found_links():
+                    links.setdefault(link, None)
+    return tuple(links)
 
 
 def collect_notes(sources):
@@ -165,6 +199,7 @@ def collect_notes(sources):
         list[str]: coverage lines from each source that offers them, then
         one line per source naming the accounts its handlers held back.
     """
+    sources = list(sources)
     notes = []
     for source in sources:
         if hasattr(source, "summary_lines"):
