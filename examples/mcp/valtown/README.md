@@ -4,8 +4,8 @@ examples/mcp/valtown/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
 Last Modified: 2026-09-12
-Summary: README for the Val Town example: what it does, how to stage and
-push it, the settings it reads, what search it runs with and without an
+Summary: README for the Val Town example: what it does, the three ways
+to push it, the settings it reads, what search it runs with and without an
 embedding service, and its limits.
 Notes: See README file for documentation and full license information.
 
@@ -32,44 +32,35 @@ The val fetches the published container once, keeps a copy in its blob store so 
 
 ## What you need
 
-1. A Val Town account and the `vt` command-line tool, which needs [Deno](https://deno.com/):
-
-   ```bash
-   deno install -grAf jsr:@valtown/vt
-   vt
-   ```
-
-   The second command asks for your Val Town API key the first time.
-2. Node 18 or newer on your machine, to assemble the val folder.
+1. A Val Town account, and an API token from [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. Write on vals is off by default when a token is made; turn it on for this one.
+2. Node 18 or newer on your machine.
 3. A published index address, starting with `https://`.
 
 
 ## Push it
 
-A val holds only its own files, so the JavaScript client and the shared protocol modules this example imports from elsewhere in the repository have to be copied beside it. `stage.js` does that and rewrites the import lines:
+A val holds only its own files, so the JavaScript client and the shared protocol modules this example imports from elsewhere in the repository have to be copied beside it. `stage.js` does that and rewrites the import lines; `push.js` runs it and then sends the six files through Val Town's REST API, with nothing to install:
 
 ```bash
 cd examples/mcp/valtown
-node stage.js
+VALTOWN_API_TOKEN=EXAMPLE_TOKEN node push.js
 ```
 
-It writes six files under `val/`, which is ignored by git. Then create the val and push the folder:
+On Windows, set the variable first (`$env:VALTOWN_API_TOKEN = 'EXAMPLE_TOKEN'` in PowerShell), then run `node push.js`.
 
-```bash
-vt create extractium-kb-mcp
-cp val/* extractium-kb-mcp/
-cd extractium-kb-mcp
-vt push
-```
+The first run creates a val named `extractium-kb-mcp` under your account, with its source unlisted; give another name as the first argument, or `--privacy public` to list it. Later runs find the val by name and update the files. `main.http.ts` is sent as an `http` file, which is what gives the val an endpoint; the script prints that endpoint, and the MCP endpoint is `/mcp` under it. Run it again whenever a source file changes.
 
-`main.http.ts` has `http` in its name, which is how `vt` knows it is the HTTP entry point. Run `node stage.js` and `vt push` again whenever a source file changes.
+Two other ways to get the same six files into a val, both from Val Town's own documentation:
 
-The Val Town steps above follow the tool's own documentation; this example was exercised in Node against the golden compendium, not through a `vt` push from this machine.
+- `node stage.js` alone writes the files under `val/`, ignored by git, for you to paste into the web editor or push with the [`vt` command-line tool](https://docs.val.town/guides/prompting/cli/), which needs Deno.
+- [Syncing vals with GitHub](https://docs.val.town/guides/github-sync/) keeps a val mirrored from a repository on every push, through a GitHub Actions workflow or a sync val. Point it at a repository holding the staged folder.
+
+`push.js` is tested against a fake of the API, call by call; it was not run against the live platform from this machine.
 
 
 ## Settings
 
-Set these in the val's environment variables on Val Town. No file holds an address or a token.
+Set these in the val's environment variables on Val Town, in the web editor or through the API's environment-variable endpoints. No file holds an address or a token.
 
 | Variable | Required | What it does |
 |---|---|---|
@@ -103,7 +94,7 @@ With one, the val runs exactly the search the [JavaScript client](../../../docs/
 node --test examples/mcp/valtown
 ```
 
-They run the search in Node against the small compendium committed in `tests/golden/`, with a blob store and a fetch in memory, and check that `stage.js` produces a folder whose imports all resolve. They need no network, no install, and no Val Town account.
+They run the search in Node against the small compendium committed in `tests/golden/`, with a blob store and a fetch in memory; check that `stage.js` produces a folder whose imports all resolve; and drive `push.js` against a fake of the API to check the calls it makes, the file types it sends, and that the token reaches one header and nothing else. They need no network, no install, and no Val Town account.
 
 
 ## Conclusion
@@ -118,7 +109,9 @@ You now have a search endpoint any MCP-capable assistant can reach, hosted for f
 * [Cloudflare MCP Server](../cloudflare/README.md) — the other hosted example, which searches from a database instead of a file in memory.
 * [Local Node MCP Server](../local-node/README.md) — the same tool on your own machine.
 * [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
-* [Val Town documentation](https://docs.val.town/) — the platform, its `vt` tool, and its blob store.
+* [Val Town documentation](https://docs.val.town/) — the platform, its blob store, and its environment variables.
+* [Val Town REST API](https://docs.val.town/reference/api/) — the calls `push.js` makes, and the token scopes.
+* [Syncing vals with GitHub](https://docs.val.town/guides/github-sync/) — keeping a val mirrored from a repository.
 * [Val Town limits](https://www.val.town/limits) — the plan limits the numbers above come from.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.
 

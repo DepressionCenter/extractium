@@ -35,7 +35,7 @@ Two hosted examples ship with Extractium. Both expose one tool, `search_kb`, wit
 
 | Pick | When | How it searches |
 |---|---|---|
-| [Val Town](../../examples/mcp/valtown/README.md) | You want the shortest path: one folder pushed with one command. | Holds the whole index file in memory. Keyword search out of the box; the full hybrid search if you point it at an embedding service. |
+| [Val Town](../../examples/mcp/valtown/README.md) | You want the shortest path: one command over the platform's API, nothing to install. | Holds the whole index file in memory. Keyword search out of the box; the full hybrid search if you point it at an embedding service. |
 | [Cloudflare](../../examples/mcp/cloudflare/README.md) | You already use Cloudflare, or you want hybrid search without a third service. | Reads a database you load the build into. Keyword search out of the box; hybrid search with Workers AI turned on, over the keyword candidates. |
 
 Both are free at the scale a documentation search runs at. The Val Town free plan stores 10 MB of blobs, so an index larger than that is downloaded on every cold start there; Cloudflare's free plan has no such limit on a database, but its Worker never sees the index file at all.
@@ -60,11 +60,10 @@ Val Town:
 
 ```bash
 cd examples/mcp/valtown
-node stage.js
-vt create extractium-kb-mcp && cp val/* extractium-kb-mcp/ && cd extractium-kb-mcp && vt push
+VALTOWN_API_TOKEN=EXAMPLE_TOKEN node push.js
 ```
 
-Then set `EXTRACTIUM_INDEX_URL` in the val's environment variables.
+The token comes from [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. The script prints the endpoint. Then set `EXTRACTIUM_INDEX_URL` in the val's environment variables. The README lists two other routes: the `vt` tool, and Val Town's GitHub sync.
 
 Cloudflare:
 

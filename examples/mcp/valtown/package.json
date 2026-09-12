@@ -6,9 +6,12 @@
   "license": "GPL-3.0-or-later",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "stage": "node stage.js",
+    "push": "node push.js",
     "test": "node --test"
   }
 }
