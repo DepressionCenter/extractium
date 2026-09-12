@@ -238,7 +238,7 @@ test('a result count outside the allowed range is refused', async () => {
 
 test('an index that cannot be loaded is a tool error carrying no internal detail', async () => {
     const server = new KbServer({
-        openIndex: () => { throw new Error('C:\\secrets\\kb-index.json is missing'); },
+        openIndex: () => { throw new Error('C:\\secrets\\compendium.json is missing'); },
         openEmbedder: () => () => expectations.queryVector,
     });
 
@@ -303,9 +303,9 @@ test('a section from a public page carries no confidentiality note', () => {
 /* ### Where an index may come from ### */
 
 test('an index address must be secure unless it is on this machine', () => {
-    assert.equal(checkedUrl('https://example.org/kb/kb-index.json'), 'https://example.org/kb/kb-index.json');
-    assert.equal(checkedUrl('http://localhost:8000/kb-index.json'), 'http://localhost:8000/kb-index.json');
-    assert.throws(() => checkedUrl('http://example.org/kb-index.json'), ConfigurationError);
+    assert.equal(checkedUrl('https://example.org/kb/compendium.json'), 'https://example.org/kb/compendium.json');
+    assert.equal(checkedUrl('http://localhost:8000/compendium.json'), 'http://localhost:8000/compendium.json');
+    assert.throws(() => checkedUrl('http://example.org/compendium.json'), ConfigurationError);
     assert.throws(() => checkedUrl('file:///etc/passwd'), ConfigurationError);
     assert.throws(() => checkedUrl('not a url at all'), ConfigurationError);
 });

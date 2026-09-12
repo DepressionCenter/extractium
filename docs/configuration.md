@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -83,12 +83,14 @@ Every source also needs a `label`. See "Naming your sources" below.
 | Setting | Type | Default | What it does |
 |---|---|---|---|
 | `name` | text | title of the first page crawled | Display name of the knowledge base, recorded in every output. |
+| `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json` for the container and `<slug>.sqlite` for the database, so `slug: efdc-compendium` publishes `efdc-compendium.json`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
 | `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
 | `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |
+| `transport` | `auto`, `browser`, or `plain` | `auto` | How the crawler opens its connections. `auto` makes an ordinary request and, only when the answer is a bot-protection challenge, retries once over a browser-shaped handshake, keeping that choice for the host. `browser` uses the handshake from the first request. `plain` never does. The crawler's own `user_agent` is sent either way. See "How a site behind bot protection is read" below. |
 | `phi_lint` | `local`, `all`, or `off` | `local` | Which content the check for protected health information scans. |
 | `github_owners` | list of text | empty | Extra GitHub accounts this build may follow links into. See "Which GitHub accounts a build reads" below. |
 
@@ -495,21 +497,21 @@ Leave `outputs` out to write the two defaults: the container file and the `llms.
 
 | Type | Options | Default | What it writes |
 |---|---|---|---|
-| `container` | `file` | `kb-index.json` | The binary index every search client reads. See the [container format](container-format.md). |
+| `container` | `file` | `<slug>.json` | The binary compendium every search client reads. See the [container format](container-format.md). |
 | `llmstxt` | none | | `llms.txt` and `llms-full.txt`. |
-| `sqlite` | `file` | `compendium.sqlite` | A SQLite database with the same content. |
+| `sqlite` | `file` | `<slug>.sqlite` | A SQLite database with the same content. |
 | `okf` | none | | An Open Knowledge Format folder of Markdown files, written as `okf/` under `out_dir`. |
 
 | Option on every output | Type | Default | What it does |
 |---|---|---|---|
 | `include_local` | true or false | `false` | Lets content from `local` sources into this output. |
 
-A `file` is always a relative path under `out_dir`. An absolute path, or one that climbs out with `..`, is refused.
+A `file` is always a relative path under `out_dir`. An absolute path, or one that climbs out with `..`, is refused. Leave `file` out and the output is named after the `slug` global setting, which is the usual choice: one short name, and every file follows it.
 
 ```yaml
+slug: example-compendium    # writes example-compendium.json and example-compendium.sqlite
 outputs:
   - type: container
-    file: kb-index.json
   - type: llmstxt
   - type: sqlite
     include_local: true      # this file stays on your machine, so local content is fine
@@ -625,6 +627,22 @@ Setting `respect_robots_txt: false` changes that, on the grounds that you only t
 Pages that were never refused are still fetched under your own `user_agent`, so a site that would have served the crawler happily is never misled.
 
 Leave `respect_robots_txt` at `true` unless you own the sites in your crawl scope. Turning it off means both parts of this: robots rules are ignored, and a refused page is retried as a browser.
+
+### How a site behind bot protection is read
+
+Some sites sit behind a service that scores the connection itself, not the name the crawler gives. Such a site answers `403` with the header `cf-mitigated: challenge` to every page, whatever `robots.txt` allows, and whatever `user_agent` is sent. [Reading a site behind bot protection](bot-protection-transport.md) records what was measured.
+
+With `transport: auto`, the default, the crawler makes its ordinary request first. When the answer is that challenge, and only then, it asks once more over a connection opened the way a browser opens one, with the same `user_agent`, the same conditional headers, and the same pause between requests. A host that was challenged once is read that way from then on, so it is not asked twice for every page. The log says so once per host:
+
+```text
+transport: example.org served over the browser transport (a plain request was answered with a challenge)
+```
+
+and the summary lists the same hosts at the end. A `403` without that header is a refusal of another kind, such as a block on the network the build runs from, and is left alone.
+
+`transport: plain` never retries; a challenged site is skipped page by page, and the log says why. `transport: browser` opens every connection the browser way from the start, which saves one refused request per host on a site known to challenge; it is not needed to read such a site, only quicker.
+
+Nothing about this changes what the crawler may ask for. `robots.txt` is still read first and still obeyed; the crawler still names itself; the pause between requests still applies. It changes what a server is willing to talk to, not what the crawler is allowed to read.
 
 ### Turning a default list off
 

@@ -53,11 +53,11 @@ The build writes three files and the workflow publishes the folder that holds th
 
 | File | What it is |
 |---|---|
-| `kb-index.json` | The search index: text, vectors, and keyword statistics in one file, for the Extractium clients. |
+| `compendium.json` | The search index: text, vectors, and keyword statistics in one file, for the Extractium clients. |
 | `llms.txt` | A short index, one line per page, for a language model that browses the web. |
 | `llms-full.txt` | The whole indexed text, in reading order. |
 
-They are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/kb-index.json`.
+They are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/compendium.json`.
 
 
 ## Choosing the version of the tool

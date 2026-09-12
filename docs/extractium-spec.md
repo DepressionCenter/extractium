@@ -195,7 +195,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 
 | Format | Files | Plan phase | Notes |
 |---|---|---|---|
-| Binary container, version 3 | `kb-index.json` (name configurable) | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
+| Binary container, version 3 | `<slug>.json`, `compendium.json` by default | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
 | llms.txt | `llms.txt`, `llms-full.txt` | 3 | Root manifest and full concatenation for web-browsing language models. |
 | SQLite | `compendium.sqlite` | 6 | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
 | OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | 11, built | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them; every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. |
@@ -235,7 +235,7 @@ The crawler identifies itself and respects the sites it reads.
 - `delay_seconds` (default 0.5) paces requests; `max_pages` (default 10,000) is a safety ceiling.
 - Whether the TeamDynamix portal serves article HTML to the truthful User-Agent was checked against the real portal on 2026-09-04. It does: the home page, the knowledge-base listing, and an article page all answered 200 with the article body in `#divMainContent`. No override is needed. Two details from the same check shape the code: the portal's `robots.txt` answers 406 when a request accepts only HTML, so the robots request sends a plain-text Accept header; and the article breadcrumb is an `ol.breadcrumb` whose linked items are the hierarchy and whose unlinked last item is the page itself.
 - Whether a GitHub Actions runner reaches the sites this project indexes was checked on 2026-09-08, from an `ubuntu-24.04` runner sending the truthful User-Agent. All three answered 200: the TeamDynamix portal home page (32,845 bytes of `text/html`), `https://github.com/DepressionCenter` (308,048 bytes of `text/html`), and a `raw.githubusercontent.com` README (12,210 bytes of `text/plain`). A cloud runner can therefore build the knowledge base; local runs stay necessary only for sources a runner cannot reach, such as local folders and YouTube.
-- One site in the Depression Center's own crawl scope, `code.depressioncenter.org`, answers 403 to the truthful User-Agent and serves the page to a browser one. Its `robots.txt` allows every crawler, so the block is a content-delivery filter rather than a stated policy. By default the crawler reports the 403 and moves on: a tool that names itself and then works around a site's own filter is not really naming itself.
+- Three sites in the Depression Center's own crawl scope, `depressioncenter.org`, `p2p.depressioncenter.org`, and `code.depressioncenter.org`, answer `403` with `cf-mitigated: challenge` to any client whose TLS handshake is not a browser's, whatever `User-Agent` it sends; their `robots.txt` allows every crawler, so the block is a content-delivery filter rather than a stated policy. Measured on 2026-09-10 and recorded in [reading a site behind bot protection](bot-protection-transport.md). The `transport` setting answers it: `auto`, the default, retries a challenged request once over a browser-shaped handshake and keeps that choice for the host; `browser` starts that way; `plain` never does. The crawler names itself Extractium over either connection, `robots.txt` is read first and obeyed as before, and the choice is reported once per host and in the build summary. A `403` without the challenge header is left alone.
 - `respect_robots_txt: false` is the operator's statement that they own the sites in scope, and it carries a second effect. With it off, a page that answers 401, 403, or 429 to the configured `user_agent` is requested once more with a common browser User-Agent, and both attempts are reported. Pages that were never refused are still fetched under the configured agent, and a 404 or a 5xx is never retried, because neither is a refusal. The two behaviours travel together deliberately: presenting as a browser is only defensible where ignoring robots rules already is.
 - When a site's `robots.txt` cannot be read (a 5xx answer or a network failure), every URL on that site is skipped and the reason is reported. A 4xx answer means the site publishes no rules. This is the robots exclusion standard's rule (RFC 9309) and it fails closed on purpose.
 - A GitHub account is read only when the operator named it: as the owner of a `github_api` source, as the owner in a GitHub `web` seed, or in the global `github_owners` list. Account names appear in READMEs, dependency lists, fork notices, and contributor links, and following them turns a one-organization build into a crawl of thousands of strangers' repositories. The rule is deny by default, holds exact names rather than patterns, applies to `github.com`, `raw.githubusercontent.com`, and `<owner>.github.io`, and is enforced in crawl scope as well as in API promotion, because a GitHub seed puts every account on the host inside the seed origin. Being allowed lets links into an account be followed; only naming an account as a source lists that account's repositories. Skipped accounts are counted and reported once.
@@ -325,6 +325,7 @@ Every setting:
 
 ```yaml
 name: Example Org Knowledge Base   # default: title of the first crawled page
+slug: compendium                    # names the output files: <slug>.json, <slug>.sqlite
 out_dir: dist                       # every adapter writes under here
 cache_dir: .kb_cache
 delay_seconds: 0.5
@@ -354,22 +355,20 @@ sources:
     exclude_repos: []               # an exclusion always wins
     include_forks: false
     include_archived: true
-    include_code: true              # reserved for phase 10; carried and reported today
+    include_code: true              # read the structure of the code, not only the docs
     max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
   - type: youtube
     label: Example Video Library
-    channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # needs YOUTUBE_API_KEY in the environment
+    channel_id: https://www.youtube.com/@ExampleChannel   # handle, address, or id; no key needed
     playlist_ids: []
     video_ids: []
     languages: [en]
 
 outputs:                            # omit = container + llmstxt
-  - type: container
-    file: kb-index.json
+  - type: container         # written as <slug>.json; file: overrides
     include_local: false
   - type: llmstxt
-  - type: sqlite
-    file: compendium.sqlite
+  - type: sqlite            # written as <slug>.sqlite; file: overrides
     include_local: true
   - type: okf
 ```

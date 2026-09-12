@@ -48,7 +48,7 @@ flowchart TD
     F --> G[Compact sections with no windows left]
     G --> H[Keyword and calibration statistics]
     H -->|one Compendium| I[Adapters]
-    I --> J[out_dir: kb-index.json, llms.txt, llms-full.txt, okf/]
+    I --> J[out_dir: compendium.json, llms.txt, llms-full.txt, okf/]
     C -.reads and updates.-> K[(.kb_cache)]
 ```
 

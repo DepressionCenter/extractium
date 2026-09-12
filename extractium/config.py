@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -89,8 +89,30 @@ DEFAULT_PHI_LINT = "local"
 DEFAULT_OUTPUTS = ({"type": "container"}, {"type": "llmstxt"})
 
 # File names the container and SQLite adapters write when none is given.
-DEFAULT_CONTAINER_FILE = "kb-index.json"
-DEFAULT_SQLITE_FILE = "compendium.sqlite"
+# The short name a build goes by. It names the output files that have no
+# `file` of their own: `<slug>.json` for the container and `<slug>.sqlite`
+# for the database. Lowercase letters, digits, and hyphens only, because
+# the name ends up in a published address.
+DEFAULT_SLUG = "compendium"
+
+# How the crawler opens its connections; see extractium.core.transport.
+TRANSPORT_MODES = ("auto", "browser", "plain")
+DEFAULT_TRANSPORT = "auto"
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+
+
+def container_file_name(slug):
+    """The container's file name for one slug."""
+    return f"{slug}.json"
+
+
+def sqlite_file_name(slug):
+    """The SQLite output's file name for one slug."""
+    return f"{slug}.sqlite"
+
+
+DEFAULT_CONTAINER_FILE = container_file_name(DEFAULT_SLUG)
+DEFAULT_SQLITE_FILE = sqlite_file_name(DEFAULT_SLUG)
 
 # Files a local source reads when no include_globs are given. PDF and
 # Office formats need extra dependencies and are not read.
@@ -198,12 +220,14 @@ DEFAULT_INDEX_EXCLUDE_PATTERNS = None
 # "max_page" into a crawl that quietly runs with the wrong ceiling.
 KNOWN_KEYS = frozenset({
     "name",
+    "slug",
     "out_dir",
     "cache_dir",
     "max_pages",
     "delay_seconds",
     "user_agent",
     "respect_robots_txt",
+    "transport",
     "phi_lint",
     "github_owners",
     "sources",
@@ -316,12 +340,14 @@ class Config:
     Attributes:
         name (str | None): display name of the knowledge base; None means
             "use the title of the first crawled page".
+        slug (str): the short name the output files are named after.
         out_dir (str): folder every adapter writes under.
         cache_dir (str): folder for the fetch cache.
         max_pages (int): hard ceiling on pages visited in one crawl; 1 or more.
         delay_seconds (float): pause between requests, in seconds; 0 or more.
         user_agent (str): the User-Agent header the crawler sends.
         respect_robots_txt (bool): whether robots.txt disallow rules are honored.
+        transport (str): one of TRANSPORT_MODES; how connections are opened.
         phi_lint (str): one of PHI_LINT_MODES.
         github_owners (tuple[str, ...]): GitHub accounts, beyond the ones
             the sources themselves name, whose pages a build may follow
@@ -334,12 +360,14 @@ class Config:
     sources: tuple
     outputs: tuple
     name: object = None
+    slug: str = DEFAULT_SLUG
     out_dir: str = DEFAULT_OUT_DIR
     cache_dir: str = DEFAULT_CACHE_DIR
     max_pages: int = DEFAULT_MAX_PAGES
     delay_seconds: float = DEFAULT_DELAY_SECONDS
     user_agent: str = DEFAULT_USER_AGENT
     respect_robots_txt: bool = DEFAULT_RESPECT_ROBOTS_TXT
+    transport: str = DEFAULT_TRANSPORT
     phi_lint: str = DEFAULT_PHI_LINT
     github_owners: tuple = DEFAULT_GITHUB_OWNERS
 
@@ -923,15 +951,27 @@ def _read_sources(data, source):
 
 ### Validate Outputs ###
 
-def _read_container_output(entry, source):
-    return {"file": _read_output_file(entry, "file", DEFAULT_CONTAINER_FILE, source)}
+def _read_slug(data, source):
+    """
+    Reads the short name, which the default output file names are built
+    from. Refused unless it is safe in a file name and in a web address.
+    """
+    value = _read_text(data, "slug", DEFAULT_SLUG, source)
+    if not SLUG_RE.match(value):
+        _fail(source, f"slug must be lowercase letters, digits, and hyphens, starting with a letter "
+                      f"or digit, up to 64 characters (got {value!r}).")
+    return value
 
 
-def _read_sqlite_output(entry, source):
-    return {"file": _read_output_file(entry, "file", DEFAULT_SQLITE_FILE, source)}
+def _read_container_output(entry, source, slug):
+    return {"file": _read_output_file(entry, "file", container_file_name(slug), source)}
 
 
-def _read_no_options(entry, source):
+def _read_sqlite_output(entry, source, slug):
+    return {"file": _read_output_file(entry, "file", sqlite_file_name(slug), source)}
+
+
+def _read_no_options(entry, source, slug):
     return {}
 
 
@@ -943,9 +983,10 @@ _OUTPUT_READERS = {
 }
 
 
-def _read_outputs(data, source):
+def _read_outputs(data, source, slug=DEFAULT_SLUG):
     """
-    Validates the outputs list, or supplies the default outputs.
+    Validates the outputs list, or supplies the default outputs. Outputs
+    that name no file of their own are named after the slug.
 
     Returns:
         tuple[OutputConfig, ...]: one record per entry, in file order.
@@ -974,7 +1015,7 @@ def _read_outputs(data, source):
         reader = _OUTPUT_READERS.get(type_name)
         if reader is not None:
             _check_known_keys(options, OUTPUT_OPTION_KEYS[type_name], label)
-            options = reader(entry, label)
+            options = reader(entry, label, slug)
         outputs.append(
             OutputConfig(type=type_name, include_local=include_local, options=MappingProxyType(options))
         )
@@ -1021,8 +1062,10 @@ def config_from_mapping(data, source="configuration"):
     if "\n" in user_agent or "\r" in user_agent:
         _fail(source, "user_agent cannot contain line breaks.")
 
+    slug = _read_slug(data, source)
     return Config(
         name=_read_text(data, "name", None, source),
+        slug=slug,
         out_dir=_read_text(data, "out_dir", DEFAULT_OUT_DIR, source),
         cache_dir=_read_text(data, "cache_dir", DEFAULT_CACHE_DIR, source),
         max_pages=_read_positive_int(data, "max_pages", DEFAULT_MAX_PAGES, source),
@@ -1031,10 +1074,11 @@ def config_from_mapping(data, source="configuration"):
         ),
         user_agent=user_agent,
         respect_robots_txt=_read_bool(data, "respect_robots_txt", DEFAULT_RESPECT_ROBOTS_TXT, source),
+        transport=_read_choice(data, "transport", DEFAULT_TRANSPORT, TRANSPORT_MODES, source),
         phi_lint=_read_choice(data, "phi_lint", DEFAULT_PHI_LINT, PHI_LINT_MODES, source),
         github_owners=_read_github_owners(data, source),
         sources=_read_sources(data, source),
-        outputs=_read_outputs(data, source),
+        outputs=_read_outputs(data, source, slug),
     )
 
 

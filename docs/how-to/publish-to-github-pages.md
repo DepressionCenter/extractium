@@ -55,7 +55,7 @@ Check three files:
 |---|---|
 | `.../llms.txt` | A list of the pages that were indexed, one line each, with the build time near the top. |
 | `.../llms-full.txt` | The whole indexed text. |
-| `.../kb-index.json` | A download rather than readable text. It is partly binary; that is expected. |
+| `.../compendium.json` | A download rather than readable text. It is partly binary; that is expected. |
 
 If `llms.txt` lists pages you did not mean to index, fix the patterns in `config.yaml` and run again. Publishing is the last step of the build, so what you see is exactly what the crawl found.
 

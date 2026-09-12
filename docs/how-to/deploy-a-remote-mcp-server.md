@@ -43,7 +43,7 @@ Both are free at the scale a documentation search runs at. The Val Town free pla
 
 ## Step 1: Publish the index
 
-You need a published `kb-index.json` for Val Town, or a `compendium.sqlite` for Cloudflare. [How to publish to GitHub Pages](publish-to-github-pages.md) covers the first; for the second, add a `sqlite` output to your settings file and run a build:
+You need a published `compendium.json` for Val Town, or a `compendium.sqlite` for Cloudflare. [How to publish to GitHub Pages](publish-to-github-pages.md) covers the first; for the second, add a `sqlite` output to your settings file and run a build:
 
 ```yaml
 outputs:
@@ -61,7 +61,7 @@ Val Town:
 ```bash
 cd examples/mcp/valtown
 VALTOWN_API_TOKEN=EXAMPLE_TOKEN python push.py --push --name my-compendium \
-  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/kb-index.json
+  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json
 ```
 
 The token comes from [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. The script prints the endpoint. If you would rather make no token, `python push.py` alone writes the six files for you to paste into a new val in the browser; the README walks through both ways.

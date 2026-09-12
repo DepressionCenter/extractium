@@ -305,7 +305,7 @@ def test_a_result_count_outside_the_allowed_range_is_refused(golden_server, expe
 
 def test_an_index_that_cannot_be_loaded_is_a_tool_error_carrying_no_internal_detail(expectations):
     def refuse():
-        raise OSError(r"C:\secrets\kb-index.json is missing")
+        raise OSError(r"C:\secrets\compendium.json is missing")
 
     server = server_module.KbServer(
         open_index=refuse, open_embedder=lambda index: (lambda text: [])
@@ -372,20 +372,20 @@ def test_a_section_from_a_public_page_carries_no_confidentiality_note():
 ### Where an index may come from ###
 
 @pytest.mark.parametrize("url", [
-    "https://example.org/kb/kb-index.json",
-    "http://localhost:8000/kb-index.json",
-    "http://127.0.0.1:8000/kb-index.json",
+    "https://example.org/kb/compendium.json",
+    "http://localhost:8000/compendium.json",
+    "http://127.0.0.1:8000/compendium.json",
 ])
 def test_a_secure_address_or_one_on_this_machine_is_accepted(url):
     assert server_module.checked_url(url) == url
 
 
 @pytest.mark.parametrize("url", [
-    "http://example.org/kb-index.json",
+    "http://example.org/compendium.json",
     "file:///etc/passwd",
-    "ftp://example.org/kb-index.json",
+    "ftp://example.org/compendium.json",
     "not a url at all",
-    "https:///kb-index.json",
+    "https:///compendium.json",
 ])
 def test_an_insecure_or_unreadable_address_is_refused(url):
     with pytest.raises(server_module.ConfigurationError):
@@ -410,9 +410,9 @@ def test_a_downloaded_index_is_cached_with_its_validators(tmp_path):
         calls.append(dict(request.headers))
         return FakeResponse(b"index bytes", {"ETag": '"abc"', "Last-Modified": "Mon, 01 Jan 2026 00:00:00 GMT"})
 
-    body = server_module.container_bytes("https://example.org/kb-index.json", tmp_path, opener)
+    body = server_module.container_bytes("https://example.org/compendium.json", tmp_path, opener)
 
-    body_path, meta_path = server_module.cache_paths("https://example.org/kb-index.json", tmp_path)
+    body_path, meta_path = server_module.cache_paths("https://example.org/compendium.json", tmp_path)
     assert body == b"index bytes"
     assert body_path.read_bytes() == b"index bytes"
     assert json.loads(meta_path.read_text(encoding="utf-8"))["etag"] == '"abc"'
@@ -420,7 +420,7 @@ def test_a_downloaded_index_is_cached_with_its_validators(tmp_path):
 
 
 def test_an_unchanged_index_is_read_from_the_cache_rather_than_downloaded_again(tmp_path):
-    url = "https://example.org/kb-index.json"
+    url = "https://example.org/compendium.json"
     server_module.container_bytes(
         url, tmp_path, lambda request, timeout=None: FakeResponse(b"index bytes", {"ETag": '"abc"'})
     )
@@ -435,7 +435,7 @@ def test_an_unchanged_index_is_read_from_the_cache_rather_than_downloaded_again(
 
 
 def test_a_host_that_cannot_be_reached_falls_back_to_the_cached_copy(tmp_path):
-    url = "https://example.org/kb-index.json"
+    url = "https://example.org/compendium.json"
     server_module.container_bytes(
         url, tmp_path, lambda request, timeout=None: FakeResponse(b"index bytes")
     )
@@ -451,7 +451,7 @@ def test_a_host_that_cannot_be_reached_with_nothing_cached_fails_rather_than_pre
         raise urllib.error.URLError("no route to host")
 
     with pytest.raises(urllib.error.URLError):
-        server_module.container_bytes("https://example.org/kb-index.json", tmp_path, offline)
+        server_module.container_bytes("https://example.org/compendium.json", tmp_path, offline)
 
 
 def test_an_index_past_the_size_cap_is_refused(tmp_path, monkeypatch):
@@ -461,7 +461,7 @@ def test_an_index_past_the_size_cap_is_refused(tmp_path, monkeypatch):
         return FakeResponse(b"x" * 64)
 
     with pytest.raises(ValueError):
-        server_module.container_bytes("https://example.org/kb-index.json", tmp_path, flood)
+        server_module.container_bytes("https://example.org/compendium.json", tmp_path, flood)
 
 
 def test_an_index_path_is_read_without_touching_the_network(golden_dir):

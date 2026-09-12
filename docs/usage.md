@@ -93,7 +93,7 @@ With the default settings, the output folder holds three files:
 
 | File | What it is |
 |---|---|
-| `kb-index.json` | The search index: text, vectors, and keyword statistics in one file. Despite the name it is partly binary; the `.json` extension keeps static hosts serving it correctly. The [container format](container-format.md) page describes it byte by byte. |
+| `compendium.json` | The search index: text, vectors, and keyword statistics in one file. Despite the name it is partly binary; the `.json` extension keeps static hosts serving it correctly. The [container format](container-format.md) page describes it byte by byte. |
 | `llms.txt` | A short index, one line per page, for a language model that browses the web. |
 | `llms-full.txt` | The whole indexed text, in reading order. |
 
@@ -109,7 +109,7 @@ Built 'Example Org Knowledge Base' at 2026-09-08T14:30:00Z
   sections : 812
   windows  : 1944
   sources  : 233
-  wrote    : dist/kb-index.json (2.71 MB)
+  wrote    : dist/compendium.json (2.71 MB)
   wrote    : dist/llms.txt (0.04 MB)
   wrote    : dist/llms-full.txt (1.12 MB)
   wrote    : dist/okf (235 files, 1.18 MB)

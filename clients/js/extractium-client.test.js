@@ -12,7 +12,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-09
+ * Last Modified: 2026-09-12
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -117,7 +117,7 @@ function sampleHeader(overrides = {}) {
 /* ### Tokenizing ### */
 
 test('tokenize keeps runs of three or more letters or digits, lowercased', () => {
-    assert.deepEqual(tokenize('Weekly BUILD of kb-index v3 a an'), ['weekly', 'build', 'index']);
+    assert.deepEqual(tokenize('Weekly BUILD of compendium v3 a an'), ['weekly', 'build', 'compendium']);
 });
 
 test('tokenize handles empty and missing text', () => {

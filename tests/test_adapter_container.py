@@ -146,7 +146,7 @@ def test_write_produces_the_documented_byte_layout(tmp_path, fixtures_dir, fake_
 
     (path,) = ContainerAdapter().write(compendium, tmp_path, {})
 
-    assert path == tmp_path / "kb-index.json"
+    assert path == tmp_path / "compendium.json"
     header, vectors = read_container(path)
     assert header["site"] == "Example Org"
     assert len(vectors) == len(compendium.children) * header["embedding"]["dims"]

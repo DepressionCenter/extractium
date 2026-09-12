@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-11
+# Last Modified: 2026-09-12
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -29,9 +29,16 @@
 #
 # Every source needs a label: the name a reader sees for the collection it
 # came from, such as "Staff Handbook" or "Video Library". It heads a section
-# in llms.txt and travels with every section in the index, so a search
+# in llms.txt and travels with every section in the compendium, so a search
 # result can say where its answer came from. Two web sources cannot be told
 # apart without it, which is why it is required rather than guessed.
+#
+# A page two sources both reach is indexed once, by whichever reached it
+# first, and the build says how many pages that happened to. An overlap
+# costs duplicated fetching, not a failed build; a section of a site you
+# already crawl belongs to that crawl as a second seed_urls entry, not to a
+# source of its own. See examples/config.efdc.yaml for a complete, working
+# configuration that uses every source type.
 # ---------------------------------------------------------------------------
 
 sources:
@@ -137,10 +144,11 @@ sources:
   #  max_file_bytes: 2000000         # larger files are skipped, and each one is named
 
   # Captions from a YouTube channel, playlists, or single videos. Each
-  # stretch of a transcript is cited at the moment it was said. Listing a
-  # channel or playlist needs YOUTUBE_API_KEY in the environment; naming
-  # videos under video_ids needs no key. Fetching captions needs the
-  # optional install: pip install "extractium[youtube]".
+  # stretch of a transcript is cited at the moment it was said. No key is
+  # needed: without one, the newest hundred videos of each listing are
+  # read, which is where YouTube's robots.txt stops the crawler; set
+  # YOUTUBE_API_KEY in the environment to read a whole channel. Fetching
+  # captions needs the optional install: pip install "extractium[youtube]".
   #
   # YouTube refuses caption requests from cloud-provider addresses, so a
   # scheduled build cannot fetch a transcript. Build once on your own
@@ -165,12 +173,10 @@ sources:
 # ---------------------------------------------------------------------------
 
 #outputs:
-#  - type: container
-#    file: kb-index.json
+#  - type: container         # written as <slug>.json unless file: names another
 #    include_local: false      # true lets local-source content into this file
 #  - type: llmstxt
-#  - type: sqlite
-#    file: compendium.sqlite
+#  - type: sqlite            # written as <slug>.sqlite unless file: names another
 #    include_local: true
 #  - type: okf         # a folder of Markdown, one file per page, under out_dir/okf
 
@@ -183,6 +189,11 @@ sources:
 # Display name of the knowledge base. Defaults to the title of the first
 # page crawled.
 #name: "Example Org Knowledge Base"
+
+# The short name the output files are named after: <slug>.json for the
+# container and <slug>.sqlite for the database. Lowercase letters, digits,
+# and hyphens, because it ends up in the published address.
+#slug: compendium
 
 # Folder every output is written under. A relative path is resolved from
 # the folder you run the build in.
@@ -212,6 +223,13 @@ sources:
 # How the crawler introduces itself to each site. The default names the
 # tool and its repository.
 #user_agent: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
+
+# How the crawler opens its connections. auto, the default, makes an
+# ordinary request and, only when a site answers a bot-protection
+# challenge, asks once more over a browser-shaped connection, keeping that
+# choice for the host; the crawler still names itself. browser starts that
+# way; plain never does. See docs/bot-protection-transport.md.
+#transport: auto
 
 # Whether to honor each site's robots.txt. A site whose robots.txt cannot
 # be read is skipped entirely. Switch it off only for sites you own: as

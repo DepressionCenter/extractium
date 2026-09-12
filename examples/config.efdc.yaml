@@ -2,13 +2,14 @@
 # examples/config.efdc.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-09
-# Last Modified: 2026-09-10
+# Last Modified: 2026-09-12
 # Summary: A build configuration for the Eisenberg Family Depression Center at
 # the University of Michigan. It gathers the center's public documentation --
 # the U-M Health Research Resource Library, the Open Source Hub, the GitHub
 # repositories, the main website and its Depression Center Toolkit, the
-# Peer-to-Peer program site, and the center's Deep Blue collections -- into
-# one searchable index. Copy it to config.yaml and run it.
+# Peer-to-Peer program site, the YouTube channel, and the center's Deep Blue
+# collections -- into one compendium, written in every format the tool has.
+# Copy it to config.yaml and run it.
 # Notes: See README file for documentation and full license information.
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -25,26 +26,23 @@
 
 name: Eisenberg Family Depression Center Resource Library
 
+# The short name every output file is named after: efdc-compendium.json is
+# the container the clients read, efdc-compendium.sqlite the same content as
+# tables. It is also the name the published address ends in.
+slug: efdc-compendium
+
 
 # ---------------------------------------------------------------------------
-# BEFORE THE FIRST RUN: three of these sites answer 403 today
+# Three of these sites sit behind bot protection
 #
-# As of 2026-09-10, depressioncenter.org, p2p.depressioncenter.org, and
-# code.depressioncenter.org answer 403 to this crawler, with the header
-# "cf-mitigated: challenge". Sources 2, 4, and 5 therefore contribute
-# nothing, and the build says so page by page rather than failing. Sources 1,
-# 3, and 7 work today.
-#
-# This is not about the crawler's name. A real browser User-Agent is refused
-# in exactly the same way. What is being read is the TLS handshake, and a
-# crawler that opens its connections the way a browser does is served
-# normally, with no challenge raised. Those three sites were read that way on
-# 2026-09-10, at 200, with the crawler still identifying itself as
-# Extractium.
-#
-# Phase 8 of the implementation plan builds that transport. Until it ships,
-# nothing in this file can reach those three sites. See
-# docs/bot-protection-transport.md for what was measured.
+# depressioncenter.org, p2p.depressioncenter.org, and code.depressioncenter.org
+# answer 403 with "cf-mitigated: challenge" to any client whose connection
+# does not look like a browser's, whatever name it gives. The build handles
+# that by itself: with transport at its default of auto, a challenged page is
+# asked for once more over a browser-shaped connection, the crawler still
+# naming itself Extractium, and the host is read that way from then on. The
+# log says so once per host, and the summary lists the hosts again. Nothing
+# in this file needs changing for it. See docs/bot-protection-transport.md.
 # ---------------------------------------------------------------------------
 
 
@@ -93,8 +91,8 @@ sources:
   #    what each file defines, what it brings in, and where each definition
   #    can be read, never the code itself. It needs the optional parser set
   #    (pip install "extractium[code]"), and it multiplies how many records
-  #    an account produces, so set it to false if this index is meant for
-  #    readers rather than for developers.
+  #    an account produces, so set it to false if this compendium is meant
+  #    for readers rather than for developers.
   - label: Depression Center Open Source Hub
     type: github_api
     org: DepressionCenter
@@ -124,17 +122,24 @@ sources:
     type: web
     seed_url: https://p2p.depressioncenter.org/
 
-  # 6. EFDC YouTube channel: https://www.youtube.com/@DepressionCenter
+  # 6. The center's YouTube channel, indexed from its captions: each stretch
+  #    of a transcript is a section cited at the moment it was said.
   #
-  #    NOT YET AVAILABLE. The youtube source arrives in phase 13 of the
-  #    implementation plan. Uncommenting this today stops the build with
-  #    "no source named 'youtube'". It will also need YOUTUBE_API_KEY in the
-  #    environment, and the channel id rather than the @handle.
+  #    The channel is named the way a browser shows it. No API key is
+  #    needed: without one the newest hundred videos of each listing are
+  #    read, which is where YouTube's robots.txt stops the crawler; set
+  #    YOUTUBE_API_KEY in the environment to read the whole channel. The
+  #    channel's own playlists are read too, and a video in one of them is
+  #    indexed only when this channel published it.
   #
-  #- label: Depression Center Video Library
-  #  type: youtube
-  #  channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
-  #  languages: [en]
+  #    Run this source on your own machine first. YouTube refuses caption
+  #    requests from cloud-provider addresses, so a scheduled build can only
+  #    reuse the transcripts stored under cache_dir; see the youtube section
+  #    of docs/configuration.md and docs/troubleshooting.md.
+  - label: Depression Center Video Library
+    type: youtube
+    channel_id: https://www.youtube.com/@DepressionCenter
+    languages: [en]
 
   # 7. The two U-M Library Deep Blue collections.
   #
@@ -164,7 +169,7 @@ sources:
 
   # 8. Campus Mind Works: https://campusmindworks.org/
   #    On the center's own list of resources, but a site for students rather
-  #    than project documentation. Add it if you want it in the index.
+  #    than project documentation. Add it if you want it in the compendium.
   #
   #- label: Campus Mind Works
   #  type: web
@@ -173,17 +178,22 @@ sources:
 
 # ---------------------------------------------------------------------------
 # Outputs
+#
+# Every format the tool writes. The container and the database take their
+# names from the slug above; llms.txt and the okf folder have fixed names.
 # ---------------------------------------------------------------------------
 
 outputs:
-  # The search index every client reads.
+  # efdc-compendium.json: the compendium every search client reads.
   - type: container
-    file: efdc-compendium.json
   # llms.txt and llms-full.txt, for language models that browse the web.
   - type: llmstxt
-  # The same content as tables, for anyone who would rather write SQL.
-  #- type: sqlite
-  #  file: compendium.sqlite
+  # efdc-compendium.sqlite: the same content as tables, for anyone who would
+  # rather write SQL, and what the Cloudflare search server is loaded from.
+  - type: sqlite
+  # okf/: one Markdown file per page, in the Open Knowledge Format, readable
+  # in any Markdown viewer.
+  - type: okf
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +201,15 @@ outputs:
 # ---------------------------------------------------------------------------
 
 out_dir: dist
+
+# How connections are opened; see the note at the top. auto is the default
+# and the right setting here.
+transport: auto
+
+# Fetched pages, GitHub blobs, and YouTube transcripts between builds. The
+# transcripts are the part a scheduled build cannot fetch for itself; a data
+# repository that runs on a schedule names a visible folder here and commits
+# it, as examples/data-repo/ does.
 cache_dir: .kb_cache
 
 # A ceiling for the whole build. Raise it once the page list in dist/llms.txt

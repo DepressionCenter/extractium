@@ -3,11 +3,10 @@ This file is part of Extractium™
 docs/bot-protection-transport.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Summary: Why some sites refuse the crawler with a bot-protection challenge,
-what was measured against three live sites, and the transport design that
-reads them without running a browser and without misidentifying the
-crawler. Planned as Phase 8 of the implementation plan.
+what was measured against three live sites, and how the build reads them
+without running a browser and without misidentifying the crawler.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -30,7 +29,7 @@ Some websites refuse a crawler before it reads a single page. They answer `403 F
 
 It is written for whoever maintains the crawler, and for anyone who has to decide whether this approach is acceptable for their organization. The short version: the refusal is not about the crawler's name, and the fix is not a trick. It is about how the connection itself is opened.
 
-**Planned.** This page describes Phase 8 of the [implementation plan](implementation-plan.md). The measurements below are real and dated. The transport described under "The design" is not built yet.
+The transport described under "The design" is built, and is on by default: a build needs no setting to read such a site. The `transport` setting in the [configuration reference](configuration.md) turns it off or forces it. The measurements below are real and dated, and the build was run against the same three sites on 2026-09-12 with the same result.
 
 
 ## The problem, as a person meets it
@@ -166,7 +165,7 @@ flowchart TD
 
 Text description of the diagram: a source asks the fetch layer for a page. The fetch layer consults one setting. Set to `plain`, it makes an ordinary request. Set to `browser`, it uses the browser handshake. Left at `auto`, the default, it makes an ordinary request first and inspects the answer; if that answer is a challenge, and only then, it retries once over the browser handshake. A response either way is used as normal. A host that answers neither way is reported by name and the build continues.
 
-`auto` is the default because it costs nothing on a site that was never challenged, and because it makes the fix invisible to someone who does not have this problem. The retry happens once per request, never in a loop.
+`auto` is the default because it costs nothing on a site that was never challenged, and because it makes the fix invisible to someone who does not have this problem. The retry happens once, and the choice is then kept for the host, so the second and every later page of a challenged site costs one request rather than two. `robots.txt` does not settle the choice: the filter never challenges a static file, so its answer says nothing about the pages. The build's pause between requests is taken before the retry too.
 
 ### Every build says what it did
 
@@ -206,7 +205,7 @@ The wheels matter: they are `abi3`, so one wheel covers every supported Python v
 
 The Depression Center's three refused sites are readable, the crawler can keep identifying itself honestly while reading them, and rebuilds stay incremental. What looked like a rule only the university's network team could change turned out to be a property of how the crawler opened its connections.
 
-Next: Phase 8 in the [implementation plan](implementation-plan.md) lists the deliverables and the tests. Once it is built, [configuration reference](configuration.md) will document the `transport` setting, and the warning block in the Depression Center's own settings file can go.
+The build does this by itself. The log names each host that needed the browser handshake as it happens, and the summary lists them again at the end. The `transport` setting, documented in the [configuration reference](configuration.md), is there for the two other cases: `plain` for an organization that would rather a challenged site stay unread, and `browser` for a site known to challenge, which saves the first refused request on every host.
 
 
 ## Additional Resources

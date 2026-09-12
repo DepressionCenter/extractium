@@ -26,7 +26,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-A build writes one file, `kb-index.json`, that holds your text, its vectors, and its keyword statistics. This page shows you how to search that file: once from Python, once from JavaScript. Both clients ship with Extractium, need no server and no database, and give the same answers for the same question. Read it if you are writing a tool, a script, or a web page over a published index.
+A build writes one file, `compendium.json`, that holds your text, its vectors, and its keyword statistics. This page shows you how to search that file: once from Python, once from JavaScript. Both clients ship with Extractium, need no server and no database, and give the same answers for the same question. Read it if you are writing a tool, a script, or a web page over a published index.
 
 
 ## What you need
@@ -43,7 +43,7 @@ The clients deliberately do not embed the query themselves. That keeps them smal
 ```python
 from extractium.search import load_container
 
-index = load_container("dist/kb-index.json")
+index = load_container("dist/compendium.json")
 
 hits = index.search("how do I request a data extract", embed_query)
 
@@ -84,7 +84,7 @@ An empty list means nothing was relevant enough. That is a real answer: say so r
 Tell the loader which embedder you will use, and it will refuse a file built with another one instead of returning quietly wrong results:
 
 ```python
-index = load_container("dist/kb-index.json", model="BAAI/bge-small-en-v1.5", dims=384)
+index = load_container("dist/compendium.json", model="BAAI/bge-small-en-v1.5", dims=384)
 ```
 
 
@@ -95,7 +95,7 @@ The client is one file with no dependencies and no build step: `clients/js/extra
 ```javascript
 import { loadContainer } from './extractium-client.js';
 
-const response = await fetch('https://example.org/kb/kb-index.json');
+const response = await fetch('https://example.org/kb/compendium.json');
 const index = loadContainer(await response.arrayBuffer());
 
 const hits = await index.search('how do I request a data extract', embedQuery);
