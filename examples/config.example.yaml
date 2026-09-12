@@ -163,6 +163,7 @@ sources:
   #  languages: [en]
   #  include_playlists: true   # read the channel's playlists as well as its uploads
   #  only_channel_videos: true # skip playlist videos another channel published
+  #  delay_seconds: 1          # seconds between requests to YouTube; never less than 1
 
 
 # ---------------------------------------------------------------------------

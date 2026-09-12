@@ -11,6 +11,8 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 [Back to project README](../README.md)
 
+## Summary
+
 These original starter recipes help maintainers write small, useful skills for
 common project types. They are documentation examples only: none is installed or
 listed as an available skill. The linked primary sources support the technical
@@ -344,13 +346,13 @@ Name: `python-cli`. Description: Implement or review Python command-line tools a
 Sources: [Python argparse](https://docs.python.org/3/library/argparse.html),
 [Python subprocess](https://docs.python.org/3/library/subprocess.html).
 
-### Conclusion
+## Conclusion
 
 Choose the smallest recipe that captures useful project knowledge and replace
 generic checks with real repository commands. Keep the skill subordinate to
 `AGENTS.md`, then validate its behavior before sharing it.
 
-### Additional resources
+## Additional Resources
 
 The source links beside each recipe are its primary technical references.
 

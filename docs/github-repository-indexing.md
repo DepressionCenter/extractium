@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: The design for reading GitHub repositories: the three-tier
 ingestion ladder in Phase 7, and the lightweight static code analysis in
 Phase 10. Covers URL detection, authentication, repository selection, file
@@ -295,7 +295,7 @@ GitHub gives every file body a blob SHA, which is an ideal cache key: the same S
     github/
         repositories/   Repository metadata and trees, keyed by repository and tree SHA
         blobs/          File bodies, keyed by blob SHA
-        analysis/       Phase 10 parser output, keyed by blob SHA and parser signature
+        analysis/       Parser output, keyed by blob SHA and parser signature
 ```
 
 Nothing under `.kb_cache/github/` ever contains a token. A cache test checks this rather than assuming it.
@@ -313,7 +313,7 @@ sources:
     exclude_repos: []              # exclusion wins over inclusion
     include_forks: false
     include_archived: true
-    include_code: true             # Phase 10; ignored until then
+    include_code: true             # read the structure of the code as well as the docs
     max_file_bytes: 2000000
 ```
 
@@ -358,7 +358,7 @@ Every document keeps `source_type = github`, so existing filters keep working. T
 | Value | What it is |
 |---|---|
 | `manifest` | A project or build file indexed as text |
-| `repo_map` | The synthetic per-repository summary (written from Phase 10; a metadata-only version exists in Phase 7) |
+| `repo_map` | The synthetic per-repository summary: the file inventory, and the code structure when the parsers ran |
 
 `readme`, `text`, `wiki`, and `release_notes` are unchanged.
 

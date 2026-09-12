@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, what each exit code means, and how to try a small run
@@ -34,16 +34,7 @@ This page shows you how to build your knowledge index. You write one settings fi
 You need three things:
 
 1. Python 3.10 or newer.
-2. Extractium installed. Clone the repository, then install it from inside the clone:
-
-   ```
-   git clone https://github.com/DepressionCenter/extractium.git
-   cd extractium
-   pip install -e ".[dev]"
-   ```
-
-   Install from inside the clone, not from an empty folder: `pip install -e .` reads the `pyproject.toml` sitting in the folder you are in.
-
+2. Extractium installed. The [installation guide](how-to/install.md) covers both ways in: the one-command scripts `run.sh` and `run.bat`, which install and build in one step, and `pip install -e .` from inside a clone for a developer. It also explains the three optional extras, `dev`, `code`, and `youtube`, and when each is needed.
 3. A settings file. Copy [examples/config.example.yaml](../examples/config.example.yaml), name it `config.yaml`, and change the seed URL to your own site.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
@@ -74,6 +65,18 @@ It needs Python's scripts folder on your `PATH`, which it often is not after a u
 | `--max-pages N` | Visit at most N pages. Overrides the setting in the file. |
 | `--float32-vecs` | Store the vectors at full precision instead of the compressed default. The file grows about four times. Use it only if you are comparing search quality. |
 | `--version` | Print the version and stop. |
+
+
+### Environment variables
+
+Two settings are read from the environment and never from the settings file. Both are optional.
+
+| Variable | Used by | Without it |
+|---|---|---|
+| `GITHUB_TOKEN` | The `github_api` source and a GitHub seed in a `web` source | The same content is read through the public API, at a lower request limit. |
+| `YOUTUBE_API_KEY` | The `youtube` source | Listings come from YouTube's own pages and stop at the newest hundred videos of each one. |
+
+Neither value reaches a log line, an error message, a cache file, or an output. See [how to crawl a site](how-to/crawl-a-site.md) for when each one is worth setting.
 
 
 ## Try a small run first
@@ -165,6 +168,8 @@ Extractium keeps fetched pages in a cache folder, `.kb_cache` unless you change 
 
 Add `.kb_cache/` to your `.gitignore`. Deleting the folder is safe: the next build simply downloads everything again.
 
+The one exception is a build that reads YouTube. Captions are stored under `<cache_dir>/youtube/`, and a scheduled build cannot fetch them again, because YouTube refuses caption requests from cloud-provider addresses. Such a build names a visible folder as its `cache_dir` and commits it. See the `youtube` section of the [configuration reference](configuration.md).
+
 
 ## Conclusion
 
@@ -174,6 +179,8 @@ You can now run a build, cap it for a trial, read what it produced, and tell fro
 ## Additional Resources
 
 * [Extractium™ README](../README.md) — project overview and quick start.
+* [Installation guide](how-to/install.md) — the two ways to install, and the optional extras.
+* [How to crawl a site](how-to/crawl-a-site.md) — choosing source types, tuning patterns, and reading what a build reports.
 * [Configuration reference](configuration.md) — every setting in `config.yaml`.
 * [Data flow](data-flow.md) — where content enters, how it is changed, and where it lands.
 * [Container format](container-format.md) — the index file, byte by byte.

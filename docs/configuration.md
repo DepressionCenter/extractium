@@ -560,7 +560,7 @@ The check reads shapes, not meaning. It will miss things, and it will flag thing
 
 ## How the URL patterns work
 
-The three pattern lists on a web source hold regular expressions. Each pattern is matched against the whole URL, and upper and lower case are treated the same. Wrap patterns in single quotes so YAML keeps your backslashes as you typed them.
+The three pattern lists on a web source hold regular expressions. Each pattern is matched against the whole URL, and upper and lower case are treated the same. Wrap patterns in single quotes so YAML keeps your backslashes as you typed them. This section is the full rule set; [how to crawl a site](how-to/crawl-a-site.md) shows the usual way of arriving at a good set of patterns, one trial run at a time.
 
 ### The order of the checks
 
@@ -710,6 +710,8 @@ You now know every setting a build accepts, what you get for free, and how to re
 
 * [Extractium™ README](../README.md) — project overview and quick start.
 * [examples/config.example.yaml](../examples/config.example.yaml) — commented example file to copy.
+* [How to crawl a site](how-to/crawl-a-site.md) — choosing source types and tuning these settings by trial run.
+* [How to install](how-to/install.md) — the optional extras some sources need.
 * [extractium/config.py](../extractium/config.py) — the settings, defaults, and checks in code.
 * [extractium/core/registry.py](../extractium/core/registry.py) — how a `type` or site handler name is resolved to a plugin.
 * [extractium/core/fetch.py](../extractium/core/fetch.py) — the crawl scope rules, the User-Agent, and the `robots.txt` policy.

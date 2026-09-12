@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/publish-to-github-pages.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-12
 Summary: How to publish a built index to GitHub Pages: turning Pages on,
 what the workflow uploads, the permissions it asks for and why, how to
 check the published files, and what to do before publishing anything that
@@ -101,6 +101,7 @@ Set the Pages source to GitHub Actions, run the workflow once, and check the thr
 
 * [Extractium™ README](../../README.md) — project overview and quick start.
 * [How to Run a Weekly Build](run-a-weekly-build.md) — the scheduled build and the local one.
+* [How to Deploy](deploy.md) — Pages beside the other places a build can be published.
 * [How to Search a Compendium](search-a-compendium.md) — reading the published index from Python or JavaScript.
 * [Compliance](../compliance.md) — the security and privacy posture of a published build.
 * [Data repository template](../../examples/data-repo/README.md) — the workflow and settings file to copy.

@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This page describes the code as it stands, not the finished design. It says which modules work, which are empty placeholders, and which design decisions are settled so that nobody builds on a question that has already been answered a different way. Read it before you add to the engine.
+This page describes the code as it stands, not the finished design. It says what each module does and which design decisions are settled, so that nobody builds on a question that has already been answered a different way. Read it before you add to the engine.
 
 The target design is in [the specification](extractium-spec.md) and the order of work is in the [implementation plan](implementation-plan.md). Where this page and the specification disagree, the specification says what is intended and this page says what exists.
 
@@ -44,13 +44,13 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Part | File | State |
 |---|---|---|
 | Settings | `extractium/config.py` | Working. Loads and checks `config.yaml`: global settings, a `sources` list, and an `outputs` list, with per-type checks for the built-in types. See the [configuration reference](configuration.md). |
-| Fetch and cache | `extractium/core/fetch.py`, `core/cache.py` | Working. Conditional GET, on-disk page cache, URL scope rules, a truthful User-Agent, a per-origin `robots.txt` policy, and progress through a callback. One host-specific rule remains: the TeamDynamix portal-folder scope prefix in `derive_auto_prefix`. The handler protocol now has an optional scope hook, which the GitHub account rule uses; moving the TeamDynamix rule onto it is possible and has not been done. |
+| Fetch and cache | `extractium/core/fetch.py`, `core/cache.py` | Working. Conditional GET, on-disk page cache, URL scope rules, a truthful User-Agent, a per-origin `robots.txt` policy, and progress through a callback. One host-specific rule remains: the TeamDynamix portal-folder scope prefix in `derive_auto_prefix`. The handler protocol now has an optional scope hook, which the GitHub account rule uses; moving the TeamDynamix rule onto it is possible and has not been done. With `respect_robots_txt: false`, a page that answers 401, 403, or 429 to the configured User-Agent is requested once more with a browser's, and both attempts are reported; the setting is the operator's statement that they own the site. |
 | Transport | `extractium/core/transport.py` | Working. One function returns the session a build fetches through, for the `transport` setting: an ordinary session, a browser-shaped one, or the default that starts plain and switches a host to the browser handshake the first time it answers a bot-protection challenge. The crawler's own `User-Agent` goes over either. The choice is reported once per host and listed in the build summary. See [reading a site behind bot protection](bot-protection-transport.md). |
 | Chunking | `extractium/core/chunk.py` | Working. Parent sections, child windows with their offsets into the parent, stable parent identifiers, `chunk_document` for a `Document` record. No host branches; reading a page is the site handlers' job. |
 | Scoring | `extractium/core/embed.py`, `dedup.py`, `bm25.py`, `calibration.py` | Working. `core/build.py` runs them in order. The embedding library is imported only when embedding runs, so nothing that merely reads an index loads it. |
 | Crawl loop | `extractium/sources/web.py` | Working. The `web` source: takes the session, the cache metadata, and a progress callback; consults the site handlers per URL; yields `Document` records. Pinned against the reference crawl on the fixtures. |
 | Build step | `extractium/core/build.py` | Working. `build_compendium` chunks the documents, embeds the children once, collapses near-duplicates, compacts orphaned parents, builds the BM25 and calibration statistics, and returns one `Compendium`. |
-| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. The built-in `web`, `local`, `github_api`, and `dspace` sources, the `generic`, `tdx`, and `github` handlers, and the `container`, `llmstxt`, and `sqlite` adapters are declared as entry points in `pyproject.toml`. |
+| Plugin registry | `extractium/core/registry.py` | Working. Resolves sources, site handlers, and adapters from the `plugins/` folder, installed entry points, and built-ins, in that order. The built-in `web`, `local`, `github_api`, `dspace`, and `youtube` sources, the `generic`, `tdx`, `github`, and `youtube` handlers, and the `container`, `llmstxt`, `sqlite`, and `okf` adapters are declared as entry points in `pyproject.toml`. See [plugin architecture](plugin-architecture.md). |
 | Data models | `extractium/core/models.py` | Working. `Document`, `Extraction`, `Parent`, `Children`, `Compendium`, and the three plugin protocols, including the three optional site-handler hooks. |
 | PHI check | `extractium/core/phi_lint.py` | Working. A table of 26 rules over the HIPAA Safe Harbor identifiers, in two tiers: shapes settled by a check digit fire anywhere, and the rest fire only next to a label word. Writes a JSON report and a plain-text report to the working directory, neither holding the text it matched. The command line runs it between the sources and the build step. |
 | Site handlers | `extractium/sources/generic.py`, `tdx.py`, `github.py`, `youtube_site.py` | Working. Each owns its host's selectors, title rule, categories, content types, and default exclude patterns. The TeamDynamix handler also recovers an article title the portal cut short. The GitHub handler additionally keeps a crawl to the accounts the operator named, and offers the API source for a GitHub seed, through the three optional handler hooks. The YouTube handler uses the same hooks for the opposite purpose: it refuses every YouTube address for crawling, because a video's words are in its caption track and not on its page, and offers the video source for a channel, playlist, or watch address given as a seed. |
@@ -68,9 +68,9 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 | Operations | `run.sh`, `run.bat`, `requirements-lock.txt`, `.github/workflows/build-compendium.yml`, `examples/data-repo/` | Working. One command builds locally on either platform from a hash-checked lock file; the workflow runs weekly and on a button press, reuses the crawl cache between runs, and publishes through the official GitHub Pages actions only. The data-repository template is what an organization copies for its own content. |
 | Command line | `extractium/cli.py` | Working. `extractium build --config config.yaml`, with `--out-dir`, `--max-pages`, and `--float32-vecs`; progress on standard error, the summary on standard output, and a distinct exit code for a bad configuration, an empty crawl, and an unwritable output. |
 
-Every component above is built. No placeholder files remain in the package.
+Every component above is built.
 
-The test suite passes: 1,482 Python tests as of 2026-09-12, plus 36 Node tests for the JavaScript client (`node --test clients/js`), 24 for the local Node MCP server, 19 for the shared MCP core, 13 for the Val Town example, and 14 for the Cloudflare example (`node --test examples/mcp/<folder>`).
+The test suite passes: 1,727 Python tests as of 2026-09-12, with one skipped, plus 36 Node tests for the JavaScript client (`node --test clients/js`), 24 for the local Node MCP server, 19 for the shared MCP core, 13 for the Val Town example, and 14 for the Cloudflare example (`node --test examples/mcp/<folder>`).
 
 
 ## Settled design decisions
@@ -174,9 +174,62 @@ A second finding, made on 2026-09-10, separates the identity from the connection
 Specification: section 6.
 
 
+### 9. The parsers and the caption library are optional installs
+
+**Decision:** the Tree-sitter grammars are the `extractium[code]` extra and the caption library is the `extractium[youtube]` extra. Neither is a runtime dependency. A build without the parsers still records every source file by name, language, and length; a build without the caption library still reads transcripts a person already stored.
+
+**Why:** most builds index documentation and no code or video at all, and the parser set is fourteen packages with native wheels. Making them optional keeps the default install small and keeps a machine that cannot install them able to build everything else.
+
+Specification: section 5, the `youtube` and code-structure rows.
+
+
+### 10. The YouTube store is committed content, not a cache
+
+**Decision:** captions and playlist listings are written under `cache_dir/youtube/`, nothing in that folder is revalidated, and a data repository commits it. A build that reads YouTube names a visible folder as its `cache_dir`.
+
+**Why:** YouTube refuses caption requests from cloud-provider addresses, so a scheduled build cannot fetch a transcript. It can only reuse what a person fetched on their own machine. Treating the store as a convenience that may be deleted would make every scheduled build lose its videos.
+
+Specification: sections 5, 8, and 11.
+
+
+### 11. One page is indexed once, whichever source reached it first
+
+**Decision:** pages are compared by their normalized address across every source in a build. The first source to produce a page keeps it, later sources are told they were too late, and the build reports how many pages that happened to.
+
+**Why:** two sources often overlap without meaning to: a website and a section of it, or a portal and a short link into one of its articles. Indexing the page twice would double its weight in every search and list it twice in `llms.txt`. A section of a site that is already crawled belongs to that crawl as a second `seed_urls` entry, not to a source of its own.
+
+Specification: section 3.1.
+
+
+### 12. A video is one document per stretch of its captions
+
+**Decision:** consecutive caption lines are joined into stretches of roughly a thousand characters, and each stretch is one document addressed at the moment it begins. The outputs that list pages group the stretches back into one video.
+
+**Why:** a caption track arrives one phrase per line, far too small to answer a question with, and a whole talk is too large to cite. A stretch is the size of a section elsewhere in the index, and addressing it at its start time is what lets a citation open the video at the words it quoted.
+
+Specification: section 5, the `youtube` row.
+
+
+### 13. Bot protection is answered in the handshake, not in the name
+
+**Decision:** the `transport` setting defaults to `auto`: an ordinary request first, and one retry over a browser-shaped TLS handshake when a host answers a bot-protection challenge, keeping that choice for the host. The crawler's own User-Agent is sent over either connection, `robots.txt` is read first and obeyed as before, and the choice is reported once per host and in the build summary.
+
+**Why:** the three Depression Center sites that challenged the crawler were measured to read the TLS handshake and not the User-Agent, and the center cannot change the rule. Changing the name would have been dishonest and would not have worked. Changing the handshake is plumbing, and the name stays truthful.
+
+Specification: section 6, and [reading a site behind bot protection](bot-protection-transport.md).
+
+
 ## Conclusion
 
-A build now runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place; the web source crawls through the site handlers to produce documents; one build step turns those documents into a scored compendium; the container and `llms.txt` adapters write it from the command line; the Python and JavaScript clients search the result identically; and one command, locally or on a weekly schedule, does the whole thing and publishes it. A folder on the operator's own machine can be indexed, with every output dropping that content unless it opted in, and every build now checks what it read for likely protected health information and writes two reports for review. GitHub repositories are read through the API, with their code analyzed into records a search can find a definition in, and a DSpace repository's deposits are read through its own interface. Every build result can also be written as a folder of Markdown, in the Open Knowledge Format, which a person reads in any Markdown viewer. An assistant on the operator's own machine can search the result through either of two local MCP servers, and an assistant anywhere can search it through a server hosted for free on Val Town or Cloudflare, or be pointed at the static files by a system prompt. A channel's videos are indexed from their captions, each stretch citable at the moment it was said. A site behind bot protection is read over a browser-shaped connection, with the crawler still naming itself. Every phase of the plan through Phase 14 is built; the documentation pass is what remains. That order, with a done-when rule for each step, is the [implementation plan](implementation-plan.md); the GitHub and code-analysis work is designed in detail in [GitHub repository indexing](github-repository-indexing.md).
+A build runs end to end, and what it writes can be read back. The settings layer, the registry, and the data models are in place. The web source crawls through the site handlers to produce documents, one build step turns them into a scored compendium, and the adapters write it in four formats from the command line.
+
+Five source types feed that build. Websites are crawled, with a browser-shaped connection used only where a site challenges the crawler and the crawler still naming itself. GitHub repositories are read through the API, with their code analyzed into records a search can find a definition in. A DSpace repository's deposits are read through its own interface. A channel's videos are indexed from their captions, each stretch citable at the moment it was said. A folder on the operator's own machine can be indexed, and every output drops that content unless it opted in.
+
+Every build checks what it read for likely protected health information and writes two reports for a person to review. One command, locally or on a weekly schedule, does the whole thing and publishes it.
+
+The result is searched the same way from Python and JavaScript. An assistant on the operator's own machine can search it through either of two local MCP servers, an assistant anywhere can search it through a server hosted on Val Town or Cloudflare, and a platform that only browses can be pointed at the static files by a system prompt.
+
+Every phase of the [implementation plan](implementation-plan.md) is built. The GitHub and code-analysis work is designed in detail in [GitHub repository indexing](github-repository-indexing.md), and the plugin kinds a contributor can add are described in [plugin architecture](plugin-architecture.md).
 
 
 ## Additional Resources
@@ -189,6 +242,7 @@ A build now runs end to end, and what it writes can be read back. The settings l
 * [Data flow](data-flow.md) — what happens to content between the site and the output folder.
 * [Running a build](usage.md) — the command line, its options, and its exit codes.
 * [Configuration reference](configuration.md) — every setting in `config.yaml` as it exists now.
+* [Plugin architecture](plugin-architecture.md) — the three plugin kinds, the registry, and a working example of each.
 * [tests/reference/build_kb_index_reference.py](../tests/reference/build_kb_index_reference.py) — the frozen original the port is measured against.
 
 

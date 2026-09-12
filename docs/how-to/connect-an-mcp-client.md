@@ -173,6 +173,7 @@ You now have an assistant that can search your organization's documentation and 
 * [How to Deploy a Remote MCP Server](deploy-a-remote-mcp-server.md) — the same tool hosted on Val Town or Cloudflare.
 * [Container Format](../container-format.md) — the index file both servers read.
 * [Running a Build](../usage.md) — how the index is produced.
+* [How to Deploy](deploy.md) — the deployment choices, and how each one is consumed.
 * [Troubleshooting](../troubleshooting.md) — known failures, causes, and fixes.
 * [Using a Published Compendium](../using-a-compendium.md) — how an AI agent should use what it gets back.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol these servers speak.

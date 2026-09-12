@@ -30,26 +30,6 @@
           "name": "Mongefranco, Gabriel",
           "type": "personal"
         }
-      },
-      {
-        "affiliations": [ { "id": "00jmfr291", "name": "University of Michigan" } ],
-        "person_or_org": {
-          "family_name": "[Family Name]",
-          "given_name": "[Given Name]",
-          "identifiers": [ { "identifier": "0000-000X-XXXX-XXXX", "scheme": "orcid" } ],
-          "name": "[Family Name], [Given Name]",
-          "type": "personal"
-        }
-      },
-	  {
-        "affiliations": [ { "id": "00jmfr291", "name": "University of Michigan" } ],
-        "person_or_org": {
-          "family_name": "[Family Name]",
-          "given_name": "[Given Name]",
-          "identifiers": [ { "identifier": "0000-000X-XXXX-XXXX", "scheme": "orcid" } ],
-          "name": "[Family Name], [Given Name]",
-          "type": "personal"
-        }
       }
     ],
     "publisher": "Eisenberg Family Depression Center",

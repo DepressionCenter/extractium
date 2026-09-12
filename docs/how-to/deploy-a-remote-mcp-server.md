@@ -163,6 +163,7 @@ You now have a search tool any MCP-capable assistant can call, hosted for free, 
 * [Cloudflare MCP Server](../../examples/mcp/cloudflare/README.md) — loading D1, local runs, and limits of the Cloudflare example.
 * [How to Connect an MCP Client](connect-an-mcp-client.md) — the local servers and the client configuration in full.
 * [How to Publish to GitHub Pages](publish-to-github-pages.md) — where the published index comes from.
+* [How to Deploy](deploy.md) — the deployment choices side by side.
 * [Hosted Assistant Prompts](../../examples/wrappers/README.md) — for platforms that browse but cannot call tools.
 * [Using a Published Compendium](../using-a-compendium.md) — how an AI agent should use what it gets back.
 * [Configuration Reference](../configuration.md) — the `sqlite` output.
