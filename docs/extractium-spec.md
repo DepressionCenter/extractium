@@ -4,20 +4,15 @@ docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
 Last Modified: 2026-09-12
-Summary: Provides a high-level specification of the Extractium™ project, in Markdown format.
+Summary: The intended design of Extractium™: what the tool is for, how
+its parts fit together, what it reads, what it writes, and what it will
+never do. Written for developers and plugin authors.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>.
+Licensed under the GNU Free Documentation License v1.3 or later.
+See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license information.
 
 -->
 
@@ -32,7 +27,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 
 This page is the intended design of Extractium™: what the tool is for, how its parts fit together, what it reads, what it writes, and what it will never do. It is written for developers and plugin authors. For what is built today, read [Architecture and Current State](architecture.md). For the order in which the design gets built, read the [implementation plan](implementation-plan.md).
 
-- Status: Draft v0.2 (2026-09-04). Supersedes v0.1 (2026-08-16); section 14 lists the changes.
+- Status: Draft v0.3 (2026-09-12). Supersedes v0.2 (2026-09-04) and v0.1 (2026-08-16); sections 14 and 15 list the changes.
 - License: GPL-3.0-or-later for code; all dependencies must be compatible with it.
 - Home: the DepressionCenter GitHub organization.
 
@@ -93,7 +88,7 @@ config.yaml (one per organization)
         v
 +-------------------------------------------------------------+
 | ADAPTERS (plugins)  serialize the Compendium                 |
-|   container (v3) | llmstxt | sqlite | okf                    |
+|   container (v4) | llmstxt | sqlite | okf                    |
 +-------------------------------------------------------------+
         |
         v
@@ -119,6 +114,7 @@ Three kinds, each a small duck-typed protocol.
 | `name` | Registry key and the `type:` value in `config.yaml`. |
 | `__init__(options)` | Receives the validated options for its entry in `sources:`. |
 | `fetch(session, cache, progress)` | Yields `Document` records. Takes the HTTP session and a progress callback from the caller; never constructs a session or prints. |
+| `configure(registry, settings)` | Optional. Receives the plugin registry and the global crawl settings after construction, for a source that takes part in a web crawl. |
 
 **Site handler.** Takes part in the web crawl for URLs it recognizes. Not a crawler: link discovery stays in the web source.
 
@@ -131,6 +127,9 @@ Three kinds, each a small duck-typed protocol.
 | `extract(soup, url)` | Returns the title, the content node, and the categories list, or nothing when the page holds no indexable content and is only a link-discovery hop. |
 | `source_type`, `content_type(url)` | Metadata values recorded on every parent. See section 3.4. |
 | `default_crawl_exclude_patterns`, `default_index_exclude_patterns` | Patterns the handler adds to the crawl when it is enabled. |
+| `configure(settings)` | Optional. Receives the build's global crawl settings after construction, for a handler whose rules depend on what the operator configured. |
+| `allows(url)` | Optional. May veto a URL the crawl would otherwise follow. Every handler that defines it is asked about every URL, and one refusal keeps the URL out of scope. |
+| `offer_source(seed_url)` | Optional. May name a better source for a crawl's seed, as a source name and its options. Consulted for the seed only, never for a link found mid-crawl. |
 
 **Adapter.** Writes one output format.
 
@@ -160,6 +159,8 @@ The original script crawls TeamDynamix, GitHub, and ordinary pages with one loop
 
 A source yields `Document` records: the source URL, a title, the content (a parsed HTML node or plain text), `source_type`, `source_label`, `content_type`, `categories`, and `local`. The core engine never sees a source's fetch details.
 
+One page is indexed once, however many sources reach it. Documents are compared by their normalized address across every source in a build; the first source to produce a page keeps it, later sources are told they were too late, and the build reports how many pages that happened to. A section of a site that is already crawled belongs to that crawl as a second `seed_urls` entry rather than to a source of its own.
+
 ### 3.2 Parents and children
 
 - **Parents** are full sections: one per `h2`/`h3` heading, cut at a maximum length. They are the context unit shown to a language model and the unit of citation.
@@ -179,7 +180,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 |---|---|
 | `source_type` | `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`, `repository` (a scholarly repository such as a DSpace instance) |
 | `source_label` | The name a reader sees for the source, from its required `label` setting. At most 60 characters, never empty. Groups the sections of `llms.txt` |
-| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`; `manifest` and `repo_map` from phase 7; `code_file` and `code_symbol` from phase 10 |
+| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest`, `repo_map`, `code_file`, `code_symbol` |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
 | `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
@@ -193,13 +194,15 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 
 ## 4. Output formats
 
-| Format | Files | Plan phase | Notes |
+Every row marked "built" exists in the code; [Architecture and Current State](architecture.md) says where.
+
+| Format | Files | Status | Notes |
 |---|---|---|---|
-| Binary container, version 3 | `<slug>.json`, `compendium.json` by default | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
-| llms.txt | `llms.txt`, `llms-full.txt` | 3 | Root manifest and full concatenation for web-browsing language models. |
-| SQLite | `compendium.sqlite` | 6 | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
-| OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | 11, built | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them; every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. |
-| gzip container | `--gzip` flag | later | Same format, compressed; browsers decode with `DecompressionStream`. |
+| Binary container, version 4 | `<slug>.json`, `compendium.json` by default | built | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
+| llms.txt | `llms.txt`, `llms-full.txt` | built | Root manifest and full concatenation for web-browsing language models. |
+| SQLite | `<slug>.sqlite`, `compendium.sqlite` by default | built | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
+| OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | built | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them; every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. |
+| gzip container | `--gzip` flag | future | Same format, compressed; browsers decode with `DecompressionStream`. |
 | Parquet, DuckDB | install extras | future | `[parquet]` and `[duckdb]` extras only. |
 | JSONL plus separate vector file | none | never | No ecosystem behind it; the container covers the case. |
 
@@ -208,19 +211,21 @@ Reading OKF bundles produced by other tools, as a source, is possible future wor
 
 ## 5. Sources and site handlers
 
-| Kind | Name | Plan phase | Notes |
+The same rule applies here: "built" means the row exists in the code.
+
+| Kind | Name | Status | Notes |
 |---|---|---|---|
-| Source | `web` | 2 | Core crawler. Scope: same origin plus a prefix, or explicit include patterns. Consults site handlers per URL. |
-| Site handler | `generic` | 2 | Core fallback: common content selectors, boilerplate stripping. |
-| Site handler | `tdx` | 2 | TeamDynamix portals: content selectors, title prefix stripping, recovery of a title the portal cut short, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
-| Site handler | `youtube` | 13, built | Recognition only, in both directions. Every address on a YouTube host is refused for crawling, because the page is a shell around a player and its words are in the caption track; the count held back is reported once with the advice to add a video source. A channel, playlist, or watch address given as a crawl seed is offered to the `youtube` source instead, in whichever form it was written, which is the same seed promotion the GitHub handler performs. Extracts nothing, and is reached for extraction only if an operator turned it off and let an address through anyway. |
-| Site handler | `github` | 2 | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns. |
-| Source | `local` | 6 | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
-| Source | `github_api` | 7, built | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget; it never widens what may be published. Only accounts the operator named are read, whatever links to them (section 6). See [GitHub repository indexing](github-repository-indexing.md). |
-| Source | `youtube` | 13, built | Captions only. No key is needed at all: a channel may be named by handle, by custom address, by watch-page address, or by id, and anything but an id is resolved once against the channel's own page and stored. Listings come from the Data API when `YOUTUBE_API_KEY` is set and from YouTube's own pages when it is not, and a channel's uploads playlist is derived from its id rather than asked for. The keyless path stops where YouTube's robots.txt does, at the newest hundred of a listing, and says which listings it stopped short on; paging further, and the one browser-identity retry a refused page gets, both require `respect_robots_txt: false`. A channel's uploads and the playlists it shows are both read, and a video in a playlist that another channel published is left out unless `only_channel_videos` is turned off, because a playlist holds whatever its owner chose. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and stored under `cache_dir` to be committed; a CI run reuses that store and reaches YouTube not at all. Nothing stored is revalidated, because revalidating is the thing a runner cannot do. Each stretch of a transcript is one parent, addressed at the moment it begins, so a citation opens the video at the quoted words; `llms.txt` and the OKF bundle group those stretches back into one video. The caption library is an optional install (`extractium[youtube]`), so a build that reads only stored transcripts needs it not at all. A video whose captions are off is skipped and counted, not fatal. |
-| Source | GitHub code structure | 10, built | Tree-sitter analysis of repository code, inside the `github_api` source: signatures, documentation, imports, calls labelled `resolved`, `probable`, or `unresolved`, reverse edges, and repository and account maps. Never raw code bodies, and no language model; a symbol record links to its lines on GitHub instead of copying them. The parser set is an optional install (`extractium[code]`), so a build without it still records every source file at the file-metadata tier. Universal Ctags is an optional second parser, run with an argument array, no shell, and no configuration file. No R grammar is published for Python, so R falls to Ctags or to a file-level record; Stata always does. Notebooks, R Markdown, Lua Server Pages, and HTML have their prose indexed and their embedded code parsed, and a notebook's saved outputs are never read. See [GitHub repository indexing](github-repository-indexing.md). |
-| Source | `dspace` | 9, built | Scholarly deposits in a DSpace 7 repository, such as the University of Michigan Library's Deep Blue. Named collections only, never discovered. One document per deposit: abstract, authors, date, subjects, rights, and the handle, DOI, and any other address the depositor gave, all kept apart. File contents come from the repository's own extracted-text bundle, so no PDF, Word, or archive reader is added. Incremental from the per-deposit modification stamp the listing carries, which arrives with the files in one request per hundred deposits. No fall back to crawling: the pages a crawler reaches hold no deposits. A collection is confirmed to exist before it is searched, because a scope the interface does not recognize is answered with the whole repository rather than refused. See [Indexing a DSpace repository](dspace-repository-indexing.md). |
-| Source | Speech-to-text fallback | not planned | Was intended for videos without captions. Dropped on measurement: of 65 videos sampled from a real channel on 2026-09-11, 64 had English captions, 37 of those generated by YouTube itself, and none had captions missing or disabled. The one gap was a video captioned in Spanish only, which the `languages` setting covers. Decoding media to recover speech this project can already read as text is a large dependency and a malformed-input risk for a problem that did not occur. Video indexing is therefore captions from YouTube only: no other video host, and no local media file. An organization that needs those can write a source plugin. |
+| Source | `web` | built | Core crawler. Scope: same origin plus a prefix, or explicit include patterns. Consults site handlers per URL. |
+| Site handler | `generic` | built | Core fallback: common content selectors, boilerplate stripping. |
+| Site handler | `tdx` | built | TeamDynamix portals: content selectors, title prefix stripping, recovery of a title the portal cut short, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
+| Site handler | `youtube` | built | Recognition only, in both directions. Every address on a YouTube host is refused for crawling, because the page is a shell around a player and its words are in the caption track; the count held back is reported once with the advice to add a video source. A channel, playlist, or watch address given as a crawl seed is offered to the `youtube` source instead, in whichever form it was written, which is the same seed promotion the GitHub handler performs. Extracts nothing, and is reached for extraction only if an operator turned it off and let an address through anyway. |
+| Site handler | `github` | built | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns. |
+| Source | `local` | built | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
+| Source | `github_api` | built | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget; it never widens what may be published. Only accounts the operator named are read, whatever links to them (section 6). See [GitHub repository indexing](github-repository-indexing.md). |
+| Source | `youtube` | built | Captions only. No key is needed at all: a channel may be named by handle, by custom address, by watch-page address, or by id, and anything but an id is resolved once against the channel's own page and stored. Listings come from the Data API when `YOUTUBE_API_KEY` is set and from YouTube's own pages when it is not, and a channel's uploads playlist is derived from its id rather than asked for. The keyless path stops where YouTube's robots.txt does, at the newest hundred of a listing, and says which listings it stopped short on; paging further, and the one browser-identity retry a refused page gets, both require `respect_robots_txt: false`. A channel's uploads and the playlists it shows are both read, and a video in a playlist that another channel published is left out unless `only_channel_videos` is turned off, because a playlist holds whatever its owner chose. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on an operator's machine and stored under `cache_dir` to be committed; a CI run reuses that store and reaches YouTube not at all. Nothing stored is revalidated, because revalidating is the thing a runner cannot do. Each stretch of a transcript is one parent, addressed at the moment it begins, so a citation opens the video at the quoted words; `llms.txt` and the OKF bundle group those stretches back into one video. The caption library is an optional install (`extractium[youtube]`), so a build that reads only stored transcripts needs it not at all. A video whose captions are off is skipped and counted, not fatal. |
+| Source | GitHub code structure | built | Tree-sitter analysis of repository code, inside the `github_api` source: signatures, documentation, imports, calls labelled `resolved`, `probable`, or `unresolved`, reverse edges, and repository and account maps. Never raw code bodies, and no language model; a symbol record links to its lines on GitHub instead of copying them. The parser set is an optional install (`extractium[code]`), so a build without it still records every source file at the file-metadata tier. Universal Ctags is an optional second parser, run with an argument array, no shell, and no configuration file. No R grammar is published for Python, so R falls to Ctags or to a file-level record; Stata always does. Notebooks, R Markdown, Lua Server Pages, and HTML have their prose indexed and their embedded code parsed, and a notebook's saved outputs are never read. See [GitHub repository indexing](github-repository-indexing.md). |
+| Source | `dspace` | built | Scholarly deposits in a DSpace 7 repository, such as the University of Michigan Library's Deep Blue. Named collections only, never discovered. One document per deposit: abstract, authors, date, subjects, rights, and the handle, DOI, and any other address the depositor gave, all kept apart. File contents come from the repository's own extracted-text bundle, so no PDF, Word, or archive reader is added. Incremental from the per-deposit modification stamp the listing carries, which arrives with the files in one request per hundred deposits. No fall back to crawling: the pages a crawler reaches hold no deposits. A collection is confirmed to exist before it is searched, because a scope the interface does not recognize is answered with the whole repository rather than refused. See [Indexing a DSpace repository](dspace-repository-indexing.md). |
+| Source | Speech-to-text fallback | dropped | Was intended for videos without captions. Dropped on measurement: of 65 videos sampled from a real channel on 2026-09-11, 64 had English captions, 37 of those generated by YouTube itself, and none had captions missing or disabled. The one gap was a video captioned in Spanish only, which the `languages` setting covers. Decoding media to recover speech this project can already read as text is a large dependency and a malformed-input risk for a problem that did not occur. Video indexing is therefore captions from YouTube only: no other video host, and no local media file. An organization that needs those can write a source plugin. |
 | Source | OKF bundles from other tools | future | Maybe. |
 
 Explicitly out: spreadsheet extraction, OAuth connectors to cloud drives (users sync to a local folder instead), SQL connectors (contributed plugins), and MCP as a core concern (servers are thin examples over the client libraries; section 9.3).
@@ -239,7 +244,7 @@ The crawler identifies itself and respects the sites it reads.
 - `respect_robots_txt: false` is the operator's statement that they own the sites in scope, and it carries a second effect. With it off, a page that answers 401, 403, or 429 to the configured `user_agent` is requested once more with a common browser User-Agent, and both attempts are reported. Pages that were never refused are still fetched under the configured agent, and a 404 or a 5xx is never retried, because neither is a refusal. The two behaviours travel together deliberately: presenting as a browser is only defensible where ignoring robots rules already is.
 - When a site's `robots.txt` cannot be read (a 5xx answer or a network failure), every URL on that site is skipped and the reason is reported. A 4xx answer means the site publishes no rules. This is the robots exclusion standard's rule (RFC 9309) and it fails closed on purpose.
 - A GitHub account is read only when the operator named it: as the owner of a `github_api` source, as the owner in a GitHub `web` seed, or in the global `github_owners` list. Account names appear in READMEs, dependency lists, fork notices, and contributor links, and following them turns a one-organization build into a crawl of thousands of strangers' repositories. The rule is deny by default, holds exact names rather than patterns, applies to `github.com`, `raw.githubusercontent.com`, and `<owner>.github.io`, and is enforced in crawl scope as well as in API promotion, because a GitHub seed puts every account on the host inside the seed origin. Being allowed lets links into an account be followed; only naming an account as a source lists that account's repositories. Skipped accounts are counted and reported once.
-- Omitting `crawl_exclude_patterns` or `index_exclude_patterns` means the host-independent asset patterns plus whatever each enabled site handler contributes, so switching a handler off also drops its exclusions. An explicit list, including an empty one, is used as written. The TeamDynamix portal-folder scope rule (`/TDClient/<n>/<slug>/`) stays in core, because the handler protocol has no scope hook.
+- Omitting `crawl_exclude_patterns` or `index_exclude_patterns` means the host-independent asset patterns plus whatever each enabled site handler contributes, so switching a handler off also drops its exclusions. An explicit list, including an empty one, is used as written. The TeamDynamix portal-folder scope rule (`/TDClient/<n>/<slug>/`) stays in core. The handler protocol has an optional scope hook, `allows`, which the GitHub account rule uses; moving the TeamDynamix rule onto it is possible and has not been done.
 - A handler's default patterns are written for the URL shapes its sites really serve. A code host serves a listing both bare (`/issues`) and with a sub-path (`/issues/12`), and a portal writes a facet as a query parameter (`?CategoryID=0&TagID=8245`) as well as a path. A pattern that covers only one shape is inert against the other, which is how the frozen script came to spend 150 pages of a 500-page crawl on listings that produced no indexed content.
 - Because every enabled handler's patterns apply to every URL in a crawl, a handler's segment patterns are anchored to the paths its own sites use. Without that, the code host's `/projects` rule would also exclude an ordinary site's `/project` page.
 - Category and tag listings belong on the index list and never on the crawl list. A TeamDynamix portal publishes no sitemap and no full article index, so those listings are the only route to most of its articles; they are also pure navigation, so their own text is not indexed. The portal writes an unfiltered listing as `TagID=0`, so a rule keyed on the presence of a tag parameter would skip the widest discovery page it has.
@@ -256,7 +261,7 @@ A local folder can hold content that must never be published. The rules:
 
 ## 8. Cache
 
-- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), `github/` (repository metadata and trees, file bodies keyed by blob SHA, and parser output keyed by blob SHA and parser signature), and `youtube/` (transcripts). `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token.
+- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
 - Revalidation uses conditional GET (`If-None-Match`, `If-Modified-Since`, honoring 304), not HEAD probing: several servers omit validators on HEAD.
 - A content SHA-256 is stored per page so a future delta build can skip unchanged chunks.
 - On GitHub Actions, `.kb_cache/` persists between runs through the cache action, keyed on a hash of the configuration file.
@@ -266,22 +271,22 @@ A local folder can hold content that must never be published. The rules:
 
 ### 9.1 Client libraries
 
-| Language | Plan phase | Notes |
+| Language | Status | Notes |
 |---|---|---|
-| JavaScript | 4 | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, calibration threshold, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
-| Python | 4 | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
-| Others | contributed | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). None is scheduled. |
+| JavaScript | built | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, calibration threshold, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
+| Python | built | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
+| Others | not scheduled | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). None is scheduled. |
 
 ### 9.2 Access tiers
 
 The compendium on a static host is the single source of truth; every access method is a thin layer over it.
 
-| Tier | Method | Search quality | Hosting cost | Plan phase |
+| Tier | Method | Search quality | Hosting cost | Status |
 |---|---|---|---|---|
-| 0 | Static files (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | Model-dependent; no ranking | None | 3 |
-| 1 | Local MCP server on the user's machine (Node or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | 12, built |
-| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | 14, built |
-| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | 14, built |
+| 0 | Static files (`llms.txt`, `llms-full.txt`, container, SQLite) fetched directly by web-browsing agents | Model-dependent; no ranking | None | built |
+| 1 | Local MCP server on the user's machine (Node or Python); index downloaded and cached; query embedded locally | Full hybrid: vectors, BM25, fusion | None | built |
+| 2 | Remote stateless MCP server on a hosted runtime | BM25; hybrid where the host offers a compatible embedding model | None or existing account | built |
+| 3 | Hosted assistant wrappers (system prompt plus Tier 0 URLs) | Model-dependent | None | built |
 
 Tier 2 detail, from the hosts' published limits: a Cloudflare Worker on the free plan has 10 milliseconds of CPU per request and a 3 MB script limit, so it cannot parse a multi-megabyte JSON header on every call; the example imports the SQLite output into D1 and answers BM25 queries from it, with optional query embedding through Workers AI, which serves the same `bge-small-en-v1.5` model. A Val Town HTTP val has 4 GiB of memory and a one-minute wall-clock limit on the free plan, so it can hold the whole container in memory after fetching it from the published URL. Both hosted servers speak the protocol's Streamable HTTP binding in its stateless form: one endpoint, one POST per message, one JSON object back, no session and no server-sent stream. Each takes an optional bearer token and an optional origin allowlist, because a hosted endpoint is otherwise open to anyone who finds its address.
 
@@ -321,7 +326,7 @@ sources:
     seed_url: https://example.edu/TDClient/000/ExampleOrg/Home/
 ```
 
-Every setting:
+Every setting, with its default where one exists. The commented example that ships as [examples/config.example.yaml](../examples/config.example.yaml) holds the same settings with a paragraph on each, and the two are kept in step.
 
 ```yaml
 name: Example Org Knowledge Base   # default: title of the first crawled page
@@ -330,8 +335,9 @@ out_dir: dist                       # every adapter writes under here
 cache_dir: .kb_cache
 delay_seconds: 0.5
 max_pages: 10000
-user_agent: Extractium/0.1 (+https://github.com/DepressionCenter/extractium)
+user_agent: Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)
 respect_robots_txt: true
+transport: auto                     # auto | browser | plain
 phi_lint: local                     # local | all | off
 github_owners: []                   # extra GitHub accounts this build may follow links
                                     # into; deny by default, exact names, never patterns
@@ -344,6 +350,11 @@ sources:
     crawl_exclude_patterns: []      # omit = handler defaults + asset extensions
     index_exclude_patterns: []
     site_handlers: [tdx, github]    # omit = all installed; [] = generic only
+  - type: web
+    label: Example Library
+    seed_urls:                      # several starting points, still one crawl
+      - https://library.example/collections/first-collection
+      - https://library.example/collections/second-collection
   - type: local
     label: Internal Notes
     path: ./internal-docs
@@ -356,13 +367,25 @@ sources:
     include_forks: false
     include_archived: true
     include_code: true              # read the structure of the code, not only the docs
+    ctags_fallback: true            # let Universal Ctags read languages no grammar covers
     max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
+  - type: dspace
+    label: Example Repository
+    api_url: https://repository.example.edu/server/api
+    site_url: https://repository.example.edu
+    collections:
+      - https://hdl.handle.net/9999.1/1001      # a handle link, or a collection identifier
+    include_full_text: true
+    max_file_bytes: 2000000
   - type: youtube
     label: Example Video Library
     channel_id: https://www.youtube.com/@ExampleChannel   # handle, address, or id; no key needed
     playlist_ids: []
     video_ids: []
     languages: [en]
+    include_playlists: true         # the channel's playlists as well as its uploads
+    only_channel_videos: true       # skip playlist videos another channel published
+    delay_seconds: 1                # seconds between requests to YouTube; never less than 1
 
 outputs:                            # omit = container + llmstxt
   - type: container         # written as <slug>.json; file: overrides
@@ -373,7 +396,7 @@ outputs:                            # omit = container + llmstxt
   - type: okf
 ```
 
-Keys and API tokens never go in this file. They are read from the environment.
+Keys and API tokens never go in this file. `GITHUB_TOKEN` and `YOUTUBE_API_KEY` are read from the environment, and both are optional.
 
 
 ## 13. Repository structure (target)
@@ -412,7 +435,26 @@ extractium/
 Documentation serves four audiences: people building an index, core developers, plugin developers, and AI agents consuming a compendium.
 
 
-## 14. Changes from v0.1
+## 14. Changes from v0.2
+
+- The container is version 4: every parent carries `source_label`, which is what lets a client name the collection an answer came from (section 4, [container format](container-format.md)).
+- Every source carries a required `label`, and `slug` names the output files (sections 3.4 and 12).
+- One page is indexed once across every source in a build (section 3.1).
+- The site-handler protocol gained three optional hooks: `configure`, `allows`, and `offer_source`. The GitHub account rule and the seed promotion to the API and video sources use them (sections 2.1 and 6).
+- A GitHub account is read only when the operator named it, through `github_owners` or a source of its own (section 6).
+- The `github_api` source, the code analysis on top of it, the `dspace` source, the `youtube` source and handler, and the OKF adapter are built. The "Plan phase" columns became "Status" columns, and the architecture page says where each row lives (sections 4 and 5).
+- The parser set and the caption library are optional installs, `extractium[code]` and `extractium[youtube]` (section 5).
+- YouTube needs no key: listings come from the Data API when `YOUTUBE_API_KEY` is set and from YouTube's own pages when it is not, stopping where its `robots.txt` does. The store under `cache_dir/youtube/` is committed content, because a cloud runner cannot fetch a transcript (sections 5, 8, and 11).
+- Speech-to-text for videos without captions was dropped on measurement, and video indexing is captions from YouTube only (section 5).
+- The `transport` setting answers bot protection in the TLS handshake and never in the crawler's name (section 6, [reading a site behind bot protection](bot-protection-transport.md)).
+- With `respect_robots_txt: false`, a refused page is retried once under a browser's identity and both attempts are reported (section 6).
+- The cache gained `repository/` for a DSpace repository's extracted text and `github/analysis/` for parser output (section 8).
+- The two hosted MCP examples and the two hosted assistant prompts are built (sections 9.2 and 9.3).
+- A `web` source accepts `seed_urls`, the `github_api` source accepts `ctags_fallback`, and the `youtube` source accepts `include_playlists`, `only_channel_videos`, and its own `delay_seconds` (section 12).
+- This page carries the documentation license header rather than the code header.
+
+
+## 15. Changes from v0.1
 
 - Site handlers replace the separate `tdx` and `github` source plugins; one web crawler is core, and the handlers are on-by-default plugins (section 2).
 - Three plugin kinds and a stated resolution order (section 2.1, 2.2).
@@ -421,15 +463,15 @@ Documentation serves four audiences: people building an index, core developers, 
 - Every adapter excludes local content unless the output opts in; the earlier rule let the container include it (section 7).
 - The OKF adapter writes a directory only; OKF defines no `.zip` packaging (section 4).
 - Crawler etiquette: a truthful User-Agent and `robots.txt` by default (section 6).
-- YouTube: enumeration through the Data API or explicit lists; transcripts fetched locally and cached because cloud runners are blocked (section 5).
+- YouTube: enumeration through the Data API or explicit lists; transcripts fetched locally and cached because cloud runners are blocked (section 5). Superseded in v0.3, which needs no key for enumeration; see section 14.
 - Remote MCP examples account for Cloudflare's CPU limit and use Workers AI for optional hybrid search (section 9.2).
 - Clients: JavaScript and Python are the only scheduled clients (section 9.1).
 - Refresh cadence is weekly, with the local run as the primary path (section 11).
 - A `sources:` and `outputs:` configuration schema (section 12).
-- The roadmap moved to the implementation plan (section 15).
+- The roadmap moved to the implementation plan (section 16).
 
 
-## 15. Roadmap
+## 16. Roadmap
 
 The order of work, sized in phases of about one week, is in the [implementation plan](implementation-plan.md). The plan is the authority on sequence; this page is the authority on design.
 

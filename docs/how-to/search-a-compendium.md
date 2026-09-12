@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/search-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: How to search a built compendium with the two client libraries:
 loading the container in Python and in JavaScript, supplying a query
 embedder, reading the results, and what the search does behind the two
@@ -151,6 +151,7 @@ You can now search a published index from either language, with your own embedde
 * [Extractium™ README](../../README.md) — project overview and quick start.
 * [Container Format](../container-format.md) — the byte layout both clients read, and the reader checklist they implement.
 * [Running a Build](../usage.md) — how the file you are searching is produced.
+* [How to Deploy](deploy.md) — where a published index lives and every way it can be consumed.
 * [How to Run a Weekly Build](run-a-weekly-build.md) — keeping a published index current.
 * [How to Connect an MCP Client](connect-an-mcp-client.md) — the two local servers built on these clients.
 * [Using a Published Compendium](../using-a-compendium.md) — how an AI agent uses the published files and these clients.

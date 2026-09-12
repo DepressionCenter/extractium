@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Summary: How to keep a knowledge index current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
@@ -138,6 +138,8 @@ You can now rebuild your index on demand from your own machine, or leave it to a
 ## Additional Resources
 
 * [Extractium™ README](../../README.md) — project overview and quick start.
+* [Installation guide](install.md) — the two ways to install, and what the lock file pins.
+* [How to Deploy](deploy.md) — the deployment choices side by side, and how each one is consumed.
 * [Running a Build](../usage.md) — every command-line option, the summary, and the exit codes.
 * [Configuration Reference](../configuration.md) — every setting in `config.yaml`.
 * [How to Publish to GitHub Pages](publish-to-github-pages.md) — the publishing settings, step by step.

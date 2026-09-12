@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -31,7 +31,7 @@ The container is the one file every Extractium client reads: a search index with
 
 ## Status of this format
 
-**Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v4_header.json` pins the header against a committed snapshot. The clients that read the file are scheduled in the [implementation plan](implementation-plan.md), Phase 4.
+**Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v4_header.json` pins the header against a committed snapshot. Two clients read it: `extractium/search.py` in Python and `clients/js/extractium-client.js` in JavaScript. Each implements the reader checklist near the end of this page, and a committed golden container holds both to the same ranking. See [how to search a compendium](how-to/search-a-compendium.md).
 
 This layout replaces the version 2 layout that Field Station AI's `build-kb-index.py` writes. Field Station AI keeps its own version 2 file and is not affected by anything on this page. The differences are listed near the end, under "Changes from version 2".
 

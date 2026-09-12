@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/data-flow.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: What happens to content between the site it is read from and the
 files a build writes: the stages, the shape of the data at each one, the
 units and time zones every field uses, and the two places where content
@@ -48,7 +48,7 @@ flowchart TD
     F --> G[Compact sections with no windows left]
     G --> H[Keyword and calibration statistics]
     H -->|one Compendium| I[Adapters]
-    I --> J[out_dir: compendium.json, llms.txt, llms-full.txt, okf/]
+    I --> J[out_dir: compendium.json, llms.txt, llms-full.txt, compendium.sqlite, okf/]
     C -.reads and updates.-> K[(.kb_cache)]
 ```
 
@@ -65,6 +65,8 @@ Every request carries the User-Agent from your settings, and every site's `robot
 
 Not every source visits a page. A repository's deposits and a channel's videos are read through their own interfaces instead, and arrive at stage 2 the same way.
 
+A repository's source files enter here too, and they are the one kind of content that does not arrive as a page. The code analysis reads each file's bytes with a parser, never running anything, and produces one document per file and one per definition it found: the signature, the documentation, the imports, the calls, and a link to the exact lines on the code host. No source body is ever copied into a document. From stage 2 on, those records travel through the flow exactly as a page does.
+
 A video is read from its captions and never from its audio. The caption track comes back as one line per phrase, which is far too small to answer a question with, so consecutive lines are joined into stretches of roughly a thousand characters. Each stretch keeps the start time of its first line, and becomes one document addressed at that moment: `https://www.youtube.com/watch?v=EXAMPLEVID1&t=134s`. That is what lets an answer cite a link which opens the video at the words it quoted. The outputs that list pages group those stretches back into one video, so a long talk is one entry and not one entry every couple of minutes.
 
 ### 2. A document
@@ -76,7 +78,7 @@ A video is read from its captions and never from its audio. The caption track co
 | `content` | The content node, or plain text. |
 | `source_type` | `kb`, `github`, `web`, `youtube`, `local`, or `repository`. |
 | `source_label` | The name a reader sees for the source this came from, such as `Peer-to-Peer Program`. Taken from the `label` every source gives itself in the settings file. Two sources of the same `source_type` are told apart by this and nothing else. |
-| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, or `video_transcript`. |
+| `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, or `text` for a page; `manifest`, `repo_map`, `code_file`, or `code_symbol` for a record read from a repository; `video_transcript` for a stretch of captions. |
 | `categories` | The hierarchy from the source, outermost first. Empty when there is none. |
 | `local` | True when it was read from a folder on this machine. |
 
@@ -166,7 +168,7 @@ So: assume any folder you point a local source at may hold protected health info
 
 ## The cache
 
-Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, and a `github/` folder of file bodies read through the GitHub API. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
+Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, and a `repository/` folder of the text a DSpace repository extracted from each deposit. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
 
 What the parsers found in a code file is stored beside the file body, under the same blob name, together with everything that result depended on: which engine read it, its version, the grammar, the grammar's version, this project's own extraction rules, and the shape of the records. A build reads that back only when every one of them still matches, so upgrading a grammar or editing a query file reparses rather than serving what the old one found.
 

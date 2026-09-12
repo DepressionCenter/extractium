@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/session-prompt-template.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-12
 Summary: A fixed, copy-and-paste opening for any AI coding session on
 this repository: what the project is, which files to read before
 changing anything, the branch and pull request workflow, and the
@@ -52,15 +52,14 @@ Read, in this order, before changing anything:
    comments, security, accessibility, documentation, response format)
 2. docs/implementation-plan.md (the phases, their done-when rules, and the
    "finished" notes that say which phases are complete)
-3. docs/architecture.md (what exists today, what is a placeholder, and the
-   eight settled design decisions with the specification section for each)
+3. docs/architecture.md (what exists today and the settled design
+   decisions, with the specification section for each)
 4. docs/configuration.md and examples/config.example.yaml (the settings file)
 5. docs/extractium-spec.md, the sections the plan or the architecture page
    point at for the work in hand
 6. extractium/core/models.py and extractium/core/registry.py (the records and
    protocols every plugin and build step is built on), then the modules the
-   task touches; a placeholder module's TODO comment describes the capability
-   it must hold
+   task touches
 7. tests/conftest.py and the test files nearest the task (patterns and
    fixtures to reuse); the frozen original the port is measured against is
    tests/reference/build_kb_index_reference.py

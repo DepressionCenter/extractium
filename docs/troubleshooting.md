@@ -437,7 +437,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### `no source named 'youtube'`
 
-**Cause.** An older Extractium. The source arrived in phase 13; before that the settings file accepted the type and no code answered to it.
+**Cause.** An older Extractium, from before the video source existed. Such a version accepts the type in the settings file, but no code answers to it.
 
 **Fix.** Update Extractium, or pin `EXTRACTIUM_REF` to a version that has it.
 
