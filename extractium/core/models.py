@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -510,9 +510,18 @@ class SiteHandler(Protocol):
     A handler reads a page; it never discovers links, so the crawl stays
     one graph however many handlers are enabled.
 
-    Three methods are optional, and a handler that defines none behaves
+    Five methods are optional, and a handler that defines none behaves
     exactly as the required five describe:
 
+    - `scope_prefix(seed_url)` may narrow the default crawl scope for a
+      seed on a host it knows, returning the prefix the crawl stays
+      inside, or None to leave the seed's origin as the scope. It is
+      consulted only when the source has no include patterns, because
+      an explicit list replaces the default scope altogether.
+    - `observe_link(url)` sees every link the crawl discovers, in scope
+      or not, before the scope check. It returns nothing. A handler
+      uses it to collect addresses another source should read, such as
+      videos linked from a page.
     - `configure(settings)` receives the build's global crawl settings
       after construction. A handler needs it when its rules depend on
       what the operator configured rather than on the URL alone.

@@ -12,7 +12,7 @@ extractium/sources/tdx.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,10 +33,17 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-04"
 
+import re
+from urllib.parse import urlparse
+
 from extractium.core.models import Extraction
 from extractium.sources.generic import UNTITLED, page_title, select_content
 
 ### Constants ###
+
+# One TeamDynamix host serves many organizations' portals, each under its
+# own folder. A crawl seeded inside one stays inside it.
+PORTAL_FOLDER_RE = re.compile(r"(/TDClient/\d+/[^/]+/)")
 
 # A TeamDynamix portal is recognized by its host name. The portal serves
 # full article HTML to the truthful default User-Agent (checked against
@@ -202,6 +209,30 @@ class TdxHandler:
     def matches(self, url):
         """True for any URL on a teamdynamix.* host."""
         return is_tdx_url(url)
+
+    def scope_prefix(self, seed_url):
+        """
+        The portal folder a crawl seeded inside a TeamDynamix portal stays
+        within, or None for any other address.
+
+        One TeamDynamix host serves many organizations' portals, each
+        under its own /TDClient/<number>/<name>/ folder, so a crawl scoped
+        to the host would wander into every other organization's
+        knowledge base. The folder is the right default scope. The rule
+        reads the path alone, because a portal may be served from an
+        organization's own host as well as from a teamdynamix one.
+
+        Args:
+            seed_url (str): one of the crawl's starting addresses.
+
+        Returns:
+            str | None: the origin plus the portal folder, or None.
+        """
+        match = PORTAL_FOLDER_RE.search(seed_url)
+        if not match:
+            return None
+        parsed = urlparse(seed_url)
+        return f"{parsed.scheme}://{parsed.netloc}{match.group(1)}"
 
     def fetch_url(self, url):
         """The page is requested at its own URL."""

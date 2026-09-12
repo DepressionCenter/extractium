@@ -3,15 +3,16 @@ Summary: HTTP fetching with local conditional-GET caching (If-None-Match /
 If-Modified-Since against .kb_cache/), the crawler's etiquette (a truthful
 User-Agent and a per-origin robots.txt policy), and the URL scope and
 normalization helpers that decide what a crawl fetches. Host-specific URL
-rules live in the site handlers under extractium.sources; the one
-exception is noted at derive_auto_prefix.
+rules live in the site handlers under extractium.sources; a handler that
+needs a narrower default scope than a seed's origin supplies it through
+the optional scope_prefix hook, which the web source consults.
 
 This file is part of Extractium™
 extractium/core/fetch.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -126,27 +127,20 @@ ASSET_EXCLUDE_PATTERNS = tuple(rf"\.{ext}$" for ext in BINARY_EXTENSIONS + SOURC
 def derive_auto_prefix(seed_url):
     """
     Derives the default crawl-scope prefix from a seed URL when no
-    explicit include pattern is configured.
+    explicit include pattern is configured: the seed's origin.
 
-    The TeamDynamix rule below is the one host-specific rule left in core:
-    the site-handler protocol has no scope hook, and adding one would
-    change the protocol every handler implements. TODO: move this rule to
-    the tdx handler if the protocol ever gains a scope method.
+    A site handler may narrow this for the hosts it knows through its
+    optional `scope_prefix(seed_url)` hook, which the web source asks
+    before falling back to this function. Core itself knows no host.
 
     Args:
         seed_url (str): the crawl's starting URL.
 
     Returns:
-        str: for a TeamDynamix URL, the origin plus its
-        /TDClient/<digits>/<slug>/ prefix; for anything else, just the
-        origin (scheme://host).
+        str: the origin (scheme://host).
     """
     parsed = urlparse(seed_url)
-    origin = f"{parsed.scheme}://{parsed.netloc}"
-    m = re.search(r"(/TDClient/\d+/[^/]+/)", seed_url)
-    if m:
-        return origin + m.group(1)
-    return origin
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def compile_patterns(patterns):

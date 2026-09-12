@@ -186,9 +186,9 @@ DEFAULT_DSPACE_INCLUDE_FULL_TEXT = True
 DEFAULT_DSPACE_MAX_FILE_BYTES = 2_000_000
 
 # An empty include list is meaningful, not missing: the crawler then scopes
-# itself to the seed URL's origin, or, for a TeamDynamix portal URL, to its
-# /TDClient/<digits>/<slug>/ prefix. See
-# extractium.core.fetch.derive_auto_prefix.
+# itself to the seed URL's origin, or to the narrower prefix an enabled site
+# handler names for that host through its scope_prefix hook, such as a
+# TeamDynamix portal's /TDClient/<digits>/<slug>/ folder.
 DEFAULT_INCLUDE_PATTERNS = ()
 
 # Only these URL schemes may seed a crawl. Anything else (file:, ftp:,

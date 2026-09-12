@@ -12,7 +12,7 @@ extractium/sources/web.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -163,6 +163,44 @@ def resolve_site_handlers(registry, names=None, settings=None):
             handler.configure(settings)
         handlers.append(handler)
     return order_site_handlers(handlers)
+
+
+def scope_prefix_for(handlers, seed_url):
+    """
+    The default scope for one seed: a handler's narrower prefix when one
+    claims the host, otherwise the seed's origin.
+
+    Handlers are asked in their crawl order and the first answer wins, so
+    a handler placed ahead of another decides for the hosts both know.
+
+    Args:
+        handlers (Iterable): the enabled handler instances.
+        seed_url (str): one of the crawl's starting addresses.
+
+    Returns:
+        str: the prefix every discovered link must start with when the
+        source has no include patterns.
+    """
+    for handler in handlers:
+        if hasattr(handler, "scope_prefix"):
+            prefix = handler.scope_prefix(seed_url)
+            if prefix:
+                return prefix
+    return fetching.derive_auto_prefix(seed_url)
+
+
+def observe_link(handlers, url):
+    """
+    Shows one discovered link to every handler that wants to see links,
+    whatever the crawl then decides about it.
+
+    Args:
+        handlers (Iterable): the enabled handler instances.
+        url (str): the discovered link.
+    """
+    for handler in handlers:
+        if hasattr(handler, "observe_link"):
+            handler.observe_link(url)
 
 
 def handlers_allow(handlers, url):
@@ -357,7 +395,7 @@ class WebSource:
             return
 
         settings = self.settings
-        auto_prefix = tuple(fetching.derive_auto_prefix(seed) for seed in self.seed_urls)
+        auto_prefix = tuple(scope_prefix_for(self.handlers, seed) for seed in self.seed_urls)
         origin = tuple(fetching.get_origin(seed) for seed in self.seed_urls)
         include_res = fetching.compile_patterns(self.include_patterns)
         crawl_exclude_res = fetching.compile_patterns(self.crawl_exclude_patterns)
@@ -414,6 +452,7 @@ class WebSource:
             # Enqueue new in-scope links, deduped before download.
             for link in extract_links(soup, url):
                 if link not in visited and link not in queued:
+                    observe_link(self.handlers, link)
                     in_scope = fetching.in_scope(
                         link, auto_prefix, origin, include_res, crawl_exclude_res
                     )
