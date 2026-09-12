@@ -23,37 +23,54 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds the written documentation for Extractium™. Each page below covers one topic. Start with Running a Build if you want to produce an index, the configuration reference if you are setting one up, or the specification if you want to know how the tool is put together.
+This folder holds the written documentation for Extractium™. Each page below covers one topic. Start with the installation guide if you have not run the tool yet, the crawling guide if you are setting up your first build, or the architecture page if you want to know how the tool is put together.
 
 
 ## Pages
 
-* [Architecture and Current State](architecture.md) — what is built, what is a placeholder,
-  and the design decisions still open.
-* [Configuration Reference](configuration.md) — every setting in `config.yaml`, its default, and how the URL patterns work.
-* [Container Format](container-format.md) — the binary index file every client reads: byte layout, header fields, and the checklist for writing a reader.
-* [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
-* [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
-* [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
-* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, and what that interface turned out to hold.
-* [Reading a Site Behind Bot Protection](bot-protection-transport.md) — why some sites refuse the
-  crawler with a challenge, what was measured against three live sites, and how the build reads
-  them without pretending to be something else.
-* [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
+### Getting started
+
+* [How to Install](how-to/install.md) — the supported Python versions, the one-command scripts, the developer install, the three optional extras, and how to check an install.
+* [How to Crawl a Site](how-to/crawl-a-site.md) — choosing a source type for each kind of content, the trial run, tuning the patterns, the two optional environment variables, and what a build reports.
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
+* [Configuration Reference](configuration.md) — every setting in `config.yaml`, its default, and how the URL patterns work.
+* [Troubleshooting](troubleshooting.md) — failures seen so far: symptom, cause, fix.
+
+### Publishing and using a build
+
+* [How to Deploy](how-to/deploy.md) — the deployment choices side by side, what each needs and costs, and every way the outputs are consumed.
+* [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the one-command local build and the scheduled build on GitHub.
+* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — turning Pages on, what is published, and what publishing means.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.
 * [How to Connect an MCP Client](how-to/connect-an-mcp-client.md) — giving an AI assistant on your own machine one tool: search of a published index.
 * [How to Deploy a Remote MCP Server](how-to/deploy-a-remote-mcp-server.md) — hosting the same tool on Val Town or Cloudflare, so an assistant anywhere can call it, with no server of your own.
-* [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the one-command local build and the scheduled build on GitHub.
-* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — turning Pages on, what is published, and what publishing means.
-* [Compliance and Posture](compliance.md) — the controls that exist, the evidence for each, and the known gaps.
-* [Troubleshooting](troubleshooting.md) — failures seen so far: symptom, cause, fix.
 * [Using a Published Compendium](using-a-compendium.md) — how an AI agent uses the published files, searches the index, cites an answer, and what it must never do with retrieved text.
+
+### How the tool works
+
+* [Architecture and Current State](architecture.md) — which modules exist, what each does, and the design decisions that are settled, each with its reason.
+* [Plugin Architecture](plugin-architecture.md) — the three plugin kinds, the registry's resolution order, the three protocols with every member, and a working example of each kind.
+* [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
+* [Container Format](container-format.md) — the binary index file every client reads: byte layout, header fields, and the checklist for writing a reader.
+* [Compliance and Posture](compliance.md) — the controls that exist, the evidence for each, and the known gaps.
+* [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
+
+### Design records
+
+* [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
+* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, and what that interface turned out to hold.
+* [Reading a Site Behind Bot Protection](bot-protection-transport.md) — why some sites refuse the crawler with a challenge, what was measured against three live sites, and how the build reads them without pretending to be something else.
+* [Implementation Plan](implementation-plan.md) — the phased order in which the tool was built, with a done-when rule and a finished note for each phase.
+
+### For maintainers
+
+These pages are about working on the repository rather than using the tool.
+
 * [Page Template](doc-template.md) — the layout new pages in this folder follow.
-* [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session, phase or not; your request goes on the last line.
+* [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session; your request goes on the last line.
 * [Skill Authoring Examples](skill-examples.md) — starter recipes for writing a small agent skill under `skills/`; documentation, not installed skills.
 
-Pages are added as the tool grows. The specification lists what is planned but not yet built.
+The specification says what the tool is meant to be, and the architecture page says what exists. Where the two differ, the architecture page is the one to trust about the code.
 
 
 ## Conclusion
@@ -65,6 +82,7 @@ Pick the page that matches your task. If you cannot find an answer here, the pro
 
 * [Extractium™ README](../README.md) — project overview, quick start, and contact details.
 * [examples/config.example.yaml](../examples/config.example.yaml) — commented example configuration file.
+* [examples/config.efdc.yaml](../examples/config.efdc.yaml) — a complete configuration that uses every source type.
 * [EFDC Knowledge Base](https://michmed.org/efdc-kb) — the wider documentation site for this group's projects.
 * [Skills index](../SKILLS.md) — the agent skills this repository carries, reached from `AGENTS.md`.
 
