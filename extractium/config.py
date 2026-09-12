@@ -243,6 +243,7 @@ SUGGESTED_SOURCE_LABELS = {
     "github_api": "GitHub",
     "youtube": "YouTube Channel",
     "dspace": "Document Repository",
+    "okf": "Knowledge Bundle",
 }
 
 # Option keys per built-in source type, beyond "type" and "label", which
@@ -266,6 +267,7 @@ SOURCE_OPTION_KEYS = {
     "dspace": frozenset({
         "api_url", "site_url", "collections", "include_full_text", "max_file_bytes",
     }),
+    "okf": frozenset({"path"}),
 }
 
 # Option keys per built-in output type, beyond "type" and "include_local",
@@ -761,6 +763,11 @@ def _read_local_source(entry, source):
     }
 
 
+def _read_okf_source(entry, source):
+    """Validates the options of an okf source entry: the bundle folder to read."""
+    return {"path": _read_required_text(entry, "path", source, hint=" (the bundle folder to read)")}
+
+
 def _read_github_api_source(entry, source):
     """
     Validates the options of a github_api source entry.
@@ -901,6 +908,7 @@ def _read_youtube_source(entry, source):
 _SOURCE_READERS = {
     "web": _read_web_source,
     "local": _read_local_source,
+    "okf": _read_okf_source,
     "github_api": _read_github_api_source,
     "youtube": _read_youtube_source,
     "dspace": _read_dspace_source,

@@ -11,7 +11,7 @@ extractium/sources/local.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -134,6 +134,38 @@ def content_type_for(path):
     return "page" if path.suffix.lower() in HTML_SUFFIXES else "text"
 
 
+def files_inside(root, globs, progress):
+    """
+    Every file the glob patterns select under a folder, in a stable order,
+    with anything reached from outside the folder refused.
+
+    A pattern, or a symbolic link inside the folder, can name a file
+    somewhere else entirely. Reading one would pull content from a part
+    of the disk nobody asked to index, so a file whose real location is
+    outside the folder is reported and skipped rather than read.
+
+    Args:
+        root (pathlib.Path): the resolved folder.
+        globs (Iterable[str]): glob patterns relative to it.
+        progress (Callable[[str], None]): receives one line per refusal.
+
+    Returns:
+        list[pathlib.Path]: resolved file paths, sorted so two runs of
+        the same folder produce the same order.
+    """
+    found = {}
+    for pattern in globs:
+        for path in root.glob(pattern):
+            if not path.is_file():
+                continue
+            resolved = path.resolve()
+            if not resolved.is_relative_to(root):
+                progress(f"  skipped (outside the source folder): {path.name}")
+                continue
+            found[resolved] = None
+    return sorted(found, key=lambda path: path.relative_to(root).as_posix())
+
+
 ### Source ###
 
 class LocalSource:
@@ -180,17 +212,7 @@ class LocalSource:
             list[pathlib.Path]: resolved file paths, sorted so two runs of
             the same folder produce the same order.
         """
-        found = {}
-        for pattern in self.include_globs:
-            for path in root.glob(pattern):
-                if not path.is_file():
-                    continue
-                resolved = path.resolve()
-                if not resolved.is_relative_to(root):
-                    progress(f"  skipped (outside the source folder): {path.name}")
-                    continue
-                found[resolved] = None
-        return sorted(found, key=lambda path: path.relative_to(root).as_posix())
+        return files_inside(root, self.include_globs, progress)
 
     def fetch(self, session, cache, progress):
         """

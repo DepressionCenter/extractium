@@ -2,7 +2,7 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
-# Last Modified: 2026-09-11
+# Last Modified: 2026-09-12
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
 # (single package; runtime deps, dev/code/parquet/duckdb extras, console
@@ -116,6 +116,7 @@ local = "extractium.sources.local:LocalSource"
 github_api = "extractium.sources.github_api:GitHubApiSource"
 dspace = "extractium.sources.dspace:DSpaceSource"
 youtube = "extractium.sources.youtube:YouTubeSource"
+okf = "extractium.sources.okf:OkfSource"
 
 [project.entry-points."extractium.site_handlers"]
 generic = "extractium.sources.generic:GenericHandler"
