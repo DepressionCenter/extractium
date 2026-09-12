@@ -33,26 +33,16 @@ slug: efdc-compendium
 
 
 # ---------------------------------------------------------------------------
-# BEFORE THE FIRST RUN: three of these sites answer 403 today
+# Three of these sites sit behind bot protection
 #
-# As of 2026-09-12, depressioncenter.org, p2p.depressioncenter.org, and
-# code.depressioncenter.org answer 403 to this crawler, with the header
-# "cf-mitigated: challenge". Sources 2, 4, and 5 therefore contribute
-# nothing, and the build says so page by page rather than failing. Every
-# other source works today.
-#
-# This is not about the crawler's name. A real browser User-Agent is refused
-# in exactly the same way, so the browser-identity retry that
-# respect_robots_txt: false switches on does not help here and is not worth
-# turning on. What is being read is the TLS handshake, and a crawler that
-# opens its connections the way a browser does is served normally, with no
-# challenge raised. Those three sites were read that way on 2026-09-10, at
-# 200, with the crawler still identifying itself as Extractium.
-#
-# Phase 8 of the implementation plan, the transport that opens connections
-# that way, has not been built. Until it is, nothing in this file can reach
-# those three sites. See docs/bot-protection-transport.md for what was
-# measured.
+# depressioncenter.org, p2p.depressioncenter.org, and code.depressioncenter.org
+# answer 403 with "cf-mitigated: challenge" to any client whose connection
+# does not look like a browser's, whatever name it gives. The build handles
+# that by itself: with transport at its default of auto, a challenged page is
+# asked for once more over a browser-shaped connection, the crawler still
+# naming itself Extractium, and the host is read that way from then on. The
+# log says so once per host, and the summary lists the hosts again. Nothing
+# in this file needs changing for it. See docs/bot-protection-transport.md.
 # ---------------------------------------------------------------------------
 
 
@@ -211,6 +201,10 @@ outputs:
 # ---------------------------------------------------------------------------
 
 out_dir: dist
+
+# How connections are opened; see the note at the top. auto is the default
+# and the right setting here.
+transport: auto
 
 # Fetched pages, GitHub blobs, and YouTube transcripts between builds. The
 # transcripts are the part a scheduled build cannot fetch for itself; a data

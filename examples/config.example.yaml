@@ -224,6 +224,13 @@ sources:
 # tool and its repository.
 #user_agent: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
 
+# How the crawler opens its connections. auto, the default, makes an
+# ordinary request and, only when a site answers a bot-protection
+# challenge, asks once more over a browser-shaped connection, keeping that
+# choice for the host; the crawler still names itself. browser starts that
+# way; plain never does. See docs/bot-protection-transport.md.
+#transport: auto
+
 # Whether to honor each site's robots.txt. A site whose robots.txt cannot
 # be read is skipped entirely. Switch it off only for sites you own: as
 # well as ignoring robots rules, it lets a page that answers 403 to the

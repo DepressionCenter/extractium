@@ -13,7 +13,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -39,14 +39,13 @@ import dataclasses
 import os
 import sys
 
-import requests
-
 from extractium import __version__
 from extractium.config import ConfigError, load_config
 from extractium.core import cache as caching
 from extractium.core import phi_lint
 from extractium.core.build import build_compendium
 from extractium.core.registry import RegistryError, build_registry
+from extractium.core.transport import make_session
 from extractium.sources.github import accounts_named_by
 from extractium.sources.github_api import GitHubSourceError
 from extractium.sources.web import CrawlSettings
@@ -323,10 +322,15 @@ def run_build(args):
 
     caching.use_cache_dir(config.cache_dir)
     cache = caching.load_cache_meta()
-    session = requests.Session()
+    session = make_session(config.transport, progress=progress_to_stderr,
+                           delay_seconds=config.delay_seconds)
 
     try:
         documents, notes = run_sources(config, registry, session, cache, progress_to_stderr)
+        # Which hosts needed the browser handshake, on record at the end
+        # as well as in the log.
+        if hasattr(session, "summary_lines"):
+            notes.extend(session.summary_lines())
     except RegistryError as e:
         return fail(str(e), EXIT_CONFIG)
     except GitHubSourceError as e:

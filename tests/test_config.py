@@ -637,6 +637,25 @@ def test_output_file_may_use_a_subfolder():
 
 
 # ---------------------------------------------------------------------------
+# The transport
+# ---------------------------------------------------------------------------
+
+def test_the_transport_defaults_to_auto():
+    assert config.config_from_mapping(minimal()).transport == "auto"
+
+
+@pytest.mark.parametrize("mode", ["auto", "browser", "plain"])
+def test_each_transport_setting_is_accepted(mode):
+    assert config.config_from_mapping(minimal(transport=mode)).transport == mode
+
+
+@pytest.mark.parametrize("mode", ["proxy", "Auto", "", True, 1])
+def test_any_other_transport_setting_is_refused(mode):
+    with pytest.raises(config.ConfigError, match="transport"):
+        config.config_from_mapping(minimal(transport=mode))
+
+
+# ---------------------------------------------------------------------------
 # The slug
 # ---------------------------------------------------------------------------
 

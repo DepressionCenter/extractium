@@ -145,6 +145,27 @@ Put that address in the settings file instead of the short link. If you want the
 **Fix.** Open the site's `robots.txt` in a browser and see what it says. If it genuinely disallows crawling, respect that; the answer is to ask the site owner, not to switch the check off. Switch `respect_robots_txt` off only for a site your own group runs.
 
 
+## A site behind bot protection
+
+### The log says a host was `served over the browser transport`
+
+**Cause.** Nothing is wrong. The site answered the crawler's ordinary request with a bot-protection challenge, so the crawler asked once more over a browser-shaped connection, was served, and will read the rest of that site the same way. It still named itself Extractium. [Reading a site behind bot protection](bot-protection-transport.md) explains why the site does that and why this is the right answer.
+
+**Fix.** None needed. To keep a challenged site unread instead, set `transport: plain`.
+
+### The log says the browser transport `is not installed`
+
+**Cause.** A site answered with a challenge, and the package that provides the browser handshake, `curl_cffi`, is missing from this Python environment. It is a required dependency, so this means an install that skipped it or an older environment.
+
+**Fix.** `pip install -e .` in the repository, or `pip install curl_cffi`, then run the build again.
+
+### Every page of a site is skipped with `403` and no transport line appears
+
+**Cause.** The `403` carried no challenge header, so it is not a bot-protection challenge but a refusal of another kind: a block on the network the build runs from, a site that requires signing in, or a site that does not want crawlers. The transport cannot help with any of those, and does not try.
+
+**Fix.** Open the page in a browser from the same network. If it opens, the site is refusing crawlers and the answer is to ask its owner, not to change a setting. If it does not, the block is on the network.
+
+
 ## Reading GitHub
 
 ### The build stops with `GitHub has no account ...`

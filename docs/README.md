@@ -37,8 +37,8 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
 * [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, and what that interface turned out to hold.
 * [Reading a Site Behind Bot Protection](bot-protection-transport.md) — why some sites refuse the
-  crawler with a challenge, what was measured against three live sites, and the transport planned
-  for Phase 8.
+  crawler with a challenge, what was measured against three live sites, and how the build reads
+  them without pretending to be something else.
 * [Implementation Plan](implementation-plan.md) — the phased order of work, about one week per phase, with a done-when rule for each.
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.

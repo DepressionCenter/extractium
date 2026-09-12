@@ -94,6 +94,10 @@ DEFAULT_OUTPUTS = ({"type": "container"}, {"type": "llmstxt"})
 # for the database. Lowercase letters, digits, and hyphens only, because
 # the name ends up in a published address.
 DEFAULT_SLUG = "compendium"
+
+# How the crawler opens its connections; see extractium.core.transport.
+TRANSPORT_MODES = ("auto", "browser", "plain")
+DEFAULT_TRANSPORT = "auto"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
@@ -223,6 +227,7 @@ KNOWN_KEYS = frozenset({
     "delay_seconds",
     "user_agent",
     "respect_robots_txt",
+    "transport",
     "phi_lint",
     "github_owners",
     "sources",
@@ -342,6 +347,7 @@ class Config:
         delay_seconds (float): pause between requests, in seconds; 0 or more.
         user_agent (str): the User-Agent header the crawler sends.
         respect_robots_txt (bool): whether robots.txt disallow rules are honored.
+        transport (str): one of TRANSPORT_MODES; how connections are opened.
         phi_lint (str): one of PHI_LINT_MODES.
         github_owners (tuple[str, ...]): GitHub accounts, beyond the ones
             the sources themselves name, whose pages a build may follow
@@ -361,6 +367,7 @@ class Config:
     delay_seconds: float = DEFAULT_DELAY_SECONDS
     user_agent: str = DEFAULT_USER_AGENT
     respect_robots_txt: bool = DEFAULT_RESPECT_ROBOTS_TXT
+    transport: str = DEFAULT_TRANSPORT
     phi_lint: str = DEFAULT_PHI_LINT
     github_owners: tuple = DEFAULT_GITHUB_OWNERS
 
@@ -1067,6 +1074,7 @@ def config_from_mapping(data, source="configuration"):
         ),
         user_agent=user_agent,
         respect_robots_txt=_read_bool(data, "respect_robots_txt", DEFAULT_RESPECT_ROBOTS_TXT, source),
+        transport=_read_choice(data, "transport", DEFAULT_TRANSPORT, TRANSPORT_MODES, source),
         phi_lint=_read_choice(data, "phi_lint", DEFAULT_PHI_LINT, PHI_LINT_MODES, source),
         github_owners=_read_github_owners(data, source),
         sources=_read_sources(data, source),
