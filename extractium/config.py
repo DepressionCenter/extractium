@@ -101,9 +101,9 @@ DEFAULT_TRANSPORT = "auto"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
-def container_file_name(slug):
-    """The container's file name for one slug."""
-    return f"{slug}.json"
+def container_file_name(slug, gzip=False):
+    """The container's file name for one slug, with the compressed suffix when gzip is on."""
+    return f"{slug}.json.gz" if gzip else f"{slug}.json"
 
 
 def sqlite_file_name(slug):
@@ -271,7 +271,7 @@ SOURCE_OPTION_KEYS = {
 # Option keys per built-in output type, beyond "type" and "include_local",
 # which every output accepts.
 OUTPUT_OPTION_KEYS = {
-    "container": frozenset({"file"}),
+    "container": frozenset({"file", "gzip"}),
     "llmstxt": frozenset(),
     "sqlite": frozenset({"file"}),
     "okf": frozenset(),
@@ -964,7 +964,16 @@ def _read_slug(data, source):
 
 
 def _read_container_output(entry, source, slug):
-    return {"file": _read_output_file(entry, "file", container_file_name(slug), source)}
+    """
+    Validates a container output. With `gzip: true` the file is written
+    compressed and, unless `file` names it otherwise, carries a .json.gz
+    suffix so a host and a reader can both tell.
+    """
+    gzip = _read_bool(entry, "gzip", False, source)
+    return {
+        "file": _read_output_file(entry, "file", container_file_name(slug, gzip), source),
+        "gzip": gzip,
+    }
 
 
 def _read_sqlite_output(entry, source, slug):

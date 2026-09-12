@@ -15,7 +15,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-09
+ * Last Modified: 2026-09-12
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -102,6 +102,34 @@ export class ContainerError extends Error {
 }
 
 /* ### Container Reader ### */
+
+/** Whether the bytes begin with the gzip signature. */
+function isGzip(bytes) {
+    return bytes.byteLength >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+/**
+ * The container bytes, inflated when the file was written compressed.
+ *
+ * A compressed container is the same file passed through gzip, so it is
+ * recognized by the gzip signature rather than by its name. Bytes that
+ * do not begin like gzip are returned as they are, so a caller can pass
+ * every download through this before loadContainer.
+ *
+ * @param {Uint8Array|ArrayBuffer} source The file as fetched.
+ * @returns {Promise<Uint8Array>} The container bytes.
+ * @throws {ContainerError} If the data begins like gzip and cannot be inflated.
+ */
+export async function inflateContainer(source) {
+    const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+    if (!isGzip(bytes)) return bytes;
+    try {
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch (error) {
+        throw new ContainerError(`file begins like gzip but cannot be inflated: ${error.message}`);
+    }
+}
 
 /**
  * Splits the raw bytes into the parsed header and the vector bytes.
@@ -617,6 +645,9 @@ export class SearchIndex {
  */
 export function loadContainer(source, expected = {}) {
     const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+    if (isGzip(bytes)) {
+        throw new ContainerError('the file is gzip-compressed; pass it through inflateContainer first.');
+    }
     const { header, vectorBytes } = readHeader(bytes);
 
     if (header.format !== CONTAINER_FORMAT) {

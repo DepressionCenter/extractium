@@ -42,7 +42,7 @@ import { pathToFileURL } from 'node:url';
 // not published to a registry, so there is no module name to import; a
 // copy of this folder elsewhere needs extractium-client.js beside it and
 // this one line changed.
-import { loadContainer } from '../../../clients/js/extractium-client.js';
+import { inflateContainer, loadContainer } from '../../../clients/js/extractium-client.js';
 
 import {
     ConfigurationError,
@@ -251,7 +251,7 @@ export async function indexFromEnvironment(environment = process.env, options = 
     const localPath = environment[INDEX_PATH_ENV];
     if (localPath) {
         log(`reading the index from ${localPath}`);
-        return loadContainer(new Uint8Array(await fs.readFile(localPath)));
+        return loadContainer(await inflateContainer(new Uint8Array(await fs.readFile(localPath))));
     }
     const url = environment[INDEX_URL_ENV];
     if (!url) {
@@ -261,7 +261,7 @@ export async function indexFromEnvironment(environment = process.env, options = 
         );
     }
     log(`reading the index from ${url}`);
-    return loadContainer(await containerBytes(checkedUrl(url), cacheRoot(environment), options));
+    return loadContainer(await inflateContainer(await containerBytes(checkedUrl(url), cacheRoot(environment), options)));
 }
 
 /**

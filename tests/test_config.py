@@ -835,3 +835,23 @@ def test_user_agent_cannot_carry_header_injection():
     """A newline in the User-Agent would let a config file inject extra request headers."""
     with pytest.raises(config.ConfigError, match="user_agent cannot contain line breaks"):
         config.config_from_mapping(minimal(user_agent="Bot/1.0\r\nX-Injected: yes"))
+
+
+def test_a_container_output_may_be_gzip_compressed_and_is_then_named_with_the_suffix():
+    cfg = config.config_from_mapping({
+        "sources": [{"type": "web", "label": "Site", "seed_url": SEED}],
+        "slug": "example",
+        "outputs": [{"type": "container", "gzip": True}, {"type": "container", "file": "plain.json"}],
+    })
+
+    packed, plain = cfg.outputs
+    assert (packed.options["file"], packed.options["gzip"]) == ("example.json.gz", True)
+    assert (plain.options["file"], plain.options["gzip"]) == ("plain.json", False)
+
+
+def test_the_gzip_option_must_be_true_or_false():
+    with pytest.raises(config.ConfigError, match="gzip must be true or false"):
+        config.config_from_mapping({
+            "sources": [{"type": "web", "label": "Site", "seed_url": SEED}],
+            "outputs": [{"type": "container", "gzip": "yes"}],
+        })
