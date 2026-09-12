@@ -32,30 +32,55 @@ The val fetches the published container once, keeps a copy in its blob store so 
 
 ## What you need
 
-1. A Val Town account, and an API token from [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. Write on vals is off by default when a token is made; turn it on for this one.
-2. Node 18 or newer on your machine.
+1. A Val Town account. The free plan is enough.
+2. Python 3.10 or newer, which you already have if you built the index. Nothing else is installed.
 3. A published index address, starting with `https://`.
 
+A val holds only its own files, so the JavaScript client and the shared protocol modules this example imports from elsewhere in the repository have to be copied beside the entry point, with their import lines rewritten. `push.py` does that. There are two ways to get the result onto Val Town: through the browser with no key at all, or through the platform's API with a token.
 
-## Push it
 
-A val holds only its own files, so the JavaScript client and the shared protocol modules this example imports from elsewhere in the repository have to be copied beside it. `stage.js` does that and rewrites the import lines; `push.js` runs it and then sends the six files through Val Town's REST API, with nothing to install:
+## Way 1: the browser, no key
 
 ```bash
 cd examples/mcp/valtown
-VALTOWN_API_TOKEN=EXAMPLE_TOKEN node push.js
+python push.py
 ```
 
-On Windows, set the variable first (`$env:VALTOWN_API_TOKEN = 'EXAMPLE_TOKEN'` in PowerShell), then run `node push.js`.
+That writes six files under `val/`, which git ignores. Then, signed in to Val Town in your browser:
 
-The first run creates a val named `extractium-kb-mcp` under your account, with its source unlisted; give another name as the first argument, or `--privacy public` to list it. Later runs find the val by name and update the files. `main.http.ts` is sent as an `http` file, which is what gives the val an endpoint; the script prints that endpoint, and the MCP endpoint is `/mcp` under it. Run it again whenever a source file changes.
+1. Create a new val and name it.
+2. Add each of the six files by name, pasting its contents. Make `main.http.ts` an HTTP file; the others are plain files.
+3. Under the val's environment variables, add `EXTRACTIUM_INDEX_URL` with your published index address.
+4. Open the address the platform shows for `main.http.ts`. You see one line naming the endpoint, and the MCP endpoint is `/mcp` under it.
 
-Two other ways to get the same six files into a val, both from Val Town's own documentation:
+Repeat step 2 for any file that changes. No token is made and nothing about your account leaves the browser.
 
-- `node stage.js` alone writes the files under `val/`, ignored by git, for you to paste into the web editor or push with the [`vt` command-line tool](https://docs.val.town/guides/prompting/cli/), which needs Deno.
-- [Syncing vals with GitHub](https://docs.val.town/guides/github-sync/) keeps a val mirrored from a repository on every push, through a GitHub Actions workflow or a sync val. Point it at a repository holding the staged folder.
 
-`push.js` is tested against a fake of the API, call by call; it was not run against the live platform from this machine.
+## Way 2: the API, with a token
+
+Make a token at [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. Write on vals is off by default when a token is made; turn it on for this one. Then:
+
+```bash
+cd examples/mcp/valtown
+VALTOWN_API_TOKEN=EXAMPLE_TOKEN python push.py --push --name my-compendium \
+  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/kb-index.json
+```
+
+On Windows, set the variable first (`$env:VALTOWN_API_TOKEN = 'EXAMPLE_TOKEN'` in PowerShell), then run the command without the prefix.
+
+The first run creates the val under your account, writes the six files with `main.http.ts` as an HTTP file, sets the variables you gave with `--set`, and prints the endpoint. Later runs find the val by name and update the files in place. Run it again whenever a source file changes. The token is read from the environment, sent in one header, and printed nowhere.
+
+| Option | What it does |
+|---|---|
+| `--name` | The val's name. Defaults to `extractium-kb-mcp`. |
+| `--org` | Create the val under an organization you belong to, by its handle. |
+| `--val-id` | Update a val you already know the id of, skipping the lookup by name. |
+| `--privacy` | `public` (the default), `unlisted`, or `private` for the source. The free plan caps the number of unlisted and private vals, and refuses a new one past the cap. |
+| `--set KEY=VALUE` | An environment variable to set on the val. Repeat for each. |
+
+Val Town also documents [syncing a val with a GitHub repository](https://docs.val.town/guides/github-sync/), which keeps a val mirrored from a repository on every push. Point it at a repository holding the staged folder.
+
+`push.py` is tested against a fake of the API, call by call, and was run against the live platform on 2026-09-12: the first run created the val, the second found it and updated every file, and the endpoint answered the golden compendium's contract query with the sections the clients rank as relevant.
 
 
 ## Settings
@@ -94,7 +119,7 @@ With one, the val runs exactly the search the [JavaScript client](../../../docs/
 node --test examples/mcp/valtown
 ```
 
-They run the search in Node against the small compendium committed in `tests/golden/`, with a blob store and a fetch in memory; check that `stage.js` produces a folder whose imports all resolve; and drive `push.js` against a fake of the API to check the calls it makes, the file types it sends, and that the token reaches one header and nothing else. They need no network, no install, and no Val Town account.
+They run the search in Node against the small compendium committed in `tests/golden/`, with a blob store and a fetch in memory. The staging and the push are covered by the Python suite, `tests/test_mcp_remote_servers.py`, which checks that the staged folder's imports all resolve and drives `push.py` against a fake of the API: the calls it makes, the file types it sends, and that the token reaches one header and nothing else. Neither needs a network, an install, or a Val Town account.
 
 
 ## Conclusion
@@ -110,7 +135,7 @@ You now have a search endpoint any MCP-capable assistant can reach, hosted for f
 * [Local Node MCP Server](../local-node/README.md) — the same tool on your own machine.
 * [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
 * [Val Town documentation](https://docs.val.town/) — the platform, its blob store, and its environment variables.
-* [Val Town REST API](https://docs.val.town/reference/api/) — the calls `push.js` makes, and the token scopes.
+* [Val Town REST API](https://docs.val.town/reference/api/) — the calls `push.py` makes, and the token scopes.
 * [Syncing vals with GitHub](https://docs.val.town/guides/github-sync/) — keeping a val mirrored from a repository.
 * [Val Town limits](https://www.val.town/limits) — the plan limits the numbers above come from.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.

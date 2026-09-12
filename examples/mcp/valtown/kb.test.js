@@ -3,8 +3,8 @@
  * kept in a fake blob store, revalidated with a conditional request,
  * served from the store when the host is down, keyword search against
  * the golden compendium, hybrid search through a fake embedding service,
- * the parsing of the shapes such services answer with, the address rule,
- * and the staging script that assembles the val folder.
+ * the parsing of the shapes such services answer with, and the address
+ * rule. The staging and the push are Python, tested in the Python suite.
  *
  * This file is part of Extractium™
  * examples/mcp/valtown/kb.test.js
@@ -31,8 +31,6 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
 import { loadContainer } from '../../../clients/js/extractium-client.js';
@@ -46,7 +44,6 @@ import {
     parseEmbedding,
     storeKeys,
 } from './kb.js';
-import { SOURCE_FILES, relocatedImports, stage } from './stage.js';
 
 /* ### Fixtures ### */
 
@@ -283,36 +280,4 @@ test('a val with no index address says which setting is missing', async () => {
 
     assert.equal(answer.result.isError, true);
     assert.match(answer.result.content[0].text, /EXTRACTIUM_INDEX_URL/);
-});
-
-/* ### Staging ### */
-
-test('imports that leave the folder are pointed at the copies beside the entry point', () => {
-    const source = 'import { a } from \'../shared/mcp-http.js\';\n'
-        + 'import { b } from "../../../clients/js/extractium-client.js";\n'
-        + 'import { c } from "./kb.js";\n'
-        + 'import { d } from "https://esm.town/v/std/blob/main.ts";\n';
-
-    assert.equal(relocatedImports(source), 'import { a } from \'./mcp-http.js\';\n'
-        + 'import { b } from "./extractium-client.js";\n'
-        + 'import { c } from "./kb.js";\n'
-        + 'import { d } from "https://esm.town/v/std/blob/main.ts";\n');
-});
-
-test('the staged folder holds every file the val needs, and every relative import in it resolves', async () => {
-    const target = fs.mkdtempSync(path.join(os.tmpdir(), 'extractium-val-'));
-    try {
-        const written = await stage(target);
-
-        assert.deepEqual(written, SOURCE_FILES.map((relative) => path.basename(relative)));
-        for (const name of written) {
-            const source = fs.readFileSync(path.join(target, name), 'utf8');
-            for (const match of source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
-                const imported = path.join(target, match[1]);
-                assert.ok(fs.existsSync(imported), `${name} imports ${match[1]}, which is not staged`);
-            }
-        }
-    } finally {
-        fs.rmSync(target, { recursive: true, force: true });
-    }
 });

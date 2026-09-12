@@ -10,8 +10,6 @@
     "node": ">=18"
   },
   "scripts": {
-    "stage": "node stage.js",
-    "push": "node push.js",
     "test": "node --test"
   }
 }

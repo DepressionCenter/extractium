@@ -31,7 +31,7 @@
 // The val-scoped blob store: keys are private to this val.
 import { blob } from "https://esm.town/v/std/blob/main.ts";
 
-// These two are copied beside this file by stage.js; see the README.
+// These two are copied beside this file by push.py; see the README.
 import { createValServer } from "./kb.js";
 import {
     ALLOWED_ORIGINS_SETTING,
