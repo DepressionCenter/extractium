@@ -1,0 +1,93 @@
+# This file is part of Extractium™
+# .github/workflows/tests.yml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-12
+# Last Modified: 2026-09-12
+# Summary: Runs the Python and Node test suites on every pull request and
+# on every push to main, on the oldest and newest supported Python
+# versions and on Linux and Windows, since the code analysis and the
+# archive reader are tested for both. Installs every optional extra so the
+# parser and caption tests run rather than skip. Nothing here publishes,
+# writes to the repository, or needs a secret.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request supersedes the run in progress.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+        python: ["3.10", "3.13"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install Extractium with every extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,code,youtube]"
+
+      - name: Run the Python test suite
+        run: python -m pytest -q
+
+  node:
+    name: Node suites
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Only the two examples with a lock file install anything; the
+      # client and the shared core have no dependencies.
+      - name: Install the examples' locked packages
+        run: |
+          npm ci --prefix examples/mcp/local-node
+          npm ci --prefix examples/mcp/cloudflare
+
+      - name: Run the Node test suites
+        run: |
+          node --test clients/js
+          node --test examples/mcp/local-node
+          node --test examples/mcp/shared
+          node --test examples/mcp/valtown
+          node --test examples/mcp/cloudflare

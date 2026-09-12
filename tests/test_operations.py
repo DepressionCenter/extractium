@@ -269,3 +269,55 @@ def test_the_template_keeps_the_crawl_cache_and_the_environment_out_of_git():
 
     assert ".kb_cache/" in ignored
     assert ".venv/" in ignored
+
+
+# ---------------------------------------------------------------------------
+# The test workflow
+# ---------------------------------------------------------------------------
+
+TESTS_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "tests.yml"
+
+
+@pytest.fixture(scope="module")
+def tests_workflow():
+    return yaml.safe_load(TESTS_WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+
+def test_the_test_workflow_runs_on_pull_requests_and_on_pushes_to_main(tests_workflow):
+    triggers = tests_workflow[True]
+
+    assert "pull_request" in triggers
+    assert triggers["push"]["branches"] == ["main"]
+
+
+def test_the_test_workflow_asks_for_read_access_only_and_no_secret(tests_workflow):
+    assert tests_workflow["permissions"] == {"contents": "read"}
+    text = TESTS_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "secrets." not in text
+
+
+def test_the_test_workflow_covers_both_python_extremes_and_both_operating_systems(tests_workflow):
+    matrix = tests_workflow["jobs"]["python"]["strategy"]["matrix"]
+
+    assert "3.10" in matrix["python"]
+    assert any(os.startswith("ubuntu") for os in matrix["os"])
+    assert any(os.startswith("windows") for os in matrix["os"])
+
+
+def test_the_test_workflow_runs_every_suite_with_every_extra(tests_workflow):
+    python_steps = "\n".join(str(step.get("run", "")) for step in tests_workflow["jobs"]["python"]["steps"])
+    node_steps = "\n".join(str(step.get("run", "")) for step in tests_workflow["jobs"]["node"]["steps"])
+
+    assert '.[dev,code,youtube]' in python_steps
+    assert "pytest" in python_steps
+    for suite in ("clients/js", "examples/mcp/local-node", "examples/mcp/shared",
+                  "examples/mcp/valtown", "examples/mcp/cloudflare"):
+        assert f"node --test {suite}" in node_steps
+
+
+def test_the_test_workflow_pins_every_action_to_a_major_version():
+    references = re.findall(r"uses:\s*(\S+)", TESTS_WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    assert references
+    for reference in references:
+        assert re.search(r"@v\d+$", reference), reference
