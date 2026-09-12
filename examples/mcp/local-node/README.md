@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/local-node/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: README for the local Node MCP server example: what it does, how
 to run it, the settings it reads, the one package it installs, and its
 limits.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds one file, `server.js`. It lets an AI assistant on your computer search a published Extractium knowledge base. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your machine: the index is a static file, and the question is turned into a vector by a model that runs locally through transformers.js.
+This folder holds one file, `server.js`, over the protocol core in [`../shared/`](../shared/). It lets an AI assistant on your computer search a published Extractium knowledge base. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your machine: the index is a static file, and the question is turned into a vector by a model that runs locally through transformers.js.
 
 The Model Context Protocol (MCP) is the standard that assistants use to call tools. This server exposes exactly one tool, `search_kb`. It is the same tool, with the same arguments and the same answers, as the [Python version](../local-python/README.md).
 
@@ -49,7 +49,7 @@ On Windows, set the variable with `set` in Command Prompt or `$env:` in PowerShe
 
 The server waits for requests on standard input, so on its own it looks like it has hung. That is correct: an assistant drives it. To add it to one, see [how to connect an MCP client](../../../docs/how-to/connect-an-mcp-client.md).
 
-Run it from this checkout, by path. It reads the JavaScript client from `clients/js/` in this repository, which is not published to the npm registry, so `npx extractium-kb-mcp` has nothing to fetch. To run the server from somewhere else, copy `extractium-client.js` next to `server.js` and change the one import line at the top.
+Run it from this checkout, by path. It reads the JavaScript client from `clients/js/` in this repository, which is not published to the npm registry, so `npx extractium-kb-mcp` has nothing to fetch. It also reads the three files under `examples/mcp/shared/`, which hold the tool definition and the protocol handling every Node example shares. To run the server from somewhere else, copy those four files next to `server.js` and change the import lines at the top to point at the copies.
 
 
 ## Settings

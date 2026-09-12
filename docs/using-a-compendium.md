@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/using-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: How an AI agent uses a published Extractium compendium: which
 file to read for which job, how to search the index with the bundled
 clients, how to cite what it finds, and the rules it must follow about
@@ -46,10 +46,10 @@ Read `llms.txt` first when you do not know what the knowledge base covers. Searc
 
 1. **Fetch the static files.** Any agent that can browse the web can read `llms.txt`, follow a link, and quote the page. No ranking, no setup.
 2. **Search locally.** Load `kb-index.json` with one of the bundled clients and run a real hybrid search on your own machine. Nothing leaves it.
-3. **Search through a tool.** Run one of the two local servers that ship with Extractium, and the search becomes a tool your client can call. See [how to connect an MCP client](how-to/connect-an-mcp-client.md).
-4. **Point a hosted assistant at the URLs.** A system prompt naming the files, for platforms that only browse.
+3. **Search through a tool.** Run one of the two local servers that ship with Extractium, and the search becomes a tool your client can call. See [how to connect an MCP client](how-to/connect-an-mcp-client.md). The same tool can be hosted for free on Val Town or Cloudflare, so an assistant that does not run on your machine can call it too; see [how to deploy a remote MCP server](how-to/deploy-a-remote-mcp-server.md). A hosted server searches by keywords unless an embedding model is configured for it.
+4. **Point a hosted assistant at the URLs.** A system prompt naming the files, for platforms that only browse. Two ready-made prompts are under [examples/wrappers/](../examples/wrappers/README.md).
 
-Options 1, 2, and 3 work today. A hosted endpoint that answers the same searches remotely is described in the [specification](extractium-spec.md) and is not built yet.
+All four work today.
 
 
 ## Searching the index
@@ -121,7 +121,9 @@ Read `llms.txt` to learn what a knowledge base covers, search `kb-index.json` to
 * [How to Connect an MCP Client](how-to/connect-an-mcp-client.md) — running the search as a tool an assistant can call.
 * [Container Format](container-format.md) — the index file, byte by byte, and the reader checklist.
 * [Running a Build](usage.md) — how a published folder is produced.
-* [Extractium™ Specification](extractium-spec.md) — the access tiers, including the hosted options not yet built.
+* [How to Deploy a Remote MCP Server](how-to/deploy-a-remote-mcp-server.md) — hosting the search tool for an assistant that runs elsewhere.
+* [Hosted Assistant Prompts](../examples/wrappers/README.md) — system prompts for platforms that browse or call a remote tool.
+* [Extractium™ Specification](extractium-spec.md) — the access tiers and what each one offers.
 * [llmstxt.org](https://llmstxt.org/) — the convention the `llms.txt` files follow.
 
 

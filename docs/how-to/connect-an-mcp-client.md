@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/connect-an-mcp-client.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: How to let an AI assistant on your own machine search a
 published compendium: which of the two local servers to pick, how to
 configure a client, how to check it works without a client, and what the
@@ -38,7 +38,7 @@ Two servers ship with Extractium, one in Python and one in JavaScript. They expo
 | [Python](../../examples/mcp/local-python/README.md) | You already installed Extractium. It embeds questions with the package Extractium installs, so there is nothing else to add. |
 | [Node](../../examples/mcp/local-node/README.md) | Your assistant runs JavaScript tools, or you have Node and no Python. It installs one package, `@huggingface/transformers`, and everything that package needs. |
 
-Both read the same index file, so you can change your mind later.
+Both read the same index file, so you can change your mind later. If the assistant does not run on your machine, or you would rather not run anything at all, the same tool can be hosted for free: see [how to deploy a remote MCP server](deploy-a-remote-mcp-server.md).
 
 
 ## Step 1: Get the index address
@@ -170,6 +170,7 @@ You now have an assistant that can search your organization's documentation and 
 * [Local Python MCP Server](../../examples/mcp/local-python/README.md) — settings and limits of the Python server.
 * [Local Node MCP Server](../../examples/mcp/local-node/README.md) — settings and limits of the Node server.
 * [How to Search a Compendium](search-a-compendium.md) — the client libraries both servers are built on.
+* [How to Deploy a Remote MCP Server](deploy-a-remote-mcp-server.md) — the same tool hosted on Val Town or Cloudflare.
 * [Container Format](../container-format.md) — the index file both servers read.
 * [Running a Build](../usage.md) — how the index is produced.
 * [Troubleshooting](../troubleshooting.md) — known failures, causes, and fixes.

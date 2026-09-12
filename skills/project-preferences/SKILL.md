@@ -55,6 +55,9 @@ pip install -e ".[dev,code,youtube]"
 python -m pytest -q
 node --test clients/js
 node --test examples/mcp/local-node
+node --test examples/mcp/shared
+node --test examples/mcp/valtown
+node --test examples/mcp/cloudflare
 ```
 
 The full Python suite must pass before a pull request is opened, and no test may

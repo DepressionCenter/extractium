@@ -1,0 +1,12 @@
+{
+  "_license": "This file is part of Extractium. Copyright © 2026 The Regents of the University of Michigan. Licensed under the GNU General Public License v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the project README for full license information.",
+  "name": "extractium-mcp-shared",
+  "version": "0.1.0",
+  "description": "The protocol core, the HTTP binding, and the search tool every Extractium MCP example server shares.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}

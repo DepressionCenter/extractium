@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -56,6 +56,7 @@ That writes `dist/kb-index.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Dro
   + [Container format](docs/container-format.md) — the index file every client reads.
   + [How to search a compendium](docs/how-to/search-a-compendium.md) — searching a built index from Python or JavaScript.
   + [How to connect an MCP client](docs/how-to/connect-an-mcp-client.md) — letting an AI assistant on your own machine search a published index.
+  + [How to deploy a remote MCP server](docs/how-to/deploy-a-remote-mcp-server.md) — hosting that search on Val Town or Cloudflare for an assistant anywhere.
   + [How to run a weekly build](docs/how-to/run-a-weekly-build.md) — the one-command local build and the scheduled one.
   + [Troubleshooting](docs/troubleshooting.md) — known failures, causes, and fixes.
   + [Implementation plan](docs/implementation-plan.md) — the phased order of work.

@@ -1,0 +1,3 @@
+# Local state wrangler keeps for D1 and dev sessions.
+.wrangler/
+.dev.vars
