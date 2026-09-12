@@ -821,7 +821,7 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
             plugin = getattr(importlib.import_module(module_name), attribute)
             assert plugin.name == name
             register(plugin, registry.Tier.BUILTIN)
-    assert reg.source_names() == ("dspace", "github_api", "local", "web", "youtube")
+    assert reg.source_names() == ("dspace", "github_api", "local", "okf", "web", "youtube")
     assert reg.site_handler_names() == ("generic", "github", "tdx", "youtube")
 
 

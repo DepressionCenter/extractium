@@ -38,9 +38,9 @@ import urllib.parse
 import yaml
 
 from extractium.adapters.okf import CONCEPT_TYPES, INDEX_FILE, LOG_FILE
+from extractium.core.chunk import markdown_text_to_soup
 from extractium.core.models import LOCAL_URL_PREFIX, Document
 from extractium.sources.local import files_inside
-from extractium.core.chunk import markdown_text_to_soup
 
 ### Constants ###
 
