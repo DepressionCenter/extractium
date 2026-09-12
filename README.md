@@ -29,7 +29,7 @@ Extractium™ turns scattered public documentation into one searchable knowledge
 
 Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and publishes several output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in Field Station AI™ and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
 
-Project status: every planned part is built. Five source types (websites, GitHub repositories with code analysis, DSpace repositories, YouTube captions, and local folders) feed one build, which writes four outputs (the search index, the `llms.txt` pair, a SQLite database, and a folder of Markdown). Two clients search the index, two local servers offer that search to an AI assistant on your machine, two hosted examples offer it to an assistant anywhere, and two system prompts point a browsing assistant at the published files.
+Project status: every planned part is built. Six source types (websites, GitHub repositories with code analysis, DSpace repositories, YouTube captions, local folders, and knowledge bundles another build wrote) feed one build, which writes four outputs (the search index, the `llms.txt` pair, a SQLite database, and a folder of Markdown). Two clients search the index, two local servers offer that search to an AI assistant on your machine, two hosted examples offer it to an assistant anywhere, and two system prompts point a browsing assistant at the published files.
 
 ```mermaid
 flowchart LR
@@ -39,8 +39,9 @@ flowchart LR
         D[DSpace repositories]
         Y[YouTube captions]
         L[Local folders]
+        K[Knowledge bundles]
     end
-    W & G & D & Y & L --> E[Extractium build: crawl once, chunk, embed once]
+    W & G & D & Y & L & K --> E[Extractium build: crawl once, chunk, embed once]
     E --> O[Outputs: search index, llms.txt, SQLite, Markdown folder]
     O --> B[Browser search page or script]
     O --> M[Local assistant through MCP]
@@ -48,7 +49,7 @@ flowchart LR
     O --> P[Hosted assistant reading llms.txt]
 ```
 
-In words: five kinds of source feed one build, which crawls and embeds each piece of content once and then writes the same result in four formats. Those files are consumed in four ways. A browser page or a script searches the index directly. An assistant on your own machine searches it through a local Model Context Protocol (MCP) server. An assistant anywhere calls a hosted search endpoint on Val Town or Cloudflare. A platform that can browse but cannot call tools reads `llms.txt` from a system prompt.
+In words: six kinds of source feed one build, which crawls and embeds each piece of content once and then writes the same result in four formats. Those files are consumed in four ways. A browser page or a script searches the index directly. An assistant on your own machine searches it through a local Model Context Protocol (MCP) server. An assistant anywhere calls a hosted search endpoint on Val Town or Cloudflare. A platform that can browse but cannot call tools reads `llms.txt` from a system prompt.
 
 
 ## Quick Start Guide

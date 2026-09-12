@@ -42,6 +42,7 @@ A settings file lists sources. Each one has a type, a label, and a few options. 
 | A DSpace repository, such as a university library's | `dspace` | The interface address, the reader address, and the collections to read. Collections are listed, never discovered. |
 | A YouTube channel, playlist, or video | `youtube` | The channel as you would type it in a browser. Each stretch of a caption track becomes a section cited at the moment it was said. |
 | A folder on your own machine | `local` | The folder path. Nothing from it reaches an output unless that output sets `include_local: true`. |
+| A knowledge bundle another build wrote | `okf` | The folder of an Open Knowledge Format bundle, from this tool or any other. Each concept keeps the address it was read from. |
 
 Every source needs a `label`: the name a reader sees for it, such as "Staff Handbook". It heads a section in `llms.txt` and travels with every section in the index, so a search result can say where its answer came from.
 
@@ -110,6 +111,7 @@ A build explains itself as it runs. The lines below are the ones that carry a de
 | `SKIP <seed> -- it redirects to <address>, which is outside what this source may crawl` | The seed is a short link to somewhere else. | Use the address the message names as the seed. |
 | `transport: <host> served over the browser transport` | The site answered a bot-protection challenge, and the build read it over a browser-shaped connection, still naming itself. | Nothing. The summary lists the host again so the choice is on record. See [reading a site behind bot protection](../bot-protection-transport.md). |
 | `already indexed by an earlier source, skipped: <url>` | Two sources reached the same page, and the first one kept it. | Nothing, unless it happens to many pages; then fold the overlapping source into the first one as a second `seed_urls` entry. |
+| `N linked video(s) were left out: ...` | Pages linked videos, and a `youtube` source in the build could not confirm that a channel it names published them. | Nothing, unless the videos are yours: then name the channel on the `youtube` source. A source naming no channel reads no linked video. |
 | `the <handler> handler reads this address through the <source> source` | A `web` seed on GitHub or YouTube was handed to the source that reads that host properly. | Nothing. Give the `github_api` or `youtube` source its own entry if you want its options. |
 | `coverage : Not read; add to github_owners to include: <account> (N links)` | Pages linked to GitHub accounts this build was not told to read, and the links were not followed. | Add only the accounts you actually want to `github_owners`. This is the guardrail working, not an error. |
 | A repository's tier, such as `tier 2 (public API)` | Which of the three ways of reading GitHub served that repository. Tier 3 is a documentation-only crawl, used when the API could not be. | Set `GITHUB_TOKEN` to reach tier 1. A tier 3 repository has its coverage noted in its repository map as well. |

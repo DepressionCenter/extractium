@@ -106,6 +106,9 @@ Extractium reads public documentation, turns it into a searchable file, and publ
 | The Val Town push sends the API token in one header and nothing else about the account | `examples/mcp/valtown/push.py` | The token is read from `VALTOWN_API_TOKEN`, travels as a bearer token, and appears in no address, body, output, or error message; the script reads the account's handle, finds or creates one val by name, writes six files, and sets only the variables it was given. `tests/test_mcp_remote_servers.py` checks every call it makes against a fake of the API, and that a refused token's message does not repeat the token. |
 | Hosted servers write nothing and run nothing | `examples/mcp/valtown/kb.js`, `examples/mcp/cloudflare/d1-search.js` | The val reads one static file and, when configured, calls one embedding service; the Worker runs `SELECT` statements and, when configured, one Workers AI call. Neither has a tool that writes, and the Worker's entry module exports the handler and nothing else. |
 | Every output records how it was made | Container header, `llms.txt` preamble | Model, dimensions, query prefix, build time, and tool version, so a stale or mismatched file is detectable rather than silently wrong. |
+| A video linked from a crawled page is read only when a named channel published it | `extractium/sources/youtube.py`, `read_found_links` | The publisher must be known and must be a channel the source names; a source naming no channel reads no linked video, an unknown publisher keeps a video out, and `only_channel_videos` does not relax the rule. What was offered, read, and left out is reported. Covered in `tests/test_source_youtube.py`. |
+| A knowledge bundle cannot make a build record a file path as a page, or read outside its folder | `extractium/sources/okf.py`, `checked_resource`; `extractium/sources/local.py`, `files_inside` | A concept's resource must be an `http(s)` address or a `local:` address, which stays local; anything else is refused with the reason printed. The folder guard is the one the local source uses. Covered in `tests/test_source_okf.py`. |
+| The test suites run on every pull request | `.github/workflows/tests.yml` | Python on the oldest and newest supported versions, on Linux and Windows, with every extra; the five Node suites beside them. Read access only, no secret. `tests/test_operations.py` pins those properties. |
 | A client refuses a file it cannot read correctly | `extractium/search.py`, `clients/js/extractium-client.js` | Both implement every check in the [container format](container-format.md) reader checklist. `tests/test_search.py` and `clients/js/extractium-client.test.js` cover each refusal. |
 
 
@@ -178,7 +181,7 @@ The exception is the YouTube store. YouTube refuses caption requests from cloud-
 
 | Item | Status |
 |---|---|
-| Test suite | 1,727 Python tests passing as of 2026-09-12, with one skipped, plus 36 Node tests for the JavaScript client, 24 for the local Node MCP server, 19 for the shared MCP core, 13 for the Val Town example, and 14 for the Cloudflare example. |
+| Test suite | 1,765 Python tests passing as of 2026-09-12, with one skipped, plus 39 Node tests for the JavaScript client, 24 for the local Node MCP server, 19 for the shared MCP core, 13 for the Val Town example, and 14 for the Cloudflare example. |
 | Security review by a second person | Not done. |
 | Privacy, IRB, or Information Assurance review | Not done, and needed before any use involving participant data. |
 | Accessibility audit with an automated tool | Not done. |

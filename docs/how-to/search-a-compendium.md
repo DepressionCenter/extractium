@@ -43,7 +43,7 @@ The clients deliberately do not embed the query themselves. That keeps them smal
 ```python
 from extractium.search import load_container
 
-index = load_container("dist/compendium.json")
+index = load_container("dist/compendium.json")   # a compendium.json.gz reads the same way
 
 hits = index.search("how do I request a data extract", embed_query)
 
@@ -93,10 +93,10 @@ index = load_container("dist/compendium.json", model="BAAI/bge-small-en-v1.5", d
 The client is one file with no dependencies and no build step: `clients/js/extractium-client.js`.
 
 ```javascript
-import { loadContainer } from './extractium-client.js';
+import { inflateContainer, loadContainer } from './extractium-client.js';
 
 const response = await fetch('https://example.org/kb/compendium.json');
-const index = loadContainer(await response.arrayBuffer());
+const index = loadContainer(await inflateContainer(await response.arrayBuffer()));
 
 const hits = await index.search('how do I request a data extract', embedQuery);
 

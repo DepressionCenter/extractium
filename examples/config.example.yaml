@@ -95,6 +95,13 @@ sources:
   #  path: ./internal-docs
   #  include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
 
+  # A knowledge bundle another build wrote, in the Open Knowledge Format,
+  # from this tool or any other. Each concept keeps the address it was
+  # read from; one whose address is local: stays local, as above.
+  #- type: okf
+  #  label: Partner Knowledge Base
+  #  path: ./partner-okf
+
   # A GitHub account's repositories, read through the API rather than
   # scraped page by page. Give exactly one of org, user, or url. Uses
   # GITHUB_TOKEN from the environment when it is set, which raises the
@@ -176,6 +183,7 @@ sources:
 #outputs:
 #  - type: container         # written as <slug>.json unless file: names another
 #    include_local: false      # true lets local-source content into this file
+#    gzip: false               # true writes <slug>.json.gz, the same bytes compressed
 #  - type: llmstxt
 #  - type: sqlite            # written as <slug>.sqlite unless file: names another
 #    include_local: true

@@ -805,7 +805,7 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
     with open(PYPROJECT_PATH, "rb") as f:
         entry_points = tomllib.load(f)["project"]["entry-points"]
     assert set(entry_points["extractium.sources"]) == {
-        "web", "local", "github_api", "dspace", "youtube",
+        "web", "local", "github_api", "dspace", "youtube", "okf",
     }
     assert set(entry_points["extractium.site_handlers"]) == {
         "generic", "tdx", "github", "youtube",

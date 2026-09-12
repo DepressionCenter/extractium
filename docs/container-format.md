@@ -222,6 +222,11 @@ Version 2 is the layout Field Station AI's `build-kb-index.py` writes. Readers o
 Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910 children, 418 sources), the version 2 file is 10.0 MB, of which the children list alone is 3.3 MB. The same corpus in version 3 was expected to be about 6.9 MB: parents 2.4 MB, children under 0.1 MB, BM25 statistics 2.1 MB, vectors 2.3 MB.
 
 
+## Compressed form
+
+A container output with `gzip: true` writes the same bytes through gzip, under `<slug>.json.gz` unless `file` names another, with no timestamp in the gzip header so two builds of one compendium produce identical files. Nothing inside the container changes, so the version stays 4. A reader recognizes the compressed form by the gzip signature, the bytes `1f 8b`, rather than by the file name, so a file renamed on the way to a host still reads. The Python client inflates inside `load_container`; the JavaScript client's loader is synchronous, so a caller passes the download through `inflateContainer` first, and the loader names that step when handed compressed bytes.
+
+
 ## Versioning rule
 
 `v` changes only when the layout changes in a way a reader cannot ignore: a moved or removed field, a new meaning for an old field, a different vector encoding. Adding a field readers may ignore does not bump `v`. Readers ignore fields they do not know.
@@ -233,15 +238,16 @@ A field that is always present, and that a reader would use if it knew about it,
 
 ## Checklist for a reader
 
-1. Read the first four bytes as a little-endian unsigned 32-bit integer; call it `N`.
-2. Decode bytes `4` to `4 + N` as UTF-8 and parse the JSON object.
-3. Refuse the file unless `format` is `extractium-compendium` and `v` is `4`.
-4. Refuse the file unless `embedding.model` and `embedding.dims` match the embedder you will use for queries.
-5. Copy the remaining bytes into a fresh buffer and check the length against `len(children.pid) × embedding.dims × width(dtype)`.
-6. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
-7. Treat `calibration` as optional: if `sampleSize` is `0`, fall back to a fixed threshold.
-8. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
-9. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Both reference clients were read against this rule when `code_file` and `code_symbol` were added: neither branches on `content_type`, so neither needed changing.
+1. If the file begins with the gzip signature, `1f 8b`, inflate it first.
+2. Read the first four bytes as a little-endian unsigned 32-bit integer; call it `N`.
+3. Decode bytes `4` to `4 + N` as UTF-8 and parse the JSON object.
+4. Refuse the file unless `format` is `extractium-compendium` and `v` is `4`.
+5. Refuse the file unless `embedding.model` and `embedding.dims` match the embedder you will use for queries.
+6. Copy the remaining bytes into a fresh buffer and check the length against `len(children.pid) × embedding.dims × width(dtype)`.
+7. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
+8. Treat `calibration` as optional: if `sampleSize` is `0`, fall back to a fixed threshold.
+9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
+10. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Both reference clients were read against this rule when `code_file` and `code_symbol` were added: neither branches on `content_type`, so neither needed changing.
 
 
 ## Conclusion
