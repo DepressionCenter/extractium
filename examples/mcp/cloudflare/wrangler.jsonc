@@ -1,0 +1,35 @@
+// This file is part of Extractium. Copyright © 2026 The Regents of the
+// University of Michigan. Licensed under the GNU General Public License
+// v3.0 or later; see <https://www.gnu.org/licenses/gpl-3.0.html> and the
+// project README for full license information.
+//
+// Wrangler configuration for the Cloudflare Worker example. Replace the
+// database id with the one `wrangler d1 create` prints for your account.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "extractium-kb-mcp",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-01",
+  "observability": { "enabled": true },
+
+  // The SQLite output of a build, imported with `wrangler d1 execute`.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "extractium-kb",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+
+  // Optional: query embedding through Workers AI, which turns keyword
+  // search into the same hybrid search the clients run. Uncomment to
+  // enable. During `wrangler dev` the binding calls the remote model, so
+  // it needs a logged-in account even for a local run.
+  // "ai": { "binding": "AI" },
+
+  // Plain settings. Secrets such as EXTRACTIUM_BEARER_TOKEN go through
+  // `wrangler secret put`, never here.
+  "vars": {
+    // "EXTRACTIUM_ALLOWED_ORIGINS": "https://assistant.example.org"
+  }
+}

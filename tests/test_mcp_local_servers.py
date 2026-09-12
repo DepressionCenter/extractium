@@ -12,7 +12,7 @@ tests/test_mcp_local_servers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -203,7 +203,7 @@ def test_the_tool_list_holds_one_tool_and_only_a_modern_client_is_told_it_is_com
 
 
 def test_the_two_runtimes_expose_the_same_tool():
-    node_source = (NODE_SERVER_DIR / "server.js").read_text(encoding="utf-8")
+    node_source = (NODE_SERVER_DIR.parent / "shared" / "search-tool.js").read_text(encoding="utf-8")
 
     definition = server_module.TOOL_DEFINITION
     assert definition["name"] in node_source

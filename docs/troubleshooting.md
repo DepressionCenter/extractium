@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -377,6 +377,39 @@ That line is not an error. It is telling you the index has that repository's doc
 **Cause.** You are installing without the lockfile, or with an older copy of it. The embedding package reaches `sharp` and `adm-zip` through version ranges that stop short of the releases that fix them.
 
 **Fix.** Install from this folder, so npm reads both `package.json` and `package-lock.json`. The `overrides` block in `package.json` lifts those two packages to patched versions, and `npm audit` then reports nothing. If you see advisories anyway, check that you ran `npm install` inside `examples/mcp/local-node` rather than copying `server.js` elsewhere and installing by hand.
+
+
+## A hosted search server
+
+### `wrangler dev` stops with `Incorrect type for map entry ... is not of type 'function or ExportedHandler'`
+
+**Cause.** The Workers runtime accepts only handlers as the entry module's exports, and `worker.js` gained a named export that is not one: a constant, an object, or a re-export from another module. The first version of the example failed exactly this way.
+
+**Fix.** Keep `worker.js` to its default export. Put anything a test needs to import in `d1-search.js`, which is where the search already lives.
+
+### The Worker logs `which Workers AI does not serve; using keyword search alone`
+
+**Cause.** The `AI` binding is on, but the `meta` table says the index was built with a model other than `bge-small-en-v1.5`, so Workers AI's vectors would not be comparable with the stored ones.
+
+**Fix.** Nothing is broken: the Worker answers by keywords. To get hybrid search, rebuild with the default model, or leave the binding off.
+
+### The val logs `could not be kept in the blob store`
+
+**Cause.** The container is larger than the plan's blob quota, 10 MB on the free plan. The val still answers, from the copy in memory, but downloads the file again on every cold start.
+
+**Fix.** Move to a plan with a larger quota, publish a smaller index, or accept the download; it costs a few seconds on a cold start and nothing while the val stays warm.
+
+### The endpoint answers `401` to every request
+
+**Cause.** `EXTRACTIUM_BEARER_TOKEN` is set on the platform and the client is not sending it, or is sending a different one.
+
+**Fix.** Add an `Authorization: Bearer <token>` header in the client configuration, as [the how-to page](how-to/deploy-a-remote-mcp-server.md) shows, or unset the token if the endpoint is meant to be open.
+
+### `node --test examples/mcp/cloudflare` fails with `Cannot find module 'node:sqlite'`
+
+**Cause.** The Cloudflare tests stand in for D1 with Node's built-in SQLite module, which arrived in Node 22.5.
+
+**Fix.** Run the tests on Node 22.5 or newer. The Worker itself does not need it; only its tests do.
 
 
 ## A YouTube source

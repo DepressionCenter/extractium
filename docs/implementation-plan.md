@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
@@ -364,6 +364,8 @@ Still not built: following a YouTube link found while crawling something else an
 **Documentation.** `how-to/deploy-a-remote-mcp-server.md`; the specification's access-tier table marks the tiers as implemented.
 
 **Done when** both examples answer a query from a fresh deployment.
+
+*Finished 2026-09-12 on branch `phase-14-remote-mcp`. The first thing built was neither example but the layer under them: the Node local server's protocol handling, tool definition, and answer rendering moved into `examples/mcp/shared/`, and a Streamable HTTP binding was written beside them once, because two hosted servers each carrying their own copy of both eras of the protocol was the duplication the engineering rules forbid. The binding is the protocol's stateless form only: one POST per message, one JSON object back, no session, no server-sent stream, GET and DELETE refused, and the mirrored headers checked against the body. Each hosted server then became a small file saying where its index comes from and how it searches. Two things the plan named came out differently. The Val Town example does not answer BM25 alone: it does by default, but it runs the clients' whole hybrid search when an HTTP embedding service is configured, since the container is already in memory and the clients' code already does it; what was not done is exercising any real embedding service, so the shape is tested against a fake one and the README says so. And the Cloudflare example's optional hybrid search is narrower than the clients': the vector ranking runs over the fifty keyword candidates rather than over every window, because reading every vector from D1 per question would not fit the CPU budget, so a section sharing no term with the question cannot appear there. The test proves it still returns the clients' recorded ranking for the golden query, which it does because that query's answers share terms with it. Loading D1 needed a script rather than a file copy, `export_d1.py`, which writes the SQLite output as INSERT statements batched under D1's statement limit with every literal escaped; the golden compendium's export is committed and checked against a fresh one. One gate a hosted endpoint wants and a local one does not was added to both: an optional bearer token compared in constant time, and an optional origin allowlist. Verified: the Worker ran under `wrangler dev` against a local D1 loaded from the golden export and answered the contract query with the expected sections; the val ran in Node with its store and fetch faked. The done-when rule asked for a fresh deployment on each platform, and that was not done from this machine: no Deno for Val Town's `vt`, and no logged-in Cloudflare account, so both deployments are owed and belong to the maintainer. The Cloudflare tests use Node's built-in SQLite module as the stand-in for D1, which sets Node 22.5 as their floor; the Worker itself has no such floor.*
 
 ### Phase 15: Documentation pass
 

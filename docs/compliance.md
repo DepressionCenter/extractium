@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/compliance.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: The security, privacy, and accessibility posture of Extractium as
 it stands today: the controls that exist and where they live in the code,
 the evidence for each, the known gaps, and what still needs institutional
@@ -92,6 +92,13 @@ Extractium reads public documentation, turns it into a searchable file, and publ
 | The Node search server's dependency tree resolves away from known advisories | `examples/mcp/local-node/package.json`, `overrides` | `@huggingface/transformers` reaches `sharp` and `adm-zip` through version ranges that stop short of the patched releases. Two `overrides` entries lift them to `sharp` 0.35.4 and `adm-zip` 0.6.1, the first versions outside every advisory range, and `package-lock.json` pins the result. `npm audit` reported four high-severity advisories on 2026-09-11 and reports none after the change. The embedding model was run end to end on the overridden tree to confirm the lift does not break it. |
 | A search server answers questions and writes nothing | The same two files | One tool, `search_kb`, which reads one static file. There is no tool that writes, deletes, or runs anything, and no path by which a model's output becomes a command. |
 | A failure tells the model what to do without exposing the machine | The same two files, `_search` / `search` | An index that cannot be loaded returns a tool error naming the step; the underlying message, which can hold a path from the operator's disk, goes to the error stream only. Both suites check that a path in the failure does not reach the answer. |
+| A hosted search server accepts one small POST and answers one JSON object | `examples/mcp/shared/mcp-http.js`, `handleMcpRequest` | POST only, `application/json` only, a 64 KB body cap checked against the declared length and the bytes read, no session, no server-sent stream, no batch, and a client-sent response refused. Every mirrored header (`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`) must agree with the body when present, so a gateway routing on the header and this server acting on the body cannot disagree. `examples/mcp/shared/mcp-http.test.js` covers each refusal. |
+| A hosted endpoint can be closed with a token, compared in constant time | The same file, `sameSecret` | When `EXTRACTIUM_BEARER_TOKEN` is set, every request must carry it as a bearer token; a missing or wrong token is 401 with `WWW-Authenticate: Bearer`. The comparison runs over every byte whatever the first difference, so timing does not reveal the token. The token is a platform secret, never a file in the repository. Tested with a missing, a one-character-short, and a right token. |
+| A web page may call a hosted endpoint only from an origin the operator named | The same file, `allowedOrigins` | When `EXTRACTIUM_ALLOWED_ORIGINS` is set, a request carrying another `Origin` is 403. A request with no `Origin` header is not from a browser page and passes, which the documentation says plainly: the setting protects a visitor's browser, not the endpoint. Tested for an origin on the list, off it, and absent. |
+| The Worker binds every query term; nothing from a question reaches SQL as text | `examples/mcp/cloudflare/d1-search.js`, `keywordPool`, `sectionsFor`, `vectorsFor` | Terms travel as bound parameters in a `VALUES` list with their inverse document frequency; window ids travel the same way. A question is cut to thirty-two distinct terms so the hundred-parameter limit of D1 is never reached. `examples/mcp/cloudflare/worker.test.js` runs a term that reads like a `DROP TABLE` and checks the table is still there. |
+| The D1 export escapes every value the way SQLite reads it back | `examples/mcp/cloudflare/export_d1.py`, `sql_literal` | Text is single-quoted with the quote doubled, bytes are hexadecimal blobs, numbers are written as Python prints them; a type the output never holds is refused. `tests/test_mcp_remote_servers.py` reads every literal kind back through SQLite, including text that reads like SQL, and loads the committed golden export to check every table matches the source. |
+| The Val Town server fetches only over HTTPS and cannot be told where to store | `examples/mcp/valtown/kb.js`, `checkedUrl`, `storeKeys` | On a hosted runtime there is no loopback exception: the address must be `https://`. Blob keys are a fixed prefix plus a SHA-256 digest of the address. The embedding token, when set, travels in one `Authorization` header and appears in no address. `examples/mcp/valtown/kb.test.js` covers each. |
+| Hosted servers write nothing and run nothing | `examples/mcp/valtown/kb.js`, `examples/mcp/cloudflare/d1-search.js` | The val reads one static file and, when configured, calls one embedding service; the Worker runs `SELECT` statements and, when configured, one Workers AI call. Neither has a tool that writes, and the Worker's entry module exports the handler and nothing else. |
 | Every output records how it was made | Container header, `llms.txt` preamble | Model, dimensions, query prefix, build time, and tool version, so a stale or mismatched file is detectable rather than silently wrong. |
 | A client refuses a file it cannot read correctly | `extractium/search.py`, `clients/js/extractium-client.js` | Both implement every check in the [container format](container-format.md) reader checklist. `tests/test_search.py` and `clients/js/extractium-client.test.js` cover each refusal. |
 
@@ -164,11 +171,11 @@ The exception is the YouTube store. YouTube refuses caption requests from cloud-
 
 | Item | Status |
 |---|---|
-| Test suite | 1,400 Python tests passing as of 2026-09-11, plus 36 Node tests for the JavaScript client and 24 for the local Node MCP server. |
+| Test suite | 1,422 Python tests passing as of 2026-09-12, plus 36 Node tests for the JavaScript client, 24 for the local Node MCP server, 19 for the shared MCP core, 15 for the Val Town example, and 14 for the Cloudflare example. |
 | Security review by a second person | Not done. |
 | Privacy, IRB, or Information Assurance review | Not done, and needed before any use involving participant data. |
 | Accessibility audit with an automated tool | Not done. |
-| Penetration testing | Not applicable: the tool is a local program with no service of its own. |
+| Penetration testing | Not done. The tool itself is a local program, but the two hosted examples are services once deployed; each was exercised against the golden compendium with the refusals above, and nothing more. |
 
 
 ## Conclusion

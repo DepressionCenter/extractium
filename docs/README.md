@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -43,6 +43,7 @@ This folder holds the written documentation for Extractium™. Each page below c
 * [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
 * [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.
 * [How to Connect an MCP Client](how-to/connect-an-mcp-client.md) — giving an AI assistant on your own machine one tool: search of a published index.
+* [How to Deploy a Remote MCP Server](how-to/deploy-a-remote-mcp-server.md) — hosting the same tool on Val Town or Cloudflare, so an assistant anywhere can call it, with no server of your own.
 * [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the one-command local build and the scheduled build on GitHub.
 * [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — turning Pages on, what is published, and what publishing means.
 * [Compliance and Posture](compliance.md) — the controls that exist, the evidence for each, and the known gaps.
