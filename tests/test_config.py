@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -632,8 +632,42 @@ def test_output_file_must_stay_under_out_dir(file):
 
 
 def test_output_file_may_use_a_subfolder():
-    cfg = config.config_from_mapping(minimal(outputs=[{"type": "container", "file": "v3/kb-index.json"}]))
-    assert cfg.outputs[0].options["file"] == "v3/kb-index.json"
+    cfg = config.config_from_mapping(minimal(outputs=[{"type": "container", "file": "v3/compendium.json"}]))
+    assert cfg.outputs[0].options["file"] == "v3/compendium.json"
+
+
+# ---------------------------------------------------------------------------
+# The slug
+# ---------------------------------------------------------------------------
+
+def test_the_slug_defaults_and_names_the_default_output_files():
+    cfg = config.config_from_mapping(minimal(outputs=[{"type": "container"}, {"type": "sqlite"}]))
+    assert cfg.slug == config.DEFAULT_SLUG == "compendium"
+    assert cfg.outputs[0].options["file"] == "compendium.json"
+    assert cfg.outputs[1].options["file"] == "compendium.sqlite"
+
+
+def test_a_slug_names_every_output_that_names_no_file_of_its_own():
+    cfg = config.config_from_mapping(minimal(
+        slug="efdc-compendium",
+        outputs=[{"type": "container"}, {"type": "sqlite"}, {"type": "container", "file": "custom.json"}],
+    ))
+    assert cfg.slug == "efdc-compendium"
+    assert [o.options.get("file") for o in cfg.outputs] == [
+        "efdc-compendium.json", "efdc-compendium.sqlite", "custom.json",
+    ]
+
+
+@pytest.mark.parametrize("slug", ["EFDC Compendium", "-leading", "a/b", "a.b", "", "x" * 65, "ünïcode"])
+def test_a_slug_unsafe_in_a_file_name_or_an_address_is_refused(slug):
+    """The slug becomes a file name and a published address, so only the characters safe in both are allowed."""
+    with pytest.raises(config.ConfigError, match="slug"):
+        config.config_from_mapping(minimal(slug=slug))
+
+
+def test_a_slug_that_is_not_text_is_refused():
+    with pytest.raises(config.ConfigError, match="slug"):
+        config.config_from_mapping(minimal(slug=12))
 
 
 def test_unknown_output_type_passes_its_options_through_unchecked():

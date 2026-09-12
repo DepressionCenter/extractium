@@ -63,7 +63,7 @@ Make a token at [val.town/settings/api](https://www.val.town/settings/api) with 
 ```bash
 cd examples/mcp/valtown
 VALTOWN_API_TOKEN=EXAMPLE_TOKEN python push.py --push --name my-compendium \
-  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/kb-index.json
+  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json
 ```
 
 On Windows, set the variable first (`$env:VALTOWN_API_TOKEN = 'EXAMPLE_TOKEN'` in PowerShell), then run the command without the prefix.

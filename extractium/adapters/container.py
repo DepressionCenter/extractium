@@ -10,7 +10,7 @@ extractium/adapters/container.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -53,7 +53,7 @@ CONTAINER_VERSION = 4
 OFFSET_UNIT = "utf16"
 
 # File name written when the output's entry gives none.
-DEFAULT_FILE = "kb-index.json"
+DEFAULT_FILE = "compendium.json"
 
 # The vector bytes are little-endian, whatever the machine that built
 # them is, so a file built on one architecture reads on another.

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -83,6 +83,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 | Setting | Type | Default | What it does |
 |---|---|---|---|
 | `name` | text | title of the first page crawled | Display name of the knowledge base, recorded in every output. |
+| `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json` for the container and `<slug>.sqlite` for the database, so `slug: efdc-compendium` publishes `efdc-compendium.json`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
 | `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
@@ -495,21 +496,21 @@ Leave `outputs` out to write the two defaults: the container file and the `llms.
 
 | Type | Options | Default | What it writes |
 |---|---|---|---|
-| `container` | `file` | `kb-index.json` | The binary index every search client reads. See the [container format](container-format.md). |
+| `container` | `file` | `<slug>.json` | The binary compendium every search client reads. See the [container format](container-format.md). |
 | `llmstxt` | none | | `llms.txt` and `llms-full.txt`. |
-| `sqlite` | `file` | `compendium.sqlite` | A SQLite database with the same content. |
+| `sqlite` | `file` | `<slug>.sqlite` | A SQLite database with the same content. |
 | `okf` | none | | An Open Knowledge Format folder of Markdown files, written as `okf/` under `out_dir`. |
 
 | Option on every output | Type | Default | What it does |
 |---|---|---|---|
 | `include_local` | true or false | `false` | Lets content from `local` sources into this output. |
 
-A `file` is always a relative path under `out_dir`. An absolute path, or one that climbs out with `..`, is refused.
+A `file` is always a relative path under `out_dir`. An absolute path, or one that climbs out with `..`, is refused. Leave `file` out and the output is named after the `slug` global setting, which is the usual choice: one short name, and every file follows it.
 
 ```yaml
+slug: example-compendium    # writes example-compendium.json and example-compendium.sqlite
 outputs:
   - type: container
-    file: kb-index.json
   - type: llmstxt
   - type: sqlite
     include_local: true      # this file stays on your machine, so local content is fine

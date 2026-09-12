@@ -195,7 +195,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 
 | Format | Files | Plan phase | Notes |
 |---|---|---|---|
-| Binary container, version 3 | `kb-index.json` (name configurable) | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
+| Binary container, version 3 | `<slug>.json`, `compendium.json` by default | 3 | Flagship. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
 | llms.txt | `llms.txt`, `llms-full.txt` | 3 | Root manifest and full concatenation for web-browsing language models. |
 | SQLite | `compendium.sqlite` | 6 | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
 | OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | 11, built | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them; every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. |
@@ -325,6 +325,7 @@ Every setting:
 
 ```yaml
 name: Example Org Knowledge Base   # default: title of the first crawled page
+slug: compendium                    # names the output files: <slug>.json, <slug>.sqlite
 out_dir: dist                       # every adapter writes under here
 cache_dir: .kb_cache
 delay_seconds: 0.5
@@ -354,22 +355,20 @@ sources:
     exclude_repos: []               # an exclusion always wins
     include_forks: false
     include_archived: true
-    include_code: true              # reserved for phase 10; carried and reported today
+    include_code: true              # read the structure of the code, not only the docs
     max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
   - type: youtube
     label: Example Video Library
-    channel_id: UCxxxxxxxxxxxxxxxxxxxxxx   # needs YOUTUBE_API_KEY in the environment
+    channel_id: https://www.youtube.com/@ExampleChannel   # handle, address, or id; no key needed
     playlist_ids: []
     video_ids: []
     languages: [en]
 
 outputs:                            # omit = container + llmstxt
-  - type: container
-    file: kb-index.json
+  - type: container         # written as <slug>.json; file: overrides
     include_local: false
   - type: llmstxt
-  - type: sqlite
-    file: compendium.sqlite
+  - type: sqlite            # written as <slug>.sqlite; file: overrides
     include_local: true
   - type: okf
 ```

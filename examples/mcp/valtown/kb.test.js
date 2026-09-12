@@ -52,7 +52,7 @@ const CONTAINER_BYTES = new Uint8Array(fs.readFileSync(new URL('contract-contain
 const expectations = JSON.parse(fs.readFileSync(new URL('contract-query.json', GOLDEN), 'utf8'));
 const container = loadContainer(CONTAINER_BYTES);
 
-const INDEX_URL = 'https://example.org/kb/kb-index.json';
+const INDEX_URL = 'https://example.org/kb/compendium.json';
 const EMBED_URL = 'https://embed.example.org/v1/vectors';
 
 /** A blob store in memory, with the shape main.http.ts builds over Val Town's. */
@@ -101,8 +101,8 @@ const settings = (values) => (name) => values[name];
 
 test('only an HTTPS address is accepted on a hosted runtime', () => {
     assert.equal(checkedUrl(INDEX_URL), INDEX_URL);
-    assert.throws(() => checkedUrl('http://localhost:8000/kb-index.json'), ConfigurationError);
-    assert.throws(() => checkedUrl('http://example.org/kb-index.json'), ConfigurationError);
+    assert.throws(() => checkedUrl('http://localhost:8000/compendium.json'), ConfigurationError);
+    assert.throws(() => checkedUrl('http://example.org/compendium.json'), ConfigurationError);
     assert.throws(() => checkedUrl(undefined), ConfigurationError);
     assert.throws(() => checkedUrl('not a url'), ConfigurationError);
 });

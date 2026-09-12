@@ -39,7 +39,7 @@ The Model Context Protocol (MCP) is the standard that assistants use to call too
 ## Run it
 
 ```bash
-export EXTRACTIUM_INDEX_URL=https://example.org/kb/kb-index.json
+export EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json
 python examples/mcp/local-python/server.py
 ```
 

@@ -23,6 +23,7 @@
 
 # Display name of the published knowledge base.
 name: "Example Org Knowledge Base"
+slug: compendium              # names the output files: compendium.json, compendium.sqlite
 
 # Where the built files land. The workflow publishes this folder.
 out_dir: dist
@@ -55,7 +56,6 @@ sources:
 # it is obvious what gets published.
 outputs:
   - type: container
-    file: kb-index.json
   - type: llmstxt
 
 # A safety net while you are still tuning the patterns. Raise it once the

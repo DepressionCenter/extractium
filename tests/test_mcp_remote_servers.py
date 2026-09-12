@@ -403,7 +403,7 @@ def test_the_entry_point_is_an_http_val_and_every_other_file_is_a_plain_file(fak
 
 def test_environment_variables_are_created_and_then_updated(tmp_path):
     platform = FakeValTown()
-    variables = [("EXTRACTIUM_INDEX_URL", "https://example.org/kb/kb-index.json")]
+    variables = [("EXTRACTIUM_INDEX_URL", "https://example.org/kb/compendium.json")]
 
     valtown_push.push(client_for(platform), variables=variables, target=tmp_path)
     valtown_push.push(client_for(platform), variables=[("EXTRACTIUM_INDEX_URL", "https://example.org/other.json")],

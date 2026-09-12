@@ -156,10 +156,10 @@ def test_build_writes_every_configured_output(build_workspace, capsys):
 
     assert code == cli.EXIT_OK
     out_dir = build_workspace / "dist"
-    assert (out_dir / "kb-index.json").exists()
+    assert (out_dir / "compendium.json").exists()
     assert (out_dir / "llms.txt").exists()
     assert (out_dir / "llms-full.txt").exists()
-    header = read_container(out_dir / "kb-index.json")
+    header = read_container(out_dir / "compendium.json")
     assert header["site"] == "Example Org"
     assert header["v"] == 4
     assert len(header["parents"]) == 2
@@ -182,7 +182,7 @@ def test_the_label_a_source_is_given_reaches_every_output(build_workspace):
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
 
     out_dir = build_workspace / "dist"
-    header = read_container(out_dir / "kb-index.json")
+    header = read_container(out_dir / "compendium.json")
     assert all(p["source_label"] == "Peer Program" for p in header["parents"])
     assert "## Peer Program" in (out_dir / "llms.txt").read_text(encoding="utf-8")
 
@@ -206,7 +206,7 @@ def test_build_defaults_to_the_container_and_llmstxt_outputs(build_workspace):
     """)
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
-    assert (build_workspace / "dist" / "kb-index.json").exists()
+    assert (build_workspace / "dist" / "compendium.json").exists()
     assert (build_workspace / "dist" / "llms.txt").exists()
 
 
@@ -269,7 +269,7 @@ def test_build_names_the_index_after_the_first_page_when_the_file_does_not(build
 
     cli.main(["build", "--config", config])
 
-    assert read_container(build_workspace / "dist" / "kb-index.json")["site"] == "Alpha Page"
+    assert read_container(build_workspace / "dist" / "compendium.json")["site"] == "Alpha Page"
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +287,7 @@ def test_out_dir_flag_overrides_the_configuration_file(build_workspace):
 
     cli.main(["build", "--config", config, "--out-dir", "published"])
 
-    assert (build_workspace / "published" / "kb-index.json").exists()
+    assert (build_workspace / "published" / "compendium.json").exists()
     assert not (build_workspace / "dist").exists()
 
 
@@ -301,7 +301,7 @@ def test_float32_vecs_flag_changes_the_stored_vector_type(build_workspace):
 
     cli.main(["build", "--config", config, "--float32-vecs"])
 
-    embedding = read_container(build_workspace / "dist" / "kb-index.json")["embedding"]
+    embedding = read_container(build_workspace / "dist" / "compendium.json")["embedding"]
     assert embedding["dtype"] == "float32"
     assert "scale" not in embedding
 
@@ -468,7 +468,7 @@ def test_a_local_source_reaches_no_output_that_did_not_opt_in(build_workspace, c
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
 
-    published = (build_workspace / "dist" / "kb-index.json").read_bytes()
+    published = (build_workspace / "dist" / "compendium.json").read_bytes()
     assert b"AB123456" not in published
     assert "NOTICE" not in capsys.readouterr().out
 
@@ -496,7 +496,7 @@ def test_an_output_that_opts_in_gets_the_local_content_and_is_named_in_the_summa
     out = capsys.readouterr().out
     assert "output 'sqlite' includes local content" in out
     assert "output 'container' includes local content" not in out
-    assert b"AB123456" not in (build_workspace / "dist" / "kb-index.json").read_bytes()
+    assert b"AB123456" not in (build_workspace / "dist" / "compendium.json").read_bytes()
     assert b"AB123456" in (build_workspace / "dist" / "compendium.sqlite").read_bytes()
 
 

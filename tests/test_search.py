@@ -11,7 +11,7 @@ tests/test_search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -127,7 +127,7 @@ KEYWORD_STATS = {
 # ---------------------------------------------------------------------------
 
 def test_tokenize_keeps_runs_of_three_or_more_letters_or_digits_lowercased():
-    assert tokenize("Weekly BUILD of kb-index v3 a an") == ["weekly", "build", "index"]
+    assert tokenize("Weekly BUILD of compendium v3 a an") == ["weekly", "build", "compendium"]
 
 
 def test_tokenize_handles_empty_and_missing_text():
@@ -307,7 +307,7 @@ def test_load_container_reads_a_well_formed_file():
 
 
 def test_load_container_reads_a_file_from_a_path(tmp_path):
-    path = tmp_path / "kb-index.json"
+    path = tmp_path / "compendium.json"
     path.write_bytes(container_bytes(sample_header(), [[1, 0], [0, 1]]))
 
     assert len(load_container(path)) == 2

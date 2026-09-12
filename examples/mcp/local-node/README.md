@@ -42,7 +42,7 @@ The Model Context Protocol (MCP) is the standard that assistants use to call too
 ```bash
 cd examples/mcp/local-node
 npm install
-EXTRACTIUM_INDEX_URL=https://example.org/kb/kb-index.json node server.js
+EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json node server.js
 ```
 
 On Windows, set the variable with `set` in Command Prompt or `$env:` in PowerShell, then run `node server.js`.
