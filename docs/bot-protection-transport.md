@@ -5,9 +5,8 @@ Author(s): Gabriel Mongefranco
 Created: 2026-09-10
 Last Modified: 2026-09-12
 Summary: Why some sites refuse the crawler with a bot-protection challenge,
-what was measured against three live sites, and the transport design that
-reads them without running a browser and without misidentifying the
-crawler, and how the build reads them without pretending to be a browser.
+what was measured against three live sites, and how the build reads them
+without running a browser and without misidentifying the crawler.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
