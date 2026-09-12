@@ -44,7 +44,6 @@ from tests.contract_fixture import (
     CONTAINER_FILE,
     QUERY_FILE,
     build_contract_compendium,
-    contract_expectations,
     write_contract_container,
     write_contract_files,
 )

@@ -203,7 +203,6 @@ Every row marked "built" exists in the code; [Architecture and Current State](ar
 | SQLite | `<slug>.sqlite`, `compendium.sqlite` by default | built | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
 | OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | built | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them; every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. |
 | gzip container | `--gzip` flag | future | Same format, compressed; browsers decode with `DecompressionStream`. |
-| Parquet, DuckDB | install extras | future | `[parquet]` and `[duckdb]` extras only. |
 | JSONL plus separate vector file | none | never | No ecosystem behind it; the container covers the case. |
 
 Reading OKF bundles produced by other tools, as a source, is possible future work.

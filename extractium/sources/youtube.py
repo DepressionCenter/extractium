@@ -49,7 +49,6 @@ from extractium.sources.youtube_client import (
     YouTubeError,
     YouTubeNotFound,
     api_key,
-    checked_video_id,
     fetch_transcript,
     uploads_playlist_id,
     watch_url,

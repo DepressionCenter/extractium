@@ -38,7 +38,6 @@ import hashlib
 import json
 import os
 
-import pytest
 
 from tests.conftest import FakeResponse
 

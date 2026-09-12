@@ -1841,7 +1841,7 @@ def test_the_handler_satisfies_the_site_handler_protocol():
     "https://www.youtube.com/@DepressionCenter/playlists",
     "https://www.youtube.com/depressioncenter",
     f"https://www.youtube.com/channel/{CHANNEL}",
-    f"https://www.youtube.com/c/Example",
+    "https://www.youtube.com/c/Example",
 ])
 def test_a_channel_address_as_a_seed_reads_that_channel(seed):
     """
