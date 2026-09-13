@@ -61,7 +61,7 @@ The same thing in words, for anyone whose reader does not show the diagram: the 
 
 A source visits a URL. The web source asks its site handlers which one reads that kind of page; the handler returns the page title, the part of the page that holds the content, and any category hierarchy the page shows, such as a portal's breadcrumb trail.
 
-Every request carries the User-Agent from your settings, and every site's `robots.txt` is checked first. A site whose `robots.txt` cannot be read at all is skipped entirely, not crawled anyway. A page that refuses the crawler outright is reported and skipped, unless you have set `respect_robots_txt: false`, which also allows one retry as a browser for such a page. See the [configuration reference](configuration.md).
+Every request carries the User-Agent from your settings, and every site's `robots.txt` is checked first. A site whose `robots.txt` cannot be read at all is skipped entirely, not crawled anyway. A page that refuses the crawler outright is reported and skipped, unless you have set `respect_robots_txt: false`, which also allows one retry as a browser for such a page. Where a request actually lands is checked against the crawl's scope like any discovered link, so a page that redirects off the site, or to an excluded address, is skipped rather than indexed under the site's own address. See the [configuration reference](configuration.md).
 
 Not every source visits a page. A repository's deposits and a channel's videos are read through their own interfaces instead, and a knowledge bundle another build wrote is read from disk with each concept keeping the address it was read from. All of them arrive at stage 2 the same way.
 
@@ -119,7 +119,7 @@ The keyword statistics must be built after the collapse, because they refer to w
 
 ### 7. The compendium
 
-One record holding the sections, the window columns, the vectors, how the vectors were made, the keyword statistics, and the calibration figures, plus the index name and the build time. The build time is UTC, ISO 8601, ending in `Z`, always. Every adapter serializes this record and nothing else.
+One record holding the sections, the window columns, the vectors, how the vectors were made, the keyword statistics, and the calibration figures, plus the index name and the build time. The build time is UTC, ISO 8601, ending in `Z`, always. Every adapter serializes this record and nothing else. With `rebuild: incremental`, pages the last build published and this build did not see are rebuilt from the manifest and join the record before embedding, unless the server confirmed them gone; see the [configuration reference](configuration.md).
 
 ### 8. The output folder
 
@@ -168,7 +168,7 @@ So: assume any folder you point a local source at may hold protected health info
 
 ## The cache
 
-Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, and a `repository/` folder of the text a DSpace repository extracted from each deposit. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
+Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, a `repository/` folder of the text a DSpace repository extracted from each deposit, and `previous-build.json`, the manifest of the last build's published sections that an incremental rebuild carries pages forward from. The manifest never holds content read from a local folder. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
 
 What the parsers found in a code file is stored beside the file body, under the same blob name, together with everything that result depended on: which engine read it, its version, the grammar, the grammar's version, this project's own extraction rules, and the shape of the records. A build reads that back only when every one of them still matches, so upgrading a grammar or editing a query file reparses rather than serving what the old one found.
 

@@ -305,6 +305,9 @@ class WebSource:
         self.seed_url = self.seed_urls[0]
         self.include_patterns = tuple(options.get("include_patterns") or ())
         self.already_indexed = set(options.get("already_indexed") or ())
+        # Pages the server confirmed gone during this crawl, so an
+        # incremental rebuild drops them rather than carrying them forward.
+        self.gone = set()
         self.registry = None
         self._adopt(site_handlers, settings)
 
@@ -429,21 +432,28 @@ class WebSource:
                 progress(f"  SKIP {url} -- disallowed by robots.txt")
                 continue
 
-            # Where a seed actually lands decides whether the crawl can go
-            # anywhere at all, so it is worth one callback to find out.
+            # Where a request actually lands is checked against the scope
+            # like any discovered link: a page may redirect off the site,
+            # and what arrives then is not this site's content.
             is_seed = url in seed_norms
             expect_html = handler.expects_html(url)
             fetched = fetching.fetch(
                 session, request_url, cache,
                 expect_html=expect_html, user_agent=settings.user_agent, progress=progress,
                 fallback_user_agent=settings.blocked_retry_user_agent,
-                note_final_url=(lambda final, key=url: landed.__setitem__(key, final)) if is_seed else None,
+                note_final_url=lambda final, key=url: landed.__setitem__(key, final),
+                note_gone=lambda key=url: self.gone.add(key),
             )
             if fetched is None:
                 continue
 
             if is_seed and self._seed_redirected_out_of_scope(
                 url, landed.get(url), auto_prefix, origin, include_res, crawl_exclude_res, progress
+            ):
+                continue
+            if not is_seed and self._redirected_out_of_scope(
+                url, request_url, landed.get(url), auto_prefix, origin, include_res,
+                crawl_exclude_res, progress,
             ):
                 continue
 
@@ -488,6 +498,54 @@ class WebSource:
             self._pause()
 
         progress(f"Crawled {len(visited)} page(s).")
+
+    def gone_pages(self):
+        """
+        The addresses the server confirmed gone during this crawl, in
+        the normalised form the build files pages under.
+
+        Returns:
+            tuple[str, ...]: the addresses, or an empty tuple.
+        """
+        return tuple(sorted(self.gone))
+
+    def _redirected_out_of_scope(self, url, request_url, final_url, auto_prefix, origin,
+                                 include_res, crawl_exclude_res, progress):
+        """
+        Whether a page landed somewhere the crawl may not go, and says so
+        if it did.
+
+        A redirect that stays in scope is ordinary and passes without
+        comment. One that leaves it is skipped, because the body that
+        arrived belongs to another site, or to an address the crawl was
+        never allowed to ask for, and indexing it under this page's
+        address would attribute it to this site. The address a request
+        lands on is not one the site handlers were asked about either,
+        so a handler's own scope rule is applied to it here.
+
+        Args:
+            url (str): the page's address in the crawl.
+            request_url (str): the address actually requested, which a
+                handler may have rewritten, such as a blob page fetched
+                from the raw host; landing there is no redirect.
+            final_url (str | None): where the request landed, or None
+                when the session does not report it.
+            auto_prefix, origin, include_res, crawl_exclude_res: the
+                crawl's scope, as in_scope takes them.
+            progress (Callable[[str], None]): receives the skip line.
+
+        Returns:
+            bool: True when the page is to be skipped.
+        """
+        if not final_url or fetching.normalise(final_url) in (url, fetching.normalise(request_url)):
+            return False
+        if fetching.in_scope(final_url, auto_prefix, origin, include_res, crawl_exclude_res)                 and handlers_allow(self.handlers, final_url):
+            return False
+        progress(
+            f"  SKIP {url} -- it redirects to {final_url}, which is outside what this "
+            "source may crawl, so what arrived is not this site's content"
+        )
+        return True
 
     def _seed_redirected_out_of_scope(self, seed, final_url, auto_prefix, origin,
                                       include_res, crawl_exclude_res, progress):

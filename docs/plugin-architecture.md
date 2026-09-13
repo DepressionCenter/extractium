@@ -305,6 +305,14 @@ faq = "example_plugins.faq_source:FaqSource"
 
 Once the package is installed, the registry finds the class by its entry point, in the installed tier, with no `register` function needed. Extractium's own built-ins are declared the same way in its `pyproject.toml`, which is the place to look for the exact spelling of each group.
 
+A plugin kept in a git repository installs the same way, pinned to a commit so a later change cannot arrive unannounced:
+
+```
+pip install "git+https://github.com/example-org/extractium-plugin-faq@<commit>"
+```
+
+There is no loader for git addresses inside Extractium and none is planned. Installing through pip keeps the trust decision where it already lives: the operator chooses what to install, pip verifies what it fetched, and the lock file can pin it like any other dependency.
+
 
 ## Conclusion
 

@@ -43,6 +43,8 @@ from extractium import __version__
 from extractium.config import ConfigError, load_config
 from extractium.core import cache as caching
 from extractium.core import phi_lint
+from extractium.core import retain
+from extractium.core.build import page_key_of
 from extractium.core.build import build_compendium
 from extractium.core.registry import RegistryError, build_registry
 from extractium.core.transport import make_session
@@ -109,11 +111,12 @@ def run_sources(config, registry, session, cache, progress):
         progress (Callable[[str], None]): receives one line per event.
 
     Returns:
-        tuple[list, list[str]]: every document produced, in source order,
-        and the notes the sources want the reader to see at the end -- how
-        completely each repository was read, and which accounts were left
-        out. A note nobody reads is a gap that will be mistaken for an
-        answer, so these are collected rather than only logged.
+        tuple[list, list[str], set[str]]: every document produced, in
+        source order; the notes the sources want the reader to see at the
+        end -- how completely each repository was read, and which accounts
+        were left out, because a note nobody reads is a gap that will be
+        mistaken for an answer; and the keys of the pages the sources
+        reported as confirmed gone.
 
     Raises:
         extractium.core.registry.RegistryError: if a source type is not
@@ -164,7 +167,42 @@ def run_sources(config, registry, session, cache, progress):
                     dataclasses.replace(document, source_label=entry.label)
                     for document in source.read_found_links(session, cache, progress, links)
                 )
-    return documents, collect_notes(source for _, source in ran)
+    gone = set()
+    for _, source in ran:
+        if hasattr(source, "gone_pages"):
+            gone.update(retain.page_key(url) for url in source.gone_pages())
+    return documents, collect_notes(source for _, source in ran), gone
+
+
+def carry_forward_pages(config, documents, gone, progress):
+    """
+    The pages an incremental rebuild keeps without having read them.
+
+    Args:
+        config (extractium.config.Config): the validated configuration.
+        documents (list): every document the sources produced.
+        gone (set[str]): the keys of the pages confirmed gone.
+        progress (Callable[[str], None]): receives one line per event.
+
+    Returns:
+        tuple[dict | None, list]: the manifest the last build wrote, and
+        what extractium.core.retain.carry_forward chose from it. Both are
+        empty on a full rebuild, which reads no manifest at all.
+    """
+    if config.rebuild != retain.REBUILD_INCREMENTAL:
+        return None, []
+    previous = retain.load_previous()
+    if previous is None:
+        progress("No earlier build to carry pages forward from.")
+        return None, []
+    # Only a crawl can miss a page that is still there; every other
+    # source lists its content through an interface, so a page absent
+    # from its listing is gone.
+    labels = {entry.label for entry in config.sources if entry.type == "web"}
+    kept = retain.carry_forward(previous, (page_key_of(d) for d in documents), gone, labels)
+    for key, parents, _, last_seen in kept:
+        progress(f"  kept from an earlier build (last seen {last_seen[:10]}): {parents[0]['u']}")
+    return previous, kept
 
 
 def found_links(sources):
@@ -276,6 +314,10 @@ def run_outputs(config, registry, compendium, progress):
         adapter = registry.get_adapter(entry.type)()
         options = dict(entry.options, include_local=entry.include_local)
         written.append((entry, adapter.write(compendium, config.out_dir, options)))
+        # An output that keeps a folder in step with the compendium says
+        # what it removed, so a deletion is never silent.
+        for path in getattr(adapter, "pruned", ()):
+            progress(f"  removed, no longer in the compendium: {path}")
     return written
 
 
@@ -361,7 +403,7 @@ def run_build(args):
                            delay_seconds=config.delay_seconds)
 
     try:
-        documents, notes = run_sources(config, registry, session, cache, progress_to_stderr)
+        documents, notes, gone = run_sources(config, registry, session, cache, progress_to_stderr)
         # Which hosts needed the browser handshake, on record at the end
         # as well as in the log.
         if hasattr(session, "summary_lines"):
@@ -384,11 +426,15 @@ def run_build(args):
     except OSError as e:
         return fail(f"the review report could not be written: {e}", EXIT_OUTPUT)
 
+    previous, kept = carry_forward_pages(config, documents, gone, progress_to_stderr)
+    notes.extend(retain.summary_lines(kept, len(gone)))
+
     compendium = build_compendium(
         documents,
         name=config.name,
         float32_vecs=args.float32_vecs,
         progress=progress_to_stderr,
+        retained=kept,
     )
     if compendium is None:
         return fail(
@@ -396,6 +442,10 @@ def run_build(args):
             "Check the seed URL and the include and exclude patterns.",
             EXIT_NO_CONTENT,
         )
+    try:
+        retain.save_manifest(compendium, previous, [key for key, _, _, _ in kept])
+    except OSError as e:
+        progress_to_stderr(f"  the build manifest could not be written ({e}); the next build cannot carry pages forward")
 
     try:
         written = run_outputs(config, registry, compendium, progress_to_stderr)

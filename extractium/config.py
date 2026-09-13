@@ -98,6 +98,15 @@ DEFAULT_SLUG = "compendium"
 # How the crawler opens its connections; see extractium.core.transport.
 TRANSPORT_MODES = ("auto", "browser", "plain")
 DEFAULT_TRANSPORT = "auto"
+
+# What a build does with a page it did not see this time. "full" publishes
+# exactly what was read; "incremental" also keeps the pages of the last
+# build that this one did not reach, unless the server confirmed them
+# gone. Full is the default because a page taken down on purpose must
+# leave the published index on the next build without anyone noticing it
+# stayed. See extractium.core.retain.
+REBUILD_MODES = ("full", "incremental")
+DEFAULT_REBUILD = "full"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
@@ -228,6 +237,7 @@ KNOWN_KEYS = frozenset({
     "user_agent",
     "respect_robots_txt",
     "transport",
+    "rebuild",
     "phi_lint",
     "github_owners",
     "sources",
@@ -350,6 +360,8 @@ class Config:
         user_agent (str): the User-Agent header the crawler sends.
         respect_robots_txt (bool): whether robots.txt disallow rules are honored.
         transport (str): one of TRANSPORT_MODES; how connections are opened.
+        rebuild (str): one of REBUILD_MODES; what happens to a page this
+            build did not see.
         phi_lint (str): one of PHI_LINT_MODES.
         github_owners (tuple[str, ...]): GitHub accounts, beyond the ones
             the sources themselves name, whose pages a build may follow
@@ -370,6 +382,7 @@ class Config:
     user_agent: str = DEFAULT_USER_AGENT
     respect_robots_txt: bool = DEFAULT_RESPECT_ROBOTS_TXT
     transport: str = DEFAULT_TRANSPORT
+    rebuild: str = DEFAULT_REBUILD
     phi_lint: str = DEFAULT_PHI_LINT
     github_owners: tuple = DEFAULT_GITHUB_OWNERS
 
@@ -1092,6 +1105,7 @@ def config_from_mapping(data, source="configuration"):
         user_agent=user_agent,
         respect_robots_txt=_read_bool(data, "respect_robots_txt", DEFAULT_RESPECT_ROBOTS_TXT, source),
         transport=_read_choice(data, "transport", DEFAULT_TRANSPORT, TRANSPORT_MODES, source),
+        rebuild=_read_choice(data, "rebuild", DEFAULT_REBUILD, REBUILD_MODES, source),
         phi_lint=_read_choice(data, "phi_lint", DEFAULT_PHI_LINT, PHI_LINT_MODES, source),
         github_owners=_read_github_owners(data, source),
         sources=_read_sources(data, source),

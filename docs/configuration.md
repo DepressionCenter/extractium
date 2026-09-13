@@ -91,6 +91,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
 | `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |
 | `transport` | `auto`, `browser`, or `plain` | `auto` | How the crawler opens its connections. `auto` makes an ordinary request and, only when the answer is a bot-protection challenge, retries once over a browser-shaped handshake, keeping that choice for the host. `browser` uses the handshake from the first request. `plain` never does. The crawler's own `user_agent` is sent either way. See "How a site behind bot protection is read" below. |
+| `rebuild` | `full` or `incremental` | `full` | What happens to a page this build did not see. `full` publishes exactly what was read. `incremental` also keeps the pages of the last build that this one did not reach, unless the server confirmed them gone. See "Full and incremental rebuilds" below. |
 | `phi_lint` | `local`, `all`, or `off` | `local` | Which content the check for protected health information scans. |
 | `github_owners` | list of text | empty | Extra GitHub accounts this build may follow links into. See "Which GitHub accounts a build reads" below. |
 
@@ -220,6 +221,8 @@ instead, or add an include pattern that covers it.
 ```
 
 Put the address it names in your settings file. A redirect that stays in scope, such as `http` to `https` or a missing trailing slash, is normal and passes without comment.
+
+Every other page is checked the same way. A page inside the site that sends the crawler to another host, or to an address the exclude patterns cover, is skipped with the landing address named, because what arrived is not this site's content and would otherwise be indexed under this site's address. Add the other place to `include_patterns`, or as a source of its own, if it should be indexed.
 
 ### `local`: read files from a folder
 
@@ -555,6 +558,29 @@ Any Markdown viewer opens the folder. A program that reads Open Knowledge Format
 The folder holds the text of every page, so decide what to publish exactly as you would for the container. A build never deletes what an earlier build wrote. A page that has since disappeared from its source therefore stays in the folder until you remove it.
 
 The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
+
+
+## Full and incremental rebuilds
+
+Every build writes a manifest beside the cache, `previous-build.json`, holding the sections of every published page and the date each page was last seen. It never holds content read from a local folder, because a data repository that indexes video commits its cache folder.
+
+With `rebuild: full`, the default, the outputs hold exactly what this build read. A page that was not reached is not in them, whatever the reason.
+
+With `rebuild: incremental`, a page the last build had and this build did not see is carried forward from the manifest, re-chunked and re-embedded with everything else, so it stays searchable with the section identifiers it had. Three rules decide which pages that covers:
+
+- Only a page from a `web` source is carried forward. A crawl reaches pages by following links and can miss one that is still there, because a site was down for the hour the build ran or a page is no longer linked. Every other source lists its content through an interface, so a page absent from its listing is gone.
+- A page the server confirmed gone is dropped. A `404` or `410` answer is the server saying the page no longer exists; a `500`, a timeout, or a refusal says nothing about whether it exists, and such a page is kept.
+- A page whose source is no longer in the settings file is dropped with it.
+
+The build log names each page kept and the date it was last seen, and the summary counts what was kept and what was dropped. The published files carry no per-page date; the manifest does.
+
+Full is the default on purpose. A page taken down deliberately must leave the published index on the next build, and in incremental mode it does so only when the server answers that it is gone. If a site can take a page down without answering `404` for its address, for example by redirecting every old address to its home page, run that build in full mode.
+
+The Open Knowledge Format output follows the compendium in both modes: a concept file this tool wrote in an earlier build for a page that is no longer in the compendium is removed, and the build log names it. A file somebody added to the folder by hand is never touched.
+
+```yaml
+rebuild: incremental
+```
 
 
 ## The check for protected health information

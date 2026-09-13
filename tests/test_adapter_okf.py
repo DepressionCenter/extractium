@@ -43,6 +43,7 @@ from extractium.adapters import okf
 from extractium.adapters.okf import OkfAdapter
 from extractium.core import build
 from extractium.core.models import Document
+from tests.test_build import document_from_fixture
 from tests.test_adapter_container import (
     FIXED_BUILT_AT,
     mixed_compendium,
@@ -588,3 +589,37 @@ def test_a_bundle_with_nothing_in_it_still_opens(tmp_path, fixtures_dir, fake_em
     fields, _ = front_matter_of(folder / okf.INDEX_FILE)
     assert fields == {"okf_version": okf.OKF_VERSION}
     assert "0 concepts" in (folder / okf.LOG_FILE).read_text(encoding="utf-8")
+
+
+### Keeping The Folder In Step ###
+
+def test_a_concept_file_the_tool_wrote_for_a_page_no_longer_indexed_is_removed(
+    tmp_path, fixtures_dir, fake_embed_chunks_core,
+):
+    """
+    The folder mirrors the compendium: a page that left the index takes
+    its file with it. A file a person added by hand has no generated.by
+    field and is never touched, and neither are the two reserved files.
+    """
+    two_pages = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+    adapter = OkfAdapter()
+    written = adapter.write(two_pages, tmp_path, {})
+    folder = tmp_path / "okf"
+    by_hand = folder / "notes" / "by-hand.md"
+    by_hand.parent.mkdir(parents=True, exist_ok=True)
+    by_hand.write_text("# A note somebody added\n\nKept whatever the build does.\n", encoding="utf-8")
+    stale = [path for path in written if path.name not in ("index.md", "log.md")][-1]
+    assert stale.exists() and adapter.pruned == ()
+
+    one_page = build.build_compendium(
+        [document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team")],
+        name="Example Org", embedder=fake_embed_chunks_core, built_at=FIXED_BUILT_AT,
+    )
+    again = OkfAdapter()
+    kept = again.write(one_page, tmp_path, {})
+
+    assert not stale.exists()
+    assert again.pruned == (stale,)
+    assert by_hand.exists()
+    assert (folder / "index.md").exists() and (folder / "log.md").exists()
+    assert all(path.exists() for path in kept)

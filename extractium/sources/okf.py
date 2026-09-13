@@ -35,9 +35,7 @@ import pathlib
 import re
 import urllib.parse
 
-import yaml
-
-from extractium.adapters.okf import CONCEPT_TYPES, INDEX_FILE, LOG_FILE
+from extractium.adapters.okf import CONCEPT_TYPES, INDEX_FILE, LOG_FILE, split_front_matter
 from extractium.core.chunk import markdown_text_to_soup
 from extractium.core.models import LOCAL_URL_PREFIX, Document
 from extractium.sources.local import files_inside
@@ -48,9 +46,6 @@ from extractium.sources.local import files_inside
 # root are an index and a log, not concepts.
 CONCEPT_GLOBS = ("**/*.md",)
 RESERVED_FILES = frozenset({INDEX_FILE, LOG_FILE})
-
-# The front-matter block: a fence, the YAML, a fence, at the top of the file.
-FRONT_MATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?", re.S)
 
 # The lines the okf adapter writes between the front matter and the text:
 # the title as a heading, and the address the page was read from. Both
@@ -71,29 +66,6 @@ ALLOWED_SCHEMES = ("http", "https")
 
 
 ### Reading One Concept ###
-
-def split_front_matter(text):
-    """
-    Splits a concept file into its front-matter fields and its body.
-
-    Args:
-        text (str): the file's content.
-
-    Returns:
-        tuple[dict | None, str]: the fields, or None when the file has no
-        front matter or it does not parse to a mapping, and the body.
-    """
-    match = FRONT_MATTER_RE.match(text)
-    if not match:
-        return None, text
-    try:
-        fields = yaml.safe_load(match.group(1))
-    except yaml.YAMLError:
-        return None, text[match.end():]
-    if not isinstance(fields, dict):
-        return None, text[match.end():]
-    return fields, text[match.end():]
-
 
 def body_text(body):
     """
