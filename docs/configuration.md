@@ -221,6 +221,8 @@ instead, or add an include pattern that covers it.
 
 Put the address it names in your settings file. A redirect that stays in scope, such as `http` to `https` or a missing trailing slash, is normal and passes without comment.
 
+Every other page is checked the same way. A page inside the site that sends the crawler to another host, or to an address the exclude patterns cover, is skipped with the landing address named, because what arrived is not this site's content and would otherwise be indexed under this site's address. Add the other place to `include_patterns`, or as a source of its own, if it should be indexed.
+
 ### `local`: read files from a folder
 
 | Option | Type | Default | What it does |

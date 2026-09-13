@@ -9,7 +9,7 @@ tests/test_seed_handling.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -304,10 +304,14 @@ def test_a_seed_redirecting_into_an_include_pattern_is_allowed(
     assert [d.url for d in documents] == [seed]
 
 
-def test_only_a_seed_is_checked_for_this(isolated_core_cache, fake_session_factory):
+def test_a_page_that_redirects_off_the_site_is_not_indexed_as_the_site(
+    isolated_core_cache, fake_session_factory,
+):
     """
-    An ordinary page that redirects elsewhere is not a problem: the crawl
-    already has somewhere to go.
+    What arrives from another host is that host's content. Indexing it
+    under this page's address would attribute it to this site, and on a
+    cloud runner the other host could be an internal address the crawl
+    was never allowed to ask for.
     """
     seed = "https://example.org/start"
     inner = "https://example.org/inner"
@@ -324,8 +328,57 @@ def test_only_a_seed_is_checked_for_this(isolated_core_cache, fake_session_facto
 
     documents = list(make_source({"seed_url": seed}).fetch(session, {}, lines.append))
 
+    assert [d.url for d in documents] == [seed]
+    skip = next(line for line in lines if "redirects to" in line)
+    assert inner in skip and "https://elsewhere.example/page" in skip
+    assert "not this site's content" in skip
+
+
+def test_a_page_that_redirects_within_the_site_is_indexed_as_usual(
+    isolated_core_cache, fake_session_factory,
+):
+    seed = "https://example.org/start"
+    inner = "https://example.org/inner"
+    session = fake_session_factory({
+        seed: page("Start", links=[inner]),
+        inner: RedirectingResponse(
+            "https://example.org/inner/", status_code=200,
+            headers={"Content-Type": "text/html"},
+            text=page("Inner", body=BODY.replace("Body", "Inner")).text,
+        ),
+        "https://example.org/robots.txt": ROBOTS_ABSENT,
+    })
+    lines = []
+
+    documents = list(make_source({"seed_url": seed}).fetch(session, {}, lines.append))
+
     assert sorted(d.url for d in documents) == [inner, seed]
     assert not any("redirects to" in line for line in lines)
+
+
+def test_a_page_that_redirects_to_an_excluded_address_is_skipped(
+    isolated_core_cache, fake_session_factory,
+):
+    """A redirect cannot reach past the crawl's own exclusions either."""
+    seed = "https://example.org/start"
+    inner = "https://example.org/inner"
+    session = fake_session_factory({
+        seed: page("Start", links=[inner]),
+        inner: RedirectingResponse(
+            "https://example.org/Login.aspx", status_code=200,
+            headers={"Content-Type": "text/html"},
+            text=page("Inner", body=BODY.replace("Body", "Inner")).text,
+        ),
+        "https://example.org/robots.txt": ROBOTS_ABSENT,
+    })
+    lines = []
+
+    documents = list(make_source(
+        {"seed_url": seed, "crawl_exclude_patterns": [r"/Login\.aspx"]}
+    ).fetch(session, {}, lines.append))
+
+    assert [d.url for d in documents] == [seed]
+    assert any("redirects to" in line and inner in line for line in lines)
 
 
 def test_a_session_that_does_not_report_where_it_landed_changes_nothing(
