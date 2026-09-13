@@ -12,7 +12,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -210,12 +210,17 @@ def test_each_workflow_publishes_only_through_the_official_pages_actions(workflo
         assert action in OFFICIAL_PAGES_ACTIONS, action
 
 
-def test_every_action_is_pinned_to_a_major_version(workflow_text):
-    references = re.findall(r"uses:\s*(\S+)", workflow_text)
+# An action reference pinned to a full commit digest, with the release it
+# is in a comment, so a moved tag can never change what a workflow runs.
+PINNED_ACTION_RE = re.compile(r"^\s*uses:\s*[\w.-]+/[\w.-]+@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+\s*$", re.M)
+
+
+def test_every_action_is_pinned_to_a_commit_digest(workflow_text):
+    references = re.findall(r"^\s*uses:.*$", workflow_text, re.M)
 
     assert references
     for reference in references:
-        assert re.search(r"@v\d+$", reference), reference
+        assert PINNED_ACTION_RE.match(reference), reference
 
 
 def test_each_workflow_caches_the_crawl_keyed_on_the_settings_file(workflow):
@@ -235,7 +240,9 @@ def test_each_workflow_publishes_one_run_at_a_time_without_cancelling(workflow):
 def test_the_data_repository_workflow_builds_with_a_named_version_of_the_tool():
     workflow = yaml.safe_load(WORKFLOW_PATHS[1].read_text(encoding="utf-8"))
 
-    assert workflow["env"]["EXTRACTIUM_REF"]
+    # A release tag, so a change merged here never reaches an adopter's
+    # scheduled build unannounced.
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", workflow["env"]["EXTRACTIUM_REF"])
     steps = workflow["jobs"]["build"]["steps"]
     checkout = next(step for step in steps if step.get("with", {}).get("repository"))
     assert checkout["with"]["ref"] == "${{ env.EXTRACTIUM_REF }}"
@@ -315,9 +322,9 @@ def test_the_test_workflow_runs_every_suite_with_every_extra(tests_workflow):
         assert f"node --test {suite}" in node_steps
 
 
-def test_the_test_workflow_pins_every_action_to_a_major_version():
-    references = re.findall(r"uses:\s*(\S+)", TESTS_WORKFLOW_PATH.read_text(encoding="utf-8"))
+def test_the_test_workflow_pins_every_action_to_a_commit_digest():
+    references = re.findall(r"^\s*uses:.*$", TESTS_WORKFLOW_PATH.read_text(encoding="utf-8"), re.M)
 
     assert references
     for reference in references:
-        assert re.search(r"@v\d+$", reference), reference
+        assert PINNED_ACTION_RE.match(reference), reference

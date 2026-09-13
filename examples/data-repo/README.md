@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Summary: README for the data-repository template: what the folder is, how
 to turn it into your own repository, how the weekly build runs, what gets
 published, and why the YouTube cache is committed rather than ignored.
@@ -62,7 +62,7 @@ They are served at your Pages URL, for example `https://example-org.github.io/kn
 
 ## Choosing the version of the tool
 
-The workflow's `EXTRACTIUM_REF` setting names the version of Extractium to build with. It starts at `main`. Change it to a release tag once you want your builds to stay on a fixed version, so a change in the tool never arrives unannounced in a scheduled run.
+The workflow's `EXTRACTIUM_REF` setting names the release of Extractium to build with, as a tag such as `v0.1.0`. A scheduled build therefore keeps running the same tool until you move the tag forward, and a change in the tool never arrives unannounced. The releases page of the Extractium repository lists the tags; read a release's notes, change the one line, and run the workflow once by hand before leaving it to the schedule.
 
 
 ## Building on your own machine instead

@@ -71,7 +71,7 @@ The engine was extracted from a single-file script, which is kept frozen at [tes
 
 Every component above is built.
 
-The test suite passes: 1,765 Python tests as of 2026-09-12, with one skipped, plus 39 Node tests for the JavaScript client (`node --test clients/js`), 24 for the local Node MCP server, 19 for the shared MCP core, 13 for the Val Town example, and 14 for the Cloudflare example (`node --test examples/mcp/<folder>`).
+The test suite passes: 1,767 Python tests as of 2026-09-12, with one skipped, plus 39 Node tests for the JavaScript client (`node --test clients/js`), 24 for the local Node MCP server, 19 for the shared MCP core, 13 for the Val Town example, and 14 for the Cloudflare example (`node --test examples/mcp/<folder>`).
 
 
 ## Settled design decisions
