@@ -432,17 +432,38 @@ Still not built: following a YouTube link found while crawling something else an
 
 *Finished 2026-09-12 on branch `phase-15-documentation-pass`. Every correction in the three audit tables was applied or found already made by the two pull requests that landed after the audit: the transport shipped in Phase 8's late delivery, so the bot-protection page, the EFDC settings file, and the plan's own Phase 8 entry were already current, and the YouTube comments in both settings files already said no key is needed. The specification is v0.3 with a change list, a status column in place of the phase columns, the version 4 container, the three optional handler hooks, every cache folder, and a settings example that carries every setting and loads. The architecture page gained decisions 9 through 13. The two template co-authors were removed from the citation files. The four new pages exist, and the documentation index groups the maintainer pages under their own heading. The two tests the phase asked for are in `tests/test_docs.py`, with a third that loads the three example plugins from the plugin architecture page through the registry and runs each one; a YAML block that shows one setting is loaded on top of a minimal source so its keys are still checked, and a block that is not a settings mapping, such as a workflow line, is skipped. Two items were left to the maintainer, as the audit allowed: the DOI in the citation is still the template placeholder, and the placeholder preview image is no longer referenced but still sits under `images/`. The "how the URL patterns work" section stayed in the configuration reference with a pointer from the crawling guide, since moving it would have broken the links other pages already carry.*
 
+### Phase 16: Loose ends after the review
+
+**Goal.** Close what the review after Phase 15 found and the smaller ideas it filed, in one branch: the last host-specific rule in core, the absence of continuous integration, the lint findings, videos linked from crawled pages, a compressed container, and reading a bundle back. Parquet and DuckDB outputs leave the roadmap in the same change.
+
+**Deliverables.**
+
+- The site-handler protocol gains `scope_prefix(seed_url)` and `observe_link(url)`, and the source protocol gains `read_found_links(session, cache, progress, links)`. The TeamDynamix portal-folder rule moves from `extractium/core/fetch.py` onto the first, so core knows no host.
+- The YouTube handler collects the videos linked from crawled pages, and the command line offers them to every `youtube` source once every source has run. A source reads a linked video only when its publisher is known and is a channel the source names; a source naming no channel reads none, an unknown publisher keeps a video out, and `only_channel_videos` does not relax the rule.
+- The container output's `gzip` option, recognized by both clients from the gzip signature; the JavaScript client gains `inflateContainer`, and the local Node server and the Val Town example call it.
+- The `okf` source, reading an Open Knowledge Format bundle back with the local marking preserved, a resource that is not a web address refused, and the local source's folder guard shared.
+- A workflow that runs the Python suite on the oldest and newest supported Python versions on Linux and Windows, with every extra, and the five Node suites, on every pull request and push to `main`, with read access only.
+- The empty `parquet` and `duckdb` extras removed, the unused imports and placeholder-free f-strings pyflakes reported removed, the template's unreferenced preview images deleted, and the troubleshooting entry that named `EXTRACTIUM_REF` corrected.
+
+**Tests.** The portal-folder scope with the handler on and off; the hook returning None for other hosts. The handler collecting, deduplicating, and counting linked videos; the source reading a linked video from a named channel and leaving out one from another channel, one whose publisher cannot be read, and every one when no channel is named; a video already read not read again; the command line offering links to a source listed before the crawl. A compressed container inflating to the plain bytes, reproducibly, in both clients, and both clients refusing bytes that begin like gzip and are not. A bundle round-tripping its pages, a local concept staying local, the reserved files and unreadable concepts skipped with a reason, a resource that is not a web address refused, a file outside the folder never read. The test workflow's triggers, permissions, matrix, and suites.
+
+**Documentation.** The specification (sections 2.1, 4, 5, 6, 12, and 14), the architecture page (decision 14), the plugin architecture page, the configuration reference, the container format page, the crawling and search guides, the data-flow and compliance pages, the README, and the example settings file.
+
+**Done when** core holds no host-specific rule, a linked video enters the index only when a named channel published it, a compressed container reads in both clients, a bundle the `okf` output wrote reads back through the `okf` source, and the suites run on a pull request.
+
+*Finished 2026-09-12 on branch `phase-16-loose-ends`. Everything above is built and tested as written. The scope rule went onto a new `scope_prefix` hook rather than onto `allows`, because the rule narrows a seed's default scope rather than vetoing a link, and it reads the portal path on any host, as the core rule did, so a portal served from an organization's own host keeps its scope. The first run of the new test workflow is the pull request that merges this phase.*
+
 ### After Phase 15
 
 What is left is listed here so a reader of this page knows what was deferred and what was ruled out, and why. A decision recorded here is meant to save somebody proposing the same thing again from first principles.
 
 #### Still open
 
-Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; clients in other languages; Parquet and DuckDB outputs; reading OKF bundles from other tools; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one.
-
-Following a YouTube link found while crawling something else belongs here as well. The site handler already sees such a link and reports it, but the crawl discards an off-host address before any handler is asked whether to follow it, so collecting those and handing them to the video source needs a hook in the crawler's own link pipeline. That is a core change and wants its own phase.
+Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; clients in other languages; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one. Each of these is an open issue in the repository.
 
 #### Decided against
+
+**Parquet and DuckDB outputs.** Removed from the roadmap on 2026-09-12, and the two empty extras that had reserved their names with them. The SQLite output already serves a SQL consumer, and nobody had asked for either format; an organization that needs one can write an adapter plugin.
 
 **Speech-to-text for videos without captions.** Dropped on evidence rather than on principle. Sampling 65 of the 145 videos on a real channel on 2026-09-11 found English captions on 64 of them, 37 of those generated by YouTube itself, and not one video with captions missing or turned off. The one gap was a video captioned in Spanish only, which is a language to add to the `languages` setting and not a model to run. A speech-to-text pass would mean shipping several hundred megabytes and a large amount of processing to solve a problem that did not occur once, so the project lets YouTube do that work.
 

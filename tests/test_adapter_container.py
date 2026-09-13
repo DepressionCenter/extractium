@@ -307,3 +307,24 @@ def test_dropping_local_parents_leaves_a_valid_compendium(
 
     assert filtered.vectors.shape[0] == len(filtered.children)
     assert set(filtered.calibration) == {"mean", "std", "sampleSize"}
+
+
+def test_write_with_gzip_produces_the_same_bytes_compressed(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    import gzip
+
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+    (plain,) = ContainerAdapter().write(compendium, tmp_path, {"file": "compendium.json"})
+    (packed,) = ContainerAdapter().write(compendium, tmp_path, {"file": "compendium.json.gz", "gzip": True})
+
+    assert packed.name == "compendium.json.gz"
+    assert packed.read_bytes()[:2] == b"\x1f\x8b"
+    assert gzip.decompress(packed.read_bytes()) == plain.read_bytes()
+    assert packed.stat().st_size < plain.stat().st_size
+
+
+def test_write_with_gzip_is_reproducible(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+    (first,) = ContainerAdapter().write(compendium, tmp_path / "a", {"file": "c.json.gz", "gzip": True})
+    (second,) = ContainerAdapter().write(compendium, tmp_path / "b", {"file": "c.json.gz", "gzip": True})
+
+    assert first.read_bytes() == second.read_bytes()

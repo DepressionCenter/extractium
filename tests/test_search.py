@@ -465,3 +465,19 @@ def test_window_text_slices_in_utf16_code_units_like_a_browser_does():
     (hit,) = index.search("launch", lambda text: [1, 0], k=1, no_threshold=True)
 
     assert hit.window_text == "launch"
+
+
+def test_load_container_inflates_a_gzip_compressed_file(tmp_path):
+    import gzip
+
+    raw = container_bytes(sample_header(), [[1, 0], [0, 1]])
+    path = tmp_path / "compendium.json.gz"
+    path.write_bytes(gzip.compress(raw))
+
+    assert len(load_container(path)) == 2
+    assert len(load_container(gzip.compress(raw))) == 2
+
+
+def test_load_container_refuses_bytes_that_begin_like_gzip_but_are_not():
+    with pytest.raises(ContainerError, match="cannot be inflated"):
+        load_container(b"\x1f\x8b" + b"not a gzip stream at all")

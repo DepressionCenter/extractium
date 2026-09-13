@@ -2,11 +2,11 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
-# Last Modified: 2026-09-11
+# Last Modified: 2026-09-12
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
-# (single package; runtime deps, dev/code/parquet/duckdb extras, console
-# script, pytest configuration).
+# (single package; runtime deps, dev/code/youtube extras, console script,
+# pytest configuration).
 #
 # Copyright © 2026 The Regents of the University of Michigan
 #
@@ -91,16 +91,11 @@ code = [
     "tree-sitter-powershell>=0.26.4,<0.27.0",
     "tree-sitter-matlab>=1.3.1,<2.0.0",
 ]
-# Future output formats (see docs/extractium-spec.md section 4); no packages
-# needed until those adapters are built.
 # Reading a YouTube channel's captions. Optional because most builds index
 # no video at all, and because a build that reads only transcripts an
 # operator already committed never calls this package. MIT-licensed; its
 # only dependency beyond requests is defusedxml, a hardened XML parser.
 youtube = ["youtube-transcript-api>=1.2.4,<2.0.0"]
-
-parquet = []
-duckdb = []
 
 [project.scripts]
 extractium = "extractium.cli:main"
@@ -116,6 +111,7 @@ local = "extractium.sources.local:LocalSource"
 github_api = "extractium.sources.github_api:GitHubApiSource"
 dspace = "extractium.sources.dspace:DSpaceSource"
 youtube = "extractium.sources.youtube:YouTubeSource"
+okf = "extractium.sources.okf:OkfSource"
 
 [project.entry-points."extractium.site_handlers"]
 generic = "extractium.sources.generic:GenericHandler"

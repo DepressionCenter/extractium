@@ -33,6 +33,7 @@
 import {
     bm25Candidates,
     diversify,
+    inflateContainer,
     loadContainer,
     tokenize,
 } from '../../../clients/js/extractium-client.js';
@@ -283,7 +284,7 @@ export function createValServer({ readSetting, store, fetchImpl, log, now }) {
         try {
             const { bytes, fromStore } = await containerBytes(url, store, { fetchImpl, log: logger });
             if (index === null || !fromStore) {
-                index = loadContainer(bytes);
+                index = loadContainer(await inflateContainer(bytes));
                 logger(`index loaded: ${index.size} windows from ${fromStore ? 'the store' : 'the published address'}.`);
             }
         } catch (error) {

@@ -34,7 +34,7 @@ Extractium reads content through sources, reads web pages through site handlers,
 
 | Kind | Produces | Acts | Built-in examples |
 |---|---|---|---|
-| **Source** | `Document` records | Once per entry in the settings file's `sources:` list, at the start of a build | `web`, `local`, `github_api`, `dspace`, `youtube` |
+| **Source** | `Document` records | Once per entry in the settings file's `sources:` list, at the start of a build | `web`, `local`, `okf`, `github_api`, `dspace`, `youtube` |
 | **Site handler** | An `Extraction` from a fetched page | Once per URL the `web` source visits, for the first handler that recognizes the URL | `generic`, `tdx`, `github`, `youtube` |
 | **Adapter** | Files under the output folder | Once per entry in the `outputs:` list, at the end of a build | `container`, `llmstxt`, `sqlite`, `okf` |
 
@@ -82,6 +82,7 @@ The protocols live in `extractium/core/models.py`. A plugin is an ordinary class
 | `__init__(options)` | Yes | Receives the validated options of its entry. For a built-in type the loader checks the option names; for a plugin type every option is passed through for the plugin to check. `label` is not among them; the build sets it on every document afterwards. |
 | `fetch(session, cache, progress)` | Yes | Yields `Document` records. `session` is the HTTP session to request through, `cache` is the fetch cache, and `progress` is a callable that takes one line of text. A source never constructs a session and never prints. |
 | `configure(registry, settings)` | No | Called after construction with the plugin registry and the build's global crawl settings, for a source that takes part in a web crawl. A source that needs neither omits it. |
+| `read_found_links(session, cache, progress, links)` | No | Called once every source has run, with the addresses the site handlers collected during the crawls and held back. Yields documents like `fetch`. The video source uses it to read linked videos a named channel published. |
 
 A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text), `source_type`, `content_type`, `categories`, and `local`. Two of those fields are controlled vocabularies, checked when the record is made. `source_type` is one of `kb`, `github`, `web`, `youtube`, `local`, or `repository`. `content_type` is one of `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest`, `repo_map`, `code_file`, or `code_symbol`. A plugin picks the closest fit; `web` and `page` suit most new sources. A document from a folder on the operator's machine sets `local=True` and a URL starting `local:`, and every adapter then drops it unless the output opted in.
 
@@ -97,6 +98,8 @@ A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text
 | `expects_html(url)` | Yes | True when the response is HTML to parse; False when it is plain text to wrap. Decided per URL because one host can serve both. |
 | `extract(soup, url)` | Yes | Returns an `Extraction`, or `None` when the page is only a hop whose links should be followed and whose content is not indexed. |
 | `content_type(url)` | Yes | The `content_type` value recorded on sections read from that URL. |
+| `scope_prefix(seed_url)` | No | May narrow the default crawl scope for a seed on a host the handler knows, returning the prefix the crawl stays inside, or `None`. Consulted only when the source has no include patterns. The TeamDynamix handler keeps a crawl inside its portal folder this way. |
+| `observe_link(url)` | No | Sees every link the crawl discovers, in scope or not, before the scope check, and returns nothing. The YouTube handler collects linked videos this way, and exposes them through a `found_links()` method the command line reads. |
 | `configure(settings)` | No | Receives the build's global crawl settings after construction, for a handler whose rules depend on what the operator configured. |
 | `allows(url)` | No | May veto a URL the crawl would otherwise follow. Every handler that defines it is asked about every URL, whatever `matches` says, and one refusal keeps the URL out of scope. The GitHub handler uses it to keep a crawl to the accounts the operator named. |
 | `offer_source(seed_url)` | No | May name a better source for a crawl's seed, as a tuple of the source name and its options. Consulted for the seed only, never for a link found mid-crawl. The GitHub and YouTube handlers use it to hand a seed to the source that reads that host properly. |
@@ -141,7 +144,7 @@ sequenceDiagram
     Adp-->>CLI: paths written
 ```
 
-In words, the command line builds the registry, then walks the `sources:` list. For each entry it asks the registry for the class, constructs it with the entry's options, calls `configure` when the class defines it, and iterates `fetch`. While the web source runs, it asks the site handlers about each URL it visits. Every document is stamped with its entry's label. The documents are checked for likely protected health information, then handed to the build step, which returns one compendium. The command line then walks the `outputs:` list, constructs each adapter, and calls `write`, collecting the paths for the summary.
+In words, the command line builds the registry, then walks the `sources:` list. For each entry it asks the registry for the class, constructs it with the entry's options, calls `configure` when the class defines it, and iterates `fetch`. While the web source runs, it asks the site handlers about each URL it visits, and shows every discovered link to the handlers that observe links. Once every source has run, the links the handlers held back are offered to each source that defines `read_found_links`. Every document is stamped with its entry's label. The documents are checked for likely protected health information, then handed to the build step, which returns one compendium. The command line then walks the `outputs:` list, constructs each adapter, and calls `write`, collecting the paths for the summary.
 
 Two rules follow from this order. A source cannot see another source's documents, so cross-source rules, such as indexing a page once however many sources reach it, live in the build step. And an adapter sees the finished compendium and nothing earlier, so an output format cannot depend on where a section came from beyond the fields every section carries.
 
@@ -198,7 +201,7 @@ sources:
     path: ./faq.json
 ```
 
-The reference implementation for a source is `extractium/sources/local.py`, which is short, reads files rather than the network, and shows the `local` marking a folder source must apply.
+The reference implementation for a source is `extractium/sources/local.py`, which is short, reads files rather than the network, and shows the `local` marking a folder source must apply. `extractium/sources/okf.py` is a second short one that reads files with front matter.
 
 ### A site handler
 

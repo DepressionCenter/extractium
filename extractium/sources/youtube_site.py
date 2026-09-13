@@ -12,7 +12,7 @@ extractium/sources/youtube_site.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -77,6 +77,9 @@ class YouTubeHandler:
         skipped (int): how many YouTube addresses were kept out of the
             crawl, so a build can say once that it saw them and why they
             were not read as pages.
+        found_videos (dict): the videos those addresses named, in the
+            order found, keyed by video id. A `youtube` source in the
+            same build reads the ones a channel it names published.
     """
 
     name = "youtube"
@@ -93,6 +96,41 @@ class YouTubeHandler:
 
     def __init__(self):
         self.skipped = 0
+        self.found_videos = {}
+        self._observed = set()
+
+    def observe_link(self, url):
+        """
+        Notes a YouTube address the crawl discovered, wherever it led.
+
+        The crawl discards an address on another host before asking any
+        handler whether to follow it, so this is the only place a video
+        linked from an ordinary page is seen. A link naming a video is
+        kept for the `youtube` source to consider; a link to a channel or
+        a playlist is counted and not kept, because following either
+        would pull a whole listing into a build on the strength of one
+        link.
+
+        Args:
+            url (str): a link the crawl found on a page.
+        """
+        if not self.matches(url) or url in self._observed:
+            return
+        self._observed.add(url)
+        self.skipped += 1
+        video_id = _read(parse_video_selector, url)
+        if video_id:
+            self.found_videos.setdefault(video_id, watch_url(video_id))
+
+    def found_links(self):
+        """
+        The video addresses found on crawled pages, in the order found,
+        for a source that reads videos to consider.
+
+        Returns:
+            tuple[str, ...]: one watch address per distinct video.
+        """
+        return tuple(self.found_videos.values())
 
     ### Recognition ###
 
@@ -121,7 +159,8 @@ class YouTubeHandler:
         """
         if not self.matches(url):
             return True
-        self.skipped += 1
+        if url not in self._observed:
+            self.skipped += 1
         return False
 
     def offer_source(self, seed_url):
@@ -178,7 +217,8 @@ class YouTubeHandler:
             return ""
         return (
             f"{self.skipped} YouTube link(s) were not crawled: a video's words are in "
-            "its captions, not its page. Add a youtube source to index them."
+            f"its captions, not its page. {len(self.found_videos)} of them name a video; "
+            "a youtube source naming your channel reads the ones that channel published."
         )
 
     ### Page Reading ###
@@ -215,6 +255,11 @@ class YouTubeHandler:
 
 
 ### Reading An Address ###
+
+def watch_url(video_id):
+    """The plain watch address of one video."""
+    return f"https://www.youtube.com/watch?v={video_id}"
+
 
 def _host_of(url):
     """The lowercase host of an address, or "" when it has none."""

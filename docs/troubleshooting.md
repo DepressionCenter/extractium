@@ -439,7 +439,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Cause.** An older Extractium, from before the video source existed. Such a version accepts the type in the settings file, but no code answers to it.
 
-**Fix.** Update Extractium, or pin `EXTRACTIUM_REF` to a version that has it.
+**Fix.** Update Extractium. In a data repository built from the template, `EXTRACTIUM_REF` in its workflow names the version of the tool it installs; move it forward.
 
 ### The build stops saying YouTube refused the request
 

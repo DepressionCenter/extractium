@@ -13,7 +13,7 @@ extractium/sources/youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -49,7 +49,6 @@ from extractium.sources.youtube_client import (
     YouTubeError,
     YouTubeNotFound,
     api_key,
-    checked_video_id,
     fetch_transcript,
     uploads_playlist_id,
     watch_url,
@@ -248,6 +247,16 @@ class YouTubeSource:
         # the publisher rule does not apply.
         self.allowed_channels = set()
         self.skipped_other_channels = 0
+        # Videos linked from crawled pages that this source was offered:
+        # how many there were, how many it read, and how many it left out
+        # because no channel it names published them. Reading a linked
+        # video means a linked video's words enter the knowledge base on
+        # the strength of one link, so the rule is strict: the publisher
+        # must be known and must be a named channel.
+        self.found_offered = 0
+        self.found_read = 0
+        self.found_left_out = 0
+        self._read_ids = set()
         # How many videos were read before YouTube began refusing this
         # machine, or 0 when it never did.
         self.blocked_after = 0
@@ -305,31 +314,119 @@ class YouTubeSource:
                 and nothing is stored for it, or captions have to be
                 fetched from a machine YouTube refuses.
         """
-        client = YouTubeClient(
+        client = self._client(session, progress)
+        video_ids, discovered = self._video_ids(client, progress)
+        if not video_ids:
+            progress("YouTube:      nothing to read")
+            return
+        progress(f"YouTube:      {len(video_ids)} video(s)")
+        titles = self._titles(client, video_ids, progress)
+        # A video the channel published is read as itself. One that
+        # turned up in a playlist is read only if the same channel
+        # published it, so a playlist holding somebody else's talk
+        # does not put their words in this knowledge base.
+        wanted = [
+            video_id for video_id in video_ids
+            if video_id not in discovered
+            or self._published_by_an_allowed_channel(video_id, titles, client, progress)
+        ]
+        yield from self._read_videos(client, wanted, titles, progress)
+        if self.skipped_other_channels:
+            progress(
+                f"  {self.skipped_other_channels} video(s) in those playlists were "
+                "published by another channel and were left out"
+            )
+
+    def read_found_links(self, session, cache, progress, links):
+        """
+        Reads the videos linked from crawled pages that a channel this
+        source names published, and nothing else.
+
+        A site handler collects video links during a crawl; the command
+        line offers them to every source that defines this method once
+        every source has run. Only a video whose publisher is known and is
+        one of this source's named channels is read. A source that names
+        no channel reads none of them, and a video whose publisher cannot
+        be determined is left out rather than guessed at, because one
+        link on one page is not an operator's decision to index somebody
+        else's words. The `only_channel_videos` setting does not relax
+        this rule; it governs playlists, which the operator chose to read.
+
+        Args:
+            session: HTTP session to request through.
+            cache (dict): the fetch cache metadata. Unused, as in fetch.
+            progress (Callable[[str], None]): receives one line per event.
+            links (Iterable[str]): the addresses the handlers held back.
+
+        Yields:
+            extractium.core.models.Document: one per stretch of each
+            video read, addressed at the moment the stretch begins.
+        """
+        video_ids = []
+        for link in links:
+            try:
+                video_id = parse_video_selector(link)
+            except YouTubeError:
+                continue
+            if video_id not in self._read_ids and video_id not in video_ids:
+                video_ids.append(video_id)
+        if not video_ids:
+            return
+        self.found_offered = len(video_ids)
+        if not self.allowed_channels:
+            self.found_left_out = len(video_ids)
+            progress(
+                f"  {len(video_ids)} linked video(s) were left out: this youtube source "
+                "names no channel, so none of them can be known to be yours"
+            )
+            return
+        progress(f"YouTube:      {len(video_ids)} video(s) linked from crawled pages")
+        client = self._client(session, progress)
+        details = self._details(client, video_ids, progress)
+        wanted = [
+            video_id for video_id in video_ids
+            if self._published_by_an_allowed_channel(video_id, details, client, progress, strict=True)
+        ]
+        self.found_left_out = len(video_ids) - len(wanted)
+        if self.found_left_out:
+            progress(
+                f"  {self.found_left_out} linked video(s) were left out: not published by "
+                "a channel this source names, or the publisher could not be read"
+            )
+        before = len(self.coverage)
+        yield from self._read_videos(client, wanted, details, progress)
+        self.found_read = len(self.coverage) - before
+
+    def _client(self, session, progress):
+        """The Data API client for one run, keyed from the environment when a key is set."""
+        return YouTubeClient(
             session,
             key=api_key(),
             user_agent=self._user_agent(),
             progress=progress,
             delay_seconds=self._delay_seconds(),
         )
-        video_ids, discovered = self._video_ids(client, progress)
-        if not video_ids:
-            progress("YouTube:      nothing to read")
-            return
 
-        progress(f"YouTube:      {len(video_ids)} video(s)")
-        titles = self._titles(client, video_ids, progress)
+    def _read_videos(self, client, video_ids, titles, progress):
+        """
+        Reads each video in order and yields its stretches.
+
+        Args:
+            client (YouTubeClient): the Data API client.
+            video_ids (Sequence[str]): the videos to read, already chosen.
+            titles (Mapping): what is known about each, keyed by id.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Yields:
+            extractium.core.models.Document: one per stretch.
+
+        Raises:
+            YouTubeSourceError: if YouTube refuses this machine before a
+                single video was read.
+        """
         missing = []
         produced = 0
         for video_id in video_ids:
-            # A video the channel published is read as itself. One that
-            # turned up in a playlist is read only if the same channel
-            # published it, so a playlist holding somebody else's talk
-            # does not put their words in this knowledge base.
-            if video_id in discovered and not self._published_by_an_allowed_channel(
-                video_id, titles, client, progress
-            ):
-                continue
             try:
                 record, from_store = self._video(client, video_id, titles, progress)
             except _Blocked as e:
@@ -357,15 +454,11 @@ class YouTubeSource:
             for stretch in stretches:
                 yield self._document(video_id, record["title"], stretch)
             produced += 1
+            self._read_ids.add(video_id)
             self.coverage += ((record["title"], len(stretches), from_store),)
-        self.without_captions = tuple(missing)
+        self.without_captions += tuple(missing)
         if missing:
             progress(f"  {len(missing)} video(s) had no captions to read")
-        if self.skipped_other_channels:
-            progress(
-                f"  {self.skipped_other_channels} video(s) in those playlists were "
-                "published by another channel and were left out"
-            )
 
     ### Choosing What To Read ###
 
@@ -567,7 +660,7 @@ class YouTubeSource:
             progress(f"  playlist {listing_id}: the listing could not be stored ({e})")
         return video_ids
 
-    def _published_by_an_allowed_channel(self, video_id, titles, client, progress):
+    def _published_by_an_allowed_channel(self, video_id, titles, client, progress, strict=False):
         """
         Whether a video found through a playlist was published by one of
         the channels this build was pointed at.
@@ -590,26 +683,31 @@ class YouTubeSource:
             client (YouTubeClient): the Data API client.
             progress (Callable[[str], None]): receives one line per event.
 
+            strict (bool): True for a video linked from a crawled page,
+                where an unknown publisher keeps the video out and the
+                `only_channel_videos` setting does not apply.
+
         Returns:
-            bool: True when the video may be indexed. True also when the
-            publisher cannot be determined at all: holding a video back
-            on a failed lookup would quietly shrink a knowledge base, and
-            what was held back is reported either way.
+            bool: True when the video may be indexed. For a playlist video
+            this is True also when the publisher cannot be determined at
+            all: holding a video back on a failed lookup would quietly
+            shrink a knowledge base, and what was held back is reported
+            either way. For a linked video the unknown case is False.
         """
-        if not self.only_channel_videos or not self.allowed_channels:
+        if not strict and (not self.only_channel_videos or not self.allowed_channels):
             return True
         record = titles.get(video_id) or {}
         channel_id = (record.get("channel_id") or "").strip()
         if not channel_id:
             author_url = (record.get("author_url") or "").strip()
-            if not author_url:
-                return True
-            channel_id = self._channel_for_author(author_url, client, progress)
+            if author_url:
+                channel_id = self._channel_for_author(author_url, client, progress)
         if not channel_id:
-            return True
+            return not strict
         if channel_id in self.allowed_channels:
             return True
-        self.skipped_other_channels += 1
+        if not strict:
+            self.skipped_other_channels += 1
         return False
 
     def _channel_for_author(self, author_url, client, progress):
@@ -667,12 +765,30 @@ class YouTubeSource:
             video_id for video_id in video_ids
             if cache_module.load_video(video_id) is None
         ]
-        if not unknown:
+        return self._details(client, unknown, progress)
+
+    def _details(self, client, video_ids, progress):
+        """
+        What YouTube says about each video: its title, and its publisher
+        where the interface reports one. Asked for every id given, stored
+        transcript or not, because a linked video's publisher has to be
+        known before it is read.
+
+        Args:
+            client (YouTubeClient): the Data API client.
+            video_ids (Sequence[str]): the videos to name.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            dict[str, dict]: identifier to record, empty when nothing
+            could be read.
+        """
+        if not video_ids:
             return {}
         try:
             if client.key:
-                return client.video_details(unknown)
-            return client.public_video_details(unknown)
+                return client.video_details(video_ids)
+            return client.public_video_details(video_ids)
         except YouTubeError as e:
             # A missing title costs a readable heading, not the build:
             # the identifier stands in, and the transcript is still
@@ -839,6 +955,12 @@ class YouTubeSource:
             lines.append(
                 f"{self.skipped_other_channels} video(s) left out: another channel "
                 "published them"
+            )
+        if self.found_offered:
+            lines.append(
+                f"{self.found_offered} video(s) linked from crawled pages: "
+                f"{self.found_read} read, {self.found_left_out} left out because no "
+                "channel this source names is known to have published them"
             )
         if self.blocked_after:
             lines.append(

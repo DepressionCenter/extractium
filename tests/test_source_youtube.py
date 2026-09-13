@@ -1841,7 +1841,7 @@ def test_the_handler_satisfies_the_site_handler_protocol():
     "https://www.youtube.com/@DepressionCenter/playlists",
     "https://www.youtube.com/depressioncenter",
     f"https://www.youtube.com/channel/{CHANNEL}",
-    f"https://www.youtube.com/c/Example",
+    "https://www.youtube.com/c/Example",
 ])
 def test_a_channel_address_as_a_seed_reads_that_channel(seed):
     """
@@ -1919,3 +1919,92 @@ def test_the_handler_extracts_nothing_from_a_page():
     title, content, categories = handler().extract(None, f"https://www.youtube.com/watch?v={VIDEO_A}")
 
     assert (title, content, categories) == ("", None, ())
+
+
+### Videos Linked From Crawled Pages ###
+
+def test_the_handler_collects_linked_videos_and_counts_every_youtube_link():
+    built = handler()
+    built.observe_link(f"https://www.youtube.com/watch?v={VIDEO_A}")
+    built.observe_link(f"https://youtu.be/{VIDEO_B}")
+    built.observe_link(f"https://www.youtube.com/watch?v={VIDEO_A}")   # seen twice, kept once
+    built.observe_link("https://www.youtube.com/@DepressionCenter")     # a channel: counted, not kept
+    built.observe_link("https://example.org/page")                      # not this handler's business
+
+    assert built.found_links() == (
+        f"https://www.youtube.com/watch?v={VIDEO_A}",
+        f"https://www.youtube.com/watch?v={VIDEO_B}",
+    )
+    assert built.skipped == 3
+    assert "2 of them name a video" in built.skipped_page_report()
+
+
+def test_a_link_observed_and_then_refused_is_counted_once():
+    built = handler()
+    url = f"https://www.youtube.com/watch?v={VIDEO_A}"
+    built.observe_link(url)
+
+    assert built.allows(url) is False
+    assert built.skipped == 1
+
+
+def test_a_linked_video_is_read_only_when_a_named_channel_published_it():
+    """
+    A crawled page linked three videos: one this channel published, one
+    another channel published, and one whose publisher could not be read.
+    Only the first enters the index.
+    """
+    other = "UCbbbbbbbbbbbbbbbbbbbbbb"
+    video_c = "cccccccccc3"
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6), video_c: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=()),
+        "oembed": [
+            FakeResponse(body={"title": "Ours", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+            FakeResponse(body={"title": "Theirs", "author_url": f"https://www.youtube.com/channel/{other}"}),
+            FakeResponse(body={"title": "Unknown"}),
+        ],
+    })
+    built = source(reader=reader, channel_id=CHANNEL, include_playlists=False, only_channel_videos=False)
+    assert list(built.fetch(session, {}, quiet)) == []
+
+    links = [f"https://www.youtube.com/watch?v={VIDEO_A}", f"https://youtu.be/{VIDEO_B}",
+             f"https://www.youtube.com/watch?v={video_c}", "https://example.org/not-a-video"]
+    documents = list(built.read_found_links(session, {}, quiet, links))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"Ours"}
+    assert (built.found_offered, built.found_read, built.found_left_out) == (3, 1, 2)
+    assert [call["video_id"] for call in reader.calls] == [VIDEO_A]
+    assert "3 video(s) linked from crawled pages: 1 read, 2 left out" in "\n".join(built.summary_lines())
+
+
+def test_a_source_naming_no_channel_reads_no_linked_video():
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({"oembed": FakeResponse(body={"title": "A"})})
+    built = source(reader=reader, video_ids=(VIDEO_B,))
+    lines = []
+
+    documents = list(built.read_found_links(session, {}, lines.append,
+                                            [f"https://www.youtube.com/watch?v={VIDEO_A}"]))
+
+    assert documents == []
+    assert reader.calls == []
+    assert built.found_left_out == 1
+    assert any("names no channel" in line for line in lines)
+
+
+def test_a_linked_video_the_source_already_read_is_not_read_again():
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=(VIDEO_A,)),
+        "oembed": FakeResponse(body={"title": "Ours", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+    })
+    built = source(reader=reader, channel_id=CHANNEL, include_playlists=False)
+    first = list(built.fetch(session, {}, quiet))
+    assert first
+
+    again = list(built.read_found_links(session, {}, quiet, [f"https://www.youtube.com/watch?v={VIDEO_A}"]))
+
+    assert again == []
+    assert built.found_offered == 0
+    assert len(reader.calls) == 1

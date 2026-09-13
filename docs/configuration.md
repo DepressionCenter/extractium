@@ -337,6 +337,10 @@ Anything but the last two costs one request, once: the channel page states its o
 
 Playlists and videos work the same way. A playlist may be its id or any address with `list=` in it; a video may be its id, a `watch?v=` address, a `youtu.be` short link, or a `/shorts/`, `/live/`, or `/embed/` address.
 
+#### Videos linked from other sites
+
+A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The build reports how many linked videos were offered, read, and left out.
+
 #### What gets read from a channel
 
 Both of these, every time, whether or not you asked for a playlist:
@@ -486,6 +490,23 @@ sources:
   Deep Blue Documents  42 deposit(s)  35 with file text  7 description only
 ```
 
+### `okf`: read a knowledge bundle
+
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `path` | text | none (required) | The bundle folder to read. |
+
+Reads an Open Knowledge Format bundle, such as the `okf` output writes, from this tool or any other that follows the format. Every Markdown file under the folder except the reserved `index.md` and `log.md` is a concept: its front matter names the address it was read from (`resource`), its `title`, and its `type`, which becomes the content type again. The title heading and the source line under the front matter are not indexed twice.
+
+A concept whose resource is a `local:` address was read from a folder by the build that wrote the bundle, and stays local here, so every output drops it unless that output sets `include_local: true`. A concept whose resource is a web address is not local: the bundle is a copy of published pages. A resource that is anything else is refused and the file skipped, with the reason printed. A file the folder reaches through a shortcut or a symbolic link to somewhere else is skipped the way the `local` source skips one.
+
+```yaml
+sources:
+  - type: okf
+    label: Partner Knowledge Base
+    path: ./partner-okf
+```
+
 ### Source types from plugins
 
 A type that is not one of the built-in types above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.
@@ -497,7 +518,7 @@ Leave `outputs` out to write the two defaults: the container file and the `llms.
 
 | Type | Options | Default | What it writes |
 |---|---|---|---|
-| `container` | `file` | `<slug>.json` | The binary compendium every search client reads. See the [container format](container-format.md). |
+| `container` | `file`, `gzip` | `<slug>.json`, or `<slug>.json.gz` with `gzip: true` | The binary compendium every search client reads. See the [container format](container-format.md). `gzip: true` writes the same bytes compressed; both clients recognize the compressed form by its signature, and the JavaScript client's `inflateContainer` runs before its loader. |
 | `llmstxt` | none | | `llms.txt` and `llms-full.txt`. |
 | `sqlite` | `file` | `<slug>.sqlite` | A SQLite database with the same content. |
 | `okf` | none | | An Open Knowledge Format folder of Markdown files, written as `okf/` under `out_dir`. |
@@ -577,7 +598,7 @@ Pages that survive all four checks are fetched. A fetched page whose URL matches
 
 Leaving `include_patterns` out (the default) keeps the crawl close to home:
 
-- A TeamDynamix portal URL keeps the crawl inside that portal's `/TDClient/<number>/<name>/` folder. So a seed of `https://example.edu/TDClient/000/ExampleOrg/Home/` limits the crawl to `https://example.edu/TDClient/000/ExampleOrg/`.
+- A TeamDynamix portal URL keeps the crawl inside that portal's `/TDClient/<number>/<name>/` folder. So a seed of `https://example.edu/TDClient/000/ExampleOrg/Home/` limits the crawl to `https://example.edu/TDClient/000/ExampleOrg/`. This rule belongs to the `tdx` site handler, so switching that handler off drops it along with its exclusions.
 - Any other URL keeps the crawl on the same site, meaning the same scheme and host.
 
 This is usually the right setting. Add patterns only when one build has to cover more than one place.

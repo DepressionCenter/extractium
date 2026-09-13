@@ -805,7 +805,7 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
     with open(PYPROJECT_PATH, "rb") as f:
         entry_points = tomllib.load(f)["project"]["entry-points"]
     assert set(entry_points["extractium.sources"]) == {
-        "web", "local", "github_api", "dspace", "youtube",
+        "web", "local", "github_api", "dspace", "youtube", "okf",
     }
     assert set(entry_points["extractium.site_handlers"]) == {
         "generic", "tdx", "github", "youtube",
@@ -821,5 +821,34 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
             plugin = getattr(importlib.import_module(module_name), attribute)
             assert plugin.name == name
             register(plugin, registry.Tier.BUILTIN)
-    assert reg.source_names() == ("dspace", "github_api", "local", "web", "youtube")
+    assert reg.source_names() == ("dspace", "github_api", "local", "okf", "web", "youtube")
     assert reg.site_handler_names() == ("generic", "github", "tdx", "youtube")
+
+
+def test_a_portal_seed_stays_inside_its_portal_folder_through_the_tdx_handler(fake_session_factory):
+    """
+    The portal-folder scope rule lives in the tdx handler: with it enabled
+    a crawl seeded inside one portal never follows a link into another
+    portal on the same host, and with it disabled the scope is the host.
+    """
+    portal = "https://teamdynamix.example.edu/TDClient/210/ExampleOrg"
+    other = "https://teamdynamix.example.edu/TDClient/999/OtherOrg/KB/ArticleDet?ID=7"
+    seed = f"{portal}/KB/ArticleDet?ID=1"
+    inside = f"{portal}/KB/ArticleDet?ID=2"
+    page = (
+        "<html><head><title>Article - Inside</title></head><body>"
+        '<main id="divMainContent"><p>Synthetic paragraph long enough to clear the sixty character minimum for a section.</p>'
+        f'<a href="{inside}">inside</a> <a href="{other}">other portal</a></main></body></html>'
+    )
+    responses = {
+        seed: html_response(page),
+        inside: html_response(page),
+        other: html_response(page),
+        "https://teamdynamix.example.edu/robots.txt": ROBOTS_ABSENT,
+    }
+
+    with_tdx = crawl(make_source(seed), fake_session_factory(responses))
+    assert sorted(d.url for d in with_tdx) == sorted([seed, inside])
+
+    without = crawl(make_source(seed, handlers=()), fake_session_factory(responses))
+    assert sorted(d.url for d in without) == sorted([seed, inside, other])

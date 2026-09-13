@@ -48,7 +48,7 @@ flowchart TD
     F --> G[Compact sections with no windows left]
     G --> H[Keyword and calibration statistics]
     H -->|one Compendium| I[Adapters]
-    I --> J[out_dir: compendium.json, llms.txt, llms-full.txt, compendium.sqlite, okf/]
+    I --> J[out_dir: compendium.json or .json.gz, llms.txt, llms-full.txt, compendium.sqlite, okf/]
     C -.reads and updates.-> K[(.kb_cache)]
 ```
 
@@ -63,7 +63,7 @@ A source visits a URL. The web source asks its site handlers which one reads tha
 
 Every request carries the User-Agent from your settings, and every site's `robots.txt` is checked first. A site whose `robots.txt` cannot be read at all is skipped entirely, not crawled anyway. A page that refuses the crawler outright is reported and skipped, unless you have set `respect_robots_txt: false`, which also allows one retry as a browser for such a page. See the [configuration reference](configuration.md).
 
-Not every source visits a page. A repository's deposits and a channel's videos are read through their own interfaces instead, and arrive at stage 2 the same way.
+Not every source visits a page. A repository's deposits and a channel's videos are read through their own interfaces instead, and a knowledge bundle another build wrote is read from disk with each concept keeping the address it was read from. All of them arrive at stage 2 the same way.
 
 A repository's source files enter here too, and they are the one kind of content that does not arrive as a page. The code analysis reads each file's bytes with a parser, never running anything, and produces one document per file and one per definition it found: the signature, the documentation, the imports, the calls, and a link to the exact lines on the code host. No source body is ever copied into a document. From stage 2 on, those records travel through the flow exactly as a page does.
 

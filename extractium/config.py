@@ -101,9 +101,9 @@ DEFAULT_TRANSPORT = "auto"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
-def container_file_name(slug):
-    """The container's file name for one slug."""
-    return f"{slug}.json"
+def container_file_name(slug, gzip=False):
+    """The container's file name for one slug, with the compressed suffix when gzip is on."""
+    return f"{slug}.json.gz" if gzip else f"{slug}.json"
 
 
 def sqlite_file_name(slug):
@@ -186,9 +186,9 @@ DEFAULT_DSPACE_INCLUDE_FULL_TEXT = True
 DEFAULT_DSPACE_MAX_FILE_BYTES = 2_000_000
 
 # An empty include list is meaningful, not missing: the crawler then scopes
-# itself to the seed URL's origin, or, for a TeamDynamix portal URL, to its
-# /TDClient/<digits>/<slug>/ prefix. See
-# extractium.core.fetch.derive_auto_prefix.
+# itself to the seed URL's origin, or to the narrower prefix an enabled site
+# handler names for that host through its scope_prefix hook, such as a
+# TeamDynamix portal's /TDClient/<digits>/<slug>/ folder.
 DEFAULT_INCLUDE_PATTERNS = ()
 
 # Only these URL schemes may seed a crawl. Anything else (file:, ftp:,
@@ -243,6 +243,7 @@ SUGGESTED_SOURCE_LABELS = {
     "github_api": "GitHub",
     "youtube": "YouTube Channel",
     "dspace": "Document Repository",
+    "okf": "Knowledge Bundle",
 }
 
 # Option keys per built-in source type, beyond "type" and "label", which
@@ -266,12 +267,13 @@ SOURCE_OPTION_KEYS = {
     "dspace": frozenset({
         "api_url", "site_url", "collections", "include_full_text", "max_file_bytes",
     }),
+    "okf": frozenset({"path"}),
 }
 
 # Option keys per built-in output type, beyond "type" and "include_local",
 # which every output accepts.
 OUTPUT_OPTION_KEYS = {
-    "container": frozenset({"file"}),
+    "container": frozenset({"file", "gzip"}),
     "llmstxt": frozenset(),
     "sqlite": frozenset({"file"}),
     "okf": frozenset(),
@@ -761,6 +763,11 @@ def _read_local_source(entry, source):
     }
 
 
+def _read_okf_source(entry, source):
+    """Validates the options of an okf source entry: the bundle folder to read."""
+    return {"path": _read_required_text(entry, "path", source, hint=" (the bundle folder to read)")}
+
+
 def _read_github_api_source(entry, source):
     """
     Validates the options of a github_api source entry.
@@ -901,6 +908,7 @@ def _read_youtube_source(entry, source):
 _SOURCE_READERS = {
     "web": _read_web_source,
     "local": _read_local_source,
+    "okf": _read_okf_source,
     "github_api": _read_github_api_source,
     "youtube": _read_youtube_source,
     "dspace": _read_dspace_source,
@@ -964,7 +972,16 @@ def _read_slug(data, source):
 
 
 def _read_container_output(entry, source, slug):
-    return {"file": _read_output_file(entry, "file", container_file_name(slug), source)}
+    """
+    Validates a container output. With `gzip: true` the file is written
+    compressed and, unless `file` names it otherwise, carries a .json.gz
+    suffix so a host and a reader can both tell.
+    """
+    gzip = _read_bool(entry, "gzip", False, source)
+    return {
+        "file": _read_output_file(entry, "file", container_file_name(slug, gzip), source),
+        "gzip": gzip,
+    }
 
 
 def _read_sqlite_output(entry, source, slug):

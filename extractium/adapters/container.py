@@ -31,6 +31,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
+import gzip
 import json
 import struct
 
@@ -164,7 +165,10 @@ class ContainerAdapter:
 
     The file keeps a `.json` extension so a static host such as GitHub
     Pages serves it with a plain content type and no configuration, even
-    though everything after the header is binary.
+    though everything after the header is binary. With the `gzip` option
+    the same bytes are written through gzip, under a `.json.gz` name by
+    default; a client inflates the file before reading it, which is a
+    fraction of the download for the browser client.
 
     This adapter never fetches a URL and never runs the embedding model:
     it serializes the compendium it is given and nothing else.
@@ -181,7 +185,8 @@ class ContainerAdapter:
             out_dir (str | pathlib.Path): folder to write under; created
                 when it does not exist.
             options (Mapping): the output's validated options: `file` for
-                the name, `include_local` for the local-content guardrail.
+                the name, `gzip` to compress the file, `include_local` for
+                the local-content guardrail.
 
         Returns:
             tuple[pathlib.Path, ...]: the one path written.
@@ -197,7 +202,10 @@ class ContainerAdapter:
         ).tobytes()
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
+        # The gzip header carries no timestamp, so two builds of the same
+        # compendium produce the same bytes and a rebuild changes nothing.
+        opener = (lambda p: gzip.GzipFile(p, "wb", mtime=0)) if options.get("gzip") else (lambda p: open(p, "wb"))
+        with opener(path) as f:
             f.write(struct.pack("<I", len(header)))
             f.write(header)
             f.write(vectors)

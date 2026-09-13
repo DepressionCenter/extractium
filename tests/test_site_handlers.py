@@ -84,6 +84,18 @@ def test_built_in_handlers_satisfy_the_protocol(handler_class):
     assert handler.content_type(GENERIC_URL) in CONTENT_TYPES
 
 
+@pytest.mark.parametrize("seed, expected", [
+    ("https://example.edu/TDClient/210/DepressionCenter/Home/",
+     "https://example.edu/TDClient/210/DepressionCenter/"),
+    ("https://teamdynamix.example.edu/TDClient/33/Org/KB/ArticleDet?ID=1",
+     "https://teamdynamix.example.edu/TDClient/33/Org/"),
+    ("https://teamdynamix.example.edu/", None),
+    ("https://example.org/docs/", None),
+])
+def test_tdx_scope_prefix_is_the_portal_folder_for_portal_seeds_only(seed, expected):
+    assert tdx.TdxHandler().scope_prefix(seed) == expected
+
+
 def test_tdx_handler_claims_portal_urls_only():
     handler = tdx.TdxHandler()
     assert handler.matches(TDX_URL) is True

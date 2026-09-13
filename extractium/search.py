@@ -15,7 +15,7 @@ extractium/search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -36,6 +36,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-08"
 
+import gzip
 import json
 import math
 import re
@@ -114,6 +115,36 @@ class ContainerError(ValueError):
 
 
 ### Container Reader ###
+
+# The two bytes every gzip stream begins with.
+GZIP_MAGIC = b"\x1f\x8b"
+
+
+def inflate(data):
+    """
+    The container bytes, inflated when the file was written compressed.
+
+    A compressed container is the same file passed through gzip, so it is
+    recognized by the gzip signature rather than by its name, and a file
+    renamed on the way to a host still reads.
+
+    Args:
+        data (bytes): the file as read.
+
+    Returns:
+        bytes: the container bytes.
+
+    Raises:
+        ContainerError: if the data begins like gzip and is not a
+            readable gzip stream.
+    """
+    if not data.startswith(GZIP_MAGIC):
+        return data
+    try:
+        return gzip.decompress(data)
+    except (OSError, EOFError) as error:
+        raise ContainerError(f"file begins like gzip but cannot be inflated: {error}") from error
+
 
 def _header_of(data):
     """
@@ -641,6 +672,7 @@ def load_container(source, model=None, dims=None):
     else:
         with open(source, "rb") as handle:
             data = handle.read()
+    data = inflate(data)
 
     header, vector_bytes = _header_of(data)
     if header.get("format") != CONTAINER_FORMAT:

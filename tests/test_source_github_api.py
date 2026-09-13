@@ -54,7 +54,7 @@ from extractium.sources.github_api import (
 )
 from extractium.sources.github_client import API_ROOT
 from extractium.sources.web import CrawlSettings
-from tests.conftest import FakeApiResponse, FakeGitHubSession
+from tests.conftest import FakeApiResponse
 
 FIXTURE_PATH = pathlib.Path(__file__).parent / "fixtures" / "github" / "example_org.json"
 

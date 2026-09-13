@@ -755,3 +755,68 @@ def test_version_flag_reports_the_package_version(capsys):
 
     assert exit_info.value.code == 0
     assert capsys.readouterr().out.startswith("extractium ")
+
+
+### Links Found While Crawling ###
+
+from extractium.core.models import Document  # noqa: E402
+
+
+class _CollectingHandler:
+    """A site handler stand-in that held two links back during a crawl."""
+
+    def found_links(self):
+        return ("https://video.example/watch?v=one", "https://video.example/watch?v=two")
+
+
+class _CrawlingSource:
+    """A source with handlers, like the web source."""
+
+    name = "fakeweb"
+
+    def __init__(self, options):
+        self.handlers = (_CollectingHandler(),)
+
+    def fetch(self, session, cache, progress):
+        yield Document(url="https://example.org/", title="Page", content="Body text.",
+                       source_type="web", content_type="page")
+
+
+class _LinkReadingSource:
+    """A source that reads the links the handlers held back, like the video source."""
+
+    name = "fakevideo"
+    offered = None
+
+    def __init__(self, options):
+        pass
+
+    def fetch(self, session, cache, progress):
+        return iter(())
+
+    def read_found_links(self, session, cache, progress, links):
+        type(self).offered = tuple(links)
+        yield Document(url=links[0], title="Linked", content="Spoken words.",
+                       source_type="youtube", content_type="video_transcript")
+
+
+def test_links_the_handlers_held_back_reach_every_source_that_reads_them():
+    from extractium.core.registry import Registry
+    from extractium.config import config_from_mapping
+
+    registry = Registry()
+    registry.register_source(_CrawlingSource)
+    registry.register_source(_LinkReadingSource)
+    settings = config_from_mapping({"sources": [
+        {"type": "fakevideo", "label": "Videos"},        # listed first: order must not matter
+        {"type": "fakeweb", "label": "Site"},
+    ]})
+    _LinkReadingSource.offered = None
+
+    documents, _ = cli.run_sources(settings, registry, session=None, cache={}, progress=lambda line: None)
+
+    assert _LinkReadingSource.offered == ("https://video.example/watch?v=one", "https://video.example/watch?v=two")
+    assert [(d.url, d.source_label) for d in documents] == [
+        ("https://example.org/", "Site"),
+        ("https://video.example/watch?v=one", "Videos"),
+    ]

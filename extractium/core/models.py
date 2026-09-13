@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -485,6 +485,13 @@ class Source(Protocol):
     settings. Those belong to the whole build rather than to one entry in
     the sources list, so they do not travel in the entry's options. A
     source that needs neither omits the method.
+
+    A source may also define `read_found_links(session, cache, progress,
+    links)`, which the caller invokes once every source has run, with the
+    addresses the site handlers collected during the crawls and held back
+    from them. It yields documents like `fetch`, and it applies the
+    source's own rule for what a link found on somebody's page may add to
+    the index.
     """
 
     name: ClassVar[str]
@@ -510,9 +517,18 @@ class SiteHandler(Protocol):
     A handler reads a page; it never discovers links, so the crawl stays
     one graph however many handlers are enabled.
 
-    Three methods are optional, and a handler that defines none behaves
+    Five methods are optional, and a handler that defines none behaves
     exactly as the required five describe:
 
+    - `scope_prefix(seed_url)` may narrow the default crawl scope for a
+      seed on a host it knows, returning the prefix the crawl stays
+      inside, or None to leave the seed's origin as the scope. It is
+      consulted only when the source has no include patterns, because
+      an explicit list replaces the default scope altogether.
+    - `observe_link(url)` sees every link the crawl discovers, in scope
+      or not, before the scope check. It returns nothing. A handler
+      uses it to collect addresses another source should read, such as
+      videos linked from a page.
     - `configure(settings)` receives the build's global crawl settings
       after construction. A handler needs it when its rules depend on
       what the operator configured rather than on the URL alone.

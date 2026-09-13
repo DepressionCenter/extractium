@@ -44,6 +44,7 @@ import {
     SOURCE_CAP,
     bm25Candidates,
     diversify,
+    inflateContainer,
     loadContainer,
     relevanceCutoff,
     rrfFuse,
@@ -431,4 +432,25 @@ test('the golden container carries the query prefix the contract expects', () =>
     const expected = JSON.parse(fs.readFileSync(path.join(GOLDEN, 'contract-query.json'), 'utf-8'));
 
     assert.equal(loadContainer(new Uint8Array(container)).queryPrefix, expected.queryPrefix);
+});
+
+test('inflateContainer returns plain bytes untouched and inflates a gzip-compressed container', async () => {
+    const { gzipSync } = await import('node:zlib');
+    const plain = containerBytes(sampleHeader(), [1, 0, 0, 1]);
+    assert.strictEqual(await inflateContainer(plain), plain);
+
+    const packed = new Uint8Array(gzipSync(plain));
+    const inflated = await inflateContainer(packed);
+    assert.deepStrictEqual(Array.from(inflated), Array.from(plain));
+    assert.strictEqual(loadContainer(inflated).size, 2);
+});
+
+test('loadContainer names the step a caller skipped when handed a compressed file', async () => {
+    const { gzipSync } = await import('node:zlib');
+    const packed = new Uint8Array(gzipSync(containerBytes(sampleHeader(), [1, 0, 0, 1])));
+    assert.throws(() => loadContainer(packed), { name: 'ContainerError', message: /inflateContainer/ });
+});
+
+test('inflateContainer refuses bytes that begin like gzip but are not', async () => {
+    await assert.rejects(inflateContainer(new Uint8Array([0x1f, 0x8b, 1, 2, 3, 4])), { name: 'ContainerError' });
 });

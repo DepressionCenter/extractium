@@ -40,11 +40,12 @@ from extractium.core import fetch
 # derive_auto_prefix
 # ---------------------------------------------------------------------------
 
-def test_derive_auto_prefix_tdx_url_scopes_to_client_prefix():
+def test_derive_auto_prefix_knows_no_host_and_scopes_a_portal_url_to_its_origin():
+    # The portal-folder rule belongs to the tdx site handler, not to core.
     prefix = fetch.derive_auto_prefix(
         "https://example.edu/TDClient/210/DepressionCenter/Home/"
     )
-    assert prefix == "https://example.edu/TDClient/210/DepressionCenter/"
+    assert prefix == "https://example.edu"
 
 
 def test_derive_auto_prefix_non_tdx_url_scopes_to_origin():
