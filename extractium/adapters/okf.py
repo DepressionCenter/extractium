@@ -14,7 +14,7 @@ extractium/adapters/okf.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-11
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -36,6 +36,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
 import hashlib
+import pathlib
 import re
 
 import yaml
@@ -550,6 +551,81 @@ def render_log(compendium, pages):
 
 ### Adapter ###
 
+### Front Matter Reader ###
+
+# The front-matter block: a fence, the YAML, a fence, at the top of a file.
+FRONT_MATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?", re.S)
+
+
+def split_front_matter(text):
+    """
+    Splits a concept file into its front-matter fields and its body.
+
+    Args:
+        text (str): the file's content.
+
+    Returns:
+        tuple[dict | None, str]: the fields, or None when the file has no
+        front matter or it does not parse to a mapping, and the body.
+    """
+    match = FRONT_MATTER_RE.match(text)
+    if not match:
+        return None, text
+    try:
+        fields = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        return None, text[match.end():]
+    if not isinstance(fields, dict):
+        return None, text[match.end():]
+    return fields, text[match.end():]
+
+
+def written_by_this_tool(path):
+    """
+    Whether a Markdown file in a bundle is one this tool wrote, read from
+    its `generated.by` field. A file a person added by hand carries no
+    such field and is never touched.
+
+    Args:
+        path (pathlib.Path): the file.
+
+    Returns:
+        bool: True for a concept file this tool produced.
+    """
+    try:
+        fields, _ = split_front_matter(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return False
+    generated = (fields or {}).get("generated")
+    producer = generated.get("by") if isinstance(generated, dict) else None
+    return isinstance(producer, str) and producer.startswith(PRODUCER.split("/")[0] + "/")
+
+
+def prune_bundle(folder, written):
+    """
+    Removes the concept files this tool wrote in an earlier build that the
+    build just finished did not write, so the folder mirrors the
+    compendium. Files a person added are left alone, and so are the two
+    reserved files, which every build rewrites.
+
+    Args:
+        folder (pathlib.Path): the bundle folder.
+        written (Iterable[pathlib.Path]): what this build wrote.
+
+    Returns:
+        tuple[pathlib.Path, ...]: the files removed, in name order.
+    """
+    keep = {pathlib.Path(path).resolve() for path in written}
+    removed = []
+    for path in sorted(folder.rglob("*.md")):
+        if path.resolve() in keep or path.name in (INDEX_FILE, LOG_FILE) and path.parent == folder:
+            continue
+        if written_by_this_tool(path):
+            path.unlink()
+            removed.append(path)
+    return tuple(removed)
+
+
 class OkfAdapter:
     """
     Writes an Open Knowledge Format bundle: a folder of Markdown files
@@ -569,6 +645,9 @@ class OkfAdapter:
 
     name = "okf"
 
+    def __init__(self):
+        self.pruned = ()
+
     def write(self, compendium, out_dir, options):
         """
         Writes the bundle under `out_dir`.
@@ -583,7 +662,10 @@ class OkfAdapter:
 
         Returns:
             tuple[pathlib.Path, ...]: the index file, the log file, then
-            one path per concept file, in build order.
+            one path per concept file, in build order. Concept files this
+            tool wrote in an earlier build and did not write now are
+            removed, and listed in `pruned`, so the folder mirrors the
+            compendium.
 
         Raises:
             OSError: if a file cannot be written.
@@ -606,6 +688,7 @@ class OkfAdapter:
             written.append(
                 _write_file(target, render_concept(page, compendium.built_at, name))
             )
+        self.pruned = prune_bundle(folder, written)
         return tuple(written)
 
 

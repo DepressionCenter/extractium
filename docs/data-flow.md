@@ -119,7 +119,7 @@ The keyword statistics must be built after the collapse, because they refer to w
 
 ### 7. The compendium
 
-One record holding the sections, the window columns, the vectors, how the vectors were made, the keyword statistics, and the calibration figures, plus the index name and the build time. The build time is UTC, ISO 8601, ending in `Z`, always. Every adapter serializes this record and nothing else.
+One record holding the sections, the window columns, the vectors, how the vectors were made, the keyword statistics, and the calibration figures, plus the index name and the build time. The build time is UTC, ISO 8601, ending in `Z`, always. Every adapter serializes this record and nothing else. With `rebuild: incremental`, pages the last build published and this build did not see are rebuilt from the manifest and join the record before embedding, unless the server confirmed them gone; see the [configuration reference](configuration.md).
 
 ### 8. The output folder
 
@@ -168,7 +168,7 @@ So: assume any folder you point a local source at may hold protected health info
 
 ## The cache
 
-Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, and a `repository/` folder of the text a DSpace repository extracted from each deposit. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
+Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, a `repository/` folder of the text a DSpace repository extracted from each deposit, and `previous-build.json`, the manifest of the last build's published sections that an incremental rebuild carries pages forward from. The manifest never holds content read from a local folder. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
 
 What the parsers found in a code file is stored beside the file body, under the same blob name, together with everything that result depended on: which engine read it, its version, the grammar, the grammar's version, this project's own extraction rules, and the shape of the records. A build reads that back only when every one of them still matches, so upgrading a grammar or editing a query file reparses rather than serving what the old one found.
 

@@ -813,7 +813,7 @@ def test_links_the_handlers_held_back_reach_every_source_that_reads_them():
     ]})
     _LinkReadingSource.offered = None
 
-    documents, _ = cli.run_sources(settings, registry, session=None, cache={}, progress=lambda line: None)
+    documents, _, _ = cli.run_sources(settings, registry, session=None, cache={}, progress=lambda line: None)
 
     assert _LinkReadingSource.offered == ("https://video.example/watch?v=one", "https://video.example/watch?v=two")
     assert [(d.url, d.source_label) for d in documents] == [

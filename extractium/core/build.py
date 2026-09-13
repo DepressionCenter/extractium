@@ -12,7 +12,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-10
+Last Modified: 2026-09-12
 Notes: See README file for documentation and full license information.
 """
 
@@ -93,6 +93,11 @@ def utc_now():
 # and every definition inside it. They are told apart by their heading,
 # which is also how their identifiers are told apart.
 MULTI_RECORD_CONTENT_TYPES = frozenset({"code_file", "code_symbol"})
+
+
+def page_key_of(document):
+    """The normalised address one document's page is filed under, for a build that keeps pages between runs."""
+    return normalise(document.url)
 
 
 def _page_key(document):
@@ -213,7 +218,7 @@ def _children_columns(parents, children):
 
 
 def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
-                     progress=None, built_at=None):
+                     progress=None, built_at=None, retained=()):
     """
     Builds one scored Compendium from the documents a build's sources
     produced. This is the only place embedding runs.
@@ -240,6 +245,10 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
             stage. None reports nothing.
         built_at (str | None): build time, ISO 8601 UTC with a Z suffix.
             None uses the current time.
+        retained (Iterable[tuple]): pages carried forward from an earlier
+            build, as extractium.core.retain.carry_forward returns them:
+            already chunked, appended after the documents and embedded
+            with them, so every later step treats them as any other page.
 
     Returns:
         Compendium | None: the scored result, or None when the documents
@@ -250,6 +259,12 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
 
     ### Chunk ###
     parents, children, first_title = chunk_documents(documents, report)
+    for _, page_parents, page_children, _ in retained:
+        pid_offset = len(parents)
+        for child in page_children:
+            child["pid"] += pid_offset
+        parents.extend(page_parents)
+        children.extend(page_children)
     if not children:
         report("No indexable content: nothing to score.")
         return None

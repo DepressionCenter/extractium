@@ -240,6 +240,14 @@ sources:
 # way; plain never does. See docs/bot-protection-transport.md.
 #transport: auto
 
+# What a build does with a page it did not see this time. full, the
+# default, publishes exactly what was read. incremental also keeps the
+# pages of the last build that this one did not reach, unless the server
+# answered 404 or 410 for them, so a site that was down for an hour does
+# not empty the index; a page taken down on purpose still leaves it. Only
+# pages from web sources are kept this way.
+#rebuild: full
+
 # Whether to honor each site's robots.txt. A site whose robots.txt cannot
 # be read is skipped entirely. Switch it off only for sites you own: as
 # well as ignoring robots rules, it lets a page that answers 403 to the

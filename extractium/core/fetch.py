@@ -72,6 +72,11 @@ BROWSER_USER_AGENT = (
 # Answers that mean "not for you", as opposed to "not here" or "broken".
 # A page that gives one of these to the tool's own User-Agent is worth one
 # retry as a browser; a 404 or a 500 is not.
+
+# The answers that confirm a page is gone, as opposed to unreachable: the
+# server was asked and said the page does not exist any more. An
+# incremental rebuild drops such a page and keeps one that merely failed.
+GONE_STATUS_CODES = (404, 410)
 BLOCKED_STATUS_CODES = (401, 403, 429)
 
 # Sent with every page request, alongside the User-Agent.
@@ -392,7 +397,7 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html):
 
 
 def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AGENT,
-          progress=None, fallback_user_agent=None, note_final_url=None):
+          progress=None, fallback_user_agent=None, note_final_url=None, note_gone=None):
     """
     Fetches one URL through the local page cache. If a cache entry exists,
     sends a single conditional GET with If-None-Match / If-Modified-Since
@@ -428,6 +433,9 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
             redirected. A caller that needs to know where a redirect led
             supplies this; everything else leaves it None, because the
             content is the same either way.
+        note_gone (Callable[[], None] | None): called once when the server
+            answered one of GONE_STATUS_CODES, so a caller can tell a page
+            that no longer exists from one that could not be reached.
 
     Returns:
         BeautifulSoup | str | None: the fetched content, or None if the
@@ -460,6 +468,9 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
                 headers=request_headers(fallback_user_agent, conditional_headers),
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
+
+        if note_gone is not None and r.status_code in GONE_STATUS_CODES:
+            note_gone()
 
         if note_final_url is not None:
             # Where the request landed, which is not where it was sent when

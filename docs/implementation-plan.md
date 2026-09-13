@@ -453,15 +453,40 @@ Still not built: following a YouTube link found while crawling something else an
 
 *Finished 2026-09-12 on branch `phase-16-loose-ends`. Everything above is built and tested as written. The scope rule went onto a new `scope_prefix` hook rather than onto `allows`, because the rule narrows a seed's default scope rather than vetoing a link, and it reads the portal path on any host, as the core rule did, so a portal served from an organization's own host keeps its scope. The first run of the new test workflow is the pull request that merges this phase.*
 
+### Phase 17: Full and incremental rebuilds
+
+**Goal.** Decide, in one setting, what a build does with a page it did not see, and make the Open Knowledge Format folder mirror the compendium so a page that left the index takes its file with it.
+
+**Deliverables.**
+
+- A `rebuild` setting with two modes. `full`, the default, publishes exactly what the build read. `incremental` carries forward a web page the last build published and this one did not see, unless the server answered 404 or 410 for it or its source left the settings file; every other source is authoritative about its own content, and there is no append-only mode.
+- A manifest, `previous-build.json` beside the cache, holding every published page's sections and the date it was last seen, written after every build and never holding content read from a local folder. A carried-forward page is rebuilt from it with the section identifiers it had, re-embedded with everything else, and named in the log with its last-seen date; the summary counts what was kept and what was dropped.
+- The fetch layer tells a page confirmed gone from one that failed, and the web source reports the confirmed-gone pages.
+- The `okf` output removes concept files this tool wrote for pages no longer in the compendium, names each removal, and never touches a file added by hand.
+
+**Tests.** The manifest round-trips and holds no local marker; a carried-forward page keeps its real last-seen date; only an unseen web page not confirmed gone from a configured source is kept; a kept page has the identifiers fresh chunking gives it; the build step scores kept pages with the rest; 404 and 410 are gone and 500, 403, and 200 are not; a whole incremental build through the command line keeps an unlinked page and a broken page and drops a lost one, while a full build publishes only what it read; the setting's default and its checking; a stale tool-written OKF file removed and a hand-written one kept.
+
+**Documentation.** The configuration reference, the data-flow, compliance, and architecture pages (decision 15), the specification (sections 8, 11, 12, and 14), the crawling guide, and the example settings file.
+
+**Done when** a site that fails for one build keeps its pages in incremental mode, a page the server says is gone leaves the index in either mode, and an OKF folder holds exactly the tool-written files of the current compendium plus whatever a person added.
+
+*Finished 2026-09-12 on branch `fix-redirect-scope-and-pins`, alongside the redirect-scope fix and the action pinning, because the maintainer asked for the three review items to land in one pull request. Built as written. The mode is a build-level decision and not an output option, because every single-file output is rewritten whole from the one compendium and cannot differ from the others; the OKF folder is the one output with files to prune, and it prunes in both modes, since the compendium already carries the decision.*
+
 ### After Phase 15
 
 What is left is listed here so a reader of this page knows what was deferred and what was ruled out, and why. A decision recorded here is meant to save somebody proposing the same thing again from first principles.
 
 #### Still open
 
-Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; clients in other languages; loading plugins from git URLs. Optical character recognition for image-only deposits, and reading DSpace communities rather than named collections, sit here too. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one. Each of these is an open issue in the repository.
+Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; clients in other languages; optical character recognition for image-only deposits. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one. Each of these is an open issue in the repository.
 
 #### Decided against
+
+**Loading plugins from git addresses.** Decided on 2026-09-12. Installing a plugin as a package already works through entry points, and pip installs from a git address at a pinned commit, which gives the pinning and the trust decision through pip rather than through a loader of our own. The plugin architecture page shows the form.
+
+**Reading DSpace communities.** Decided on 2026-09-12 after checking the repository. Both of the center's collections sit directly under Research Collections, a library-wide community every research unit deposits into, so naming a community would index every research collection at the university. Listing collections stays the rule; a new collection is one line in the settings file.
+
+**An append-only rebuild mode.** Considered with the `rebuild` setting and left out. Never updating a page once written makes the index wrong on purpose the first time a page changes, and git history on a data repository already keeps every earlier version.
 
 **Parquet and DuckDB outputs.** Removed from the roadmap on 2026-09-12, and the two empty extras that had reserved their names with them. The SQLite output already serves a SQL consumer, and nobody had asked for either format; an organization that needs one can write an adapter plugin.
 

@@ -305,6 +305,9 @@ class WebSource:
         self.seed_url = self.seed_urls[0]
         self.include_patterns = tuple(options.get("include_patterns") or ())
         self.already_indexed = set(options.get("already_indexed") or ())
+        # Pages the server confirmed gone during this crawl, so an
+        # incremental rebuild drops them rather than carrying them forward.
+        self.gone = set()
         self.registry = None
         self._adopt(site_handlers, settings)
 
@@ -439,6 +442,7 @@ class WebSource:
                 expect_html=expect_html, user_agent=settings.user_agent, progress=progress,
                 fallback_user_agent=settings.blocked_retry_user_agent,
                 note_final_url=lambda final, key=url: landed.__setitem__(key, final),
+                note_gone=lambda key=url: self.gone.add(key),
             )
             if fetched is None:
                 continue
@@ -494,6 +498,16 @@ class WebSource:
             self._pause()
 
         progress(f"Crawled {len(visited)} page(s).")
+
+    def gone_pages(self):
+        """
+        The addresses the server confirmed gone during this crawl, in
+        the normalised form the build files pages under.
+
+        Returns:
+            tuple[str, ...]: the addresses, or an empty tuple.
+        """
+        return tuple(sorted(self.gone))
 
     def _redirected_out_of_scope(self, url, request_url, final_url, auto_prefix, origin,
                                  include_res, crawl_exclude_res, progress):

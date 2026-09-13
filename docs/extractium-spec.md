@@ -149,7 +149,7 @@ The registry resolves each kind in this order, first match wins:
 2. Installed packages that declare entry points in the groups `extractium.sources`, `extractium.site_handlers`, and `extractium.adapters`.
 3. Built-ins, which are declared through those same entry-point groups in this package.
 
-Loading a module from `plugins/` executes code the operator placed there. It is the same trust level as `config.yaml`, and it is documented rather than sandboxed. Loading plugins from git URLs, with trust gates, is future work; the protocol must not prevent it.
+Loading a module from `plugins/` executes code the operator placed there. It is the same trust level as `config.yaml`, and it is documented rather than sandboxed. A plugin shared between projects is installed as a package, which pip can do from a git address at a pinned commit; no loader of its own is planned, because pip's trust model is the one to use.
 
 ### 2.3 Why site handlers instead of three crawlers
 
@@ -263,7 +263,7 @@ A local folder can hold content that must never be published. The rules:
 
 ## 8. Cache
 
-- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
+- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `previous-build.json` is the manifest of the last build's published sections, which an incremental rebuild carries unseen pages forward from; it never holds a section read from a local folder. `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
 - Revalidation uses conditional GET (`If-None-Match`, `If-Modified-Since`, honoring 304), not HEAD probing: several servers omit validators on HEAD.
 - A content SHA-256 is stored per page so a future delta build can skip unchanged chunks.
 - On GitHub Actions, `.kb_cache/` persists between runs through the cache action, keyed on a hash of the configuration file.
@@ -311,6 +311,7 @@ The two Tier 2 servers are built, over a protocol core the Node examples share (
 ## 11. Operations
 
 - Refresh cadence: weekly. The GitHub Actions template runs on a schedule and on a "Run workflow" button press. Publishing uses only the official GitHub Pages actions.
+- Two rebuild modes, chosen by the `rebuild` setting. `full`, the default, publishes exactly what the build read. `incremental` also carries forward a web page the last build published and this one did not reach, unless the server confirmed it gone with a 404 or 410 or its source left the settings file; every other source is authoritative about its own content. Full is the default because a page taken down on purpose must leave the published index on the next build. The Open Knowledge Format folder mirrors the compendium in both modes, removing only files this tool wrote.
 - Local run: `run.bat` or `run.sh` creates a virtual environment, installs pinned dependencies from a committed lock file, builds, and prints what to commit. This is the primary path for sources a cloud runner cannot reach (local folders, YouTube).
 - Data and configuration are kept apart from the tool. The tool repository holds the engine. Each organization keeps a small data repository with its `config.yaml`, its transcript cache when it uses YouTube, and the published output folder. A template for that repository ships under `examples/data-repo/`.
 
@@ -340,6 +341,7 @@ max_pages: 10000
 user_agent: Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)
 respect_robots_txt: true
 transport: auto                     # auto | browser | plain
+rebuild: full                       # full | incremental
 phi_lint: local                     # local | all | off
 github_owners: []                   # extra GitHub accounts this build may follow links
                                     # into; deny by default, exact names, never patterns
@@ -461,6 +463,8 @@ Documentation serves four audiences: people building an index, core developers, 
 - The site-handler protocol gained `scope_prefix` and `observe_link`, and the source protocol `read_found_links`. The TeamDynamix scope rule moved onto the first, and a video linked from a crawled page reaches the `youtube` source through the other two, which reads it only when a channel it names published it (sections 2.1, 5, and 6).
 - The container output's `gzip` option, and the `okf` source that reads a bundle back (sections 4 and 5).
 - Parquet and DuckDB outputs were removed from the roadmap, and their empty extras with them (section 4).
+- The `rebuild` setting and the build manifest: a full rebuild publishes what was read, an incremental one carries forward unseen web pages unless confirmed gone, and the OKF folder mirrors the compendium (sections 8, 11, and 12).
+- Loading plugins from git addresses is not planned; pip installs from one (section 2.2).
 
 
 ## 15. Changes from v0.1
