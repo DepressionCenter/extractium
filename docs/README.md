@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -23,54 +23,54 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds the written documentation for Extractium™. Each page below covers one topic. Start with the installation guide if you have not run the tool yet, the crawling guide if you are setting up your first build, or the architecture page if you want to know how the tool is put together.
+This folder holds the detailed documentation for Extractium™. The pages are grouped by what you want to do. If you have not run the tool yet, start with the installation guide, then the crawling guide. If you want to know how the tool works inside, or you plan to write a plug-in, start with the architecture page. An overview and user guide is also available in the [EFDC Knowledge Base](https://michmed.org/efdc-kb).
 
 
-## Pages
+## Getting started
 
-### Getting started
+* [How to Install](how-to/install.md): the supported Python versions, the two ways to install, the optional extras, and how to check that the install worked.
+* [How to Crawl a Site](how-to/crawl-a-site.md): choosing a source type for each kind of content, running a small trial, tuning the URL patterns, and reading what a build reports.
+* [Running a Build](usage.md): the `extractium build` command, its options, the files it writes, and what each exit code means.
+* [Configuration Reference](configuration.md): every setting in `config.yaml`, its default, and how the URL patterns work.
+* [Troubleshooting](troubleshooting.md): known failures, with the cause and the fix for each.
 
-* [How to Install](how-to/install.md) — the supported Python versions, the one-command scripts, the developer install, the three optional extras, and how to check an install.
-* [How to Crawl a Site](how-to/crawl-a-site.md) — choosing a source type for each kind of content, the trial run, tuning the patterns, the two optional environment variables, and what a build reports.
-* [Running a Build](usage.md) — the `extractium build` command, its options, what it writes, and what each exit code means.
-* [Configuration Reference](configuration.md) — every setting in `config.yaml`, its default, and how the URL patterns work.
-* [Troubleshooting](troubleshooting.md) — failures seen so far: symptom, cause, fix.
 
-### Publishing and using a build
+## Publishing and using a knowledge base
 
-* [How to Deploy](how-to/deploy.md) — the deployment choices side by side, what each needs and costs, and every way the outputs are consumed.
-* [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the one-command local build and the scheduled build on GitHub.
-* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — turning Pages on, what is published, and what publishing means.
-* [How to Search a Compendium](how-to/search-a-compendium.md) — searching a built index from Python and from JavaScript, and what the search does behind the call.
-* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md) — giving an AI assistant on your own machine one tool: search of a published index.
-* [How to Deploy a Remote MCP Server](how-to/deploy-a-remote-mcp-server.md) — hosting the same tool on Val Town or Cloudflare, so an assistant anywhere can call it, with no server of your own.
-* [Using a Published Compendium](using-a-compendium.md) — how an AI agent uses the published files, searches the index, cites an answer, and what it must never do with retrieved text.
+* [How to Deploy](how-to/deploy.md): where a build can run and where its outputs can live, with what each choice needs and costs.
+* [How to Run a Weekly Build](how-to/run-a-weekly-build.md): the one-command local build and the scheduled build on GitHub.
+* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md): turning Pages on, what gets published, and what publishing means.
+* [How to Search a Compendium](how-to/search-a-compendium.md): searching a built index from Python or JavaScript.
+* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md): letting an AI assistant on your own computer search a published index.
+* [How to Deploy a Remote MCP Server](how-to/deploy-a-remote-mcp-server.md): hosting that search on Val Town or Cloudflare so an assistant anywhere can use it.
+* [Using a Published Compendium](using-a-compendium.md): how an AI agent should use the published files, cite an answer, and treat retrieved text.
 
-### How the tool works
 
-* [Architecture and Current State](architecture.md) — which modules exist, what each does, and the design decisions that are settled, each with its reason.
-* [Plugin Architecture](plugin-architecture.md) — the three plugin kinds, the registry's resolution order, the three protocols with every member, and a working example of each kind.
-* [Data Flow](data-flow.md) — what happens to content between the site it is read from and the files a build writes, and where private content is kept out.
-* [Container Format](container-format.md) — the binary index file every client reads: byte layout, header fields, and the checklist for writing a reader.
-* [Compliance and Posture](compliance.md) — the controls that exist, the evidence for each, and the known gaps.
-* [Extractium™ Specification](extractium-spec.md) — the intended design: architecture, plugin kinds, data model, output formats, sources, and access tiers.
+## How the tool works
 
-### Design records
+* [Architecture](architecture.md): the modules, what each one does, and the design decisions behind them.
+* [Plug-in Architecture](plugin-architecture.md): the three plug-in kinds, how the tool finds them, and a working example of each.
+* [Data Flow](data-flow.md): what happens to content between the site it came from and the files a build writes, and where private content is kept out.
+* [Container Format](container-format.md): the search index file every client reads, byte by byte, with a checklist for writing your own reader.
+* [Compliance and Posture](compliance.md): the security, privacy, and accessibility controls in place, the evidence for each, the dependency licenses, and the known gaps.
+* [Specification](extractium-spec.md): the design of the tool: plug-in protocols, data model, output formats, sources, and access tiers.
 
-* [GitHub Repository Indexing](github-repository-indexing.md) — how a GitHub organization, user, or repository is read, the three-tier ingestion ladder, and the lightweight code analysis built on it.
-* [Indexing a DSpace Repository](dspace-repository-indexing.md) — how scholarly deposits in a repository such as Deep Blue are read through its own interface, and what that interface turned out to hold.
-* [Reading a Site Behind Bot Protection](bot-protection-transport.md) — why some sites refuse the crawler with a challenge, what was measured against three live sites, and how the build reads them without pretending to be something else.
-* [Implementation Plan](implementation-plan.md) — the phased order in which the tool was built, with a done-when rule and a finished note for each phase.
 
-### For maintainers
+## Design notes
+
+* [GitHub Repository Indexing](github-repository-indexing.md): how a GitHub organization, user, or repository is read, and how a repository's code is analyzed without copying it.
+* [Indexing a DSpace Repository](dspace-repository-indexing.md): how scholarly deposits in a repository such as Deep Blue are read through its own interface.
+* [Reading a Site Behind Bot Protection](bot-protection-transport.md): why some sites refuse the crawler, what was measured, and how the build reads them while still identifying itself.
+
+
+## For maintainers
 
 These pages are about working on the repository rather than using the tool.
 
-* [Page Template](doc-template.md) — the layout new pages in this folder follow.
-* [Session Prompt Template](session-prompt-template.md) — the fixed opening to paste into any new coding session; your request goes on the last line.
-* [Skill Authoring Examples](skill-examples.md) — starter recipes for writing a small agent skill under `skills/`; documentation, not installed skills.
-
-The specification says what the tool is meant to be, and the architecture page says what exists. Where the two differ, the architecture page is the one to trust about the code.
+* [Implementation Plan](implementation-plan.md): the order in which the tool was built, kept as a project record.
+* [Page Template](doc-template.md): the layout new pages in this folder follow.
+* [Session Prompt Template](session-prompt-template.md): the fixed opening to paste into a new coding session.
+* [Skill Authoring Examples](skill-examples.md): starter recipes for writing a small agent skill under `skills/`.
 
 
 ## Conclusion
@@ -80,11 +80,11 @@ Pick the page that matches your task. If you cannot find an answer here, the pro
 
 ## Additional Resources
 
-* [Extractium™ README](../README.md) — project overview, quick start, and contact details.
-* [examples/config.example.yaml](../examples/config.example.yaml) — commented example configuration file.
-* [examples/config.efdc.yaml](../examples/config.efdc.yaml) — a complete configuration that uses every source type.
-* [EFDC Knowledge Base](https://michmed.org/efdc-kb) — the wider documentation site for this group's projects.
-* [Skills index](../SKILLS.md) — the agent skills this repository carries, reached from `AGENTS.md`.
+* [Extractium™ README](../README.md): project overview, quick start, and contact details.
+* [examples/config.example.yaml](../examples/config.example.yaml): a commented example settings file to copy.
+* [examples/config.efdc.yaml](../examples/config.efdc.yaml): a complete settings file that uses every source type.
+* [EFDC Knowledge Base](https://michmed.org/efdc-kb): the overview and user guide for this and other EFDC projects.
+* [Skills index](../SKILLS.md): the agent skills this repository carries.
 
 
 [← Back to README](../README.md)

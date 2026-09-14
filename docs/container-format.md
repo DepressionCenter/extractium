@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -26,12 +26,12 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-The container is the one file every Extractium client reads: a search index with the text, the vectors, and the keyword statistics for a whole knowledge base, packed so a browser, a script, or a small server can load it with no database. This page defines the file byte by byte. It is written for people building a client in any language, and for anyone who has to check what a published index contains.
+The container is the one file every Extractium™ client reads: a search index with the text, the vectors, and the keyword statistics for a whole knowledge base, packed so a browser, a script, or a small server can load it with no database. This page defines the file byte by byte. Use it to build a client in any language, or to check what a published index contains.
 
 
-## Status of this format
+## Where the format is written and read
 
-**Implemented.** `extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v4_header.json` pins the header against a committed snapshot. Two clients read it: `extractium/search.py` in Python and `clients/js/extractium-client.js` in JavaScript. Each implements the reader checklist near the end of this page, and a committed golden container holds both to the same ranking. See [how to search a compendium](how-to/search-a-compendium.md).
+`extractium/adapters/container.py` writes exactly what this page describes, and `tests/golden/container_v4_header.json` pins the header against a committed snapshot. Two clients read it: `extractium/search.py` in Python and `clients/js/extractium-client.js` in JavaScript. Each implements the reader checklist near the end of this page, and a committed golden container holds both to the same ranking. See [how to search a compendium](how-to/search-a-compendium.md).
 
 This layout replaces the version 2 layout that Field Station AI's `build-kb-index.py` writes. Field Station AI keeps its own version 2 file and is not affected by anything on this page. The differences are listed near the end, under "Changes from version 2".
 
@@ -165,9 +165,9 @@ For `int8`, each stored value `q` becomes `q / scale`. Vectors are unit length b
 | `df` | object | Term to the number of children containing it. |
 | `postings` | object | Term to a list of `[childIndex, termFrequency]` pairs. |
 
-**Token rule.** Lowercase the text and take every run of three or more ASCII letters or digits: the regular expression `[a-z0-9]{3,}`. A query must be tokenized the same way or nothing will match.
+Token rule: lowercase the text and take every run of three or more ASCII letters or digits, which is the regular expression `[a-z0-9]{3,}`. A query must be tokenized the same way or nothing will match.
 
-**Score.** For a query with terms `T`, over `N` children, the score of child `i` is the sum over `t` in `T` found in `postings`:
+Score: for a query with terms `T`, over `N` children, the score of child `i` is the sum over `t` in `T` found in `postings`:
 
 ```
 idf(t)  = ln(1 + (N - df[t] + 0.5) / (df[t] + 0.5))
@@ -176,7 +176,7 @@ denom   = tf + k * (1 - b + b * docLen[i] / avgDocLen)
 score  += idf(t) * (d + tf * (k + 1)) / denom
 ```
 
-**Safety note for JavaScript readers.** `df` and `postings` are keyed by words taken from crawled pages. Load them into `Map` objects, never plain objects, so a page containing the word `__proto__` cannot pollute a prototype.
+Safety note for JavaScript readers: `df` and `postings` are keyed by words taken from crawled pages. Load them into `Map` objects, never plain objects, so a page containing the word `__proto__` cannot pollute a prototype.
 
 
 ## Calibration
@@ -219,7 +219,7 @@ Version 2 is the layout Field Station AI's `build-kb-index.py` writes. Readers o
 - Parents gained `id`, `source_type`, `content_type`, `categories`, and `local`. The `kind` field is replaced by `source_type`.
 - The query prefix convention is stated in the file instead of assumed.
 
-Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910 children, 418 sources), the version 2 file is 10.0 MB, of which the children list alone is 3.3 MB. The same corpus in version 3 was expected to be about 6.9 MB: parents 2.4 MB, children under 0.1 MB, BM25 statistics 2.1 MB, vectors 2.3 MB.
+Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910 children, 418 sources), the version 2 file is 10.0 MB, of which the children list alone is 3.3 MB. The same corpus in this layout is about 6.9 MB: parents 2.4 MB, children under 0.1 MB, BM25 statistics 2.1 MB, vectors 2.3 MB.
 
 
 ## Compressed form
@@ -247,24 +247,23 @@ A field that is always present, and that a reader would use if it knew about it,
 7. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
 8. Treat `calibration` as optional: if `sampleSize` is `0`, fall back to a fixed threshold.
 9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
-10. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Both reference clients were read against this rule when `code_file` and `code_symbol` were added: neither branches on `content_type`, so neither needed changing.
+10. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
 
 
 ## Conclusion
 
-You can now read or write an Extractium container in any language: four bytes of length, a JSON header, and raw vectors. Keep the token rule, the query prefix, and the offset unit exactly as stated, and your client will rank the same way the reference clients do. For how the file is produced, read the [data flow](data-flow.md); for how to produce one, read [Running a Build](usage.md).
+You can now read or write an Extractium™ container in any language: four bytes of length, a JSON header, and raw vectors. Keep the token rule, the query prefix, and the offset unit exactly as stated, and your client will rank the same way the reference clients do. For how the file is produced, read the [data flow](data-flow.md); for how to produce one, read [Running a Build](usage.md).
 
 
 ## Additional Resources
 
-* [Extractium™ README](../README.md) — project overview and quick start.
-* [Extractium™ specification](extractium-spec.md) — architecture, data model, outputs, and sources.
-* [Running a build](usage.md) — how to produce one of these files.
-* [Data flow](data-flow.md) — what happens to content before it reaches this file.
-* [Implementation plan](implementation-plan.md) — the phase in which this format is written and read.
-* [tests/reference/build_kb_index_reference.py](../tests/reference/build_kb_index_reference.py) — the frozen version 2 writer this format replaces.
-* [BAAI bge-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5) — the default embedding model and its query instruction.
-* [Okapi BM25 on Wikipedia](https://en.wikipedia.org/wiki/Okapi_BM25) — background on the keyword score.
+* [Extractium™ README](../README.md): project overview and quick start.
+* [Extractium™ specification](extractium-spec.md): architecture, data model, outputs, and sources.
+* [Running a build](usage.md): how to produce one of these files.
+* [Data flow](data-flow.md): what happens to content before it reaches this file.
+* [tests/reference/build_kb_index_reference.py](../tests/reference/build_kb_index_reference.py): the frozen version 2 writer this format replaces.
+* [BAAI bge-small-en-v1.5 model card](https://huggingface.co/BAAI/bge-small-en-v1.5): the default embedding model and its query instruction.
+* [Okapi BM25 on Wikipedia](https://en.wikipedia.org/wiki/Okapi_BM25): background on the keyword score.
 
 
 [← Back to README](../README.md)

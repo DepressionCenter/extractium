@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/bot-protection-transport.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-10
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: Why some sites refuse the crawler with a bot-protection challenge,
 what was measured against three live sites, and how the build reads them
 without running a browser and without misidentifying the crawler.
@@ -25,14 +25,14 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-Some websites refuse a crawler before it reads a single page. They answer `403 Forbidden` no matter what the crawler asks for. This page explains why that happens, what it turned out to be in the Depression Center's own case, and how Extractium is designed to read those sites.
+Some websites refuse a crawler before it reads a single page. They answer `403 Forbidden` no matter what the crawler asks for. This page explains why that happens, what it turned out to be in the Depression Center's own case, and how Extractium™ reads those sites.
 
-It is written for whoever maintains the crawler, and for anyone who has to decide whether this approach is acceptable for their organization. The short version: the refusal is not about the crawler's name, and the fix is not a trick. It is about how the connection itself is opened.
+Read it if you maintain the crawler, or if you have to decide whether this approach is acceptable for your organization. The short version: the refusal is not about the crawler's name, and the fix is not a trick. It is about how the connection itself is opened.
 
-The transport described under "The design" is built, and is on by default: a build needs no setting to read such a site. The `transport` setting in the [configuration reference](configuration.md) turns it off or forces it. The measurements below are real and dated, and the build was run against the same three sites on 2026-09-12 with the same result.
+The transport described under "The design" is on by default, so a build needs no setting to read such a site. The `transport` setting in the [configuration reference](configuration.md) turns it off or forces it. The measurements below are dated, and the build was run against the same three sites on 2026-09-12 with the same result.
 
 
-## The problem, as a person meets it
+## The problem
 
 You point a build at your own organization's website and every page is refused:
 
@@ -50,7 +50,7 @@ cf-mitigated: challenge
 
 That second header means a bot-protection service stopped the request and asked the visitor to prove it is a browser. The proof normally involves running a small script. A crawler runs no scripts, so on the face of it there is nothing to be done.
 
-That reading is wrong, and it cost real time to find out. What follows is what was actually measured.
+That reading is wrong. What follows is what was measured.
 
 
 ## What was measured
@@ -103,7 +103,7 @@ A client that completes the TLS handshake the way a browser does is served norma
 | `p2p.depressioncenter.org` | `200`, no challenge header | 2,343,459 bytes, title *Peer-to-Peer Resources* |
 | `code.depressioncenter.org` | `200`, no challenge header | 137,521 bytes, title *Open Source Hub* |
 
-Not a challenge that was solved. **No challenge was raised at all.** Deeper pages behave the same way, so it is not a special case for a front page.
+This is not a challenge that was solved. No challenge was raised at all. Deeper pages behave the same way, so it is not a special case for a front page.
 
 The same result appeared with every browser profile tried, Chrome, Firefox and Safari alike, which says the service is not looking for one specific browser. It is scoring the handshake, and every real browser scores well enough.
 
@@ -113,7 +113,7 @@ This is the finding that decides whether the approach is acceptable. The transpo
 
 | Request | Result |
 |---|---|
-| Extractium `User-Agent`, browser TLS handshake | **`200`**, no challenge |
+| Extractium `User-Agent`, browser TLS handshake | `200`, no challenge |
 
 The crawler does not have to claim to be Chrome. It says `Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)`, as it always has, and it is served. Only the shape of the handshake changed.
 
@@ -122,26 +122,26 @@ The crawler does not have to claim to be Chrome. It says `Extractium/0.1.0 (+htt
 | Request | Result |
 |---|---|
 | First request | `200`, `Last-Modified: Thu, 10 Sep 2026 13:36:00 GMT` |
-| Same request with `If-Modified-Since` | **`304 Not Modified`** |
+| Same request with `If-Modified-Since` | `304 Not Modified` |
 
 The cache layer still works, so a rebuild of an unchanged site still downloads nothing. This mattered enough to check before committing to the approach.
 
 
 ## Why this is a reasonable thing to do
 
-State the honest version of what is happening: Extractium opens its connection the way a browser opens one, and a service that was scoring the old handshake as suspicious stops doing so.
+The plain description of what happens is this: Extractium™ opens its connection the way a browser opens one, and a service that was scoring the old handshake as suspicious stops doing so.
 
 Reasons this is acceptable here:
 
-- **The sites belong to the organization running the build.** Extractium is a tool an organization points at its own documentation.
-- **The crawler still identifies itself.** It gives its name and its project address on every request, so anyone reading a server log can see exactly what visited and can block it deliberately if they want to. A crawler claiming to be Chrome would be the dishonest version, and that is not what this does.
-- **`robots.txt` is still fetched first and still obeyed.** This phase changes what a server is willing to talk to. It never changes what the crawler is allowed to ask for. A site that refuses Extractium in `robots.txt` stays refused.
-- **Nothing is bypassed.** No login, no payment, no rate limit, no access control. Every page read this way is a page any visitor can open in a browser without signing in.
-- **The politeness delay still applies.** The crawler is not faster or heavier than before.
+- The sites belong to the organization running the build. Extractium™ is a tool you point at your own documentation.
+- The crawler still identifies itself. It gives its name and its project address on every request, so anyone reading a server log can see exactly what visited and can block it deliberately if they want to. A crawler claiming to be Chrome would be the dishonest version, and that is not what this does.
+- `robots.txt` is still fetched first and still obeyed. The transport changes what a server is willing to talk to. It never changes what the crawler is allowed to ask for. A site that refuses Extractium™ in `robots.txt` stays refused.
+- Nothing is bypassed. No login, no payment, no rate limit, no access control. Every page read this way is a page any visitor can open in a browser without signing in.
+- The politeness delay still applies. The crawler is not faster or heavier than before.
 
 Where the line is: this is for reading public pages of sites you are entitled to crawl. It is not a way around a login, a paywall, an address-based block, or an explicit refusal in `robots.txt`. If a site owner tells you not to crawl, the answer is not a different handshake.
 
-Worth saying plainly to whoever asks: this does not weaken anyone's security. The protection exists to keep automated traffic from overwhelming a site or scraping it at scale. A single polite crawler reading an organization's own public documentation, at one page every half second, identifying itself by name, is not the traffic that rule was written for.
+This does not weaken anyone's security. The protection exists to keep automated traffic from overwhelming a site or scraping it at scale. A single polite crawler reading an organization's own public documentation, at one page every half second, identifying itself by name, is not the traffic that rule was written for.
 
 
 ## The design
@@ -191,33 +191,32 @@ transport: teamdynamix.umich.edu served over the plain transport
 
 The wheels matter: they are `abi3`, so one wheel covers every supported Python version rather than needing a new build for each.
 
-**Recorded honestly:** the package bundles a patched build of libcurl. That is a native binary in the supply chain, and `compliance.md` says so. It is pinned in `requirements-lock.txt` with a hash like every other dependency, so an unexpected change to it fails the install rather than passing quietly.
+The package bundles a patched build of libcurl. That is a native binary in the supply chain, and [compliance.md](compliance.md) says so. It is pinned in `requirements-lock.txt` with a hash like every other dependency, so an unexpected change to it fails the install rather than passing quietly.
 
 
 ## What this does not fix
 
-- **An address-based block.** If a service is refusing the network the build runs from, no handshake helps. The symptom is a refusal with no challenge header.
-- **A site that truly needs its scripts run.** A page whose content is assembled in the browser has nothing in its HTML to read. That is a different problem, and Deep Blue is the example: see [Indexing a DSpace repository](dspace-repository-indexing.md), where the answer was to read the repository's interface instead.
-- **An explicit refusal in `robots.txt`.** Deliberately not fixed.
+- An address-based block. If a service is refusing the network the build runs from, no handshake helps. The symptom is a refusal with no challenge header.
+- A site that needs its scripts run. A page whose content is assembled in the browser has nothing in its HTML to read. That is a different problem, and Deep Blue is the example. See [Indexing a DSpace repository](dspace-repository-indexing.md), where the answer was to read the repository's interface instead.
+- An explicit refusal in `robots.txt`. Deliberately not fixed.
 
 
 ## Conclusion
 
-The Depression Center's three refused sites are readable, the crawler can keep identifying itself honestly while reading them, and rebuilds stay incremental. What looked like a rule only the university's network team could change turned out to be a property of how the crawler opened its connections.
+The Depression Center's three refused sites are readable, the crawler keeps identifying itself while reading them, and rebuilds stay incremental. What looked like a rule only the university's network team could change turned out to be a property of how the crawler opened its connections.
 
 The build does this by itself. The log names each host that needed the browser handshake as it happens, and the summary lists them again at the end. The `transport` setting, documented in the [configuration reference](configuration.md), is there for the two other cases: `plain` for an organization that would rather a challenged site stay unread, and `browser` for a site known to challenge, which saves the first refused request on every host.
 
 
 ## Additional Resources
 
-- [Implementation plan](implementation-plan.md) — Phase 8 deliverables, tests, and the rule for when it is done.
-- [Configuration reference](configuration.md) — every setting in a build's settings file.
-- [Indexing a DSpace repository](dspace-repository-indexing.md) — the other kind of unreadable site, and why it needed a different answer.
-- [Troubleshooting](troubleshooting.md) — symptoms, causes, and fixes, including the current entry for a refused crawler.
-- [GitHub repository indexing](github-repository-indexing.md) — the three-tier ladder used when a code host cannot be read through its interface.
-- [Compliance posture](compliance.md) — dependencies, security posture, and known gaps.
-- [curl_cffi](https://github.com/lexiforest/curl_cffi) — the library providing the browser handshake.
-- [Cloudflare: challenge pages](https://developers.cloudflare.com/waf/reference/cloudflare-challenges/) — what `cf-mitigated: challenge` means, from the service's own documentation.
-- [The Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html) — the `robots.txt` rules the crawler follows.
+- [Configuration reference](configuration.md): every setting in a build's settings file.
+- [Indexing a DSpace repository](dspace-repository-indexing.md): the other kind of unreadable site, and why it needed a different answer.
+- [Troubleshooting](troubleshooting.md): symptoms, causes, and fixes, including the current entry for a refused crawler.
+- [GitHub repository indexing](github-repository-indexing.md): the three-tier ladder used when a code host cannot be read through its interface.
+- [Compliance posture](compliance.md): dependencies, security posture, and known gaps.
+- [curl_cffi](https://github.com/lexiforest/curl_cffi): the library providing the browser handshake.
+- [Cloudflare: challenge pages](https://developers.cloudflare.com/waf/reference/cloudflare-challenges/): what `cf-mitigated: challenge` means, from the service's own documentation.
+- [The Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html): the `robots.txt` rules the crawler follows.
 
 [← Back to README](../README.md)

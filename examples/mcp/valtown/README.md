@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/valtown/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: README for the Val Town example: what it does, the three ways
 to push it, the settings it reads, what search it runs with and without an
 embedding service, and its limits.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds a hosted search server that runs on [Val Town](https://www.val.town/), a platform that runs small TypeScript programs at a public address. Once pushed, it answers Model Context Protocol (MCP) requests at `https://<your-val>.val.run/mcp`, so an assistant anywhere can search your published knowledge base without you running a machine. It exposes the same one tool, `search_kb`, as the [local servers](../local-node/README.md), with the same arguments and the same answers.
+This folder holds a hosted search server that runs on [Val Town](https://www.val.town/), a platform that runs small TypeScript programs at a public address. Once pushed, it answers Model Context Protocol (MCP) requests at `https://<your-val>.val.run/mcp`, so an assistant anywhere can search your published knowledge base without you running a computer of your own. It exposes the same one tool, `search_kb`, as the [local servers](../local-node/README.md), with the same arguments and the same answers.
 
 The val fetches the published container once, keeps a copy in its blob store so a cold start does not download it again, and holds it in memory while the val stays warm. Out of the box it answers with keyword search. Point it at an embedding service and it runs the full hybrid search the clients run.
 
@@ -39,7 +39,7 @@ The val fetches the published container once, keeps a copy in its blob store so 
 A val holds only its own files, so the JavaScript client and the shared protocol modules this example imports from elsewhere in the repository have to be copied beside the entry point, with their import lines rewritten. `push.py` does that. There are two ways to get the result onto Val Town: through the browser with no key at all, or through the platform's API with a token.
 
 
-## Way 1: the browser, no key
+## Option 1: the browser, no key
 
 ```bash
 cd examples/mcp/valtown
@@ -56,7 +56,7 @@ That writes six files under `val/`, which git ignores. Then, signed in to Val To
 Repeat step 2 for any file that changes. No token is made and nothing about your account leaves the browser.
 
 
-## Way 2: the API, with a token
+## Option 2: the API, with a token
 
 Make a token at [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. Write on vals is off by default when a token is made; turn it on for this one. Then:
 
@@ -80,7 +80,7 @@ The first run creates the val under your account, writes the six files with `mai
 
 Val Town also documents [syncing a val with a GitHub repository](https://docs.val.town/guides/github-sync/), which keeps a val mirrored from a repository on every push. Point it at a repository holding the staged folder.
 
-`push.py` is tested against a fake of the API, call by call, and was run against the live platform on 2026-09-12: the first run created the val, the second found it and updated every file, and the endpoint answered the golden compendium's contract query with the sections the clients rank as relevant.
+`push.py` is tested against a fake of the API, call by call, and was run against the live platform on 2026-09-12. The first run created the val, the second found it and updated every file, and the endpoint answered the golden compendium's contract query with the sections the clients rank as relevant.
 
 
 ## Settings
@@ -108,7 +108,7 @@ With one, the val runs exactly the search the [JavaScript client](../../../docs/
 ## Limits
 
 - The Val Town free plan allows 10 MB of blob storage in total. A larger container is still served, but cannot be kept in the store, so every cold start downloads it again; the val's log says so. The Pro plan allows 1 GB.
-- A val has one minute of wall-clock time per request and four gigabytes of memory, which is far more than one search needs; the first request after a cold start also pays for the download.
+- A val has one minute of wall-clock time per request and four gigabytes of memory, which is far more than one search needs. The first request after a cold start also pays for the download.
 - While the val stays warm, the index is revalidated against the published address at most every ten minutes, so a new build appears within that time without a push.
 - One tool, no writes: the val reads one static file and, when configured, calls one embedding service.
 
@@ -129,16 +129,16 @@ You now have a search endpoint any MCP-capable assistant can reach, hosted for f
 
 ## Additional Resources
 
-* [Extractium™ README](../../../README.md) — project overview and quick start.
-* [How to Deploy a Remote MCP Server](../../../docs/how-to/deploy-a-remote-mcp-server.md) — both hosted examples, step by step, and how to connect a client.
-* [Cloudflare MCP Server](../cloudflare/README.md) — the other hosted example, which searches from a database instead of a file in memory.
-* [Local Node MCP Server](../local-node/README.md) — the same tool on your own machine.
-* [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
-* [Val Town documentation](https://docs.val.town/) — the platform, its blob store, and its environment variables.
-* [Val Town REST API](https://docs.val.town/reference/api/) — the calls `push.py` makes, and the token scopes.
-* [Syncing vals with GitHub](https://docs.val.town/guides/github-sync/) — keeping a val mirrored from a repository.
-* [Val Town limits](https://www.val.town/limits) — the plan limits the numbers above come from.
-* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.
+* [Extractium™ README](../../../README.md): project overview and quick start.
+* [How to Deploy a Remote MCP Server](../../../docs/how-to/deploy-a-remote-mcp-server.md): both hosted examples, step by step, and how to connect a client.
+* [Cloudflare MCP Server](../cloudflare/README.md): the other hosted example, which searches from a database instead of a file in memory.
+* [Local Node MCP Server](../local-node/README.md): the same tool on your own machine.
+* [Using a Published Compendium](../../../docs/using-a-compendium.md): how an AI agent should use what it gets back.
+* [Val Town documentation](https://docs.val.town/): the platform, its blob store, and its environment variables.
+* [Val Town REST API](https://docs.val.town/reference/api/): the calls `push.py` makes, and the token scopes.
+* [Syncing vals with GitHub](https://docs.val.town/guides/github-sync/): keeping a val mirrored from a repository.
+* [Val Town limits](https://www.val.town/limits): the plan limits the numbers above come from.
+* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol this server speaks.
 
 
 [← Back to the Extractium README](../../../README.md)

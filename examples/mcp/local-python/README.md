@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/local-python/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-14
 Summary: README for the local Python MCP server example: what it does,
 how to run it, the settings it reads, and its limits.
 Notes: See README file for documentation and full license information.
@@ -24,7 +24,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds one file, `server.py`. It lets an AI assistant on your computer search a published Extractium knowledge base. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your machine: the index is a static file, and the question is turned into a vector by a model that runs locally.
+This folder holds one file, `server.py`. It lets an AI assistant on your computer search a published Extractium™ knowledge base. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your computer. The index is a static file, and the question is turned into a vector by a model that runs locally.
 
 The Model Context Protocol (MCP) is the standard that assistants use to call tools. This server exposes exactly one tool, `search_kb`.
 
@@ -45,7 +45,7 @@ python examples/mcp/local-python/server.py
 
 On Windows, use `set` in Command Prompt or `$env:` in PowerShell instead of `export`.
 
-The server waits for requests on standard input, so on its own it looks like it has hung. That is correct: an assistant drives it. To add it to one, see [how to connect an MCP client](../../../docs/how-to/connect-an-mcp-client.md).
+The server waits for requests on standard input, so on its own it looks like it has hung. That is correct. An assistant drives it. To add it to one, see [how to connect an MCP client](../../../docs/how-to/connect-an-mcp-client.md).
 
 
 ## Settings
@@ -85,12 +85,12 @@ You can now run a local search server over any published compendium. The [Node v
 
 ## Additional Resources
 
-* [Extractium™ README](../../../README.md) — project overview and quick start.
-* [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md) — the client configuration, step by step.
-* [Local Node MCP Server](../local-node/README.md) — the same tool in JavaScript.
-* [How to Search a Compendium](../../../docs/how-to/search-a-compendium.md) — the client library this server is built on.
-* [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
-* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.
+* [Extractium™ README](../../../README.md): project overview and quick start.
+* [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md): the client configuration, step by step.
+* [Local Node MCP Server](../local-node/README.md): the same tool in JavaScript.
+* [How to Search a Compendium](../../../docs/how-to/search-a-compendium.md): the client library this server is built on.
+* [Using a Published Compendium](../../../docs/using-a-compendium.md): how an AI agent should use what it gets back.
+* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol this server speaks.
 
 
 [← Back to the Extractium README](../../../README.md)

@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/kb-cache/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-14
 Summary: Explains why this data repository commits its YouTube cache:
 YouTube refuses caption requests from cloud runners, so transcripts are
 fetched on a person's machine and committed for the scheduled build to
@@ -37,7 +37,7 @@ YouTube refuses caption requests that come from cloud-provider addresses. GitHub
 
 The way around it has three steps:
 
-1. You build once on your own machine, where YouTube answers.
+1. You build once on your own computer, where YouTube answers.
 2. The transcripts land here, one file per video.
 3. You commit this folder, and every later build reads it instead of asking YouTube.
 
@@ -61,7 +61,7 @@ A stored transcript has no expiry date. A build uses it because it exists, not b
 Captions rarely change, but they can: somebody corrects an automatic transcript, or replaces a video.
 
 1. Delete that video's file from `youtube/videos/`.
-2. Build on your own machine, so the transcript is fetched again.
+2. Build on your own computer, so the transcript is fetched again.
 3. Commit the new file.
 
 To pick up videos added to a playlist, delete the playlist's file from `youtube/listings/` and do the same.
@@ -81,11 +81,11 @@ Commit this folder, refresh a file when a video changes, and keep credentials ou
 
 ## Additional Resources
 
-* [Extractium™ README](../../../README.md) — project overview and quick start.
-* [Data repository template](../README.md) — the repository this folder belongs to.
-* [Configuration reference](../../../docs/configuration.md) — the `youtube` source and the `cache_dir` setting.
-* [How to run a weekly build](../../../docs/how-to/run-a-weekly-build.md) — the local build that fills this folder, and the scheduled one that reads it.
-* [Troubleshooting](../../../docs/troubleshooting.md) — what a blocked caption request looks like and what to do.
+* [Extractium™ README](../../../README.md): project overview and quick start.
+* [Data repository template](../README.md): the repository this folder belongs to.
+* [Configuration reference](../../../docs/configuration.md): the `youtube` source and the `cache_dir` setting.
+* [How to run a weekly build](../../../docs/how-to/run-a-weekly-build.md): the local build that fills this folder, and the scheduled one that reads it.
+* [Troubleshooting](../../../docs/troubleshooting.md): what a blocked caption request looks like and what to do.
 
 
 [← Back to the Extractium README](../../../README.md)

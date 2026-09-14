@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -25,89 +25,82 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 # Extractium™
 
 ## Description
-Extractium™ turns scattered public documentation into one searchable compendium of knowledge. Point it at sources such as TeamDynamix, GitHub, YouTube, library DSpace repositories, websites, and local files, and it gathers and organizes the content for use in a website, search tool, or AI assistant - independent of the AI provder.
+Extractium™ turns your organization's scattered public documentation into one searchable knowledge base. Point it at your website, knowledge base portal, GitHub repositories, YouTube channel, library repository, or a folder of files, and it gathers the content, prepares it for both keyword and meaning-based search, and writes it out in several formats. You can then use that knowledge base in a website search box, in your own scripts, or with the AI assistant of your choice, without depending on any one AI provider.
 
-Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and publishes several output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in [Field Station AI™](https://github.com/DepressionCenter/FieldStationAI) and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
+Unlike a vector database, Extractium™ needs no server, no database, and no API to run. Every output is a static file that you can host anywhere, including GitHub Pages, and the same build feeds all of them at once. Sources and outputs are plug-ins, so you can add your own if the built-in ones do not cover your needs.
 
-Six source types (websites, GitHub repositories with code analysis, DSpace repositories, YouTube captions, local folders, and knowledge bundles another build wrote) feed one build, which writes four outputs (a binary JSON search index, an `llms.txt` pair, a SQLite database, and a folder of Markdown). Two clients search the index, two local servers offer that search to an AI assistant on your machine, two hosted examples offer it to an assistant anywhere, and two system prompts point a browsing assistant at the published files.
+Extractium™ grew out of the indexing engine in [Field Station AI™](https://github.com/DepressionCenter/FieldStationAI).
 
 ```mermaid
 flowchart LR
     subgraph Sources
-        W[Websites]
+        W[Websites and portals]
         G[GitHub repositories]
         D[DSpace repositories]
         Y[YouTube captions]
         L[Local folders]
         K[Knowledge bundles]
-        C[Custom input plut-ins]
+        C[Custom source plug-ins]
     end
-    W & G & D & Y & L & K & C --> E[Extractium build: crawl once, chunk, embed once]
-    E --> O[Outputs: search index, llms.txt, SQLite, Markdown folder]
-    O --> B[Browser search page or script]
-    O --> M[Local assistant through MCP]
-    O --> H[Hosted search endpoint]
-    O --> P[Hosted assistant reading llms.txt]
-    O --> P[Custom output plug-ins]
+    W & G & D & Y & L & K & C --> E[Extractium build]
+    E --> O1[Search index]
+    E --> O2[llms.txt files]
+    E --> O3[SQLite database]
+    E --> O4[Markdown folder]
+    E --> O5[Custom output plug-ins]
+    O1 --> U1[Search box on a website]
+    O1 --> U2[Scripts in Python or JavaScript]
+    O1 --> U3[AI assistant on your computer]
+    O1 --> U4[Hosted search endpoint on Val Town]
+    O2 --> U5[AI assistant that browses the web]
+    O3 --> U6[SQL queries and reports]
+    O3 --> U7[Hosted search endpoint on Cloudflare]
+    O4 --> U8[Reading and editing as plain files]
+    O4 --> U9[Other tools that read Open Knowledge Format]
 ```
 
-Six kinds of source feed one build, which crawls and embeds each piece of content once and then writes the same result in four formats. Those files are consumed in four ways. A browser page or a script searches the index directly. An assistant on your own machine searches it through a local Model Context Protocol (MCP) server. An assistant anywhere calls a hosted search endpoint on Val Town or Cloudflare. A platform that can browse but cannot call tools reads `llms.txt` from a system prompt.
+The diagram shows the content sources on the left, the Extractium™ build in the middle, and the outputs on the right, with the uses each output is good for. Every source feeds one build, and that one build writes every output. Custom plug-ins can add sources and outputs of their own.
+
+| Output | Files | Best for |
+|---|---|---|
+| Search index | `compendium.json` | Fast keyword and meaning-based search with nothing to run: a search box on your website, a script, an AI assistant on your computer, or a hosted search endpoint. |
+| llms.txt files | `llms.txt`, `llms-full.txt` | AI assistants and platforms that can read web pages but cannot call tools. Also a readable list of everything that was indexed. |
+| SQLite database | `compendium.sqlite` | SQL queries and reports, or loading the content into a hosted database. |
+| Markdown folder | `okf/` | Reading and editing the content as ordinary files, sharing it with other tools that use the Open Knowledge Format, or feeding it into another Extractium™ build. |
 
 
 ## Quick Start Guide
-There are two ways in. The one-command script installs and builds in one step:
++ Install Python 3.10 or newer.
++ Clone this repository and copy the example settings file:
 
-```bash
-git clone https://github.com/DepressionCenter/extractium.git
-cd extractium
-cp examples/config.example.yaml config.yaml   # then change the seed URL to your own site; also see config.efdc.yaml
-./run.sh --max-pages 25                        # run.bat on Windows
-```
+  ```bash
+  git clone https://github.com/DepressionCenter/extractium.git
+  cd extractium
+  cp examples/config.example.yaml config.yaml
+  ```
 
-A developer installs it into a virtual environment instead, then builds:
++ Open `config.yaml` and change `seed_url` to the page your documentation starts from. See `examples/config.efdc.yaml` for a complete example that uses every source type.
++ Run the build script. It installs everything it needs into a virtual environment, then builds:
 
-```bash
-pip install -e ".[dev,code,youtube]"
-python -m extractium.cli build --config config.yaml --max-pages 25
-```
+  ```bash
+  ./run.sh --max-pages 25      # run.bat on Windows
+  ```
 
-Needs Python 3.10 or newer. The first build downloads the embedding model, about 130 MB; later builds reuse it. The three extras are optional: `dev` adds the test tools, `code` adds the parsers that read a repository's code, and `youtube` adds the caption library. Two environment variables are optional too and are never read from a settings file: `GITHUB_TOKEN` raises the GitHub request limit, and `YOUTUBE_API_KEY` lets a build list a whole channel.
++ Open `dist/llms.txt` to see which pages were indexed. When the list looks right, run the script again without the page limit.
++ To use a Python development environment instead of the script, run `pip install -e ".[dev,code,youtube]"` and then `python -m extractium.cli build --config config.yaml`.
 
-That writes `dist/compendium.json`, `dist/llms.txt`, and `dist/llms-full.txt`. Drop the page cap once the page list in `dist/llms.txt` looks right. See [how to install](docs/how-to/install.md) for the extras and the lock file, [how to crawl a site](docs/how-to/crawl-a-site.md) for your first real build, and [docs/troubleshooting.md](docs/troubleshooting.md) if a step above did not work.
+The first build downloads the embedding model, about 130 MB. Later builds reuse it.
 
 
 ## Documentation
-+ The full documentation is available at: https://michmed.org/efdc-kb
-+ Technical pages live in [docs/](docs/README.md):
-  + [How to install](docs/how-to/install.md) — the two ways in, the optional extras, and the lock file.
-  + [How to crawl a site](docs/how-to/crawl-a-site.md) — choosing source types, the trial run, tuning patterns, and reading what a build reports.
-  + [Running a build](docs/usage.md) — the command line, its options, and its exit codes.
-  + [Configuration reference](docs/configuration.md) — every setting in `config.yaml`.
-  + [Troubleshooting](docs/troubleshooting.md) — known failures, causes, and fixes.
-  + [How to deploy](docs/how-to/deploy.md) — the deployment choices side by side, and every way the outputs are consumed.
-  + [How to run a weekly build](docs/how-to/run-a-weekly-build.md) — the one-command local build and the scheduled one.
-  + [How to publish to GitHub Pages](docs/how-to/publish-to-github-pages.md) — turning Pages on and what publishing means.
-  + [How to search a compendium](docs/how-to/search-a-compendium.md) — searching a built index from Python or JavaScript.
-  + [How to connect an MCP client](docs/how-to/connect-an-mcp-client.md) — letting an AI assistant on your own machine search a published index.
-  + [How to deploy a remote MCP server](docs/how-to/deploy-a-remote-mcp-server.md) — hosting that search on Val Town or Cloudflare for an assistant anywhere.
-  + [Using a published compendium](docs/using-a-compendium.md) — how an AI agent should use the published files.
-  + [Architecture and current state](docs/architecture.md) — what each module does and the settled design decisions.
-  + [Plugin architecture](docs/plugin-architecture.md) — the three plugin kinds, the registry, and a working example of each.
-  + [Data flow](docs/data-flow.md) — what happens to content between the site and the output folder.
-  + [Container format](docs/container-format.md) — the index file every client reads.
-  + [Compliance and posture](docs/compliance.md) — the controls in place, the evidence, and the known gaps.
-  + [Specification](docs/extractium-spec.md) — the intended design: architecture, plugin kinds, outputs, and sources.
-  + [GitHub repository indexing](docs/github-repository-indexing.md) — the design of the GitHub source and the code analysis.
-  + [Indexing a DSpace repository](docs/dspace-repository-indexing.md) — the design of the repository source.
-  + [Reading a site behind bot protection](docs/bot-protection-transport.md) — what was measured and how the build reads such a site.
-  + [Implementation plan](docs/implementation-plan.md) — the phased order in which the tool was built.
-
++ An overview and user guide is available in the EFDC Knowledge Base at: https://michmed.org/efdc-kb
++ Detailed documentation, for users and developers, is available under [docs/](docs/README.md).
 
 
 ## Additional Resources
 + FieldStationAI™: https://github.com/DepressionCenter/FieldStationAI
-+ [Mobile Technologies Core](https://depressioncenter.org/mobiletech) — the group that develops and maintains Field Station AI.
-+ [EFDC Knowledge Base](https://michmed.org/efdc-kb) — documentation site referenced above and used as source content for the app's optional knowledge-base feature.
++ [Mobile Technologies Core](https://depressioncenter.org/mobiletech), the group that develops and maintains Extractium™ and Field Station AI™.
++ [EFDC Knowledge Base](https://michmed.org/efdc-kb), the documentation site referenced above.
 
 
 
@@ -138,33 +131,14 @@ If you need assistance identifying a contact person, email the EFDC's Mobile Tec
 
 
 ### This work is based in part on the following projects, libraries and/or studies:
-+ FieldStationAI™ : A research platform for mobile and digital mental health studies. Used as the original source of the crawling/indexing engine that was extracted into this project. https://github.com/DepressionCenter/FieldStationAI
-+ BAAI/bge-small-en-v1.5 : The sentence-embedding model every build and every client use, so that a question and a passage land in the same vector space. MIT license. https://huggingface.co/BAAI/bge-small-en-v1.5
-+ llms.txt : The convention the `llms.txt` and `llms-full.txt` outputs follow, for language models that browse the web. https://llmstxt.org/
-+ Open Knowledge Format : The Markdown-with-front-matter format the `okf` output writes, one file per page. https://github.com/GoogleCloudPlatform/open-knowledge-format
++ FieldStationAI™: A research platform for mobile and digital mental health studies. Its crawling and indexing engine was extracted into this project. https://github.com/DepressionCenter/FieldStationAI
++ BAAI/bge-small-en-v1.5: The sentence-embedding model used by every build and every client. MIT license. https://huggingface.co/BAAI/bge-small-en-v1.5
++ llms.txt: The convention the `llms.txt` and `llms-full.txt` outputs follow. https://llmstxt.org/
++ Open Knowledge Format: The Markdown-with-front-matter format the `okf` output writes and the `okf` source reads. https://github.com/GoogleCloudPlatform/open-knowledge-format
++ Python libraries used: requests, curl_cffi, Beautiful Soup 4, Sentence Transformers, NumPy, Python-Markdown, PyYAML, and optionally Tree-sitter with its language grammars, Universal Ctags, youtube-transcript-api, pytest, and uv.
++ JavaScript libraries used by the examples: @huggingface/transformers and the ONNX Runtime it brings.
 
-Runtime dependencies, installed with the package:
-+ requests : HTTP client. Fetches every page, repository file, and caption listing. Apache-2.0 license. https://requests.readthedocs.io/
-+ curl_cffi : HTTP client with a browser-shaped TLS handshake. Used only when a site answers a bot-protection challenge, with the crawler still naming itself. MIT license; bundles its own build of libcurl. https://github.com/lexiforest/curl_cffi
-+ Beautiful Soup 4 : HTML parser. Reads each fetched page so the site handlers can find its title and content. MIT license. https://www.crummy.com/software/BeautifulSoup/
-+ Sentence Transformers : Runs the embedding model over every window once per build. Apache-2.0 license. https://sbert.net/
-+ NumPy : Array arithmetic for the vectors, the near-duplicate collapse, and the calibration statistics. BSD-3-Clause license, with bundled components under 0BSD, MIT, Zlib, and CC0-1.0. https://numpy.org/
-+ Python-Markdown : Renders Markdown files from a local folder or a repository into HTML before chunking. BSD-3-Clause license. https://python-markdown.github.io/
-+ PyYAML : Reads the settings file and writes the front matter of the Open Knowledge Format output. MIT license. https://pyyaml.org/
-
-Optional dependencies, installed with an extra or by hand:
-+ Tree-sitter and thirteen language grammars (`code` extra) : Parse a repository's source files so a search can find a definition and what calls it, never copying a source body. MIT license, each. https://tree-sitter.github.io/tree-sitter/
-+ Universal Ctags (installed on the machine, not with pip) : Reads the languages no grammar covers, when present. Run with an argument array, no shell, and no configuration file. GPL-2.0-or-later license. https://ctags.io/
-+ youtube-transcript-api (`youtube` extra) : Fetches a video's caption track. MIT license. https://github.com/jdepoix/youtube-transcript-api
-
-Development dependencies (`dev` extra and the lock file):
-+ pytest and pytest-cov : Run the test suite and measure its coverage. MIT license, each. https://docs.pytest.org/
-+ uv : Generates the hash-checked lock file the run scripts and the scheduled build install from. Apache-2.0 or MIT license. https://docs.astral.sh/uv/
-
-Used by the examples only:
-+ @huggingface/transformers and the ONNX Runtime it brings : Run the same embedding model in the Node search server. Apache-2.0 and MIT licenses respectively. https://huggingface.co/docs/transformers.js
-
-Every license above was read from the package's own metadata or license file, and each is compatible with the GNU General Public License v3.0 or later that this project carries.
+Every dependency license was checked for compatibility with the GNU General Public License v3.0 or later. The list, with each license, is in [docs/compliance.md](docs/compliance.md).
 
 
 

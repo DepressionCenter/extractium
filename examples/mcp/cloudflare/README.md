@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/cloudflare/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: README for the Cloudflare Worker example: what it does, how to
 load a build into D1 and deploy, the settings it reads, what search it
 runs with and without Workers AI, and its limits.
@@ -60,12 +60,12 @@ npx wrangler d1 create extractium-kb
 npx wrangler d1 execute extractium-kb --remote --file compendium.d1.sql
 ```
 
-`d1 create` prints a `database_id`; replace the zeros in `wrangler.jsonc` with it. The export begins by dropping the tables, so loading a newer build replaces the older one rather than adding to it. Repeat the two `export` and `execute` steps after every build you want the server to answer from.
+`d1 create` prints a `database_id`. Replace the zeros in `wrangler.jsonc` with it. The export begins by dropping the tables, so loading a newer build replaces the older one rather than adding to it. Repeat the two `export` and `execute` steps after every build you want the server to answer from.
 
-The export is text. On a real knowledge base it runs to tens of megabytes, because it carries every vector as hexadecimal; that is expected.
+The export is text. On a real knowledge base it runs to tens of megabytes, because it carries every vector as hexadecimal. That is expected.
 
 
-## Try it on your machine first
+## Try it on your computer first
 
 Everything above works locally, with no account, against a database wrangler keeps under `.wrangler/`:
 
@@ -83,7 +83,7 @@ curl -X POST http://localhost:8787/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_kb","arguments":{"query":"how do I request a data extract"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}'
 ```
 
-You get one JSON object back holding the sections it found. This is the check the Worker was built against: the golden compendium in `tests/golden/` loaded the same way, queried the same way.
+You get one JSON object back holding the sections it found. The Worker's tests make this same check with the golden compendium in `tests/golden/`, loaded the same way and queried the same way.
 
 
 ## Deploy
@@ -115,7 +115,7 @@ Keyword search runs as one SQL statement over the postings table: the inverse do
 
 With the `AI` binding, the Worker embeds the question through Workers AI's `@cf/baai/bge-small-en-v1.5`, which is the model Extractium builds with, and ranks those same fifty windows by cosine similarity against their stored vectors. The two rankings are fused by reciprocal rank, thresholded, and diversified exactly as the clients do. The binding is used only when the `meta` table says the index was built with that model; otherwise the Worker logs why and answers from keywords alone.
 
-The difference from the clients is the candidate pool. A client scores every window by vector; the Worker scores only the fifty that keyword search found, because reading every vector from the database on every question would not fit the CPU budget. A section that shares no term with the question therefore cannot appear, hybrid or not.
+The difference from the clients is the candidate pool. A client scores every window by vector. The Worker scores only the fifty that keyword search found, because reading every vector from the database on every question would not fit the CPU budget. A section that shares no term with the question therefore cannot appear, hybrid or not.
 
 
 ## Limits
@@ -142,16 +142,16 @@ You now have a search endpoint at the edge that answers from a database, costs n
 
 ## Additional Resources
 
-* [Extractium™ README](../../../README.md) — project overview and quick start.
-* [How to Deploy a Remote MCP Server](../../../docs/how-to/deploy-a-remote-mcp-server.md) — both hosted examples, step by step, and how to connect a client.
-* [Val Town MCP Server](../valtown/README.md) — the other hosted example, which holds the whole container in memory.
-* [Local Node MCP Server](../local-node/README.md) — the same tool on your own machine.
-* [Configuration Reference](../../../docs/configuration.md) — the `sqlite` output this example reads.
-* [Using a Published Compendium](../../../docs/using-a-compendium.md) — how an AI agent should use what it gets back.
-* [Cloudflare D1 documentation](https://developers.cloudflare.com/d1/) — the database, its binding, and the `wrangler d1` commands.
-* [Workers AI text embeddings](https://developers.cloudflare.com/workers-ai/models/bge-small-en-v1.5/) — the model the optional binding serves.
-* [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/) — the CPU budget this design works within.
-* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest) — the protocol this server speaks.
+* [Extractium™ README](../../../README.md): project overview and quick start.
+* [How to Deploy a Remote MCP Server](../../../docs/how-to/deploy-a-remote-mcp-server.md): both hosted examples, step by step, and how to connect a client.
+* [Val Town MCP Server](../valtown/README.md): the other hosted example, which holds the whole container in memory.
+* [Local Node MCP Server](../local-node/README.md): the same tool on your own machine.
+* [Configuration Reference](../../../docs/configuration.md): the `sqlite` output this example reads.
+* [Using a Published Compendium](../../../docs/using-a-compendium.md): how an AI agent should use what it gets back.
+* [Cloudflare D1 documentation](https://developers.cloudflare.com/d1/): the database, its binding, and the `wrangler d1` commands.
+* [Workers AI text embeddings](https://developers.cloudflare.com/workers-ai/models/bge-small-en-v1.5/): the model the optional binding serves.
+* [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/): the CPU budget this design works within.
+* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol this server speaks.
 
 
 [← Back to the Extractium README](../../../README.md)

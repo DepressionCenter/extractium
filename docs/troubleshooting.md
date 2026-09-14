@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -26,7 +26,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This page lists failures that have actually happened, with the cause and the fix for each. Find the symptom that matches yours and work from there. If your problem is not here, the [running a build](usage.md) page explains what each exit code means, which usually narrows it down quickly.
+This page lists known failures, with the cause and the fix for each. Find the symptom that matches yours and work from there. If your problem is not here, the [running a build](usage.md) page explains what each exit code means, which usually narrows it down quickly.
 
 
 ## Installing
@@ -43,7 +43,7 @@ cd extractium
 pip install -e ".[dev]"
 ```
 
-If you already made an empty folder, delete it or clone into it with `git clone https://github.com/DepressionCenter/extractium.git .` — note the trailing dot.
+If you already made an empty folder, delete it or clone into it with `git clone https://github.com/DepressionCenter/extractium.git .` (note the trailing dot).
 
 ### `extractium: command not found`, or `The term 'extractium' is not recognized`
 
@@ -123,7 +123,7 @@ The progress lines name each page visited and each one skipped, with the reason.
 
 **Cause.** The seed is a short link that redirects somewhere else. The crawl works out what it may visit from the address you wrote, so after the redirect every link on the page it received is out of scope.
 
-**Fix.** The build now catches this and names the address to use:
+**Fix.** The build catches this and names the address to use:
 
 ```text
 SKIP https://example.edu/kb -- it redirects to https://portal.example/TDClient/210/Org/Home/,
@@ -207,7 +207,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Cause.** Code analysis is an optional install, and this machine does not have it.
 
-**Fix.** `pip install "extractium[code]"`. Until then every source file is still indexed, with its path, language, length, and link — just not what is inside it.
+**Fix.** `pip install "extractium[code]"`. Until then every source file is still indexed, with its path, language, length, and link, but not what is inside it.
 
 ### No definitions were found in your R files
 
@@ -311,9 +311,9 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### The `okf` folder holds a page that no longer exists on the site
 
-**Cause.** A build writes every page it read and deletes nothing, so a page that has since been taken down stays in the folder from the run that last saw it.
+**Cause.** Either the build runs with `rebuild: incremental` and the page was kept because no server confirmed it gone, or the file was added to the folder by hand. A build removes only the files it wrote itself, for pages that are no longer in the compendium.
 
-**Fix.** Delete the file, or delete the whole `okf` folder and run the build again. Check `okf/log.md` first: it names the date of the build that last wrote the folder.
+**Fix.** For a kept page, run the build with `rebuild: full`, which publishes exactly what was read, and the file is removed. For a file added by hand, delete it yourself. Check `okf/log.md` first: it names the date of the build that last wrote the folder.
 
 ### A page appears twice in the `okf` folder under two names
 
@@ -404,7 +404,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### `wrangler dev` stops with `Incorrect type for map entry ... is not of type 'function or ExportedHandler'`
 
-**Cause.** The Workers runtime accepts only handlers as the entry module's exports, and `worker.js` gained a named export that is not one: a constant, an object, or a re-export from another module. The first version of the example failed exactly this way.
+**Cause.** The Workers runtime accepts only handlers as the entry module's exports, and `worker.js` gained a named export that is not one: a constant, an object, or a re-export from another module.
 
 **Fix.** Keep `worker.js` to its default export. Put anything a test needs to import in `d1-search.js`, which is where the search already lives.
 
@@ -437,9 +437,9 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### `no source named 'youtube'`
 
-**Cause.** An older Extractium, from before the video source existed. Such a version accepts the type in the settings file, but no code answers to it.
+**Cause.** An older version of Extractium™, from before the video source existed. Such a version accepts the type in the settings file, but no code answers to it.
 
-**Fix.** Update Extractium. In a data repository built from the template, `EXTRACTIUM_REF` in its workflow names the version of the tool it installs; move it forward.
+**Fix.** Update Extractium™. In a data repository built from the template, `EXTRACTIUM_REF` in its workflow names the version of the tool it installs. Move it forward.
 
 ### The build stops saying YouTube refused the request
 
@@ -505,7 +505,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Cause.** Most often it has no captions, or none in the languages asked for. The build counts these and says how many were skipped.
 
-**Fix.** Add the language to `languages` if the captions exist in another one, which is the usual cause: `languages: ["en", "es"]` covers a channel that publishes in both. A video with captions genuinely turned off cannot be indexed, and there is no fallback: reading speech from the audio is [not planned](extractium-spec.md), because sampling a real channel found captions on every video.
+**Fix.** Add the language to `languages` if the captions exist in another one, which is the usual cause: `languages: ["en", "es"]` covers a channel that publishes in both. A video with captions turned off cannot be indexed. There is no fallback that reads speech from the audio. The [specification](extractium-spec.md) explains why.
 
 ### A corrected transcript is not picked up
 
@@ -522,19 +522,19 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ## Conclusion
 
-Most failures come down to three things: a pattern that is broader or narrower than you meant, a file that did not arrive intact, or a mismatch between the model that built an index and the model searching it. If you hit something that is not here and work out the cause, add it to this page in the same change.
+Most failures come down to three things: a pattern that is broader or narrower than you meant, a file that did not arrive intact, or a mismatch between the model that built an index and the model searching it. If you hit something that is not here and work out the cause, add it to this page.
 
 
 ## Additional Resources
 
-* [Extractium™ README](../README.md) — project overview and quick start.
-* [Running a Build](usage.md) — options, the summary, and what each exit code means.
-* [Configuration Reference](configuration.md) — every setting, including the crawl patterns.
-* [How to Run a Weekly Build](how-to/run-a-weekly-build.md) — the local and scheduled builds.
-* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md) — publishing settings and checks.
-* [How to Search a Compendium](how-to/search-a-compendium.md) — using the index from Python or JavaScript.
-* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md) — running the search as a tool an assistant calls.
-* [Container Format](container-format.md) — the reader checks the error messages come from.
+* [Extractium™ README](../README.md): project overview and quick start.
+* [Running a Build](usage.md): options, the summary, and what each exit code means.
+* [Configuration Reference](configuration.md): every setting, including the crawl patterns.
+* [How to Run a Weekly Build](how-to/run-a-weekly-build.md): the local and scheduled builds.
+* [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md): publishing settings and checks.
+* [How to Search a Compendium](how-to/search-a-compendium.md): using the index from Python or JavaScript.
+* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md): running the search as a tool an assistant calls.
+* [Container Format](container-format.md): the reader checks the error messages come from.
 
 
 [← Back to README](../README.md)
