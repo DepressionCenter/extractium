@@ -12,7 +12,7 @@ tests/test_github_client.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -188,6 +188,15 @@ def test_a_name_that_would_change_the_endpoint_is_refused(name):
 
     with pytest.raises(ValueError):
         client.account(name)
+
+
+@pytest.mark.parametrize("name", [".github", ".github-private", "example-tools", "a.b_c-d"])
+def test_a_name_github_itself_uses_is_accepted(name):
+    """
+    GitHub names an account's profile repository ".github", so a leading
+    dot is a real name and not a path trick; a bare "." or ".." still is.
+    """
+    assert client_module._checked(name, "repository name") == name
 
 
 @pytest.mark.parametrize("ref", ["../main", "main?x=1", "a b", "", "/main"])

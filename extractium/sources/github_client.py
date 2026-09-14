@@ -12,7 +12,7 @@ extractium/sources/github_client.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-09
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -104,7 +104,11 @@ THROTTLED_STATUS_CODES = (403, 429)
 # request path. Names arrive from configuration and from API responses,
 # both of which are untrusted input; an unchecked name could otherwise
 # reach a different endpoint than the one intended.
-NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$")
+# A repository name may start with a dot: GitHub itself names an
+# account's profile and template repository ".github". A bare "." or ".."
+# is still refused below, because either one placed in a request path
+# addresses a different endpoint.
+NAME_RE = re.compile(r"^\.?[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$")
 
 
 ### Errors ###

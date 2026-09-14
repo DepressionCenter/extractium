@@ -245,6 +245,8 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 
 Give exactly one of `org`, `user`, or `url`. Two is an error, not a request for both.
 
+An account listing leaves out repositories whose names start with a dot, such as `.github` and `.github-private`. They hold the account's profile, issue templates, and workflow templates rather than a project's documentation. Name one in `include_repos` to read it.
+
 ```yaml
 sources:
   - type: github_api
