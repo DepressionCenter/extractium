@@ -163,7 +163,7 @@ If you find this repository, code or paper useful for your research, please cite
 
 #### Citation Example:
 >_Mongefranco, Gabriel (2026). Extractium™. University of Michigan. Software. https://github.com/DepressionCenter/extractium_  
-​​​​​​​     _DOI: [< DOI # e.g. 10.6084/m9.figshare.xxxxxx.v1 >](https://doi.org/...)_
+​​​​​​​     _DOI: [10.5281/zenodo.22754640](https://doi.org/10.5281/zenodo.22754640)_
 
 
 ----
