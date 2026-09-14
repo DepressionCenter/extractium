@@ -53,7 +53,12 @@ REM runs. A tag or a branch name pins one. The download lands in
 REM EXTRACTIUM_DIR.
 if not defined EXTRACTIUM_REPO set "EXTRACTIUM_REPO=https://github.com/DepressionCenter/extractium"
 if not defined EXTRACTIUM_REF set "EXTRACTIUM_REF=latest"
-if not defined EXTRACTIUM_DIR set "EXTRACTIUM_DIR=%HERE%\extractium"
+
+REM That folder name is deliberately not a valid Python module name. A
+REM folder named "extractium" beside the settings file is taken for the
+REM package itself by anything that puts the working directory on the
+REM import path, and the checkout's outer folder is not the package.
+if not defined EXTRACTIUM_DIR set "EXTRACTIUM_DIR=%HERE%\extractium-src"
 
 REM ### Get Extractium if this script is on its own ###
 
@@ -162,6 +167,14 @@ REM exact locked versions in place.
 "%VENV_PYTHON%" -m pip install --quiet --no-deps -e "%HERE%"
 if errorlevel 1 exit /b 1
 
+REM The build runs through the command the install just placed in the
+REM environment, and not through the interpreter's -m flag on the
+REM extractium.cli module. The module form puts the folder you ran this
+REM script from at the front of the import path, so a folder named
+REM "extractium" sitting there is imported in place of the installed
+REM package and the build stops before it starts.
+set "VENV_EXTRACTIUM=%VENV_DIR%\Scripts\extractium.exe"
+
 REM ### Write a first settings file ###
 
 REM With no settings file and no arguments, this is a first run: ask for
@@ -171,7 +184,7 @@ set "FIRST_RUN=0"
 if "%~1"=="" if not exist "%CONFIG%" (
     echo.
     echo There is no %CONFIG% yet, so a few questions first.
-    "%VENV_PYTHON%" -m extractium.cli init --output "%CONFIG%"
+    "%VENV_EXTRACTIUM%" init --output "%CONFIG%"
     if errorlevel 1 exit /b %errorlevel%
     set "FIRST_RUN=1"
 )
@@ -180,13 +193,13 @@ REM ### Run the build ###
 
 echo.
 if not "%~1"=="" (
-    "%VENV_PYTHON%" -m extractium.cli build %*
+    "%VENV_EXTRACTIUM%" build %*
 ) else if "%FIRST_RUN%"=="1" (
     echo Building from %CONFIG%, limited to 25 pages for this first run ...
-    "%VENV_PYTHON%" -m extractium.cli build --config "%CONFIG%" --max-pages 25
+    "%VENV_EXTRACTIUM%" build --config "%CONFIG%" --max-pages 25
 ) else (
     echo Building from %CONFIG% ...
-    "%VENV_PYTHON%" -m extractium.cli build --config "%CONFIG%"
+    "%VENV_EXTRACTIUM%" build --config "%CONFIG%"
 )
 if errorlevel 1 exit /b %errorlevel%
 

@@ -51,9 +51,14 @@ PYTHON="${PYTHON:-python3}"
 # was saved on its own rather than run from inside a checkout. "latest"
 # means the newest published release, looked up when the script runs. A
 # tag or a branch name pins one. The download lands in EXTRACTIUM_DIR.
+#
+# That folder name is deliberately not a valid Python module name. A
+# folder named "extractium" beside the settings file is taken for the
+# package itself by anything that puts the working directory on the
+# import path, and the checkout's outer folder is not the package.
 EXTRACTIUM_REPO="${EXTRACTIUM_REPO:-https://github.com/DepressionCenter/extractium}"
 EXTRACTIUM_REF="${EXTRACTIUM_REF:-latest}"
-EXTRACTIUM_DIR="${EXTRACTIUM_DIR:-$HERE/extractium}"
+EXTRACTIUM_DIR="${EXTRACTIUM_DIR:-$HERE/extractium-src}"
 
 ### Check the interpreter ###
 
@@ -176,6 +181,18 @@ echo "Installing pinned dependencies ..."
 # exact locked versions in place.
 "$VENV_PYTHON" -m pip install --quiet --no-deps -e "$HERE"
 
+# The build runs through the command the install just placed in the
+# environment, and not through the interpreter's -m flag on the
+# extractium.cli module. The module form puts the folder you ran this
+# script from at the front of the import path, so a folder named
+# "extractium" sitting there is imported in place of the installed
+# package and the build stops before it starts.
+if [ -x "$VENV_DIR/bin/extractium" ]; then
+    VENV_EXTRACTIUM="$VENV_DIR/bin/extractium"
+else
+    VENV_EXTRACTIUM="$VENV_DIR/Scripts/extractium.exe"
+fi
+
 ### Write a first settings file ###
 
 # With no settings file and no arguments, this is a first run: ask for
@@ -185,7 +202,7 @@ FIRST_RUN=0
 if [ "$#" -eq 0 ] && [ ! -f "$CONFIG" ]; then
     echo
     echo "There is no $CONFIG yet, so a few questions first."
-    "$VENV_PYTHON" -m extractium.cli init --output "$CONFIG"
+    "$VENV_EXTRACTIUM" init --output "$CONFIG"
     FIRST_RUN=1
 fi
 
@@ -193,13 +210,13 @@ fi
 
 echo
 if [ "$#" -gt 0 ]; then
-    "$VENV_PYTHON" -m extractium.cli build "$@"
+    "$VENV_EXTRACTIUM" build "$@"
 elif [ "$FIRST_RUN" -eq 1 ]; then
     echo "Building from $CONFIG, limited to 25 pages for this first run ..."
-    "$VENV_PYTHON" -m extractium.cli build --config "$CONFIG" --max-pages 25
+    "$VENV_EXTRACTIUM" build --config "$CONFIG" --max-pages 25
 else
     echo "Building from $CONFIG ..."
-    "$VENV_PYTHON" -m extractium.cli build --config "$CONFIG"
+    "$VENV_EXTRACTIUM" build --config "$CONFIG"
 fi
 
 ### Say what to do next ###

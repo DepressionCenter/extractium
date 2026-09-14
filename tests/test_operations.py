@@ -162,7 +162,7 @@ def test_each_run_script_installs_the_locked_versions_only(script):
 def test_each_run_script_builds_and_says_what_to_commit(script):
     text = (REPO_ROOT / script).read_text(encoding="utf-8")
 
-    assert "extractium.cli build" in text
+    assert re.search(r'VENV_EXTRACTIUM%?" build', text)
     assert "git add" in text
     assert ".kb_cache" in text
 
@@ -171,8 +171,39 @@ def test_each_run_script_builds_and_says_what_to_commit(script):
 def test_each_run_script_writes_a_first_settings_file_and_limits_the_first_build(script):
     text = (REPO_ROOT / script).read_text(encoding="utf-8")
 
-    assert "extractium.cli init" in text
+    assert re.search(r'VENV_EXTRACTIUM%?" init', text)
     assert "--max-pages 25" in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_runs_the_installed_command_and_not_the_module(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    # The interpreter's -m flag puts the folder the script was run from at
+    # the front of the import path. The checkout sits in that folder, so
+    # the module form imports the checkout's outer folder as the package
+    # and every build fails on the first import.
+    assert "-m extractium.cli" not in text
+    assert re.search(r"Scripts[/\\]extractium\.exe", text)
+
+
+# Where each script sets the folder the download lands in, by default.
+DOWNLOAD_FOLDER = {
+    "run.sh": r"EXTRACTIUM_DIR:-\$HERE/([^\"}]+)",
+    "run.bat": r"EXTRACTIUM_DIR=%HERE%[/\\]([^\"]+)",
+}
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_downloads_into_a_folder_that_cannot_shadow_the_package(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    found = re.search(DOWNLOAD_FOLDER[script], text)
+    assert found, "the script must set a default download folder"
+    # The download lands beside the settings file, which is where a build
+    # is started from. A folder named "extractium" there would be imported
+    # in place of the installed package.
+    assert not found.group(1).isidentifier()
 
 
 @pytest.mark.parametrize("script", ["run.sh", "run.bat"])
