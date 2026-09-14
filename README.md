@@ -71,23 +71,16 @@ The diagram shows the content sources on the left, the Extractium™ build in th
 
 ## Quick Start Guide
 + Install Python 3.10 or newer.
-+ Clone this repository and copy the example settings file:
++ Save the build script for your operating system into an empty folder: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone this repository instead and run the script from the clone.
++ Run the script. It downloads the latest release of Extractium™ (with git if you have it, otherwise as a plain download), installs everything it needs into a virtual environment, asks you for the name of your knowledge base, a short name for its files, and the website to crawl, then builds a first index limited to 25 pages:
 
   ```bash
-  git clone https://github.com/DepressionCenter/extractium.git
-  cd extractium
-  cp examples/config.example.yaml config.yaml
+  ./run.sh       # macOS and Linux
+  run.bat        # Windows
   ```
 
-+ Open `config.yaml` and change `seed_url` to the page your documentation starts from. See `examples/config.efdc.yaml` for a complete example that uses every source type.
-+ Run the build script. It installs everything it needs into a virtual environment, then builds:
-
-  ```bash
-  ./run.sh --max-pages 25      # run.bat on Windows
-  ```
-
-+ Open `dist/llms.txt` to see which pages were indexed. When the list looks right, run the script again without the page limit.
-+ To use a Python development environment instead of the script, run `pip install -e ".[dev,code,youtube]"` and then `python -m extractium.cli build --config config.yaml`.
++ Open `dist/llms.txt` to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`. See `examples/config.efdc.yaml` for a complete example that uses every source type.
++ To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
 

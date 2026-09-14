@@ -7,13 +7,15 @@ core build step, and lets each adapter write its own output format. Along
 the way it scans what the sources produced for likely protected health
 information and writes the review reports.
 Progress goes to standard error; the summary goes to standard output.
+The `init` subcommand, in extractium/init.py, writes a first settings
+file so a person can start without editing YAML.
 
 This file is part of Extractium™
 extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-14"
 
 import argparse
 import dataclasses
@@ -40,6 +42,7 @@ import os
 import sys
 
 from extractium import __version__
+from extractium import init as init_command
 from extractium.config import ConfigError, load_config
 from extractium.core import cache as caching
 from extractium.core import phi_lint
@@ -479,6 +482,19 @@ def build_parser():
     build.add_argument("--float32-vecs", action="store_true",
                        help="Store vectors as float32 instead of the default int8, at four times the size.")
     build.set_defaults(handler=run_build)
+
+    init = subcommands.add_parser("init", help="Write a first settings file, asking for what a flag does not give.")
+    init.add_argument("--name", metavar="TEXT",
+                      help="Display name of the knowledge base.")
+    init.add_argument("--slug", metavar="TEXT",
+                      help="Short name the output files are named after. Derived from the name when omitted.")
+    init.add_argument("--seed-url", metavar="URL",
+                      help="The website to start crawling from.")
+    init.add_argument("--output", default=init_command.DEFAULT_OUTPUT, metavar="FILE",
+                      help="Where to write the settings file. Defaults to config.yaml in the current folder.")
+    init.add_argument("--force", action="store_true",
+                      help="Replace the file if it already exists.")
+    init.set_defaults(handler=init_command.run_init)
     return parser
 
 

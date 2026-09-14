@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
@@ -471,6 +471,23 @@ Still not built: following a YouTube link found while crawling something else an
 **Done when** a site that fails for one build keeps its pages in incremental mode, a page the server says is gone leaves the index in either mode, and an OKF folder holds exactly the tool-written files of the current compendium plus whatever a person added.
 
 *Finished 2026-09-12 on branch `fix-redirect-scope-and-pins`, alongside the redirect-scope fix and the action pinning, because the maintainer asked for the three review items to land in one pull request. Built as written. The mode is a build-level decision and not an output option, because every single-file output is rewritten whole from the one compendium and cannot differ from the others; the OKF folder is the one output with files to prune, and it prunes in both modes, since the compendium already carries the decision.*
+
+### Phase 18: First run without git or a text editor
+
+**Goal.** Let a person with nothing but Python get from an empty folder to a first index by running one script and answering three questions.
+
+**Deliverables.**
+
+- An `extractium init` command that writes `config.yaml` from the commented example, filled in with the knowledge base's name, a short name for its files, and the website to crawl. Each value comes from a flag or a question. The one web source is labelled `Website`. The result is checked through the settings loader before it is written, an existing file is kept unless `--force` is given, and every typed value is written as a quoted YAML string.
+- The build scripts download the latest release when they are saved on their own, through git when it is installed and otherwise as the release archive through `curl`, `wget`, PowerShell, or Python's own library, then hand over to the copy of themselves inside the download. "latest" is resolved through the redirect GitHub serves at `releases/latest`, so the scripts never name a version. With no settings file and no arguments they run `init` and limit the first build to 25 pages.
+
+**Tests.** The slug derivation; refused slugs and addresses; every missing flag asked as a question with defaults and retries; the file written from the example and from the fallback template; an existing file kept; hostile names and addresses read back unchanged; the command's exit codes; and the scripts' download order, release lookup, and first-run behavior.
+
+**Documentation.** The README quick start, the installation guide, the build page, the weekly build guide, troubleshooting, the architecture and compliance pages.
+
+**Done when** a lone copy of either script on a computer without git downloads the release, asks the three questions, and builds.
+
+*Finished 2026-09-14 on branch `feat-init-command`. Built as written. Both scripts were tried from a lone copy: on Windows with git hidden from the path, the script resolved "latest" against a repository that has releases, downloaded the archive through PowerShell, unpacked it, and handed over; with git present it cloned. On this machine the bash script cloned through git and downloaded a branch archive through curl. The questions stop at one website on purpose. The other source types each need something a person may not have ready, such as a channel that must be built locally or a repository interface address that is not guessable, and a first run should not become a reading assignment. A guided setup that offers the other types, or a friendlier interface for a full setup, is an open issue.*
 
 ### After Phase 15
 

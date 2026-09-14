@@ -42,19 +42,18 @@ YouTube needs both, in a set order. YouTube refuses caption requests from cloud-
 
 ## Build on your own computer
 
-You need Python 3.10 or newer and a copy of this repository.
+You need Python 3.10 or newer and the script for your operating system, either on its own or inside a clone of this repository. [How to install](install.md) explains both.
 
-1. Put your settings file, `config.yaml`, in the repository folder. Copy [examples/config.example.yaml](../../examples/config.example.yaml) if you do not have one, and change the seed URL.
-2. Run the script for your operating system:
+1. Run the script from the folder that holds your settings file, `config.yaml`. If there is no settings file yet, the script asks you three questions and writes one:
 
    ```
    ./run.sh                  # macOS and Linux
    run.bat                   # Windows
    ```
 
-3. Read the summary it prints, then follow the three lines it gives you to commit and push the result.
+2. Read the summary it prints, then follow the three lines it gives you to commit and push the result.
 
-The script creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium™ into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes. Later runs reuse it.
+The script downloads Extractium™ when it is on its own, creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium™ into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes, and it stops at 25 pages so you can check the page list in `dist/llms.txt` before building everything. Later runs reuse the environment and the model and build the whole site.
 
 The lock file holds the runtime dependencies only, so a build made this way reads a repository's documentation and records its source files by name without reading what is inside them. To analyze code on a schedule as well, regenerate the lock file with the optional parser set included:
 
@@ -73,7 +72,7 @@ CONFIG=other-settings.yaml ./run.sh          # macOS and Linux
 set CONFIG=other-settings.yaml && run.bat    # Windows
 ```
 
-Anything you pass as an argument goes straight to the build command, so a limited trial run looks like this:
+Anything you pass as an argument goes straight to the build command, and the script then asks no questions, so a limited trial run looks like this:
 
 ```
 ./run.sh --config config.yaml --max-pages 25 --out-dir trial
