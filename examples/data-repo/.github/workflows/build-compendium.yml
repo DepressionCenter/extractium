@@ -53,7 +53,7 @@ env:
   # The version of the tool this repository builds with. Raise it
   # deliberately, so a change in the tool never arrives unannounced in a
   # scheduled run. Any tag or commit of the Extractium repository works.
-  EXTRACTIUM_REF: v0.1.0
+  EXTRACTIUM_REF: v0.2
 
 jobs:
   build:

@@ -48,7 +48,7 @@ import { SearchServer } from '../shared/mcp-protocol.js';
 // Identity this server reports. It is self-reported and unverified, so it
 // is for display and logging only.
 export const SERVER_NAME = 'extractium-cloudflare';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2';
 
 // The Workers AI model that serves the same embeddings as the build. It
 // is used only when the index was built with that model, which the meta

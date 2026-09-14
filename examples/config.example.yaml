@@ -231,7 +231,7 @@ sources:
 
 # How the crawler introduces itself to each site. The default names the
 # tool and its repository.
-#user_agent: "Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)"
+#user_agent: "Extractium/0.2 (+https://github.com/DepressionCenter/extractium)"
 
 # How the crawler opens its connections. auto, the default, makes an
 # ordinary request and, only when a site answers a bot-protection
