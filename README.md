@@ -40,13 +40,15 @@ flowchart LR
         Y[YouTube captions]
         L[Local folders]
         K[Knowledge bundles]
+        C[Custom input plut-ins]
     end
-    W & G & D & Y & L & K --> E[Extractium build: crawl once, chunk, embed once]
+    W & G & D & Y & L & K & C --> E[Extractium build: crawl once, chunk, embed once]
     E --> O[Outputs: search index, llms.txt, SQLite, Markdown folder]
     O --> B[Browser search page or script]
     O --> M[Local assistant through MCP]
     O --> H[Hosted search endpoint]
     O --> P[Hosted assistant reading llms.txt]
+    O --> P[Custom output plug-ins]
 ```
 
 Six kinds of source feed one build, which crawls and embeds each piece of content once and then writes the same result in four formats. Those files are consumed in four ways. A browser page or a script searches the index directly. An assistant on your own machine searches it through a local Model Context Protocol (MCP) server. An assistant anywhere calls a hosted search endpoint on Val Town or Cloudflare. A platform that can browse but cannot call tools reads `llms.txt` from a system prompt.
