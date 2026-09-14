@@ -14,7 +14,7 @@ cff-version: 1.2.0
 # with this program. If not, see https://www.gnu.org/licenses/.
 type: software
 title: "Extractium™"
-# doi: "10.5281/zenodo.22754640" # Use your version-agnostic DOI here
+doi: "10.5281/zenodo.22754640" # Use your version-agnostic DOI here
 url: "https://github.com/DepressionCenter/extractium" # project website or repository URL
 repository-code: "https://github.com/DepressionCenter/extractium"
 license: "gpl-3.0-or-later"
