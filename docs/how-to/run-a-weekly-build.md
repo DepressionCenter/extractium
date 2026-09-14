@@ -3,8 +3,8 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-12
-Summary: How to keep a knowledge index current: the one-command local
+Last Modified: 2026-09-14
+Summary: How to keep a knowledge base current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
 Notes: See README file for documentation and full license information.
@@ -25,27 +25,27 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-A knowledge index goes stale as the pages behind it change, so it should be rebuilt on a schedule. This page shows you both ways to do that: from your own machine with one command, and from GitHub on a weekly timer. You do not need to write code for either. Pick the one that suits where your content lives.
+A knowledge base goes stale as the pages behind it change, so you should rebuild it on a schedule. This page shows you both ways to do that: from your own computer with one command, and from GitHub on a weekly timer. You do not need to write code for either. Pick the one that suits where your content lives.
 
 
 ## Which one do you need?
 
 | Build it | When |
 |---|---|
-| On GitHub, weekly | Your sources are public web pages. Nothing to install, nothing to remember. This is the normal choice. |
-| On your own machine | Your sources include a folder of local files, or YouTube captions, which a cloud runner cannot reach. Also useful for a first trial run. |
+| On GitHub, weekly | Your sources are public web pages. Nothing to install, nothing to remember. This is the usual choice. |
+| On your own computer | Your sources include a folder of local files, or YouTube captions, which a cloud runner cannot reach. Also useful for a first trial run. |
 
 You can use both. Many groups run the weekly build on GitHub and rebuild by hand after a large content change.
 
-YouTube needs both, in a set order. YouTube refuses caption requests from cloud-provider addresses, so you build once on your own machine, commit the folder `cache_dir` names, and the weekly build on GitHub reads the transcripts from there without asking YouTube for anything. [The cache README](../../examples/data-repo/kb-cache/README.md) says what to commit and when to refresh it.
+YouTube needs both, in a set order. YouTube refuses caption requests from cloud-provider addresses, so you build once on your own computer, commit the folder `cache_dir` names, and the weekly build on GitHub reads the transcripts from there without asking YouTube for anything. [The cache README](../../examples/data-repo/kb-cache/README.md) says what to commit and when to refresh it.
 
 
-## Build on your own machine
+## Build on your own computer
 
 You need Python 3.10 or newer and a copy of this repository.
 
 1. Put your settings file, `config.yaml`, in the repository folder. Copy [examples/config.example.yaml](../../examples/config.example.yaml) if you do not have one, and change the seed URL.
-2. Run the script for your system:
+2. Run the script for your operating system:
 
    ```
    ./run.sh                  # macOS and Linux
@@ -54,15 +54,15 @@ You need Python 3.10 or newer and a copy of this repository.
 
 3. Read the summary it prints, then follow the three lines it gives you to commit and push the result.
 
-The script creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes. Later runs reuse it.
+The script creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium™ into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes. Later runs reuse it.
 
-The lock file holds the runtime dependencies only, so a scheduled build reads a repository's documentation and records its source files by name without reading what is inside them. To analyze code on a schedule as well, regenerate the lock with the optional parser set included:
+The lock file holds the runtime dependencies only, so a build made this way reads a repository's documentation and records its source files by name without reading what is inside them. To analyze code on a schedule as well, regenerate the lock file with the optional parser set included:
 
 ```bash
 uv pip compile pyproject.toml --extra code --universal --python-version 3.11 --generate-hashes -o requirements-lock.txt
 ```
 
-Keep the header at the top of the file when you do; the command that produced the list is recorded on the line below it.
+Keep the header at the top of the file when you do. The command that produced the list is recorded on the line below it.
 
 ### Changing what it builds
 
@@ -73,7 +73,7 @@ CONFIG=other-settings.yaml ./run.sh          # macOS and Linux
 set CONFIG=other-settings.yaml && run.bat    # Windows
 ```
 
-Anything you pass as an argument goes straight to the build command, so a capped trial run looks like this:
+Anything you pass as an argument goes straight to the build command, so a limited trial run looks like this:
 
 ```
 ./run.sh --config config.yaml --max-pages 25 --out-dir trial
@@ -101,11 +101,11 @@ The schedule is one line in the workflow:
     - cron: "17 6 * * 1"
 ```
 
-The five fields are minute, hour, day of month, month, and day of the week, in UTC. `1` is Monday. Pick an odd minute rather than `0`: GitHub queues a great many jobs on the hour, and a run scheduled there can start late.
+The five fields are minute, hour, day of month, month, and day of the week, in UTC. `1` is Monday. Pick an odd minute rather than `0`. GitHub queues a great many jobs on the hour, and a run scheduled there can start late.
 
 ### What the run does
 
-1. Checks out your repository, and Extractium at the version your workflow names.
+1. Checks out your repository, and Extractium™ at the version your workflow names.
 2. Installs the locked dependencies. Every package carries a hash, so a package whose contents do not match what was locked is refused rather than installed.
 3. Restores the crawl cache from the last run.
 4. Builds the index.
@@ -116,37 +116,37 @@ Nothing is written back to your repository. The published files come from the bu
 
 ## Why a rebuild is cheap
 
-Extractium keeps every page it fetches in a cache folder, `.kb_cache`. On the next run it asks each site whether its pages have changed and downloads only the ones that have. A weekly rebuild is far faster than the first build.
+Extractium™ keeps every page it fetches in a cache folder, `.kb_cache`. On the next run it asks each site whether its pages have changed and downloads only the ones that have. A weekly rebuild is far faster than the first build.
 
-The cache is keyed on your settings file. Change what is crawled and the next run starts from an empty cache, which is what you want: a new pattern should be fetched fresh rather than answered from what an old pattern had collected.
+The cache is keyed on your settings file. Change what is crawled and the next run starts from an empty cache. That is what you want: a new pattern should be fetched fresh rather than answered from what an old pattern had collected.
 
 Deleting the cache is always safe. It costs time, never correctness.
 
 
 ## Checking that it worked
 
-- The **Actions** tab shows a green tick and, in the log, the same summary the local build prints: how many sections, how many windows, how many pages, and every file written.
+- The **Actions** tab shows a green check mark and, in the log, the same summary the local build prints: how many sections, how many windows, how many pages, and every file written.
 - Your published `llms.txt` starts with the build time. If that time is old, the last run failed or the schedule is off.
-- A failed run sends an email to the person who owns the repository. [Troubleshooting](../troubleshooting.md) lists the failures seen so far.
+- A failed run sends an email to the person who owns the repository. [Troubleshooting](../troubleshooting.md) lists the known failures.
 
 
 ## Conclusion
 
-You can now rebuild your index on demand from your own machine, or leave it to a weekly run on GitHub. Next, set up publishing with [how to publish to GitHub Pages](publish-to-github-pages.md), or read [how to search a compendium](search-a-compendium.md) to use the file you just built.
+You can now rebuild your knowledge base on demand from your own computer, or leave it to a weekly run on GitHub. Next, set up publishing with [how to publish to GitHub Pages](publish-to-github-pages.md), or read [how to search a compendium](search-a-compendium.md) to use the file you just built.
 
 
 ## Additional Resources
 
-* [Extractium™ README](../../README.md) — project overview and quick start.
-* [Installation guide](install.md) — the two ways to install, and what the lock file pins.
-* [How to Deploy](deploy.md) — the deployment choices side by side, and how each one is consumed.
-* [Running a Build](../usage.md) — every command-line option, the summary, and the exit codes.
-* [Configuration Reference](../configuration.md) — every setting in `config.yaml`.
-* [How to Publish to GitHub Pages](publish-to-github-pages.md) — the publishing settings, step by step.
-* [How to Search a Compendium](search-a-compendium.md) — using the index the build writes.
-* [Data repository template](../../examples/data-repo/README.md) — the files to copy into your own content repository.
-* [Troubleshooting](../troubleshooting.md) — known failures, causes, and fixes.
-* [POSIX cron expressions on GitHub](https://docs.github.com/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule) — the schedule syntax and its limits.
+* [Extractium™ README](../../README.md): project overview and quick start.
+* [Installation guide](install.md): the two ways to install, and what the lock file pins.
+* [How to Deploy](deploy.md): the deployment choices side by side, and how each one is consumed.
+* [Running a Build](../usage.md): every command-line option, the summary, and the exit codes.
+* [Configuration Reference](../configuration.md): every setting in `config.yaml`.
+* [How to Publish to GitHub Pages](publish-to-github-pages.md): the publishing settings, step by step.
+* [How to Search a Compendium](search-a-compendium.md): using the index the build writes.
+* [Data repository template](../../examples/data-repo/README.md): the files to copy into your own content repository.
+* [Troubleshooting](../troubleshooting.md): known failures, causes, and fixes.
+* [POSIX cron expressions on GitHub](https://docs.github.com/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule): the schedule syntax and its limits.
 
 
 [← Back to README](../../README.md)

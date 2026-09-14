@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -26,14 +26,9 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-Extractium reads its settings from one small YAML file, usually called `config.yaml`. The file lists the sources to read, the outputs to write, and a few global settings. This page lists every setting, what it does, and what happens when you leave it out. It is written for the person who sets up a build, and for anyone who later has to work out why a crawl reached the wrong pages.
+Extractium™ reads its settings from one small YAML file, usually called `config.yaml`. The file lists the sources to read, the outputs to write, and a few global settings. This page lists every setting, what it does, and what happens when you leave it out. Use it when you set up a build, and again when you need to work out why a crawl reached the wrong pages.
 
-A ready-to-copy starting point ships with the project: [examples/config.example.yaml](../examples/config.example.yaml).
-
-
-## Status of this feature
-
-The settings file and its checks are in place, in [extractium/config.py](../extractium/config.py), and `extractium build --config config.yaml` reads the file and runs the whole build. You can also load and check a file yourself:
+A ready-to-copy starting point ships with the project: [examples/config.example.yaml](../examples/config.example.yaml). To check a file without running a build, load it from Python:
 
 ```python
 from extractium.config import load_config
@@ -42,12 +37,10 @@ settings = load_config("config.yaml")
 print(settings.sources[0].options["seed_url"], settings.max_pages)
 ```
 
-The crawl scope rules (`in_scope`, `derive_auto_prefix`), the User-Agent, and the `robots.txt` policy live in [extractium/core/fetch.py](../extractium/core/fetch.py). The crawl itself is [extractium/sources/web.py](../extractium/sources/web.py). Reading GitHub through its API is [extractium/sources/github_api.py](../extractium/sources/github_api.py), reading a DSpace repository is [extractium/sources/dspace.py](../extractium/sources/dspace.py), and reading a channel's captions is [extractium/sources/youtube.py](../extractium/sources/youtube.py). The plugin names used in `type:` and `site_handlers:` are resolved by [extractium/core/registry.py](../extractium/core/registry.py). See [the specification](extractium-spec.md) for the rest of the design.
-
 
 ## Where the file goes
 
-Extractium keeps the engine and your organization's data apart. Put `config.yaml` in your own project folder, next to the output you publish, and run the build from that folder. Paths inside the file are read from wherever you run the build.
+Extractium™ keeps the engine and your organization's data apart. Put `config.yaml` in your own project folder, next to the output you publish, and run the build from that folder. Paths inside the file are read from wherever you run the build.
 
 To start:
 
@@ -73,7 +66,7 @@ outputs:                 # optional: defaults to container + llmstxt
 max_pages: 500           # optional global settings
 ```
 
-Each entry in `sources` and `outputs` names a `type` and then that type's own options. The type is the name of a plugin. The built-in types are listed below. A plugin you drop into the `plugins/` folder can add more.
+Each entry in `sources` and `outputs` names a `type` and then that type's own options. The type is the name of a plug-in. The built-in types are listed below. A plug-in you drop into the `plugins/` folder can add more. See the [plug-in architecture](plugin-architecture.md) page.
 
 Every source also needs a `label`. See "Naming your sources" below.
 
@@ -103,7 +96,7 @@ See "The check for protected health information" below for what the check does.
 
 A GitHub account name can turn up anywhere: in a README's credits, in a list of dependencies, in a fork notice, in somebody's profile link. If a build followed all of them, one link would pull thousands of other people's repositories into your index.
 
-So a build reads a GitHub account **only when you named it**. That means:
+So a build reads a GitHub account only when you named it. That means:
 
 - an account named by a `github_api` source, under `org`, `user`, or `url`;
 - the account in the address a `web` source starts from;
@@ -160,7 +153,7 @@ sources:
 
 The label travels with every section the source produces. It heads a section in `llms.txt`, it is stored in the index as `source_label`, and a search client uses it to say where an answer came from.
 
-**Why it is required rather than guessed.** Both sources above are of type `web`. Nothing in the address or the page says which is the main site and which is a program microsite. Only you know that. Without a label, a search result could say no more than "web", and a reader could not tell the two apart.
+The label is required rather than guessed because both sources above are of type `web`. Nothing in the address or the page says which is the main site and which is a program microsite. Only you know that. Without a label, a search result could say no more than "web", and a reader could not tell the two apart.
 
 Keep it short and use the name people actually say. "Video Library" is better than "YouTube channel for the center".
 
@@ -201,7 +194,7 @@ sources:
 
 Give one or the other, never both.
 
-This is **one crawl**, not two sources, and the difference matters. One crawl keeps one list of the pages it has visited, so a page reachable from both starting points is fetched once and indexed once. It also shares one `max_pages` budget and one set of patterns. Two sources covering the same ground would each fetch that page.
+This is one crawl, not two sources, and the difference matters. One crawl keeps one list of the pages it has visited, so a page reachable from both starting points is fetched once and indexed once. It also shares one `max_pages` budget and one set of patterns. Two sources covering the same ground would each fetch that page.
 
 Scope is worked out from every seed. A link is followed if it is inside the scope of any of them, so two seeds on different hosts put both hosts in scope. If you need something narrower than a whole host, write `include_patterns`.
 
@@ -209,9 +202,7 @@ Scope is worked out from every seed. A link is followed if it is inside the scop
 
 Short links are convenient and they hide where they go. `https://example.edu/kb` might land on a portal at another address entirely.
 
-That used to produce a nearly empty index with no error. The crawl works out what it is allowed to visit from the address **you wrote**, so after the redirect, every link on the page it received was out of scope, and the crawl stopped after one page.
-
-The build now notices and refuses that seed, naming the address to use instead:
+The crawl works out what it is allowed to visit from the address you wrote, so after such a redirect every link on the page it received would be out of scope, and the crawl would stop after one page. The build notices this and refuses the seed, naming the address to use instead:
 
 ```text
 SKIP https://example.edu/kb -- it redirects to https://portal.example/TDClient/210/Org/Home/,
@@ -252,7 +243,7 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 | `ctags_fallback` | true or false | `true` | Lets Universal Ctags read the languages no grammar covers, when it is installed. Set it to `false` to keep a build from launching any other program at all. |
 | `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. |
 
-Give **exactly one** of `org`, `user`, or `url`. Two is an error, not a request for both.
+Give exactly one of `org`, `user`, or `url`. Two is an error, not a request for both.
 
 ```yaml
 sources:
@@ -272,9 +263,9 @@ sources:
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 
-**What gets read.** README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. That includes `bin/` and `dist/`, which hold what a build produced, and `data/`, which holds the files a project reads and writes rather than anything written to be read — skipping `data/` also keeps a folder of participant records out of an index by default. `.env.example` is kept, because it documents what a project needs.
+What gets read: README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. That includes `bin/` and `dist/`, which hold what a build produced, and `data/`, which holds the files a project reads and writes rather than anything written to be read. Skipping `data/` also keeps a folder of participant records out of an index by default. `.env.example` is kept, because it documents what a project needs.
 
-**Reading the code.** With `include_code` on, each source file gets a record naming what it defines, what it brings in, and which files reach into it, and each definition in it gets a record of its own: the signature, the documentation somebody wrote for it, what it calls, and a link to its exact lines on GitHub. **No source body is ever indexed.** To read the implementation you follow the link.
+Reading the code: with `include_code` on, each source file gets a record naming what it defines, what it brings in, and which files reach into it, and each definition in it gets a record of its own: the signature, the documentation somebody wrote for it, what it calls, and a link to its exact lines on GitHub. No source body is ever indexed. To read the implementation you follow the link.
 
 Code analysis needs the parser set, which is an optional install:
 
@@ -282,17 +273,17 @@ Code analysis needs the parser set, which is an optional install:
 pip install "extractium[code]"
 ```
 
-Without it a build still reads every source file and records its path, language, length, and link — just not what is inside it. The same is true of a language nobody has published a grammar for. Python, JavaScript, TypeScript, shell, Lua, C#, SQL, Kotlin, Swift, PowerShell, and MATLAB are parsed. **R is not**: no R grammar is published for Python, so an R file is read by Universal Ctags where that is installed and recorded by name where it is not. Stata is recorded by name everywhere. The repository's own summary record names which of these happened, so a reader can see the gap.
+Without it a build still reads every source file and records its path, language, length, and link, but not what is inside it. The same is true of a language nobody has published a grammar for. Python, JavaScript, TypeScript, shell, Lua, C#, SQL, Kotlin, Swift, PowerShell, and MATLAB are parsed. R is not: no R grammar is published for Python, so an R file is read by Universal Ctags where that is installed and recorded by name where it is not. Stata is recorded by name everywhere. The repository's own summary record names which of these happened, so a reader can see the gap.
 
-Notebooks, R Markdown, Quarto, Lua Server Pages, and HTML pages are read twice over: their prose is indexed as documentation, and the code inside them is parsed with the language it is written in. **A notebook's saved outputs are never read**, because they can hold printed rows of real data.
+Notebooks, R Markdown, Quarto, Lua Server Pages, and HTML pages are read twice over: their prose is indexed as documentation, and the code inside them is parsed with the language it is written in. A notebook's saved outputs are never read, because they can hold printed rows of real data.
 
-**Code multiplies the size of an index.** Reading this project's own repository produces about 135 documentation records, or about 1,900 records with `include_code` on, and a 10 MB index file rather than a 4 MB one. That is worth knowing before pointing a build at a whole account. Set `include_code: false` on sources where the code is not what people are searching for.
+Code multiplies the size of an index. Reading this project's own repository produces about 135 documentation records, or about 1,900 records with `include_code` on, and a 10 MB index file rather than a 4 MB one. Keep that in mind before pointing a build at a whole account. Set `include_code: false` on sources where the code is not what people are searching for.
 
-**How files are downloaded.** A repository is normally downloaded once, as a single archive, and the wanted files are read out of it in memory. Nothing is ever extracted to disk. This spends one request per repository instead of one per file, which matters because reading GitHub anonymously allows only about sixty requests an hour in total. A repository too large to hold in memory has its files requested one at a time instead. Either way, each file is stored under its blob name, so the next build downloads nothing that has not changed.
+How files are downloaded: a repository is normally downloaded once, as a single archive, and the wanted files are read out of it in memory. Nothing is ever extracted to disk. This spends one request per repository instead of one per file, which matters because reading GitHub anonymously allows only about sixty requests an hour in total. A repository too large to hold in memory has its files requested one at a time instead. Either way, each file is stored under its blob name, so the next build downloads nothing that has not changed.
 
-**Tokens.** Set `GITHUB_TOKEN` in the environment to raise the request limit. It never goes in the configuration file, in an output, in a log line, or in the cache. A token raises how much a build can read; it never widens what a build may publish, and private repositories are never indexed.
+Tokens: set `GITHUB_TOKEN` in the environment to raise the request limit. It never goes in the configuration file, in an output, in a log line, or in the cache. A token raises how much a build can read. It never widens what a build may publish, and private repositories are never indexed.
 
-**When GitHub cannot be read.** The build tries three ways in order: with a token, without one, and finally an ordinary crawl of the documentation pages. The first two produce exactly the same result for a public repository. The third reads documentation only and runs no code analysis. Whatever happens, the summary names each repository and the way it was read:
+When GitHub cannot be read, the build tries three ways in order: with a token, without one, and finally an ordinary crawl of the documentation pages. The first two produce exactly the same result for a public repository. The third reads documentation only and runs no code analysis. Whatever happens, the summary names each repository and the way it was read:
 
 ```text
   coverage : DepressionCenter/extractium  tier 2 (public API)  documentation, code analysis
@@ -348,8 +339,8 @@ A page crawled by a `web` source may link to a video. The crawl never follows a 
 
 Both of these, every time, whether or not you asked for a playlist:
 
-1. **Everything the channel published**, read from its uploads playlist. That includes its shorts and its past live streams, which the "Videos" tab on the site leaves out.
-2. **The playlists the channel shows**, and the videos in them. Turn this off with `include_playlists: false`.
+1. Everything the channel published, read from its uploads playlist. That includes its shorts and its past live streams, which the "Videos" tab on the site leaves out.
+2. The playlists the channel shows, and the videos in them. Turn this off with `include_playlists: false`.
 
 A playlist is a list of whatever its owner chose, so a channel's playlists routinely hold other people's videos: a conference talk, a partner's explainer, something the owner simply liked. By default those are left out, because indexing them would put another organization's words in your knowledge base under your name. The build says how many it left out. Set `only_channel_videos: false` to index them anyway.
 
@@ -417,7 +408,7 @@ YouTube addresses are never crawled as pages, wherever they turn up. A video's w
 
 YouTube tolerates far less than a documentation site does. A run that asked for about 145 transcripts back to back was refused partway through, and everything after that would have been refused too.
 
-So this source waits at least **one second** between requests, whatever the build's `delay_seconds` says. Set the source's own `delay_seconds` higher if you are reading a large channel and would rather be sure:
+So this source waits at least one second between requests, whatever the build's `delay_seconds` says. Set the source's own `delay_seconds` higher if you are reading a large channel and would rather be sure:
 
 ```yaml
 sources:
@@ -468,9 +459,9 @@ sources:
       - https://hdl.handle.net/2027.42/195645
 ```
 
-**The two addresses are different hosts, and neither one implies the other.** `site_url` is the site a person opens. `api_url` is the interface behind it, and it is not guessable: it is named in the reader site's own settings, under `dspaceServer`. Point `api_url` at the reader site and the build stops with a message saying the address answered a web page rather than data.
+The two addresses are different hosts, and neither one implies the other. `site_url` is the site a person opens. `api_url` is the interface behind it, and it is not guessable: it is named in the reader site's own settings, under `dspaceServer`. Point `api_url` at the reader site and the build stops with a message saying the address answered a web page rather than data.
 
-**Naming a collection.** Write each collection whichever way you have it in hand. All four mean the same thing:
+Naming a collection: write each collection whichever way you have it in hand. All four mean the same thing:
 
 | Written as | Example |
 |---|---|
@@ -479,15 +470,15 @@ sources:
 | The address a browser shows after following that link | `https://deepblue.lib.umich.edu/collections/3acf951c-e107-4b8d-8f7d-ced171665b11` |
 | The collection's identifier on its own | `3acf951c-e107-4b8d-8f7d-ced171665b11` |
 
-**Collections are listed, never discovered.** A repository holds the deposits of everybody at a university, so a build reads the collections it was given and nothing it merely found a link to. This is the same rule as `github_owners`, and it matters more here: a search scope the repository does not recognize is answered with every deposit it holds rather than refused. Each collection is therefore confirmed to exist before anything is searched, which is also how its name is read. A collection the repository does not have stops the build and is named, because a quiet skip would look like an empty collection.
+Collections are listed, never discovered. A repository holds the deposits of everybody at a university, so a build reads the collections it was given and nothing it merely found a link to. This is the same rule as `github_owners`, and it matters more here: a search scope the repository does not recognize is answered with every deposit it holds rather than refused. Each collection is therefore confirmed to exist before anything is searched, which is also how its name is read. A collection the repository does not have stops the build and is named, because a quiet skip would look like an empty collection.
 
-**What gets read.** One document per deposit: its abstract first, then its authors, date, subjects, rights, publisher, and every address it carries, then the text of its files. A deposit's address list is sorted into three kinds and all three are kept: its handle (the permanent citation), its DOI (how the work is cited in the literature), and any other address, which is often the project's own documentation.
+What gets read: one document per deposit, holding its abstract first, then its authors, date, subjects, rights, publisher, and every address it carries, then the text of its files. A deposit's address list is sorted into three kinds and all three are kept: its handle (the permanent citation), its DOI (how the work is cited in the literature), and any other address, which is often the project's own documentation.
 
-**Where the file text comes from.** The repository extracted it when the file was deposited, and this source reads that. No PDF reader, no Word reader, no archive handling, and no new dependency. A deposit whose files hold no readable text, such as a poster deposited as an image, is still indexed from its description, and the record says plainly that its file contents are not in the index.
+Where the file text comes from: the repository extracted it when the file was deposited, and this source reads that. No PDF reader, no Word reader, no archive handling, and no new dependency. A deposit whose files hold no readable text, such as a poster deposited as an image, is still indexed from its description, and the record says plainly that its file contents are not in the index.
 
-**Set `phi_lint: 'all'` for a build with this source.** The default scans only content read from a folder on this machine, because that is the content nobody has published. A deposit in a public repository was published deliberately, but text a machine pulled out of a research poster is exactly where a stray identifier is most likely to sit, and reading it is worth one setting. Expect a long report: a scholarly deposit names its authors, and a poster often prints an email address, so the check flags them. Every line in that report is a question for a person, not a verdict. See "The check for protected health information" above.
+Set `phi_lint: 'all'` for a build with this source. The default scans only content read from a folder on your computer, because that is the content nobody has published. A deposit in a public repository was published deliberately, but text a machine pulled out of a research poster is exactly where a stray identifier is most likely to sit, and reading it is worth one setting. Expect a long report: a scholarly deposit names its authors, and a poster often prints an email address, so the check flags them. Every line in that report is a question for a person, not a verdict. See "The check for protected health information" below.
 
-**Rebuilds.** The repository reports when each deposit last changed, and that stamp is stored beside the stored text. A collection nobody has touched costs one request per hundred deposits and downloads nothing. The summary says how much of each collection is description alone:
+Rebuilds: the repository reports when each deposit last changed, and that stamp is stored beside the stored text. A collection nobody has touched costs one request per hundred deposits and downloads nothing. The summary says how much of each collection is description alone:
 
 ```text
   Deep Blue Documents  42 deposit(s)  35 with file text  7 description only
@@ -510,9 +501,9 @@ sources:
     path: ./partner-okf
 ```
 
-### Source types from plugins
+### Source types from plug-ins
 
-A type that is not one of the built-in types above is passed to the registry as written, with its options unchecked. The plugin that answers to that name checks its own options. If no plugin answers to it, the build stops with a message listing the known names.
+A type that is not one of the built-in types above is passed to the registry as written, with its options unchecked. The plug-in that answers to that name checks its own options. If no plug-in answers to it, the build stops with a message listing the known names.
 
 
 ## Outputs
@@ -541,7 +532,7 @@ outputs:
     include_local: true      # this file stays on your machine, so local content is fine
 ```
 
-All four writers exist today. An output type that is not one of the four above is passed to the registry as written, like a plugin source type.
+An output type that is not one of the four above is passed to the registry as written, like a plug-in source type.
 
 The `okf` output writes a folder rather than a file. Inside `out_dir/okf/` you get:
 
@@ -555,7 +546,7 @@ Each file is named after the page's title, plus a short code taken from its addr
 
 Any Markdown viewer opens the folder. A program that reads Open Knowledge Format v0.2 sees each page as a concept, using the block at the top of each file.
 
-The folder holds the text of every page, so decide what to publish exactly as you would for the container. A build never deletes what an earlier build wrote. A page that has since disappeared from its source therefore stays in the folder until you remove it.
+The folder holds the text of every page, so decide what to publish exactly as you would for the container. A build removes a file it wrote in an earlier build when that page is no longer in the compendium, and names each removal in its log. A file you added to the folder by hand is never touched. See "Full and incremental rebuilds" below.
 
 The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
 
@@ -602,7 +593,7 @@ Two files are written to the folder you ran the build from, never to `out_dir`:
 
 Neither report copies the text it matched. It names the file and the line, so you open the file and look. A report that quoted what it found would be a second copy of the identifiers, saved somewhere nobody guards.
 
-The check reads shapes, not meaning. It will miss things, and it will flag things that are fine. **A clean result never means content is safe to publish.** The reports say so, and so does this page. See [the compliance page](compliance.md) for what the check does and does not cover.
+The check reads shapes, not meaning. It will miss things, and it will flag things that are fine. A clean result never means content is safe to publish. The reports say so, and so does this page. See [the compliance page](compliance.md) for what the check does and does not cover.
 
 
 ## How the URL patterns work
@@ -613,10 +604,10 @@ The three pattern lists on a web source hold regular expressions. Each pattern i
 
 For each link the crawler finds:
 
-1. **Off-site links** are dropped, unless they match an entry in `include_patterns`. This is how you add a second site.
-2. **Files that are not readable text** are dropped: images, archives, office documents, fonts, media, and source code files.
-3. **`include_patterns`** decides what is in scope. If the list is empty, the crawler works the scope out from the seed URL instead (see below). If the list has entries, a URL must match at least one.
-4. **`crawl_exclude_patterns`** removes what is left. An exclusion always wins over an inclusion.
+1. Off-site links are dropped, unless they match an entry in `include_patterns`. This is how you add a second site.
+2. Files that are not readable text are dropped: images, archives, office documents, fonts, media, and source code files.
+3. `include_patterns` decides what is in scope. If the list is empty, the crawler works the scope out from the seed URL instead (see below). If the list has entries, a URL must match at least one.
+4. `crawl_exclude_patterns` removes what is left. An exclusion always wins over an inclusion.
 
 Pages that survive all four checks are fetched. A fetched page whose URL matches `index_exclude_patterns` still has its links followed, but its own text is left out of the index. That is what you want for menu and category pages: they lead to real articles but say nothing themselves.
 
@@ -633,8 +624,8 @@ This is usually the right setting. Add patterns only when one build has to cover
 
 You get the two exclusion lists for free. Each list is the sum of two parts:
 
-1. **Files that hold no readable text**: images, archives, office documents, fonts, media, and source code. Always included.
-2. **What each enabled site handler adds.** The generic handler, which is always on, skips search forms, sign-in pages, print views, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, and file-download views, and puts its category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
+1. Files that hold no readable text: images, archives, office documents, fonts, media, and source code. Always included.
+2. What each enabled site handler adds. The generic handler, which is always on, skips search forms, sign-in pages, print views, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, and file-download views, and puts its category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
 
 Category, tag, and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.
 
@@ -667,7 +658,7 @@ By default, Extractium reports the refusal and moves on. It does not disguise it
 Setting `respect_robots_txt: false` changes that, on the grounds that you only turn the check off for sites you own or have permission for. With it off:
 
 - Every page is still requested with your `user_agent` first.
-- A page that answers `401`, `403`, or `429` to that is requested **once more** with a common browser User-Agent.
+- A page that answers `401`, `403`, or `429` to that is requested once more with a common browser User-Agent.
 - Both attempts are printed, so the log always shows which identity got the page.
 - A page that is simply missing (`404`) or broken (`5xx`) is never retried. Those are not refusals.
 
@@ -740,7 +731,7 @@ A misspelled setting is treated as an error on purpose. If Extractium ignored it
 - Only `http` and `https` seeds are accepted. A `file:` seed would pull content off your own disk into an index whose web-facing outputs assume everything in it was already published.
 - Output files must stay under `out_dir`, so a configuration file cannot direct a build to overwrite a file elsewhere on the disk.
 - The `user_agent` value cannot contain line breaks, so the file cannot add extra request headers.
-- The crawler honors `robots.txt` by default and stops at a site whose rules it cannot read, so a configuration file cannot make it fetch pages a site has asked crawlers to leave alone unless the operator switches the check off.
+- The crawler honors `robots.txt` by default and stops at a site whose rules it cannot read, so a configuration file cannot make it fetch pages a site has asked crawlers to leave alone unless you switch the check off.
 - Keep passwords, tokens, and participant identifiers out of this file. It is meant to be committed to a repository. Sources that need a token read it from the environment.
 - Content from `local` sources is left out of every output unless that output says `include_local: true`. Publishing is the normal use of every output, so the safe default is the one that cannot leak by omission.
 - A `local` source refuses a file whose real location is outside the folder you named, so a shortcut or a symbolic link cannot pull in content from elsewhere on the disk.
@@ -750,25 +741,25 @@ A misspelled setting is treated as an error on purpose. If Extractium ignored it
 
 ## Conclusion
 
-You now know every setting a build accepts, what you get for free, and how to read the error messages. Copy `examples/config.example.yaml`, set the web source's `seed_url`, and leave the rest alone until you have a reason to change it. To understand what happens after the file is read, read [the specification](extractium-spec.md).
+You now know every setting a build accepts, what you get for free, and how to read the error messages. Copy `examples/config.example.yaml`, set the web source's `seed_url`, and leave the rest alone until you have a reason to change it. To understand what happens after the file is read, read the [data flow](data-flow.md) page.
 
 
 ## Additional Resources
 
-* [Extractium™ README](../README.md) — project overview and quick start.
-* [examples/config.example.yaml](../examples/config.example.yaml) — commented example file to copy.
-* [How to crawl a site](how-to/crawl-a-site.md) — choosing source types and tuning these settings by trial run.
-* [How to install](how-to/install.md) — the optional extras some sources need.
-* [extractium/config.py](../extractium/config.py) — the settings, defaults, and checks in code.
-* [extractium/core/registry.py](../extractium/core/registry.py) — how a `type` or site handler name is resolved to a plugin.
-* [extractium/core/fetch.py](../extractium/core/fetch.py) — the crawl scope rules, the User-Agent, and the `robots.txt` policy.
-* [extractium/sources/web.py](../extractium/sources/web.py) — the crawl loop that acts on a `web` entry.
-* [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309) — the rules the `robots.txt` policy follows.
-* [Container format](container-format.md) — the file the `container` output writes.
-* [Implementation plan](implementation-plan.md) — which sources and outputs are built, and when.
-* [Extractium™ specification](extractium-spec.md) — architecture, outputs, and roadmap.
-* [YAML 1.2 specification](https://yaml.org/spec/1.2.2/) — the file format's own reference.
-* [Python regular expression syntax](https://docs.python.org/3/library/re.html#regular-expression-syntax) — how the patterns are written.
+* [Extractium™ README](../README.md): project overview and quick start.
+* [examples/config.example.yaml](../examples/config.example.yaml): commented example file to copy.
+* [How to crawl a site](how-to/crawl-a-site.md): choosing source types and tuning these settings by trial run.
+* [How to install](how-to/install.md): the optional extras some sources need.
+* [extractium/config.py](../extractium/config.py): the settings, defaults, and checks in code.
+* [extractium/core/registry.py](../extractium/core/registry.py): how a `type` or site handler name is resolved to a plug-in.
+* [extractium/core/fetch.py](../extractium/core/fetch.py): the crawl scope rules, the User-Agent, and the `robots.txt` policy.
+* [extractium/sources/web.py](../extractium/sources/web.py): the crawl loop that acts on a `web` entry.
+* [Robots Exclusion Protocol, RFC 9309](https://www.rfc-editor.org/rfc/rfc9309): the rules the `robots.txt` policy follows.
+* [Container format](container-format.md): the file the `container` output writes.
+* [Plug-in architecture](plugin-architecture.md): how to add a source or output type of your own.
+* [Extractium™ specification](extractium-spec.md): the design behind these settings.
+* [YAML 1.2 specification](https://yaml.org/spec/1.2.2/): the file format's own reference.
+* [Python regular expression syntax](https://docs.python.org/3/library/re.html#regular-expression-syntax): how the patterns are written.
 
 
 [← Back to README](../README.md)

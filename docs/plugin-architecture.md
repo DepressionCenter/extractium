@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/plugin-architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Summary: The three plugin kinds, the registry's resolution order, the
 three protocols with every member and every optional hook, how a source,
 a site handler, and an adapter each fit into a build, and a minimal
@@ -20,25 +20,25 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 # Extractium™
 
-## Plugin Architecture
+## Plug-in Architecture
 
 [← Back to README](../README.md)
 
 
 ## Summary
 
-Extractium reads content through sources, reads web pages through site handlers, and writes outputs through adapters. All three are plugins, and you can add your own by dropping one Python file into a folder. This page explains the three kinds, how the tool finds them, what each one must provide, and where each one acts during a build. It ends with a minimal working example of each kind, checked by the test suite. It is written for a developer who wants to add a source, a handler, or an output and has read nothing else about the project.
+Extractium™ reads content through sources, reads web pages through site handlers, and writes outputs through adapters. All three are plug-ins, and you can add your own by dropping one Python file into a folder. This page explains the three kinds, how the tool finds them, what each one must provide, and where each one acts during a build. It ends with a minimal working example of each kind, checked by the test suite. You can use this page to write a source, a handler, or an output without having read anything else about the project.
 
 
 ## The three kinds
 
 | Kind | Produces | Acts | Built-in examples |
 |---|---|---|---|
-| **Source** | `Document` records | Once per entry in the settings file's `sources:` list, at the start of a build | `web`, `local`, `okf`, `github_api`, `dspace`, `youtube` |
-| **Site handler** | An `Extraction` from a fetched page | Once per URL the `web` source visits, for the first handler that recognizes the URL | `generic`, `tdx`, `github`, `youtube` |
-| **Adapter** | Files under the output folder | Once per entry in the `outputs:` list, at the end of a build | `container`, `llmstxt`, `sqlite`, `okf` |
+| Source | `Document` records | Once per entry in the settings file's `sources:` list, at the start of a build | `web`, `local`, `okf`, `github_api`, `dspace`, `youtube` |
+| Site handler | An `Extraction` from a fetched page | Once per URL the `web` source visits, for the first handler that recognizes the URL | `generic`, `tdx`, `github`, `youtube` |
+| Adapter | Files under the output folder | Once per entry in the `outputs:` list, at the end of a build | `container`, `llmstxt`, `sqlite`, `okf` |
 
-Everything between the sources and the adapters is the core engine and is not pluggable: chunking, embedding, the near-duplicate collapse, the keyword and calibration statistics, and the build step that turns every document into one `Compendium`. A plugin never fetches inside an adapter and never embeds inside a source. That rule is what keeps a build to one crawl and one embedding pass, whatever the outputs.
+Everything between the sources and the adapters is the core engine and is not pluggable: chunking, embedding, the near-duplicate collapse, the keyword and calibration statistics, and the build step that turns every document into one `Compendium`. A plug-in never fetches inside an adapter and never embeds inside a source. That rule is what keeps a build to one crawl and one embedding pass, whatever the outputs.
 
 ```mermaid
 flowchart LR
@@ -55,36 +55,36 @@ flowchart LR
 In words: the settings file names sources and outputs by their registry names, and optionally names which site handlers a web crawl uses. The registry resolves each name to a class. Each source yields document records; the web source asks the site handlers how to read each page it fetches. The core engine turns every document into one compendium. Each adapter writes that compendium into the output folder in its own format.
 
 
-## How the registry finds a plugin
+## How the registry finds a plug-in
 
 The registry resolves each name in three tiers, and the first tier that answers wins:
 
-1. **The `plugins/` folder** next to your settings file. Every `.py` file whose name does not start with an underscore is imported, in name order, and its `register(registry)` function is called.
-2. **Installed packages** that declare an entry point in one of three groups: `extractium.sources`, `extractium.site_handlers`, or `extractium.adapters`.
-3. **The built-ins**, which are declared through those same entry-point groups in the Extractium package itself. A built-in is a plugin that happens to ship in the box.
+1. The `plugins/` folder next to your settings file. Every `.py` file whose name does not start with an underscore is imported, in name order, and its `register(registry)` function is called.
+2. Installed packages that declare an entry point in one of three groups: `extractium.sources`, `extractium.site_handlers`, or `extractium.adapters`.
+3. The built-ins, which are declared through those same entry-point groups in the Extractium™ package itself. A built-in is a plug-in that happens to ship with the tool.
 
-A plugin in a higher tier shadows a built-in of the same name, so you can replace the `generic` handler for one project by registering your own under that name. Two plugins of the same name in the same tier are an error, reported when they load.
+A plug-in in a higher tier shadows a built-in of the same name, so you can replace the `generic` handler for one project by registering your own under that name. Two plug-ins of the same name in the same tier are an error, reported when they load.
 
-A plugin is checked against its kind's protocol when it is registered, so a missing method is reported at load time rather than in the middle of a build. An entry point from an installed package is loaded on first use, so one broken package cannot stop a build that never asked for it.
+A plug-in is checked against its kind's protocol when it is registered, so a missing method is reported at load time rather than in the middle of a build. An entry point from an installed package is loaded on first use, so one broken package cannot stop a build that never asked for it.
 
 Importing a file from `plugins/` runs code you placed there. It has the same trust level as the settings file, and it is documented rather than sandboxed. Review anything you copy into that folder.
 
 
 ## What each kind must provide
 
-The protocols live in `extractium/core/models.py`. A plugin is an ordinary class; it does not inherit from anything. The class is checked for the attributes and methods below.
+The protocols live in `extractium/core/models.py`. A plug-in is an ordinary class. It does not inherit from anything. The class is checked for the attributes and methods below.
 
 ### Source
 
 | Member | Required | Meaning |
 |---|---|---|
 | `name` | Yes | Class attribute. The registry key and the `type:` value in `sources:`. |
-| `__init__(options)` | Yes | Receives the validated options of its entry. For a built-in type the loader checks the option names; for a plugin type every option is passed through for the plugin to check. `label` is not among them; the build sets it on every document afterwards. |
+| `__init__(options)` | Yes | Receives the validated options of its entry. For a built-in type the loader checks the option names. For a plug-in type every option is passed through for the plug-in to check. `label` is not among them. The build sets it on every document afterwards. |
 | `fetch(session, cache, progress)` | Yes | Yields `Document` records. `session` is the HTTP session to request through, `cache` is the fetch cache, and `progress` is a callable that takes one line of text. A source never constructs a session and never prints. |
 | `configure(registry, settings)` | No | Called after construction with the plugin registry and the build's global crawl settings, for a source that takes part in a web crawl. A source that needs neither omits it. |
 | `read_found_links(session, cache, progress, links)` | No | Called once every source has run, with the addresses the site handlers collected during the crawls and held back. Yields documents like `fetch`. The video source uses it to read linked videos a named channel published. |
 
-A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text), `source_type`, `content_type`, `categories`, and `local`. Two of those fields are controlled vocabularies, checked when the record is made. `source_type` is one of `kb`, `github`, `web`, `youtube`, `local`, or `repository`. `content_type` is one of `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest`, `repo_map`, `code_file`, or `code_symbol`. A plugin picks the closest fit; `web` and `page` suit most new sources. A document from a folder on the operator's machine sets `local=True` and a URL starting `local:`, and every adapter then drops it unless the output opted in.
+A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text), `source_type`, `content_type`, `categories`, and `local`. Two of those fields are controlled vocabularies, checked when the record is made. `source_type` is one of `kb`, `github`, `web`, `youtube`, `local`, or `repository`. `content_type` is one of `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest`, `repo_map`, `code_file`, or `code_symbol`. A plug-in picks the closest fit. `web` and `page` suit most new sources. A document from a folder on the user's computer sets `local=True` and a URL starting `local:`, and every adapter then drops it unless the output opted in.
 
 ### Site handler
 
@@ -100,11 +100,11 @@ A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text
 | `content_type(url)` | Yes | The `content_type` value recorded on sections read from that URL. |
 | `scope_prefix(seed_url)` | No | May narrow the default crawl scope for a seed on a host the handler knows, returning the prefix the crawl stays inside, or `None`. Consulted only when the source has no include patterns. The TeamDynamix handler keeps a crawl inside its portal folder this way. |
 | `observe_link(url)` | No | Sees every link the crawl discovers, in scope or not, before the scope check, and returns nothing. The YouTube handler collects linked videos this way, and exposes them through a `found_links()` method the command line reads. |
-| `configure(settings)` | No | Receives the build's global crawl settings after construction, for a handler whose rules depend on what the operator configured. |
-| `allows(url)` | No | May veto a URL the crawl would otherwise follow. Every handler that defines it is asked about every URL, whatever `matches` says, and one refusal keeps the URL out of scope. The GitHub handler uses it to keep a crawl to the accounts the operator named. |
+| `configure(settings)` | No | Receives the build's global crawl settings after construction, for a handler whose rules depend on what the settings file says. |
+| `allows(url)` | No | May veto a URL the crawl would otherwise follow. Every handler that defines it is asked about every URL, whatever `matches` says, and one refusal keeps the URL out of scope. The GitHub handler uses it to keep a crawl to the accounts the settings file names. |
 | `offer_source(seed_url)` | No | May name a better source for a crawl's seed, as a tuple of the source name and its options. Consulted for the seed only, never for a link found mid-crawl. The GitHub and YouTube handlers use it to hand a seed to the source that reads that host properly. |
 
-An `Extraction` carries `title`, `node` (the content node to chunk, or plain text), and `categories` (the page's hierarchy, outermost first). A handler reads a page; it never discovers links. Link discovery stays in the web source, so the crawl is one graph however many handlers are enabled.
+An `Extraction` carries `title`, `node` (the content node to chunk, or plain text), and `categories` (the page's hierarchy, outermost first). A handler reads a page. It never discovers links. Link discovery stays in the web source, so the crawl is one graph however many handlers are enabled.
 
 ### Adapter
 
@@ -151,7 +151,7 @@ Two rules follow from this order. A source cannot see another source's documents
 
 ## A minimal working example of each kind
 
-The three files below are complete. Drop any of them into a `plugins/` folder beside your settings file and the registry finds it on the next build. The test suite extracts these three blocks from this page, loads them through the registry, and exercises each one, so they are known to work against the current code.
+The three files below are complete. Drop any of them into a `plugins/` folder beside your settings file and the registry finds it on the next build. The test suite extracts these three blocks from this page, loads them through the registry, and runs each one, so they are known to work against the current code.
 
 ### A source
 
@@ -250,7 +250,7 @@ def register(registry):
     registry.register_site_handler(ExampleDocsHandler)
 ```
 
-Nothing in the settings file needs to change: every installed handler takes part in a web crawl unless the source's `site_handlers` list names the ones it wants. The reference implementation is `extractium/sources/generic.py`, the handler every crawl falls back to, and `extractium/sources/github.py` shows all three optional hooks in use.
+Nothing in the settings file needs to change: every installed handler takes part in a web crawl unless the source's `site_handlers` list names the ones it wants. The reference implementation is `extractium/sources/generic.py`, the handler every crawl falls back to, and `extractium/sources/github.py` shows the optional hooks in use.
 
 ### An adapter
 
@@ -294,43 +294,43 @@ outputs:
 The two helpers imported beside the guardrail, `page_address` and `page_title`, return a section's page address without its section anchor and the page's title without the section heading, so several sections of one page collapse to one line. The reference implementation is `extractium/adapters/llmstxt.py`, which writes two text files from the same records.
 
 
-## Publishing a plugin as a package
+## Publishing a plug-in as a package
 
-A plugin that several projects share can be installed rather than copied. Declare it in the package's `pyproject.toml` under the matching entry-point group, with the registry name on the left and the class on the right:
+A plug-in that several projects share can be installed rather than copied. Declare it in the package's `pyproject.toml` under the matching entry-point group, with the registry name on the left and the class on the right:
 
 ```toml
 [project.entry-points."extractium.sources"]
 faq = "example_plugins.faq_source:FaqSource"
 ```
 
-Once the package is installed, the registry finds the class by its entry point, in the installed tier, with no `register` function needed. Extractium's own built-ins are declared the same way in its `pyproject.toml`, which is the place to look for the exact spelling of each group.
+Once the package is installed, the registry finds the class by its entry point, in the installed tier, with no `register` function needed. Extractium™'s own built-ins are declared the same way in its `pyproject.toml`, which is the place to look for the exact spelling of each group.
 
-A plugin kept in a git repository installs the same way, pinned to a commit so a later change cannot arrive unannounced:
+A plug-in kept in a git repository installs the same way, pinned to a commit so a later change cannot arrive unannounced:
 
 ```
 pip install "git+https://github.com/example-org/extractium-plugin-faq@<commit>"
 ```
 
-There is no loader for git addresses inside Extractium and none is planned. Installing through pip keeps the trust decision where it already lives: the operator chooses what to install, pip verifies what it fetched, and the lock file can pin it like any other dependency.
+Extractium™ has no loader for git addresses of its own. Installing through pip keeps the trust decision where it already lives: you choose what to install, pip verifies what it fetched, and the lock file can pin it like any other dependency.
 
 
 ## Conclusion
 
-You can now tell which kind of plugin a task needs, write one from the matching example, drop it into `plugins/`, and know where it acts during a build. Next, read [data flow](data-flow.md) for what happens to a document after a source yields it, or the [specification](extractium-spec.md), sections 2 and 3, for the design the protocols serve.
+You can now tell which kind of plug-in a task needs, write one from the matching example, drop it into `plugins/`, and know where it acts during a build. Next, read [data flow](data-flow.md) for what happens to a document after a source yields it, or the [specification](extractium-spec.md), sections 2 and 3, for the design the protocols serve.
 
 
 ## Additional Resources
 
-* [Extractium™ README](../README.md) — project overview and quick start.
-* [Extractium™ specification](extractium-spec.md) — sections 2 and 3: the plugin kinds, the registry, and the data model as designed.
-* [Architecture and Current State](architecture.md) — which module holds each built-in plugin.
-* [Data flow](data-flow.md) — what happens to a document between a source and an adapter.
-* [Container format](container-format.md) — every field a `Compendium` holds, as an adapter sees them.
-* [Configuration reference](configuration.md) — how `type:` and `site_handlers:` name a plugin, and what the loader checks.
-* [extractium/core/models.py](../extractium/core/models.py) — the three protocols and the record types.
-* [extractium/core/registry.py](../extractium/core/registry.py) — the tiers, the plugin folder loader, and the entry-point loader.
-* [extractium/adapters/base.py](../extractium/adapters/base.py) — the helpers every adapter shares.
-* [Python packaging: entry points](https://packaging.python.org/en/latest/specifications/entry-points/) — how an installed package declares a plugin.
+* [Extractium™ README](../README.md): project overview and quick start.
+* [Extractium™ specification](extractium-spec.md): sections 2 and 3: the plug-in kinds, the registry, and the data model.
+* [Architecture](architecture.md): which module holds each built-in plug-in.
+* [Data flow](data-flow.md): what happens to a document between a source and an adapter.
+* [Container format](container-format.md): every field a `Compendium` holds, as an adapter sees them.
+* [Configuration reference](configuration.md): how `type:` and `site_handlers:` name a plug-in, and what the loader checks.
+* [extractium/core/models.py](../extractium/core/models.py): the three protocols and the record types.
+* [extractium/core/registry.py](../extractium/core/registry.py): the tiers, the plug-in folder loader, and the entry-point loader.
+* [extractium/adapters/base.py](../extractium/adapters/base.py): the helpers every adapter shares.
+* [Python packaging: entry points](https://packaging.python.org/en/latest/specifications/entry-points/): how an installed package declares a plug-in.
 
 
 [← Back to README](../README.md)
