@@ -49,7 +49,7 @@ from extractium.search import ContainerError, load_container
 # Identity this server reports. It is self-reported and unverified, so it
 # is for display and logging only.
 SERVER_NAME = "extractium-local-python"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2"
 
 # The one tool this server exposes.
 TOOL_NAME = "search_kb"

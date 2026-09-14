@@ -62,7 +62,7 @@ They are served at your Pages URL, for example `https://example-org.github.io/kn
 
 ## Choosing the version of the tool
 
-The workflow's `EXTRACTIUM_REF` setting names the release of Extractium™ to build with, as a tag such as `v0.1.0`. A scheduled build therefore keeps running the same tool until you move the tag forward, and a change in the tool never arrives unannounced. The releases page of the Extractium™ repository lists the tags. Read a release's notes, change the one line, and run the workflow once by hand before leaving it to the schedule.
+The workflow's `EXTRACTIUM_REF` setting names the release of Extractium™ to build with, as a tag such as `v0.2`. A scheduled build therefore keeps running the same tool until you move the tag forward, and a change in the tool never arrives unannounced. The releases page of the Extractium™ repository lists the tags. Read a release's notes, change the one line, and run the workflow once by hand before leaving it to the schedule.
 
 
 ## Building on your own machine instead

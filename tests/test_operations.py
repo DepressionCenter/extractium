@@ -311,7 +311,7 @@ def test_the_data_repository_workflow_builds_with_a_named_version_of_the_tool():
 
     # A release tag, so a change merged here never reaches an adopter's
     # scheduled build unannounced.
-    assert re.fullmatch(r"v\d+\.\d+\.\d+", workflow["env"]["EXTRACTIUM_REF"])
+    assert re.fullmatch(r"v\d+\.\d+(\.\d+)?", workflow["env"]["EXTRACTIUM_REF"])
     steps = workflow["jobs"]["build"]["steps"]
     checkout = next(step for step in steps if step.get("with", {}).get("repository"))
     assert checkout["with"]["ref"] == "${{ env.EXTRACTIUM_REF }}"

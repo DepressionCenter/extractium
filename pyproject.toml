@@ -2,7 +2,7 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
-# Last Modified: 2026-09-12
+# Last Modified: 2026-09-14
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
 # (single package; runtime deps, dev/code/youtube extras, console script,
@@ -26,7 +26,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "extractium"
-version = "0.1.0"
+# The version is read from extractium/__init__.py, so a release changes
+# one line and the installed package, the command line, the crawler's
+# User-Agent, and every output header all report the same number.
+dynamic = ["version"]
 description = "Lean knowledge-base compiler: crawls organizational sources and builds a portable, static, multi-format knowledge index (compendium) any LLM can consume."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -124,6 +127,9 @@ container = "extractium.adapters.container:ContainerAdapter"
 llmstxt = "extractium.adapters.llmstxt:LlmsTxtAdapter"
 sqlite = "extractium.adapters.sqlite_out:SqliteAdapter"
 okf = "extractium.adapters.okf:OkfAdapter"
+
+[tool.setuptools.dynamic]
+version = { attr = "extractium.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["extractium*"]

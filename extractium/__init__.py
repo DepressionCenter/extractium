@@ -8,6 +8,7 @@ extractium/__init__.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -26,6 +27,6 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-14"
 
-__version__ = "0.1.0"
+__version__ = "0.2"

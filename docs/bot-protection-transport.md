@@ -115,7 +115,7 @@ This is the finding that decides whether the approach is acceptable. The transpo
 |---|---|
 | Extractium `User-Agent`, browser TLS handshake | `200`, no challenge |
 
-The crawler does not have to claim to be Chrome. It says `Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)`, as it always has, and it is served. Only the shape of the handshake changed.
+The crawler does not have to claim to be Chrome. It says `Extractium/0.2 (+https://github.com/DepressionCenter/extractium)`, as it always has, and it is served. Only the shape of the handshake changed.
 
 ### Rebuilds stay cheap
 

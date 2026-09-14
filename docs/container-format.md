@@ -61,7 +61,7 @@ A reader copies the vector bytes into a fresh buffer before viewing them as a ty
 | `_license` | text | The license notice for the file. Present because the file is a JSON document with no other place for a notice. |
 | `format` | text | Always `extractium-compendium`. A reader refuses any other value. |
 | `v` | whole number | Layout version. This page describes `4`. |
-| `extractium` | text | Version of the tool that wrote the file, for example `0.1.0`. |
+| `extractium` | text | Version of the tool that wrote the file, for example `0.2`. |
 | `builtAt` | text | Build time in UTC, ISO 8601 with a `Z` suffix, for example `2026-09-04T12:00:00Z`. |
 | `site` | text | Display name of the knowledge base. Defaults to the title of the first page crawled. |
 | `sourceCount` | whole number | Number of distinct source URLs that contributed at least one parent. Pages visited but not indexed do not count. |

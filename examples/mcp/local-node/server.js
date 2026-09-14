@@ -62,7 +62,7 @@ export { ConfigurationError, TOOL_DEFINITION, renderResults, resultRecords };
 // Identity this server reports. It is self-reported and unverified, so it
 // is for display and logging only.
 const SERVER_NAME = 'extractium-local-node';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2';
 
 // Where the container comes from. One of the two is required; the path
 // wins when both are set, because a local file needs no network at all.

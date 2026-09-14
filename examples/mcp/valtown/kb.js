@@ -44,7 +44,7 @@ import { ConfigurationError, SearchServer } from '../shared/mcp-protocol.js';
 // Identity this server reports. It is self-reported and unverified, so it
 // is for display and logging only.
 export const SERVER_NAME = 'extractium-valtown';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2';
 
 // The settings read from the val's environment.
 export const INDEX_URL_SETTING = 'EXTRACTIUM_INDEX_URL';

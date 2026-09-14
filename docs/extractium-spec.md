@@ -337,7 +337,7 @@ out_dir: dist                       # every adapter writes under here
 cache_dir: .kb_cache
 delay_seconds: 0.5
 max_pages: 10000
-user_agent: Extractium/0.1.0 (+https://github.com/DepressionCenter/extractium)
+user_agent: Extractium/0.2 (+https://github.com/DepressionCenter/extractium)
 respect_robots_txt: true
 transport: auto                     # auto | browser | plain
 rebuild: full                       # full | incremental

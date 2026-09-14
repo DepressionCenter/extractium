@@ -77,7 +77,7 @@ def sample_header(**overrides):
     header = {
         "format": "extractium-compendium",
         "v": 4,
-        "extractium": "0.1.0",
+        "extractium": "0.2",
         "builtAt": "2026-01-02T03:04:05Z",
         "site": "Example Org",
         "sourceCount": 2,
