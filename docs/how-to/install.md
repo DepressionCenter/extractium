@@ -41,24 +41,21 @@ Nothing is installed system-wide. Everything goes into a virtual environment ins
 
 ## Option 1: the build script
 
-Use this option if you want to build a knowledge base and do not plan to change the code.
+Use this option if you want to build a knowledge base and do not plan to change the code. You do not need git.
 
-1. Clone the repository:
-
-   ```
-   git clone https://github.com/DepressionCenter/extractium.git
-   cd extractium
-   ```
-
-2. Copy [examples/config.example.yaml](../../examples/config.example.yaml) to `config.yaml` in that folder, and change `seed_url` to your own site.
-3. Run the script for your operating system:
+1. Make an empty folder for your knowledge base and save the script for your operating system into it: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone the repository instead and run the script from inside the clone.
+2. Run the script:
 
    ```
    ./run.sh                  # macOS and Linux
    run.bat                   # Windows
    ```
 
-The script creates a virtual environment in `.venv`, installs the exact package versions recorded in the lock file, installs Extractium™ into it, runs the build, and prints what to commit. Running it again reuses the environment and only rebuilds. See [how to run a weekly build](run-a-weekly-build.md) for the options the script accepts.
+3. Answer its three questions: the name of your knowledge base, a short name for its files (press Enter to accept the one it suggests), and the website to start crawling from.
+
+When the script is on its own, it first downloads the latest release of Extractium™ into a folder called `extractium` beside itself. It uses git when git is installed. Otherwise it downloads the release archive, through `curl` or `wget` on macOS and Linux, through PowerShell on Windows, or through Python itself when none of those is present. To pin a release, set `EXTRACTIUM_REF` to its tag before running the script.
+
+The script then creates a virtual environment in `.venv`, installs the exact package versions recorded in the lock file, installs Extractium™ into it, writes `config.yaml` from your answers, runs a first build limited to 25 pages, and prints what to do next. Running it again reuses the environment, skips the questions, and builds the whole site. See [how to run a weekly build](run-a-weekly-build.md) for the options the script accepts.
 
 The script installs the runtime dependencies only. A build made this way indexes documentation, records a repository's source files by name, and reads video captions that were already stored, but it does not analyze code and does not fetch new captions. For either of those, use option 2, or regenerate the lock file with the extra included, as described below.
 
@@ -83,6 +80,8 @@ Use this option if you will run the tests, change the code, or write a plug-in.
    ```
 
 Run the install from inside the cloned folder, not from an empty one, because `pip install -e .` reads the `pyproject.toml` in the folder you are in. Editable mode means a change to the code takes effect the next time you run the tool, with no reinstall.
+
+To write a first settings file, run `python -m extractium.cli init`. It asks the same three questions the build script asks and writes `config.yaml`. [Running a build](../usage.md) describes the command and its flags.
 
 
 ## The optional extras

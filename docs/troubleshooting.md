@@ -66,6 +66,18 @@ On Windows that is usually `%APPDATA%\Python\Python3xx\Scripts`; on macOS and Li
 
 ## Running the build
 
+### The script says `No published release was found`
+
+**Cause.** The script downloads the latest release of Extractium™ by asking GitHub where `releases/latest` leads, and GitHub answered with the releases page rather than a release. Either no release has been published yet, or the network answered with something other than GitHub.
+
+**Fix.** Set `EXTRACTIUM_REF` to a tag or branch name before running the script, for example `EXTRACTIUM_REF=main ./run.sh`, or clone the repository and run the script from inside the clone, which downloads nothing.
+
+### The script says `Extractium could not be downloaded`
+
+**Cause.** Neither git nor a plain download reached GitHub. Usually the computer is offline, or a proxy is in the way.
+
+**Fix.** Check that a browser on the same computer can open `https://github.com/DepressionCenter/extractium`. If it can, download the repository as a ZIP file from that page, unpack it, and run the script from inside the unpacked folder.
+
 ### `run.sh` stops with `$'\r': command not found`
 
 **Cause.** The script was saved with Windows line endings, so every line ends with a carriage return that the shell treats as part of the command.

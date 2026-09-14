@@ -3,10 +3,12 @@
 # run.sh
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-08
-# Summary: One-command build for macOS and Linux. Creates a virtual
-# environment beside this script, installs the pinned dependencies, installs
-# Extractium into it, runs the build, and prints what to commit afterwards.
+# Last Modified: 2026-09-14
+# Summary: One-command build for macOS and Linux. Downloads Extractium when
+# this script is on its own, creates a virtual environment beside the
+# checkout, installs the pinned dependencies, installs Extractium into it,
+# writes a first settings file by asking three questions when there is
+# none, runs the build, and prints what to commit afterwards.
 # Notes: See README file for documentation and full license information.
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -32,8 +34,9 @@ set -euo pipefail
 # working directory.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# The settings file to build from. Override it by setting CONFIG in the
-# environment, or by passing --config yourself as an argument.
+# The settings file to build from, relative to the folder you run the
+# script in. Override it by setting CONFIG in the environment, or by
+# passing --config yourself as an argument.
 CONFIG="${CONFIG:-config.yaml}"
 
 # Where the virtual environment goes. Override with VENV_DIR to keep
@@ -44,11 +47,105 @@ VENV_DIR="${VENV_DIR:-$HERE/.venv}"
 # or newer.
 PYTHON="${PYTHON:-python3}"
 
+# Where Extractium is downloaded from, and which release, when this script
+# was saved on its own rather than run from inside a checkout. "latest"
+# means the newest published release, looked up when the script runs. A
+# tag or a branch name pins one. The download lands in EXTRACTIUM_DIR.
+EXTRACTIUM_REPO="${EXTRACTIUM_REPO:-https://github.com/DepressionCenter/extractium}"
+EXTRACTIUM_REF="${EXTRACTIUM_REF:-latest}"
+EXTRACTIUM_DIR="${EXTRACTIUM_DIR:-$HERE/extractium}"
+
 ### Check the interpreter ###
 
 if ! command -v "$PYTHON" >/dev/null 2>&1; then
     echo "Cannot find $PYTHON. Install Python 3.10 or newer, or set PYTHON to its path." >&2
     exit 1
+fi
+
+### Get Extractium if this script is on its own ###
+
+# Turns "latest" into the newest release's tag. GitHub answers the
+# releases/latest address with a redirect to that release's page, and the
+# tag is the last part of where it lands.
+resolve_latest_release() {
+    local address="$EXTRACTIUM_REPO/releases/latest"
+    local landed=""
+    if command -v curl >/dev/null 2>&1; then
+        landed="$(curl -fsSL -o /dev/null -w '%{url_effective}' "$address")"
+    elif command -v wget >/dev/null 2>&1; then
+        landed="$(wget -q -O /dev/null -S --max-redirect=0 "$address" 2>&1 | sed -n 's/^ *Location: *//p' | head -n 1)"
+    else
+        landed="$("$PYTHON" -c 'import sys, urllib.request; print(urllib.request.urlopen(sys.argv[1]).geturl())' "$address")"
+    fi
+    case "$landed" in
+        */releases/tag/*) EXTRACTIUM_REF="${landed##*/releases/tag/}" ;;
+        *)
+            echo "No published release was found at $address. Set EXTRACTIUM_REF to a tag or branch name." >&2
+            exit 1
+            ;;
+    esac
+}
+
+# Downloads one release into EXTRACTIUM_DIR. Tries git first, then the
+# release archive through curl, wget, or Python's own library, so a
+# machine with nothing but Python installed can still get the tool.
+download_extractium() {
+    if [ "$EXTRACTIUM_REF" = "latest" ]; then
+        resolve_latest_release
+    fi
+    echo "Downloading Extractium $EXTRACTIUM_REF into $EXTRACTIUM_DIR ..."
+    if command -v git >/dev/null 2>&1; then
+        if git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$EXTRACTIUM_REF" "$EXTRACTIUM_REPO" "$EXTRACTIUM_DIR"; then
+            return 0
+        fi
+        echo "git could not clone the repository; downloading the release archive instead." >&2
+    fi
+
+    local archive="$EXTRACTIUM_REPO/archive/$EXTRACTIUM_REF.tar.gz"
+    local staging
+    staging="$(mktemp -d)"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$archive" -o "$staging/extractium.tar.gz"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$staging/extractium.tar.gz" "$archive"
+    else
+        "$PYTHON" -c 'import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])' \
+            "$archive" "$staging/extractium.tar.gz"
+    fi
+
+    if command -v tar >/dev/null 2>&1; then
+        tar -xzf "$staging/extractium.tar.gz" -C "$staging"
+    else
+        # The data filter refuses archive entries that would land outside
+        # the folder; older interpreters extract without it.
+        "$PYTHON" -c 'import sys, tarfile
+with tarfile.open(sys.argv[1]) as archive:
+    if hasattr(tarfile, "data_filter"):
+        archive.extractall(sys.argv[2], filter="data")
+    else:
+        archive.extractall(sys.argv[2])' "$staging/extractium.tar.gz" "$staging"
+    fi
+
+    # The archive holds one top-level folder named after the release.
+    local unpacked
+    unpacked="$(find "$staging" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+    if [ -z "$unpacked" ] || [ ! -f "$unpacked/pyproject.toml" ]; then
+        echo "The downloaded archive did not hold Extractium. Check EXTRACTIUM_REF ($EXTRACTIUM_REF)." >&2
+        rm -rf "$staging"
+        exit 1
+    fi
+    mv "$unpacked" "$EXTRACTIUM_DIR"
+    rm -rf "$staging"
+}
+
+if [ ! -f "$HERE/pyproject.toml" ]; then
+    if [ ! -f "$EXTRACTIUM_DIR/pyproject.toml" ]; then
+        download_extractium
+    fi
+    # Hand over to the copy of this script inside the checkout, which finds
+    # the lock file and the package beside itself. The settings file stays
+    # relative to the folder you ran this from.
+    exec bash "$EXTRACTIUM_DIR/run.sh" "$@"
 fi
 
 ### Create the environment ###
@@ -79,12 +176,29 @@ echo "Installing pinned dependencies ..."
 # exact locked versions in place.
 "$VENV_PYTHON" -m pip install --quiet --no-deps -e "$HERE"
 
+### Write a first settings file ###
+
+# With no settings file and no arguments, this is a first run: ask for
+# the name, the short name, and the website, then build with a page
+# limit so a pattern broader than intended costs seconds.
+FIRST_RUN=0
+if [ "$#" -eq 0 ] && [ ! -f "$CONFIG" ]; then
+    echo
+    echo "There is no $CONFIG yet, so a few questions first."
+    "$VENV_PYTHON" -m extractium.cli init --output "$CONFIG"
+    FIRST_RUN=1
+fi
+
 ### Run the build ###
 
-echo "Building from $CONFIG ..."
+echo
 if [ "$#" -gt 0 ]; then
     "$VENV_PYTHON" -m extractium.cli build "$@"
+elif [ "$FIRST_RUN" -eq 1 ]; then
+    echo "Building from $CONFIG, limited to 25 pages for this first run ..."
+    "$VENV_PYTHON" -m extractium.cli build --config "$CONFIG" --max-pages 25
 else
+    echo "Building from $CONFIG ..."
     "$VENV_PYTHON" -m extractium.cli build --config "$CONFIG"
 fi
 
@@ -93,6 +207,12 @@ fi
 echo
 echo "Build finished. The summary above lists every file that was written."
 echo
+if [ "$FIRST_RUN" -eq 1 ]; then
+    echo "This first run stopped at 25 pages. Open dist/llms.txt to see which pages"
+    echo "were indexed. When the list looks right, run this script again to build"
+    echo "the whole site. To change what is crawled, edit $CONFIG."
+    echo
+fi
 echo "To publish the result:"
 echo "  1. Add those files to git:   git add <output folder>"
 echo "  2. Commit them:              git commit -m \"Rebuild the knowledge index\""

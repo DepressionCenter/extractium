@@ -35,9 +35,43 @@ You need three things:
 
 1. Python 3.10 or newer.
 2. Extractium™ installed. The [installation guide](how-to/install.md) covers both options: the build scripts `run.sh` and `run.bat`, which install and build in one step, and `pip install -e .` in a Python development environment. It also explains the optional extras, `dev`, `code`, and `youtube`.
-3. A settings file. Copy [examples/config.example.yaml](../examples/config.example.yaml), name it `config.yaml`, and change `seed_url` to your own site.
+3. A settings file. The `init` command below writes one for you. You can also copy [examples/config.example.yaml](../examples/config.example.yaml), name it `config.yaml`, and change `seed_url` to your own site.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
+
+
+## Writing a first settings file
+
+```
+python -m extractium.cli init
+```
+
+This asks three questions and writes `config.yaml` in the current folder:
+
+```
+Creating config.yaml. Press Enter to accept a default shown in brackets.
+
+Name of your knowledge base [Knowledge Base]: EFDC Knowledge Base
+Short name for the output files (lowercase letters, digits, hyphens) [efdc-knowledge-base]:
+Website to start crawling from, such as https://example.edu/docs/: https://example.edu/kb/
+
+Wrote config.yaml. Every setting is explained in its comments; add more sources or outputs there.
+Next: python -m extractium.cli build --config config.yaml --max-pages 25
+```
+
+The file it writes is the commented example that ships with the project, with those three values filled in, so every other setting is explained where you would change it. The one web source is labelled `Website`. Rename it in the file if you like.
+
+The build scripts `run.sh` and `run.bat` run this command for you when there is no `config.yaml`, then build with a page limit.
+
+| Option | What it does |
+|---|---|
+| `--name TEXT` | The name, without asking. |
+| `--slug TEXT` | The short name, without asking. When `--name` is given and this is not, the short name is derived from the name. |
+| `--seed-url URL` | The website, without asking. Must start with `http://` or `https://`. |
+| `--output FILE` | Where to write the file. `config.yaml` by default. |
+| `--force` | Replace the file if it already exists. Without it, an existing file is left alone. |
+
+Give all three values as flags and the command asks nothing, which is the form for a script. It exits with code 2 for a value it cannot accept or a file it will not replace, and 4 when the file cannot be written.
 
 
 ## The build command

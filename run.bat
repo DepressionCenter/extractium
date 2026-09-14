@@ -3,10 +3,12 @@ REM This file is part of Extractium(TM)
 REM run.bat
 REM Author(s): Gabriel Mongefranco.
 REM Created: 2026-09-08
-REM Last Modified: 2026-09-08
-REM Summary: One-command build for Windows. Creates a virtual environment
-REM beside this script, installs the pinned dependencies, installs
-REM Extractium into it, runs the build, and prints what to commit afterwards.
+REM Last Modified: 2026-09-14
+REM Summary: One-command build for Windows. Downloads Extractium when this
+REM script is on its own, creates a virtual environment beside the checkout,
+REM installs the pinned dependencies, installs Extractium into it, writes a
+REM first settings file by asking three questions when there is none, runs
+REM the build, and prints what to commit afterwards.
 REM Notes: See README file for documentation and full license information.
 REM
 REM Copyright (c) 2026 The Regents of the University of Michigan
@@ -31,8 +33,9 @@ REM the script works from any working directory.
 set "HERE=%~dp0"
 set "HERE=%HERE:~0,-1%"
 
-REM The settings file to build from. Set CONFIG before running this script
-REM to build from another one, or pass --config yourself as an argument.
+REM The settings file to build from, relative to the folder you run the
+REM script in. Set CONFIG before running this script to build from another
+REM one, or pass --config yourself as an argument.
 if not defined CONFIG set "CONFIG=config.yaml"
 
 REM Where the virtual environment goes. Set VENV_DIR to keep several
@@ -42,6 +45,94 @@ if not defined VENV_DIR set "VENV_DIR=%HERE%\.venv"
 REM The launcher used to create the environment. Extractium needs Python
 REM 3.10 or newer.
 if not defined PYTHON set "PYTHON=py -3"
+
+REM Where Extractium is downloaded from, and which release, when this
+REM script was saved on its own rather than run from inside a checkout.
+REM "latest" means the newest published release, looked up when the script
+REM runs. A tag or a branch name pins one. The download lands in
+REM EXTRACTIUM_DIR.
+if not defined EXTRACTIUM_REPO set "EXTRACTIUM_REPO=https://github.com/DepressionCenter/extractium"
+if not defined EXTRACTIUM_REF set "EXTRACTIUM_REF=latest"
+if not defined EXTRACTIUM_DIR set "EXTRACTIUM_DIR=%HERE%\extractium"
+
+REM ### Get Extractium if this script is on its own ###
+
+if exist "%HERE%\pyproject.toml" goto :environment
+if exist "%EXTRACTIUM_DIR%\pyproject.toml" goto :handover
+
+REM "latest" becomes the newest release's tag. GitHub answers the
+REM releases/latest address with a redirect to that release's page, and
+REM the tag is the last part of where it lands.
+if /i not "%EXTRACTIUM_REF%"=="latest" goto :ref_known
+set "LANDED="
+for /f "usebackq delims=" %%L in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $r = [Net.WebRequest]::Create('%EXTRACTIUM_REPO%/releases/latest'); $r.AllowAutoRedirect = $false; $r.GetResponse().Headers['Location']"`) do set "LANDED=%%L"
+if not defined LANDED for /f "usebackq delims=" %%L in (`%PYTHON% -c "import sys, urllib.request; print(urllib.request.urlopen(sys.argv[1]).geturl())" "%EXTRACTIUM_REPO%/releases/latest"`) do set "LANDED=%%L"
+call :tag_from_landed
+if not defined EXTRACTIUM_TAG (
+    echo No published release was found at %EXTRACTIUM_REPO%/releases/latest. Set EXTRACTIUM_REF to a tag or branch name.
+    exit /b 1
+)
+set "EXTRACTIUM_REF=%EXTRACTIUM_TAG%"
+:ref_known
+
+echo Downloading Extractium %EXTRACTIUM_REF% into %EXTRACTIUM_DIR% ...
+
+REM git first, when it is installed.
+where git >nul 2>nul
+if not errorlevel 1 (
+    git -c advice.detachedHead=false clone --quiet --depth 1 --branch "%EXTRACTIUM_REF%" "%EXTRACTIUM_REPO%" "%EXTRACTIUM_DIR%"
+    if not errorlevel 1 goto :handover
+    echo git could not clone the repository; downloading the release archive instead.
+)
+
+REM Otherwise the release archive, fetched and unpacked by PowerShell, which
+REM every supported Windows carries, with Python's own library as the last
+REM resort. Nothing else has to be installed.
+set "ARCHIVE=%EXTRACTIUM_REPO%/archive/%EXTRACTIUM_REF%.zip"
+set "STAGING=%TEMP%\extractium-download-%RANDOM%"
+mkdir "%STAGING%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%ARCHIVE%' -OutFile '%STAGING%\extractium.zip'; Expand-Archive -Path '%STAGING%\extractium.zip' -DestinationPath '%STAGING%' -Force"
+if errorlevel 1 (
+    %PYTHON% -c "import sys, urllib.request, zipfile; urllib.request.urlretrieve(sys.argv[1], sys.argv[2]); zipfile.ZipFile(sys.argv[2]).extractall(sys.argv[3])" "%ARCHIVE%" "%STAGING%\extractium.zip" "%STAGING%"
+    if errorlevel 1 (
+        echo Extractium could not be downloaded. Check the network, or install git and run this script again.
+        exit /b 1
+    )
+)
+
+REM The archive holds one top-level folder named after the release.
+set "UNPACKED="
+for /d %%D in ("%STAGING%\*") do if not defined UNPACKED set "UNPACKED=%%D"
+if not defined UNPACKED (
+    echo The downloaded archive was empty. Check EXTRACTIUM_REF ^(%EXTRACTIUM_REF%^).
+    exit /b 1
+)
+if not exist "%UNPACKED%\pyproject.toml" (
+    echo The downloaded archive did not hold Extractium. Check EXTRACTIUM_REF ^(%EXTRACTIUM_REF%^).
+    exit /b 1
+)
+move /y "%UNPACKED%" "%EXTRACTIUM_DIR%" >nul
+rmdir /s /q "%STAGING%"
+goto :handover
+
+:tag_from_landed
+REM The tag is what follows /releases/tag/ in the address the redirect
+REM named. Anything else means there is no release yet.
+set "EXTRACTIUM_TAG="
+if not defined LANDED goto :eof
+set "REST=%LANDED:*/releases/tag/=%"
+if "%REST%"=="%LANDED%" goto :eof
+set "EXTRACTIUM_TAG=%REST%"
+goto :eof
+
+:handover
+REM Hand over to the copy of this script inside the checkout, which finds
+REM the lock file and the package beside itself. The settings file stays
+REM relative to the folder you ran this from.
+call "%EXTRACTIUM_DIR%\run.bat" %*
+exit /b %errorlevel%
+
+:environment
 
 REM ### Create the environment ###
 
@@ -71,13 +162,31 @@ REM exact locked versions in place.
 "%VENV_PYTHON%" -m pip install --quiet --no-deps -e "%HERE%"
 if errorlevel 1 exit /b 1
 
+REM ### Write a first settings file ###
+
+REM With no settings file and no arguments, this is a first run: ask for
+REM the name, the short name, and the website, then build with a page
+REM limit so a pattern broader than intended costs seconds.
+set "FIRST_RUN=0"
+if "%~1"=="" if not exist "%CONFIG%" (
+    echo.
+    echo There is no %CONFIG% yet, so a few questions first.
+    "%VENV_PYTHON%" -m extractium.cli init --output "%CONFIG%"
+    if errorlevel 1 exit /b %errorlevel%
+    set "FIRST_RUN=1"
+)
+
 REM ### Run the build ###
 
-if "%~1"=="" (
+echo.
+if not "%~1"=="" (
+    "%VENV_PYTHON%" -m extractium.cli build %*
+) else if "%FIRST_RUN%"=="1" (
+    echo Building from %CONFIG%, limited to 25 pages for this first run ...
+    "%VENV_PYTHON%" -m extractium.cli build --config "%CONFIG%" --max-pages 25
+) else (
     echo Building from %CONFIG% ...
     "%VENV_PYTHON%" -m extractium.cli build --config "%CONFIG%"
-) else (
-    "%VENV_PYTHON%" -m extractium.cli build %*
 )
 if errorlevel 1 exit /b %errorlevel%
 
@@ -86,6 +195,12 @@ REM ### Say what to do next ###
 echo.
 echo Build finished. The summary above lists every file that was written.
 echo.
+if "%FIRST_RUN%"=="1" (
+    echo This first run stopped at 25 pages. Open dist\llms.txt to see which pages
+    echo were indexed. When the list looks right, run this script again to build
+    echo the whole site. To change what is crawled, edit %CONFIG%.
+    echo.
+)
 echo To publish the result:
 echo   1. Add those files to git:   git add ^<output folder^>
 echo   2. Commit them:              git commit -m "Rebuild the knowledge index"

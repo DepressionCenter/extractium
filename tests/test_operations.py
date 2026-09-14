@@ -12,7 +12,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -165,6 +165,44 @@ def test_each_run_script_builds_and_says_what_to_commit(script):
     assert "extractium.cli build" in text
     assert "git add" in text
     assert ".kb_cache" in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_writes_a_first_settings_file_and_limits_the_first_build(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    assert "extractium.cli init" in text
+    assert "--max-pages 25" in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_downloads_the_tool_when_run_on_its_own(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    # The newest published release by default, looked up through the
+    # redirect GitHub serves, so the script never names a version.
+    assert re.search(r"EXTRACTIUM_REF[=:]?\s*\S*latest", text)
+    assert "/releases/latest" in text
+    assert "/releases/tag/" in text
+    # git first, then the release archive with no tool beyond Python.
+    assert "clone --quiet --depth 1 --branch" in text
+    assert "/archive/" in text
+    assert "urllib.request" in text
+    assert "pyproject.toml" in text, "the script tells a checkout from a lone copy of itself by the project file"
+
+
+def test_the_posix_script_downloads_through_curl_or_wget_before_python():
+    text = (REPO_ROOT / "run.sh").read_text(encoding="utf-8")
+
+    assert "curl -fsSL" in text
+    assert "wget -q" in text
+
+
+def test_the_windows_script_downloads_through_powershell_before_python():
+    text = (REPO_ROOT / "run.bat").read_text(encoding="utf-8")
+
+    assert "Invoke-WebRequest" in text
+    assert "Expand-Archive" in text
 
 
 @pytest.mark.parametrize("script", ["run.sh", "run.bat"])
