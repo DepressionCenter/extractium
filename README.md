@@ -25,11 +25,11 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 # Extractium™
 
 ## Description
-Extractium™ turns scattered public documentation into one searchable knowledge base. Point it at sources such as TeamDynamix, GitHub, YouTube, a DSpace repository, websites, and local files, and it gathers and organizes the content for use in a website, search tool, or AI assistant.
+Extractium™ turns scattered public documentation into one searchable compendium of knowledge. Point it at sources such as TeamDynamix, GitHub, YouTube, library DSpace repositories, websites, and local files, and it gathers and organizes the content for use in a website, search tool, or AI assistant - independent of the AI provder.
 
-Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and publishes several output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in Field Station AI™ and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
+Behind the scenes, Extractium™ prepares the content for both keyword and semantic search and publishes several output formats for static hosting, including GitHub Pages. It grew out of the indexing engine in [Field Station AI™](https://github.com/DepressionCenter/FieldStationAI) and uses configuration and plugins so research centers and other organizations can build their own knowledge collections.
 
-Project status: every planned part is built. Six source types (websites, GitHub repositories with code analysis, DSpace repositories, YouTube captions, local folders, and knowledge bundles another build wrote) feed one build, which writes four outputs (the search index, the `llms.txt` pair, a SQLite database, and a folder of Markdown). Two clients search the index, two local servers offer that search to an AI assistant on your machine, two hosted examples offer it to an assistant anywhere, and two system prompts point a browsing assistant at the published files.
+Six source types (websites, GitHub repositories with code analysis, DSpace repositories, YouTube captions, local folders, and knowledge bundles another build wrote) feed one build, which writes four outputs (a binary JSON search index, an `llms.txt` pair, a SQLite database, and a folder of Markdown). Two clients search the index, two local servers offer that search to an AI assistant on your machine, two hosted examples offer it to an assistant anywhere, and two system prompts point a browsing assistant at the published files.
 
 ```mermaid
 flowchart LR
@@ -49,7 +49,7 @@ flowchart LR
     O --> P[Hosted assistant reading llms.txt]
 ```
 
-In words: six kinds of source feed one build, which crawls and embeds each piece of content once and then writes the same result in four formats. Those files are consumed in four ways. A browser page or a script searches the index directly. An assistant on your own machine searches it through a local Model Context Protocol (MCP) server. An assistant anywhere calls a hosted search endpoint on Val Town or Cloudflare. A platform that can browse but cannot call tools reads `llms.txt` from a system prompt.
+Six kinds of source feed one build, which crawls and embeds each piece of content once and then writes the same result in four formats. Those files are consumed in four ways. A browser page or a script searches the index directly. An assistant on your own machine searches it through a local Model Context Protocol (MCP) server. An assistant anywhere calls a hosted search endpoint on Val Town or Cloudflare. A platform that can browse but cannot call tools reads `llms.txt` from a system prompt.
 
 
 ## Quick Start Guide
@@ -58,7 +58,7 @@ There are two ways in. The one-command script installs and builds in one step:
 ```bash
 git clone https://github.com/DepressionCenter/extractium.git
 cd extractium
-cp examples/config.example.yaml config.yaml   # then change the seed URL to your own site
+cp examples/config.example.yaml config.yaml   # then change the seed URL to your own site; also see config.efdc.yaml
 ./run.sh --max-pages 25                        # run.bat on Windows
 ```
 
