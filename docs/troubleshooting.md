@@ -64,6 +64,31 @@ python -c "import sysconfig, os; print(sysconfig.get_path('scripts', os.name + '
 On Windows that is usually `%APPDATA%\Python\Python3xx\Scripts`; on macOS and Linux, usually `~/.local/bin`.
 
 
+### `ImportError: cannot import name '__version__' from 'extractium' (unknown location)`
+
+**Cause.** Python found a folder named `extractium` where it expected the installed package. `python -m extractium.cli` looks in the folder you are standing in before it looks anywhere else, and a folder with that name wins, even though the real package is one level further down inside it.
+
+You see this after an early version of the build script, which downloaded the tool into a folder called `extractium` next to your settings file. The script now downloads into `extractium-src`, and it runs the installed `extractium` command rather than the module.
+
+**Fix.** Delete the old download folder and run the build script again:
+
+```
+rm -rf extractium          # macOS and Linux
+rmdir /s /q extractium     # Windows
+```
+
+The script downloads the tool again, into `extractium-src` this time, and builds.
+
+To run a build by hand in the meantime, use the command the install put in the virtual environment, which does not search the folder you are standing in:
+
+```
+.venv/bin/extractium build --config config.yaml        # macOS and Linux
+.venv\Scripts\extractium build --config config.yaml    # Windows
+```
+
+The same rule holds anywhere: do not name a folder after a Python package you have installed, or run a build from the folder above one.
+
+
 ## Running the build
 
 ### The script says `No published release was found`
