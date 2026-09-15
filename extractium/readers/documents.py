@@ -1,12 +1,13 @@
 """
 Summary: The one entry point for reading a document file: decides the
 format from the file's own first bytes, hands the bytes to the Word,
-OpenDocument, or RTF reader, and renders what came back as Markdown-like
-text with the headings kept, beside the title, subject, keywords, and
-description the file's own properties declare. Also holds the rules
-every source shares: which addresses and file names count as documents,
-the size ceiling, and how a title is chosen. See
-docs/configuration.md under "Reading Word, OpenDocument, and RTF files".
+OpenDocument, RTF, or PDF reader, and renders what came back as
+Markdown-like text with the headings kept, beside the title, subject,
+keywords, and description the file's own properties declare. The PDF
+reader runs in a child process that is ended if it runs too long. Also
+holds the rules every source shares: which addresses and file names
+count as documents, the size ceiling, and how a title is chosen. See
+docs/configuration.md under "Reading document files".
 
 This file is part of Extractium™
 extractium/readers/documents.py
@@ -35,6 +36,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
 import html
+import importlib.util
 import re
 from dataclasses import dataclass
 from urllib.parse import unquote, urlparse
@@ -47,7 +49,13 @@ from extractium.core import chunk
 # format, is deliberately absent: it has no safe standard-library reader,
 # so a file in that format is reported as unreadable rather than guessed
 # at.
-DOCUMENT_EXTENSIONS = ("docx", "odt", "rtf")
+DOCUMENT_EXTENSIONS = ("docx", "odt", "rtf", "pdf")
+
+# The name to install to read PDF files, quoted in the one message that
+# tells an operator what is missing. The other readers use the standard
+# library and need nothing.
+PDF_EXTRA = "extractium[pdf]"
+PDF_MODULE = "pypdf"
 
 # Extensions of document formats that are recognised but never read, so
 # a local folder holding one gets a line saying why instead of a page of
@@ -63,9 +71,9 @@ DOCUMENT_URL_RE = re.compile(
 )
 
 # The most bytes of one document file that are read. Word files from a
-# word processor run to a few hundred kilobytes; this leaves room for
-# one full of images and stops a build downloading a mistaken link to
-# an archive.
+# word processor run to a few hundred kilobytes and a PDF report to a
+# few megabytes; this leaves room for one full of images and stops a
+# build downloading a mistaken link to an archive.
 MAX_DOCUMENT_BYTES = 20_000_000
 
 # The most characters of a first line that can serve as a title when a
@@ -79,6 +87,10 @@ MAX_TITLE_CHARS = 120
 ZIP_MAGIC = b"PK\x03\x04"
 RTF_MAGIC = b"{\\rtf"
 OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+PDF_MAGIC = b"%PDF-"
+# A PDF's header may follow a few bytes of junk, which the format
+# allows, so the signature is looked for within this many bytes.
+PDF_MAGIC_WINDOW = 1024
 
 
 class DocumentError(ValueError):
@@ -201,10 +213,15 @@ class ReadDocument:
         properties (dict[str, str]): the file's own properties, among
             `title`, `subject`, `keywords`, and `description`, each
             present only when the file set it to something non-blank.
+        headings_are_titles (bool): whether the first heading in the
+            text can serve as the document's title. True for a file
+            whose headings its author wrote; False for a PDF, whose
+            headings the reader made from page numbers and bookmarks.
     """
 
     text: str
     properties: dict
+    headings_are_titles: bool = True
 
     @property
     def indexed_text(self):
@@ -300,7 +317,8 @@ def read_document(data, name=""):
 
     The format is decided from the first bytes, never from the name: a
     zip archive is opened as a Word or OpenDocument file, an RTF header
-    is parsed as RTF, and the binary Word signature is refused by name.
+    is parsed as RTF, a PDF header is read by the PDF reader in a child
+    process, and the binary Word signature is refused by name.
 
     Args:
         data (bytes): the whole file.
@@ -314,10 +332,12 @@ def read_document(data, name=""):
         DocumentError: if the file is over MAX_DOCUMENT_BYTES, is in a
             format no reader covers, or is malformed in a way the reader
             refuses (a document type declaration, an archive entry larger
-            than its ceiling, an unreadable archive).
+            than its ceiling, an unreadable archive, an encrypted PDF, a
+            PDF with no text, or one the reader could not finish in time);
+            or if the file is a PDF and the pdf extra is not installed.
     """
     # The imports sit here so that reading this module, which every
-    # source does, does not pull in both readers before either is used.
+    # source does, does not pull in the readers before one is used.
     from extractium.readers import office, rtf
 
     if len(data) > MAX_DOCUMENT_BYTES:
@@ -332,9 +352,44 @@ def read_document(data, name=""):
         raise DocumentError(
             "the binary .doc format is not read; save the file as .docx to have it indexed"
         )
+    elif PDF_MAGIC in data[:PDF_MAGIC_WINDOW]:
+        blocks, properties = _read_pdf_isolated(data)
+        return ReadDocument(
+            text=to_markdown(blocks), properties=clean_properties(properties),
+            headings_are_titles=False,
+        )
     else:
-        raise DocumentError("not a Word, OpenDocument, or RTF file")
+        raise DocumentError("not a Word, OpenDocument, RTF, or PDF file")
     return ReadDocument(text=to_markdown(blocks), properties=clean_properties(properties))
+
+
+def _read_pdf_isolated(data):
+    """
+    Runs the PDF reader in the build's child process.
+
+    The reader's own refusals come back under their own message. A
+    child that ran out of time or died is reported in the same words
+    the isolation helper uses, and any other failure inside the child
+    is named by its type, never re-raised as a traceback.
+
+    Raises:
+        DocumentError: as read_document describes.
+    """
+    from extractium.readers import isolated
+
+    if importlib.util.find_spec(PDF_MODULE) is None:
+        raise DocumentError(
+            f"reading a PDF needs {PDF_MODULE}, which is not installed. Install it "
+            f"with: pip install \"{PDF_EXTRA}\""
+        )
+    try:
+        return isolated.run("extractium.readers.pdf", "read_pdf", (data,))
+    except isolated.RemoteError as e:
+        if e.type_name == DocumentError.__name__:
+            raise DocumentError(e.message) from None
+        raise DocumentError(f"the PDF reader failed ({e.type_name}: {e.message})") from None
+    except isolated.IsolationError as e:
+        raise DocumentError(str(e)) from None
 
 
 def document_title(read, fallback):
@@ -345,7 +400,10 @@ def document_title(read, fallback):
 
     A heading in the text comes first because it is what a reader of
     the file sees, and a properties title can be left over from the
-    template a file was made from.
+    template a file was made from. A PDF's headings were made by the
+    reader from bookmarks and page numbers, not written as a title, so
+    for a PDF the properties title comes first and the headings are
+    passed over.
 
     Args:
         read (ReadDocument): what read_document returned.
@@ -362,7 +420,7 @@ def document_title(read, fallback):
             continue
         if stripped.startswith("#"):
             found = stripped.lstrip("#").strip()
-            if found:
+            if found and read.headings_are_titles:
                 return html.unescape(found)
             continue
         if len(stripped) <= MAX_TITLE_CHARS and not stripped.startswith("|"):

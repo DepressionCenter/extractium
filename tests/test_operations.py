@@ -127,6 +127,21 @@ def test_the_lock_file_pins_every_code_parser(lock_text):
     assert wanted <= pinned, f"not pinned: {sorted(wanted - pinned)}"
 
 
+def test_the_lock_file_pins_the_pdf_reader(lock_text):
+    """
+    A scripted build reads PDF files only if the lock carries the pdf
+    extra, for the same reason the parsers have to be in it.
+    """
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^pdf = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
+    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
+
+    assert wanted == {"pypdf"}
+    assert wanted <= pinned
+    assert "--extra pdf" in lock_text
+
+
 # ---------------------------------------------------------------------------
 # The run scripts
 # ---------------------------------------------------------------------------
@@ -473,7 +488,7 @@ def test_the_test_workflow_runs_every_suite_with_every_extra(tests_workflow):
     python_steps = "\n".join(str(step.get("run", "")) for step in tests_workflow["jobs"]["python"]["steps"])
     node_steps = "\n".join(str(step.get("run", "")) for step in tests_workflow["jobs"]["node"]["steps"])
 
-    assert '.[dev,code,youtube]' in python_steps
+    assert '.[dev,code,youtube,pdf]' in python_steps
     assert "pytest" in python_steps
     for suite in ("clients/js", "examples/mcp/local-node", "examples/mcp/shared",
                   "examples/mcp/valtown", "examples/mcp/cloudflare"):

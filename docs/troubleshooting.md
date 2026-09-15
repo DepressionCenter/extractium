@@ -203,11 +203,29 @@ where text was expected; the request landed on https://accounts.google.com/Servi
 
 **Fix.** Add a `leaf_patterns` entry for the host, in single quotes with the dots escaped: `'^https://files\.example\.org/'`. The log then lists it as `Leaf pats:` at the start of the crawl and marks each page it reached with `(leaf; its links are not followed)`. The [configuration reference](configuration.md) explains the rule under "Single pages on another host".
 
-### A Word file linked from a site is not in the index
+### A Word or PDF file linked from a site is not in the index
 
 **Cause.** One of three things. The source's `read_documents` setting is off, which is the default, so the link was dropped as a file that is not text. Or the file is on another host, such as a content-delivery network, and no `leaf_patterns` or `include_patterns` entry covers it. Or the file is in the old binary `.doc` format, which has no reader.
 
-**Fix.** Set `read_documents: true` on the source, add a `leaf_patterns` entry for the host that serves the files, and save any `.doc` file as `.docx`. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading Word, OpenDocument, and RTF files".
+**Fix.** Set `read_documents: true` on the source, add a `leaf_patterns` entry for the host that serves the files, and save any `.doc` file as `.docx`. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading document files".
+
+### `reading a PDF needs pypdf, which is not installed`
+
+**Cause.** A PDF was met and the PDF reader, which is the `pdf` extra, is not installed. The build scripts and the scheduled workflow install it from the lock file, so this line means a developer install that did not name the extra, or a lock file regenerated without it. Everything else in the build is still read.
+
+**Fix.** `pip install "extractium[pdf]"` in a developer install. In a scripted install, regenerate the lock file with `--extra pdf`, as [how to install](how-to/install.md) shows.
+
+### A PDF was skipped as `likely scanned images`
+
+**Cause.** The file's pages hold no text a reader can see, which is what a scanned document looks like: each page is a picture of a page. There is no text recognition in the build.
+
+**Fix.** Nothing, if the file is a scan. Run it through a text-recognition tool and publish the result, or publish the source document it was printed from, to have its words indexed. A PDF that does hold text but is skipped this way is worth reporting.
+
+### A PDF was skipped saying `the reader gave up after 60 seconds`
+
+**Cause.** Reading the file took longer than the limit. A malformed PDF can keep a parser busy for a very long time, so the reader runs in a separate process with a time limit, and a file that runs past it is skipped rather than allowed to stall the build. A very large ordinary file can reach the limit on a slow machine.
+
+**Fix.** Nothing, if the file is one you do not need. Otherwise open it in a viewer and save a fresh copy, which rewrites its structure, and build again.
 
 ### Every page is skipped with a message about `robots.txt`
 

@@ -1211,7 +1211,7 @@ def test_a_file_the_reader_refuses_is_reported_with_the_reason(isolated_core_cac
     documents, lines = document_crawl(session)
 
     assert SITE_DOCX not in [d.url for d in documents]
-    assert f"  SKIP {SITE_DOCX} -- not a Word, OpenDocument, or RTF file" in lines
+    assert f"  SKIP {SITE_DOCX} -- not a Word, OpenDocument, RTF, or PDF file" in lines
 
 
 def test_a_long_document_is_indexed_as_an_outline_that_keeps_its_properties(
@@ -1254,8 +1254,8 @@ def test_reading_documents_drops_their_extensions_from_both_default_exclude_list
 
     assert r"\.docx$" in off.crawl_exclude_patterns and r"\.docx$" in off.index_exclude_patterns
     assert r"\.docx$" not in on.crawl_exclude_patterns and r"\.docx$" not in on.index_exclude_patterns
-    assert r"\.rtf$" not in on.crawl_exclude_patterns
-    assert r"\.pdf$" in on.crawl_exclude_patterns and r"\.doc$" in on.crawl_exclude_patterns
+    assert r"\.rtf$" not in on.crawl_exclude_patterns and r"\.pdf$" not in on.crawl_exclude_patterns
+    assert r"\.xlsx$" in on.crawl_exclude_patterns and r"\.doc$" in on.crawl_exclude_patterns
 
 
 class _FoldingHandler:
@@ -1415,14 +1415,17 @@ def test_a_crawl_exclude_pattern_wins_over_a_leaf_pattern(isolated_core_cache, f
 def test_an_asset_on_a_leaf_host_is_not_fetched_but_a_readable_document_is(
     isolated_core_cache, fake_session_factory,
 ):
+    pytest.importorskip("pypdf")
     picture = f"{LEAF_HOST}/handout/cover.png"
-    pdf = f"{LEAF_HOST}/handout/plan.pdf"
+    archive = f"{LEAF_HOST}/handout/plan.zip"
     docx = f"{LEAF_HOST}/handout/plan.docx"
+    pdf = f"{LEAF_HOST}/handout/report.pdf"
     session = fake_session_factory({
         f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
         f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
-        DOC_SEED: page_with_links(picture, pdf, docx),
+        DOC_SEED: page_with_links(picture, archive, docx, pdf),
         docx: document_response(document_files.SAMPLE_DOCX),
+        pdf: document_response(document_files.SAMPLE_PDF),
     })
 
     without, _ = leaf_crawl(session)
@@ -1430,10 +1433,12 @@ def test_an_asset_on_a_leaf_host_is_not_fetched_but_a_readable_document_is(
     assert not any(c["url"].startswith(LEAF_HOST + "/handout") for c in session.calls)
 
     with_readers, lines = leaf_crawl(session, read_documents=True)
-    assert [d.url for d in with_readers] == [DOC_SEED, docx]
+    assert [d.url for d in with_readers] == [DOC_SEED, docx, pdf]
     assert with_readers[1].title == "Youth Mental Health Resources"
+    assert with_readers[2].title == "Properties Title"
+    assert "Page 2" in with_readers[2].content.get_text()
     requested = [c["url"] for c in session.calls]
-    assert picture not in requested and pdf not in requested
+    assert picture not in requested and archive not in requested
 
 
 def test_a_leaf_that_redirects_off_the_leaf_host_is_skipped(isolated_core_cache, fake_session_factory):

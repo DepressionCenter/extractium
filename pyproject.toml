@@ -5,7 +5,7 @@
 # Last Modified: 2026-09-15
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
-# (single package; runtime deps, dev/code/youtube extras, console script,
+# (single package; runtime deps, dev/code/youtube/pdf extras, console script,
 # pytest configuration).
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -107,6 +107,16 @@ code = [
 # operator already committed never calls this package. MIT-licensed; its
 # only dependency beyond requests is defusedxml, a hardened XML parser.
 youtube = ["youtube-transcript-api>=1.2.4,<2.0.0"]
+# Reading PDF files. Optional because the other document readers need
+# nothing beyond the standard library, and a build that reads no PDF
+# should not carry a parser for one. Checked against the dependency gate
+# in docs/github-repository-indexing.md on 2026-09-15: BSD-3-Clause, a
+# pure Python wheel, Python 3.9 or newer, released most weeks. Its
+# advisory history is a run of resource-exhaustion fixes on malformed
+# input, none of them code execution, which is why the reader runs in
+# a child process that is ended if it runs too long. The floor is the
+# newest release at the time of the check, past every published fix.
+pdf = ["pypdf>=6.18.1,<7.0.0"]
 
 [project.scripts]
 extractium = "extractium.cli:main"

@@ -141,7 +141,7 @@ class GitHubApiSource:
         self.include_archived = bool(options.get("include_archived", True))
         self.include_code = bool(options.get("include_code", True))
         self.ctags_fallback = bool(options.get("ctags_fallback", True))
-        # Word, OpenDocument, and RTF files are read into text only when
+        # Word, OpenDocument, RTF, and PDF files are read into text only when
         # asked for, because each costs a request of its own.
         self.read_documents = bool(options.get("read_documents", False))
         self.max_file_bytes = int(options.get("max_file_bytes") or 2_000_000)

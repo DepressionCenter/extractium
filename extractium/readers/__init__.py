@@ -1,12 +1,14 @@
 """
 Summary: Readers that turn a document file's bytes into text with its
-heading structure kept, so the chunker can cut a Word, OpenDocument, or
-RTF file at its headings the way it cuts a web page. Every reader uses
-the standard library alone, refuses input it cannot account for, and
-never writes a file. The web crawl, the GitHub source, and the local
-source hand bytes to `extractium.readers.documents.read_document` when
-their `read_documents` setting is on. See docs/configuration.md under
-"Reading Word, OpenDocument, and RTF files".
+heading structure kept, so the chunker can cut a Word, OpenDocument,
+RTF, or PDF file at its headings the way it cuts a web page. The Word,
+OpenDocument, and RTF readers use the standard library alone; the PDF
+reader uses pypdf, the optional pdf extra, and runs in a child process
+that is ended if it runs too long. Every reader refuses input it cannot
+account for and never writes a file. The web crawl, the GitHub source,
+and the local source hand bytes to
+`extractium.readers.documents.read_document` when their `read_documents`
+setting is on. See docs/configuration.md under "Reading document files".
 
 This file is part of Extractium™
 extractium/readers/__init__.py

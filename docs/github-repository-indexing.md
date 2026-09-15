@@ -211,7 +211,7 @@ Project and build files are indexed as text, with a short fixed heading naming t
 
 Manifests are classified before documentation, because `requirements.txt` carries a documentation extension and would otherwise be read as prose.
 
-Word, OpenDocument, and RTF files (`.docx`, `.odt`, `.rtf`) are read into text, with their headings and their own keywords and description, when the source sets `read_documents: true`. Each is downloaded on its own, one request per file, and the text read from it is cached under the file's blob name so a rebuild reads nothing again. The setting is off by default. The [configuration reference](configuration.md) explains the reader under "Reading Word, OpenDocument, and RTF files".
+Word, OpenDocument, RTF, and PDF files (`.docx`, `.odt`, `.rtf`, `.pdf`) are read into text, with their headings and their own keywords and description, when the source sets `read_documents: true`. Each is downloaded on its own, one request per file, and the text read from it is cached under the file's blob name so a rebuild reads nothing again. The setting is off by default. The [configuration reference](configuration.md) explains the readers under "Reading document files".
 
 Dependency lock files are excluded by default. They are long, they are mostly package names and version numbers, and the matching manifest already records what the project declared. `renv.lock` is the exception, because an R project's `DESCRIPTION` often does not pin anything and the lock file is where the real environment is written down.
 
@@ -226,7 +226,7 @@ coverage/  .venv/  venv/  __pycache__/  .cache/  renv/library/  data/
 
 `bin/` and `data/` are worth naming. A `bin/` folder holds what a build produced, which is a copy of source that is already in the repository. A `data/` folder holds the files a project reads and writes rather than anything written to be read, and skipping it also keeps a folder of participant records out of an index by default. Both are matched as whole path segments, so a folder called `binder/` or a file called `database-notes.md` is unaffected. The cost is the occasional README inside one of them, which is a good trade in this field.
 
-And these files, wherever they are: binaries, images, audio, video, archives, compiled objects, source maps, minified JavaScript and CSS, Git LFS pointer content, private keys and certificates, `.env` files, PDFs, spreadsheets, presentations, and the binary `.doc` format, which has no reader.
+And these files, wherever they are: binaries, images, audio, video, archives, compiled objects, source maps, minified JavaScript and CSS, Git LFS pointer content, private keys and certificates, `.env` files, spreadsheets, presentations, and the binary `.doc` format, which has no reader.
 
 `.env.example` is kept. It lists the variables a project needs, with fake values, which is documentation.
 
@@ -306,7 +306,7 @@ sources:
     include_forks: false
     include_archived: true
     include_code: true             # read the structure of the code as well as the docs
-    read_documents: false          # read Word, OpenDocument, and RTF files into text
+    read_documents: false          # read Word, OpenDocument, RTF, and PDF files into text
     max_file_bytes: 2000000
 ```
 
