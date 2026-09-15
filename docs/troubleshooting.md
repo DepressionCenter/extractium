@@ -91,9 +91,9 @@ The same rule holds anywhere: do not name a folder after a Python package you ha
 
 ### The build script fails while installing, with "Failed to build 'tree-sitter-..."
 
-**Cause.** The environment was created with a free-threaded Python, the build the launcher lists as `3.13t` or `3.14t`. The python.org installer for 3.14 offers it as an optional part, and once it is installed the launcher picks it by default. Every code parser publishes compiled `abi3` wheels only, which a free-threaded interpreter cannot use, so pip fell back to the parser's source archive, which does not build. A copy of `run.bat` or `run.sh` saved before that build existed sets `PYTHON` to the launcher's default before handing over to the downloaded script.
+**Cause.** The environment was created with a free-threaded Python, the build the launcher lists as `3.13t` or `3.14t`. The python.org installer for 3.14 offers it as an optional part, and once it is installed the launcher picks it by default. Every code parser publishes compiled `abi3` wheels only, which a free-threaded interpreter cannot use, so pip fell back to the parser's source archive, which does not build.
 
-**Fix.** Save a fresh copy of the script and run it again. The current script checks the Python it was given, looks for a standard build when that one is free-threaded, and remakes an environment that was created with the wrong one. On a machine that has only a free-threaded Python, it installs everything except the parsers and says so; code files are then recorded by name, language, and length, but what they define is not read. Install a standard build from python.org, or set `PYTHON` to the path of one, to get the parsers:
+**Fix.** Run the script again. It checks the Python it was given, looks for a standard build when that one is free-threaded, and remakes an environment that was created with the wrong one. On a machine that has only a free-threaded Python, it installs everything except the parsers and says so; code files are then recorded by name, language, and length, but what they define is not read. Install a standard build from python.org, or set `PYTHON` to the path of one, to get the parsers:
 
 ```
 set PYTHON="C:\Program Files\Python314\python.exe"

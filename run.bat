@@ -46,10 +46,8 @@ REM The interpreter used to create the environment. Extractium needs Python
 REM 3.10 or newer. A standard build is preferred: the free-threaded build,
 REM the one the launcher lists as 3.13t or 3.14t and picks by default once
 REM installed, cannot use the compiled wheels the code parsers ship. PYTHON
-REM is checked even when it is set, because a copy of this script saved
-REM before that build existed sets it to the launcher's default. Otherwise
-REM the launcher is asked for one release after another, and the first
-REM standard build is kept. When only a free-threaded build exists, it is
+REM is checked when it is set; otherwise the launcher is asked for one
+REM release after another, and the first standard build is kept. When only a free-threaded build exists, it is
 REM used and the parsers are left out of the install.
 set "CHOSEN="
 set "FREE_THREADED_ONLY="

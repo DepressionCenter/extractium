@@ -46,10 +46,8 @@ VENV_DIR="${VENV_DIR:-$HERE/.venv}"
 # The interpreter used to create the environment. Extractium needs 3.10
 # or newer. A standard build is preferred: the free-threaded build
 # (python3.13t, python3.14t) cannot use the compiled wheels the code
-# parsers ship. PYTHON is checked even when it is set, because a copy of
-# this script saved before that build existed sets it to python3.
-# Otherwise each name below is tried and the first standard build is
-# kept. When only a free-threaded build exists, it is used and the
+# parsers ship. PYTHON is checked when it is set; otherwise each name
+# below is tried and the first standard build is kept. When only a free-threaded build exists, it is used and the
 # parsers are left out of the install.
 PYTHON="${PYTHON:-}"
 

@@ -258,9 +258,8 @@ def test_each_run_script_prefers_a_standard_python_and_checks_the_one_it_was_giv
     Every parser grammar ships abi3 wheels only, which a free-threaded
     Python cannot use, so pip falls back to a source archive that does not
     build. A machine whose default Python is the free-threaded build must
-    still get a working environment, and PYTHON must be checked even when
-    set, because a copy of the script saved before that build existed sets
-    it to the launcher's default before handing over.
+    still get a working environment, and PYTHON must be checked when it
+    is set, because it may name that build too.
     """
     text = (REPO_ROOT / script).read_text(encoding="utf-8")
 
