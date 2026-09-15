@@ -7,7 +7,7 @@ extractium/core/embed.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -27,6 +27,8 @@ __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
+
+import functools
 
 import numpy as np
 
@@ -56,6 +58,18 @@ INT8_SCALE = 127
 
 ### Embedding ###
 
+@functools.lru_cache(maxsize=1)
+def _load_model():
+    """
+    The embedding model, loaded once per process. A build embeds its
+    windows and then the keyword step's candidate phrases, and loading
+    the model twice for that would cost seconds and say so twice.
+    """
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(EMBED_MODEL)
+
+
 def embed_chunks(chunks, progress=None):
     """
     Embeds a list of child chunks with the configured sentence-transformer
@@ -76,11 +90,10 @@ def embed_chunks(chunks, progress=None):
     Returns:
         np.ndarray: shape (len(chunks), DIMS), float32, L2-normalized.
     """
-    from sentence_transformers import SentenceTransformer
-
     report = progress or (lambda message: None)
-    report(f"Loading embedding model: {EMBED_MODEL}")
-    model = SentenceTransformer(EMBED_MODEL)
+    if _load_model.cache_info().currsize == 0:
+        report(f"Loading embedding model: {EMBED_MODEL}")
+    model = _load_model()
     texts = [((c["t"] + "\n") if c.get("t") else "") + c["x"] for c in chunks]
     report(f"Embedding {len(texts)} chunk(s)...")
     vecs = model.encode(texts, normalize_embeddings=True,

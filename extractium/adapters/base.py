@@ -35,14 +35,13 @@ __date__ = "2026-09-08"
 import dataclasses
 import pathlib
 import re
-import urllib.parse
 
 import numpy as np
 
 from extractium.core.bm25 import build_bm25_index
 from extractium.core.build import utf16_slice
 from extractium.core.calibration import compute_calibration_stats
-from extractium.core.models import Children
+from extractium.core.models import Children, page_address_of
 
 ### Constants ###
 
@@ -56,17 +55,6 @@ WHITESPACE_RUN = re.compile(r"\s+")
 # Longest one-line excerpt of a page's text. Long enough to tell two
 # similarly named pages apart, short enough to stay a single line.
 EXCERPT_CHARS = 180
-
-# The query parameter a video's address carries the moment in, and the
-# source type whose addresses carry it. A video's sections are each
-# addressed at the moment they begin, which is what makes a citation
-# open the video at the quoted words; an output that lists pages wants
-# the video itself, so it drops this one parameter and keeps the rest.
-# Scoped to that source type because "t" means something else elsewhere,
-# and dropping it from another site's address would break the link.
-MOMENT_PARAM = "t"
-MOMENT_SOURCE_TYPE = "youtube"
-
 
 ### Page Addresses ###
 
@@ -86,17 +74,7 @@ def page_address(parent):
     Returns:
         str: the page's address. Unchanged for every source but a video.
     """
-    if getattr(parent, "source_type", "") != MOMENT_SOURCE_TYPE:
-        return parent.u
-    split = urllib.parse.urlsplit(parent.u)
-    kept = [
-        (name, value)
-        for name, value in urllib.parse.parse_qsl(split.query, keep_blank_values=True)
-        if name != MOMENT_PARAM
-    ]
-    return urllib.parse.urlunsplit(
-        (split.scheme, split.netloc, split.path, urllib.parse.urlencode(kept), split.fragment)
-    )
+    return page_address_of(parent.u, getattr(parent, "source_type", ""))
 
 
 ### Text Helpers ###

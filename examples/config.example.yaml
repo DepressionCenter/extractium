@@ -305,6 +305,12 @@ sources:
 # bare off as false.
 #phi_lint: local
 
+# Whether every section is named with keywords and every page with tags,
+# from the text alone and the vectors the build computes anyway. On by
+# default. Needs the keywords extra; without it the build says so once
+# and goes on with the fields empty.
+#keywords: true
+
 
 # ---------------------------------------------------------------------------
 # Writing patterns safely

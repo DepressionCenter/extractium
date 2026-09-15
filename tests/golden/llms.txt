@@ -2,7 +2,7 @@
 
 > A knowledge base of 3 sections drawn from 2 pages on example.org, compiled on 2026-01-02T03:04:05Z.
 
-This file is an index, not the content itself. Each entry below names one page, links to it, and quotes the opening of its text, so you can judge whether a page answers your question before fetching it. Each heading names one of the sources this knowledge base was built from, and the entries under it are the pages that came from that source.
+This file is an index, not the content itself. Each entry below names one page, links to it, quotes the opening of its text, and lists the keywords it is about when the build found any, so you can judge whether a page answers your question before fetching it. Each heading names one of the sources this knowledge base was built from, and the entries under it are the pages that came from that source.
 
 llms-full.txt, written alongside this file, holds the complete text of every page listed here, in the same order. Read that instead if you want everything at once rather than following links.
 

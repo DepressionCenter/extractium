@@ -130,7 +130,7 @@ With the default settings, the output folder holds three files:
 | File | What it is |
 |---|---|
 | `compendium.json` | The search index: text, vectors, and keyword statistics in one file. Despite the name it is partly binary. The `.json` extension keeps static hosts serving it correctly. The [container format](container-format.md) page describes it byte by byte. |
-| `llms.txt` | A short index, one line per page, for a language model that browses the web. |
+| `llms.txt` | A short index, one line per page with its keywords, for a language model that browses the web. |
 | `llms-full.txt` | The whole indexed text, in reading order. |
 
 Add a `sqlite` output for a database with the same content, or an `okf` output for a folder of Markdown files. See the [configuration reference](configuration.md).

@@ -80,7 +80,7 @@ The diagram shows the content sources on the left, the Extractium™ build in th
   ```
 
 + Open `dist/llms.txt` to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`. See `examples/config.efdc.yaml` for a complete example that uses every source type.
-+ To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube,pdf]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
++ To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube,pdf,keywords]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
 

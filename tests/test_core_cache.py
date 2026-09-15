@@ -269,3 +269,51 @@ def test_flush_cache_meta_periodically_saves_only_every_cache_save_interval(
 
     fetch._flush_cache_meta_periodically(session, cache_meta)
     assert len(calls) == 1
+
+# ---------------------------------------------------------------------------
+# load_keywords / save_keywords
+# ---------------------------------------------------------------------------
+
+def test_load_keywords_missing_file_returns_empty_dict(isolated_core_cache):
+    assert cache.load_keywords() == {}
+
+
+def test_save_keywords_round_trips_through_the_enrichment_folder(isolated_core_cache):
+    document = {"version": "keywords-1", "sections": {"0123456789abcdef": {
+        "hash": "f" * 16, "keywords": ["peer support", "caf\u00e9"], "enriched_at": "2026-01-02T03:04:05Z",
+    }}}
+
+    cache.save_keywords(document)
+
+    assert cache.load_keywords() == document
+    assert os.path.dirname(cache.CACHE_KEYWORDS_PATH) == cache.CACHE_ENRICHMENT_DIR
+    assert os.path.basename(cache.CACHE_ENRICHMENT_DIR) == "enrichment"
+    assert not [name for name in os.listdir(cache.CACHE_ENRICHMENT_DIR) if name.endswith(".tmp")]
+
+
+def test_load_keywords_invalid_json_returns_empty_dict(isolated_core_cache):
+    os.makedirs(cache.CACHE_ENRICHMENT_DIR, exist_ok=True)
+    with open(cache.CACHE_KEYWORDS_PATH, "w", encoding="utf-8") as f:
+        f.write("{not valid json")
+
+    assert cache.load_keywords() == {}
+
+
+def test_load_keywords_that_is_not_a_document_returns_empty_dict(isolated_core_cache):
+    os.makedirs(cache.CACHE_ENRICHMENT_DIR, exist_ok=True)
+    with open(cache.CACHE_KEYWORDS_PATH, "w", encoding="utf-8") as f:
+        json.dump(["a list"], f)
+
+    assert cache.load_keywords() == {}
+
+
+def test_use_cache_dir_moves_the_keyword_store_with_the_rest(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache, "CACHE_DIR", cache.CACHE_DIR)
+    monkeypatch.setattr(cache, "CACHE_ENRICHMENT_DIR", cache.CACHE_ENRICHMENT_DIR)
+    monkeypatch.setattr(cache, "CACHE_KEYWORDS_PATH", cache.CACHE_KEYWORDS_PATH)
+    for name in [n for n in dir(cache) if n.startswith("CACHE_") and n.isupper()]:
+        monkeypatch.setattr(cache, name, getattr(cache, name))
+
+    cache.use_cache_dir(str(tmp_path / "elsewhere"))
+
+    assert cache.CACHE_KEYWORDS_PATH == os.path.join(str(tmp_path / "elsewhere"), "enrichment", "keywords.json")

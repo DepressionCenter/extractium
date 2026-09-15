@@ -369,6 +369,11 @@ def isolated_core_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "CACHE_YOUTUBE_DIR", str(youtube_dir))
     monkeypatch.setattr(cache, "CACHE_YOUTUBE_VIDEOS_DIR", str(youtube_dir / "videos"))
     monkeypatch.setattr(cache, "CACHE_YOUTUBE_LISTINGS_DIR", str(youtube_dir / "listings"))
+    # And the keyword store, so one test's stored keywords never serve
+    # another's sections.
+    enrichment_dir = cache_dir / "enrichment"
+    monkeypatch.setattr(cache, "CACHE_ENRICHMENT_DIR", str(enrichment_dir))
+    monkeypatch.setattr(cache, "CACHE_KEYWORDS_PATH", str(enrichment_dir / "keywords.json"))
     return cache_dir
 
 

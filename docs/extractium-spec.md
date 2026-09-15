@@ -186,7 +186,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
 | `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
-| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section and null until an enrichment pass (section 10) fills them. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list. `llms.txt` does not carry them yet. |
+| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section. The keyword step (section 10) fills all but `summary`, which stays null until a summary pass exists. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list; `llms.txt` ends each page's entry with the page's keywords. |
 
 ### 3.5 Embeddings
 
@@ -267,7 +267,7 @@ A local folder can hold content that must never be published. The rules:
 
 ## 8. Cache
 
-- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators, content hashes, and the file name a server gave a document), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `previous-build.json` is the manifest of the last build's published sections, which an incremental rebuild carries unseen pages forward from. It never holds a section read from a local folder. `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
+- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators, content hashes, and the file name a server gave a document), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `previous-build.json` is the manifest of the last build's published sections, which an incremental rebuild carries unseen pages forward from. It never holds a section read from a local folder. `enrichment/keywords.json` holds what the keyword step found for every section of the last build, keyed by section id with a digest of the section's text. `embeddings/` is reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
 - Revalidation uses conditional GET (`If-None-Match`, `If-Modified-Since`, honoring 304), not HEAD probing: several servers omit validators on HEAD.
 - A content SHA-256 is stored per page so a future delta build can skip unchanged chunks.
 - On GitHub Actions, `.kb_cache/` persists between runs through the cache action, keyed on a hash of the configuration file.
@@ -305,13 +305,12 @@ Each Tier 1 server is one file that speaks JSON-RPC over standard input and outp
 The two Tier 2 servers share a protocol core with the Node examples (`examples/mcp/shared/`). The tool definition, the answer shape, both eras of the protocol, and the Streamable HTTP binding are written once, and each hosted example adds only where its index comes from and how it searches. The Val Town example holds the container in memory, keeps a copy in the val's blob store, and answers with BM25 alone unless an HTTP embedding service is configured, in which case it runs the clients' hybrid search unchanged. The Cloudflare example never reads the container. A build's SQLite output is exported as SQL statements and loaded into D1, BM25 ranking runs inside the database with every term bound as a parameter, and the optional Workers AI binding re-ranks those keyword candidates by vector similarity and fuses the two rankings as the clients do. That last point is the one difference in search quality: on Cloudflare a section that shares no term with the question cannot appear, hybrid or not. The Tier 3 prompts are two plain-text files under `examples/wrappers/`, one for a platform that browses and one for a platform that can call a remote tool.
 
 
-## 10. Enrichment (reserved)
+## 10. Enrichment
 
-Every section carries the fields for an enrichment pass that does not exist yet (section 3.4), null until one runs. If one is added, these are its rules:
+Every section carries five enrichment fields (section 3.4). The keyword step fills four of them; the summary waits for a pass that does not exist yet.
 
-- A local language model only (small instruct model), GPU-gated, delta-only, parent-only. No API calls, ever.
-- It populates the reserved nullable fields (section 3.4) through the `.kb_cache/enrichment/` layer.
-- Keyword extraction without a language model (YAKE plus embedding-similarity keywords) may ship earlier as a separate step.
+- Keywords and tags ship with every build (`keywords: true`, the default) and need no model beyond the embedding model the build already loads, no network, and no GPU. YAKE proposes up to fifteen candidate phrases of one to three words from each section's text. The candidates are embedded and ranked by cosine similarity to the section's own vector, the mean of its windows' vectors, and the five closest that do not repeat one another (a phrase inside, or containing, one already chosen is passed over) are its `keywords`, closest first. A page's `tags` are its source's categories, then the keywords at least half of its sections share, up to eight. `enriched_at` is the build time and `enrich_ver` names the step's version. Results are stored under `.kb_cache/enrichment/keywords.json`, keyed by section id and text digest, so a rebuild recomputes only changed sections. The extractor is the optional `keywords` extra; a build without it says so and leaves the fields null.
+- A summary pass, if one is added, follows these rules: a local language model only (small instruct model), GPU-gated, delta-only, parent-only. No API calls, ever. It populates `summary` through the same `.kb_cache/enrichment/` layer.
 
 
 ## 11. Operations
@@ -352,6 +351,7 @@ respect_robots_txt: true
 transport: auto                     # auto | browser | plain
 rebuild: full                       # full | incremental
 phi_lint: local                     # local | all | off
+keywords: true                      # name sections with keywords and pages with tags
 github_owners: []                   # extra GitHub accounts this build may follow links
                                     # into; deny by default, exact names, never patterns
 
@@ -428,7 +428,7 @@ Keys and API tokens never go in this file. `GITHUB_TOKEN` and `YOUTUBE_API_KEY` 
 extractium/
 ├── extractium/                  # Python package (the engine)
 │   ├── core/                    # fetch, cache, chunk, embed, bm25, dedup, calibration,
-│   │                            # phi_lint, registry, models, build
+│   │                            # keywords, phi_lint, registry, models, build
 │   ├── sources/                 # web (core crawler); site handlers generic, tdx, github, youtube,
 │   │                            # google_docs; sources local, okf, github_api, dspace, youtube
 │   ├── readers/                 # Word, OpenDocument, RTF (standard library) and PDF (pypdf,

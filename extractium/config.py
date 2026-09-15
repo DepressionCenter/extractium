@@ -92,6 +92,12 @@ DEFAULT_PARALLEL_PAGES = 4
 PHI_LINT_MODES = ("local", "all", "off")
 DEFAULT_PHI_LINT = "local"
 
+# Whether every section is named with keywords and every page with
+# tags. On by default because it needs no model beyond the one the
+# build already loads and no network; a build without the keywords
+# extra installed says so and goes on without them.
+DEFAULT_KEYWORDS = True
+
 # Outputs written when the file lists none: the flagship container and
 # the two llms.txt files.
 DEFAULT_OUTPUTS = ({"type": "container"}, {"type": "llmstxt"})
@@ -258,6 +264,7 @@ KNOWN_KEYS = frozenset({
     "transport",
     "rebuild",
     "phi_lint",
+    "keywords",
     "github_owners",
     "sources",
     "outputs",
@@ -389,6 +396,8 @@ class Config:
         rebuild (str): one of REBUILD_MODES; what happens to a page this
             build did not see.
         phi_lint (str): one of PHI_LINT_MODES.
+        keywords (bool): whether the build names every section with
+            keywords and every page with tags.
         github_owners (tuple[str, ...]): GitHub accounts, beyond the ones
             the sources themselves name, whose pages a build may follow
             links into. Allowing an account does not list everything it
@@ -412,6 +421,7 @@ class Config:
     transport: str = DEFAULT_TRANSPORT
     rebuild: str = DEFAULT_REBUILD
     phi_lint: str = DEFAULT_PHI_LINT
+    keywords: bool = DEFAULT_KEYWORDS
     github_owners: tuple = DEFAULT_GITHUB_OWNERS
 
 
@@ -1159,6 +1169,7 @@ def config_from_mapping(data, source="configuration"):
         transport=_read_choice(data, "transport", DEFAULT_TRANSPORT, TRANSPORT_MODES, source),
         rebuild=_read_choice(data, "rebuild", DEFAULT_REBUILD, REBUILD_MODES, source),
         phi_lint=_read_choice(data, "phi_lint", DEFAULT_PHI_LINT, PHI_LINT_MODES, source),
+        keywords=_read_bool(data, "keywords", DEFAULT_KEYWORDS, source),
         github_owners=_read_github_owners(data, source),
         sources=_read_sources(data, source),
         outputs=_read_outputs(data, source, slug),

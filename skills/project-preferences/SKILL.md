@@ -33,7 +33,8 @@ about one week of work. Split a task that grows past that rather than stretching
 
 - Python 3.10 or newer; the package is `extractium/` and the console script is
   `extractium build --config config.yaml`. Optional extras: `[dev]` for the test
-  tools, `[code]` for the parsers, `[youtube]` for the caption library.
+  tools, `[code]` for the parsers, `[youtube]` for the caption library, `[pdf]`
+  for the PDF reader, `[keywords]` for the keyword extractor.
 - The JavaScript client is `clients/js/extractium-client.js`, one file with no
   dependencies. The two local search servers are under `examples/mcp/`.
 - Plugins resolve from `plugins/`, then installed entry points, then the built-ins
@@ -51,7 +52,7 @@ task. `docs/session-prompt-template.md` holds the same list as a paste-in prompt
 ### Setup and verification
 
 ```bash
-pip install -e ".[dev,code,youtube]"
+pip install -e ".[dev,code,youtube,pdf,keywords]"
 python -m pytest -q
 node --test clients/js
 node --test examples/mcp/local-node

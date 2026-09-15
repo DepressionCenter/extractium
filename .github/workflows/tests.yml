@@ -2,7 +2,7 @@
 # .github/workflows/tests.yml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-12
-# Last Modified: 2026-09-12
+# Last Modified: 2026-09-15
 # Summary: Runs the Python and Node test suites on every pull request and
 # on every push to main, on the oldest and newest supported Python
 # versions and on Linux and Windows, since the code analysis and the
@@ -60,7 +60,7 @@ jobs:
       - name: Install Extractium with every extra
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,code,youtube,pdf]"
+          python -m pip install -e ".[dev,code,youtube,pdf,keywords]"
 
       - name: Run the Python test suite
         run: python -m pytest -q

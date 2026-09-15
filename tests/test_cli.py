@@ -953,3 +953,73 @@ def test_links_the_handlers_held_back_reach_every_source_that_reads_them():
         ("https://example.org/", "Site"),
         ("https://video.example/watch?v=one", "Videos"),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Keywords
+# ---------------------------------------------------------------------------
+
+def test_build_names_sections_with_keywords_and_stores_them_under_the_cache(build_workspace, monkeypatch):
+    from extractium.core import keywords
+
+    monkeypatch.setattr(keywords, "keyword_library_available", lambda: True)
+    monkeypatch.setattr(keywords, "candidate_phrases", lambda text, limit=15: ["peer support", "depression"])
+    config = write_config(build_workspace, """
+        name: Example Org
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    header = read_container(build_workspace / "dist" / "compendium.json")
+    assert all(set(p["keywords"]) == {"peer support", "depression"} for p in header["parents"])
+    assert all(p["enrich_ver"] == keywords.PASS_VERSION for p in header["parents"])
+    assert all(p["tags"] for p in header["parents"])
+    store = json.loads((build_workspace / ".cache" / "enrichment" / "keywords.json").read_text(encoding="utf-8"))
+    assert store["version"] == keywords.PASS_VERSION
+    assert set(store["sections"]) == {p["id"] for p in header["parents"]}
+    assert "Keywords: " in (build_workspace / "dist" / "llms.txt").read_text(encoding="utf-8")
+
+
+def test_build_without_the_keyword_library_says_so_and_goes_on(build_workspace, monkeypatch, capsys):
+    from extractium.core import keywords
+
+    monkeypatch.setattr(keywords, "keyword_library_available", lambda: False)
+    config = write_config(build_workspace, """
+        name: Example Org
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    err = capsys.readouterr().err
+    assert "Keywords: the keywords extra is not installed" in err
+    assert 'pip install "extractium[keywords]"' in err
+    header = read_container(build_workspace / "dist" / "compendium.json")
+    assert all("keywords" not in p for p in header["parents"])
+    assert not (build_workspace / ".cache" / "enrichment").exists()
+
+
+def test_build_with_keywords_off_never_asks_for_the_library(build_workspace, monkeypatch):
+    from extractium.core import keywords
+
+    monkeypatch.setattr(keywords, "keyword_library_available", lambda: 1 / 0)
+    config = write_config(build_workspace, """
+        name: Example Org
+        cache_dir: .cache
+        keywords: false
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    header = read_container(build_workspace / "dist" / "compendium.json")
+    assert all("keywords" not in p for p in header["parents"])
