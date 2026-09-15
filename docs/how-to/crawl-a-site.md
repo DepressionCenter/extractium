@@ -77,12 +77,13 @@ Three lists on a `web` source decide what is fetched and what is indexed. Each h
 | `include_patterns` | Pages the crawl may visit. A URL must match one of them. | Empty, which means the crawl works out its scope from the seed URL: the site, or the portal's own folder. |
 | `crawl_exclude_patterns` | Pages the crawl must not fetch at all. Checked after the include list, so an entry here always wins. | Files that are not readable text, plus what each enabled site handler adds: search forms, logins, print views, tag pages, and code-host housekeeping pages. |
 | `index_exclude_patterns` | Pages the crawl may visit and follow links from, but whose own content stays out of the index. | The same defaults. Use it for menu and category pages. |
+| `extra_crawl_exclude_patterns`, `extra_index_exclude_patterns` | The same two lists, added to the defaults instead of replacing them. | Empty. |
 
 The usual sequence is:
 
 1. Leave `include_patterns` empty and let the seed decide the scope. Add an entry only to reach more, such as one folder of a second site.
-2. Add a `crawl_exclude_patterns` entry for each kind of page you saw in step 2 that should not be fetched. The defaults still apply when you add your own. Write an empty list, `[]`, only to switch them off.
-3. Add an `index_exclude_patterns` entry for navigation pages that link to the content but hold none of their own.
+2. Add an `extra_crawl_exclude_patterns` entry for each kind of page you saw in step 2 that should not be fetched. The defaults still apply. Writing `crawl_exclude_patterns` instead replaces the defaults with your list, and an empty list, `[]`, switches them off.
+3. Add an `extra_index_exclude_patterns` entry for navigation pages that link to the content but hold none of their own.
 4. Run the trial again, then raise the limit, then remove it.
 
 Wrap every pattern in single quotes so YAML keeps a backslash as you typed it, and escape a dot that should match a dot: `'example\.edu'`. The full rules, including the order the checks run in and what the built-in exclusions cover, are in the [configuration reference](../configuration.md) under "How the URL patterns work".

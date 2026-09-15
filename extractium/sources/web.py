@@ -12,7 +12,7 @@ extractium/sources/web.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -278,8 +278,10 @@ class WebSource:
             configuration file: seed_url, include_patterns,
             crawl_exclude_patterns, index_exclude_patterns (None for
             either exclude list means "asset patterns plus the enabled
-            handlers' defaults"), and site_handlers (unused here; the
-            caller resolves names to the handlers argument).
+            handlers' defaults"), extra_crawl_exclude_patterns and
+            extra_index_exclude_patterns (added on top of whichever list
+            applies), and site_handlers (unused here; the caller resolves
+            names to the handlers argument).
 
             Two further keys are set by a caller inside the program, never
             by a configuration file: `already_indexed`, a set of URLs
@@ -345,15 +347,21 @@ class WebSource:
         """
         self.handlers = order_site_handlers(site_handlers)
         self.settings = settings
-        self.crawl_exclude_patterns = self._patterns(self.options, "crawl_exclude_patterns", "crawl")
-        self.index_exclude_patterns = self._patterns(self.options, "index_exclude_patterns", "index")
+        self.crawl_exclude_patterns = self._patterns(self.options, "crawl")
+        self.index_exclude_patterns = self._patterns(self.options, "index")
 
-    def _patterns(self, options, key, kind):
-        """The option's own list, or the handler-derived default when the option is None."""
-        value = options.get(key)
-        if value is None:
-            return default_exclude_patterns(self.handlers, kind)
-        return tuple(value)
+    def _patterns(self, options, kind):
+        """
+        One exclude list: the entry's own list, or the handler-derived
+        default when the entry wrote none, followed by the entry's extra
+        patterns. An extra pattern already on the list is not repeated.
+        """
+        base = options.get(f"{kind}_exclude_patterns")
+        patterns = list(default_exclude_patterns(self.handlers, kind) if base is None else base)
+        for pattern in options.get(f"extra_{kind}_exclude_patterns") or ():
+            if pattern not in patterns:
+                patterns.append(pattern)
+        return tuple(patterns)
 
     def handler_for(self, url):
         """The first enabled handler whose matches(url) is true; the generic fallback at worst."""
