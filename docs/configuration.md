@@ -168,6 +168,8 @@ Two sources may share a label on purpose. Two sibling collections of one reposit
 | `include_patterns` | list of patterns | empty (see below) | Pages the crawl is allowed to visit. |
 | `crawl_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl must not fetch. |
 | `index_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl may visit, but whose content stays out of the index. |
+| `extra_crawl_exclude_patterns` | list of patterns | empty | Pages the crawl must not fetch, added to the list above rather than replacing it. The usual way to keep one site's own navigation out. |
+| `extra_index_exclude_patterns` | list of patterns | empty | Pages to leave out of the index, added to the list above rather than replacing it. |
 | `site_handlers` | list of names | every installed handler | Which site handlers take part. `[]` means the generic handler only. The generic handler always takes part, and always last. |
 
 A short entry is normal:
@@ -627,7 +629,7 @@ This is usually the right setting. Add patterns only when one build has to cover
 You get the two exclusion lists for free. Each list is the sum of two parts:
 
 1. Files that hold no readable text: images, archives, office documents, fonts, media, and source code. Always included.
-2. What each enabled site handler adds. The generic handler, which is always on, skips search forms, sign-in pages, print views, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, file-download, and person views, and every narrowed view of its question listing (by category, by tag, or by answered and unanswered), because the flat question listing already pages through every question. It puts the knowledge-base category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
+2. What each enabled site handler adds. The generic handler, which is always on, skips search forms, sign-in pages, print views, per-person pages, and the faceted and searched views a Drupal site makes of a listing (`?f[0]=topic:12`, `search_api_fulltext=`), each of which is a subset of the plain listing. The `tdx` handler adds the TeamDynamix portal's login, print, file-download, and person views, and every narrowed view of its question listing (by category, by tag, or by answered and unanswered), because the flat question listing already pages through every question. It puts the knowledge-base category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
 
 Category, tag, and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.
 
@@ -697,6 +699,19 @@ sources:
 ```
 
 Do this only when you know why. With no exclusions, a crawl will happily fetch sign-in pages and print views. Files that hold no readable text are still skipped: that check runs on every link whatever the lists say.
+
+Writing `crawl_exclude_patterns` with entries replaces the built-in list the same way. To keep the built-in list and add to it, which is what you want nearly every time, use `extra_crawl_exclude_patterns` instead:
+
+```yaml
+sources:
+  - type: web
+    label: Example Website
+    seed_url: 'https://example.edu/'
+    extra_crawl_exclude_patterns:
+      - '/our-members\?'          # every filtered view of the member directory
+```
+
+The same pair exists for the index list: `index_exclude_patterns` replaces, `extra_index_exclude_patterns` adds.
 
 
 ## When something is wrong

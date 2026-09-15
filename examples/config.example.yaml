@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-12
+# Last Modified: 2026-09-14
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -65,17 +65,26 @@ sources:
     #  - 'example\.org/research-services/'   # one folder of a second site
     #  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
 
-    # Pages the crawl must not fetch at all. Checked after include_patterns,
-    # so an entry here always wins. The default is the files that are not
-    # readable text plus what each enabled site handler adds: search forms,
-    # logins, print views, tag pages, and code-host housekeeping pages.
-    # Write an empty list ([]) to switch it off.
+    # Pages the crawl must not fetch at all, added to the built-in list.
+    # Checked after include_patterns, so an entry here always wins. The
+    # built-in list is the files that are not readable text plus what each
+    # enabled site handler adds: search forms, logins, print views, tag
+    # pages, faceted views, and code-host housekeeping pages.
+    #extra_crawl_exclude_patterns:
+    #  - '/our-members\?'
+
+    # The same list, but replacing the built-in one instead of adding to
+    # it. Write an empty list ([]) to switch every exclusion off.
     #crawl_exclude_patterns:
     #  - '/Search[/?$]'
     #  - '/Login[/?$]'
 
     # Pages the crawl may visit and follow links from, but whose own content
-    # stays out of the index. Use this for menu and category pages.
+    # stays out of the index. Use this for menu and category pages. As
+    # above, the extra_ form adds to the built-in list and the plain form
+    # replaces it.
+    #extra_index_exclude_patterns:
+    #  - '/directory/'
     #index_exclude_patterns:
     #  - '/Category/'
     #  - '/tree/'

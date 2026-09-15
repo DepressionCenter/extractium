@@ -619,6 +619,37 @@ def test_configure_leaves_an_explicit_exclude_list_as_written():
     assert source.crawl_exclude_patterns == (r"/x",)
 
 
+def test_extra_exclude_patterns_are_added_to_the_defaults():
+    """
+    One site's own navigation can be kept out of a crawl without
+    rewriting the built-in list, which an explicit list would replace.
+    """
+    source = web.WebSource({
+        "seed_url": "https://example.org/",
+        "extra_crawl_exclude_patterns": (r"/our-members\?",),
+        "extra_index_exclude_patterns": (r"/directory/",),
+    })
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert r"\.pdf$" in source.crawl_exclude_patterns
+    assert source.crawl_exclude_patterns[-1] == r"/our-members\?"
+    assert r"\.pdf$" in source.index_exclude_patterns
+    assert source.index_exclude_patterns[-1] == r"/directory/"
+
+
+def test_extra_exclude_patterns_are_added_to_an_explicit_list_too():
+    source = web.WebSource({
+        "seed_url": "https://example.org/",
+        "crawl_exclude_patterns": (r"/x",),
+        "extra_crawl_exclude_patterns": (r"/y", r"/x"),
+    })
+
+    source.configure(_built_in_registry(), web.CrawlSettings())
+
+    assert source.crawl_exclude_patterns == (r"/x", r"/y")
+
+
 def test_configure_rejects_a_site_handler_the_entry_names_but_nothing_installs():
     source = web.WebSource({"seed_url": "https://example.org/", "site_handlers": ("nope",)})
 
@@ -656,6 +687,9 @@ NON_CONTENT_URLS = (
     "https://teamdynamix.umich.edu/TDClient/210/Org/People/Details?ID=0b0d00e0-d00a-ed00-ade0-c00000000eb0&popup=1",
     "https://example.org/Search",
     "https://example.org/Login",
+    "https://example.org/become-member/our-members?f[0]=research:329",
+    "https://example.org/our-members?f[0]=population:201&f[1]=methods:252",
+    "https://example.org/our-members?appointment=All&methods=All&search_api_fulltext=&sort_by=name",
 )
 
 # Pages that must survive every exclude list: documentation on a code
@@ -678,6 +712,8 @@ CONTENT_URLS = (
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/TagID/8245",
     "https://example.org/reports?Filter=recent",
     "https://example.org/People/",
+    "https://example.org/become-member/our-members",
+    "https://example.org/become-member/our-members?page=1",
 )
 
 

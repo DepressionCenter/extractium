@@ -12,7 +12,7 @@ extractium/sources/generic.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -88,12 +88,22 @@ GENERIC_NON_CONTENT_SEGMENTS = (
     "profile",
 )
 
+# A Drupal site writes a faceted view of a listing as "?f[0]=topic:12"
+# and a searched one as "search_api_fulltext=". Every facet is a subset
+# of the plain listing, which pages through the same items itself, so
+# each one is a fetch that finds nothing new. Measured on the Depression
+# Center site, one member directory appeared once per facet value.
+DRUPAL_FACET_PARAMETER = r"[?&]f\[[0-9]+\]="
+DRUPAL_SEARCH_PARAMETER = r"[?&]search_api_fulltext="
+
 GENERIC_CRAWL_EXCLUDE_PATTERNS = tuple(
     rf"/{segment}{SEGMENT_END}" for segment in GENERIC_NON_CONTENT_SEGMENTS
 ) + (
     r"\?print=",
     r"/tagged$",
     r"&tab=",
+    DRUPAL_FACET_PARAMETER,
+    DRUPAL_SEARCH_PARAMETER,
 )
 
 # A page never worth fetching is never worth indexing either, so the index

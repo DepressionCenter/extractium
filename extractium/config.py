@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -262,7 +262,8 @@ SUGGESTED_SOURCE_LABELS = {
 SOURCE_OPTION_KEYS = {
     "web": frozenset({
         "seed_url", "seed_urls", "include_patterns", "crawl_exclude_patterns",
-        "index_exclude_patterns", "site_handlers",
+        "index_exclude_patterns", "extra_crawl_exclude_patterns",
+        "extra_index_exclude_patterns", "site_handlers",
     }),
     "local": frozenset({"path", "include_globs"}),
     "github_api": frozenset({
@@ -759,6 +760,14 @@ def _read_web_source(entry, source):
         ),
         "index_exclude_patterns": _read_patterns(
             entry, "index_exclude_patterns", DEFAULT_INDEX_EXCLUDE_PATTERNS, source
+        ),
+        # Added on top of whichever list applies, so one site's own
+        # navigation can be kept out without rewriting the built-in list.
+        "extra_crawl_exclude_patterns": _read_patterns(
+            entry, "extra_crawl_exclude_patterns", (), source
+        ),
+        "extra_index_exclude_patterns": _read_patterns(
+            entry, "extra_index_exclude_patterns", (), source
         ),
         # None means "every installed handler"; an empty tuple means "the
         # generic fallback only".

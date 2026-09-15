@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -306,6 +306,25 @@ def test_web_source_accepts_every_option():
     assert source.options["crawl_exclude_patterns"] == (r"/login",)
     assert source.options["index_exclude_patterns"] == (r"/tags",)
     assert source.options["site_handlers"] == ("tdx",)
+
+
+def test_extra_exclude_patterns_are_read_and_default_to_nothing():
+    """The extra lists add to the built-in ones, so leaving them out adds nothing."""
+    plain = config.config_from_mapping({"sources": [web()]}).sources[0]
+    assert plain.options["extra_crawl_exclude_patterns"] == ()
+    assert plain.options["extra_index_exclude_patterns"] == ()
+
+    source = config.config_from_mapping({"sources": [web(
+        extra_crawl_exclude_patterns=[r"/our-members\?"],
+        extra_index_exclude_patterns=[r"/directory/"],
+    )]}).sources[0]
+    assert source.options["extra_crawl_exclude_patterns"] == (r"/our-members\?",)
+    assert source.options["extra_index_exclude_patterns"] == (r"/directory/",)
+
+
+def test_an_extra_exclude_pattern_must_be_a_valid_regular_expression():
+    with pytest.raises(config.ConfigError, match="extra_crawl_exclude_patterns entry 1 is not a valid"):
+        config.config_from_mapping({"sources": [web(extra_crawl_exclude_patterns=["/docs/["])]})
 
 
 def test_empty_pattern_list_switches_a_default_off():
