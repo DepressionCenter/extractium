@@ -13,7 +13,7 @@ tests/test_web_source.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -687,6 +687,11 @@ NON_CONTENT_URLS = (
     "https://teamdynamix.umich.edu/TDClient/210/Org/People/Details?ID=0b0d00e0-d00a-ed00-ade0-c00000000eb0&popup=1",
     "https://example.org/Search",
     "https://example.org/Login",
+    "https://example.org/cdn-cgi/l/email-protection",
+    "https://example.org/cgi-bin/counter.pl?page=home",
+    "https://example.org/scripts/",
+    "https://example.org/api/v2/pages",
+    "https://example.org/docs/API?format=json",
     "https://example.org/become-member/our-members?f[0]=research:329",
     "https://example.org/our-members?f[0]=population:201&f[1]=methods:252",
     "https://example.org/our-members?appointment=All&methods=All&search_api_fulltext=&sort_by=name",
@@ -712,6 +717,9 @@ CONTENT_URLS = (
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/TagID/8245",
     "https://example.org/reports?Filter=recent",
     "https://example.org/People/",
+    "https://example.org/api-reference/",
+    "https://example.org/docs/scripting-guide",
+    "https://example.org/apiary-notes",
     "https://example.org/become-member/our-members",
     "https://example.org/become-member/our-members?page=1",
 )

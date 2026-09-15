@@ -68,7 +68,8 @@ sources:
     # Pages the crawl must not fetch at all, added to the built-in list.
     # Checked after include_patterns, so an entry here always wins. The
     # built-in list is the files that are not readable text plus what each
-    # enabled site handler adds: search forms, logins, print views, tag
+    # enabled site handler adds: search forms, logins, print views, program
+    # folders such as cgi-bin, cdn-cgi, scripts, and api, tag
     # pages, faceted views, and code-host housekeeping pages.
     #extra_crawl_exclude_patterns:
     #  - '/our-members\?'

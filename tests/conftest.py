@@ -10,7 +10,7 @@ tests/conftest.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-10
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -104,6 +104,16 @@ class FakeSession:
 
     def get(self, url, headers=None, timeout=None):
         self.calls.append({"url": url, "headers": dict(headers or {}), "timeout": timeout})
+        return self._answer(url)
+
+    def post(self, url, headers=None, timeout=None, **body):
+        """A request with a body, recorded with its method so a test can tell the two apart."""
+        self.calls.append({
+            "url": url, "headers": dict(headers or {}), "timeout": timeout, "method": "post", **body,
+        })
+        return self._answer(url)
+
+    def _answer(self, url):
         entry = self.responses[url]
         if isinstance(entry, list):
             return entry.pop(0)

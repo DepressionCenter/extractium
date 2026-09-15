@@ -13,7 +13,7 @@ tests/test_transport.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -126,6 +126,32 @@ def test_the_retry_sends_the_same_headers_so_the_crawler_still_names_itself():
 
     assert browser.calls[0]["headers"] == headers
     assert browser.calls[0]["timeout"] == 5
+
+
+def test_a_post_follows_the_same_transport_rule_as_a_get():
+    """
+    A listing that pages through a site's own interface posts its
+    continuation request. A build stopped on the first such request,
+    because the automatic session answered only get.
+    """
+    session, plain, browser, _ = auto({PAGE: challenge()}, {PAGE: page()})
+
+    response = session.post(PAGE, json={"continuation": "abc"}, headers={"User-Agent": "Extractium"}, timeout=5)
+
+    assert response.status_code == 200
+    assert plain.calls[0]["method"] == "post"
+    assert browser.calls[0]["method"] == "post"
+    assert browser.calls[0]["json"] == {"continuation": "abc"}
+    assert session.transport_by_host["example.org"] == transport.TRANSPORT_BROWSER
+
+
+def test_a_post_to_a_host_never_challenged_stays_plain():
+    session, plain, browser, built = auto({PAGE: page()})
+
+    session.post(PAGE, json={}, headers={}, timeout=5)
+
+    assert plain.calls[0]["method"] == "post"
+    assert built == []
 
 
 def test_a_host_that_was_challenged_once_uses_the_browser_transport_from_then_on():
