@@ -253,26 +253,61 @@ def test_the_windows_script_downloads_through_powershell_before_python():
 
 
 @pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_avoids_a_free_threaded_python(script):
+def test_each_run_script_prefers_a_standard_python_and_checks_the_one_it_was_given(script):
     """
     Every parser grammar ships abi3 wheels only, which a free-threaded
     Python cannot use, so pip falls back to a source archive that does not
     build. A machine whose default Python is the free-threaded build must
-    still get a working environment, and one made earlier with that build
-    must be named as the cause rather than failing inside pip.
+    still get a working environment, and PYTHON must be checked even when
+    set, because a copy of the script saved before that build existed sets
+    it to the launcher's default before handing over.
     """
     text = (REPO_ROOT / script).read_text(encoding="utf-8")
 
     assert "Py_GIL_DISABLED" in text
     assert "sys.version_info >= (3, 10)" in text
-    assert "free-threaded" in text
-    assert "Delete that folder and run this script again" in text
+    assert "FREE_THREADED_ONLY" in text
+    assert "Making it again with" in text            # a wrong environment is remade, not refused
     if script == "run.bat":
-        assert text.count("Py_GIL_DISABLED") == 2   # the choice, and the existing environment
+        assert "if defined PYTHON call :try_python %PYTHON%" in text
         assert '"py -3.10"' in text and '"python"' in text
     else:
-        assert text.count("is_standard_python") == 3   # defined, the choice, the existing environment
+        assert 'if [ -n "$PYTHON" ] && is_standard_python "$PYTHON"' in text
         assert "python3.10" in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_installs_without_the_parsers_on_a_free_threaded_python(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    assert "lock_without_parsers.py" in text
+    assert "requirements-lock-without-parsers.txt" in text
+    assert "Installing without them" in text
+    # Whichever list is used, pip still checks every hash.
+    assert re.search(r'--require-hashes -r "?(%LOCK%|\$LOCK)"?', text), text
+
+
+def test_the_lock_without_parsers_keeps_every_other_package_and_hash(lock_text):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "lock_without_parsers", REPO_ROOT / "tools" / "lock_without_parsers.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    filtered = module.without_parsers(lock_text)
+
+    packages = lambda text: [line.split("==")[0] for line in text.splitlines() if "==" in line]
+    assert [name for name in packages(lock_text) if not name.startswith("tree-sitter")] == packages(filtered)
+    assert not any(name.startswith("tree-sitter") for name in packages(filtered))
+    # Every hash of every kept package is still there, and no parser hash is.
+    kept_hashes = filtered.count("--hash=")
+    parser_hashes = sum(
+        block.count("--hash=") for block in re.split(r"(?m)^(?=\S)", lock_text) if block.startswith("tree-sitter")
+    )
+    assert kept_hashes == lock_text.count("--hash=") - parser_hashes
+    assert filtered.startswith(lock_text[:200])          # the license header survives
 
 
 @pytest.mark.parametrize("script", ["run.sh", "run.bat"])

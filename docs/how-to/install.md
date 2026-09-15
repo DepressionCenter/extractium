@@ -146,6 +146,11 @@ node --test examples/mcp/shared
 The Val Town and Cloudflare examples each carry their own test command in their READMEs.
 
 
+## A free-threaded Python
+
+Python 3.13 and 3.14 come in two builds, and the python.org installer offers the free-threaded one (`3.13t`, `3.14t`) as an optional part. The build script prefers a standard build, because the code parsers ship compiled wheels the free-threaded build cannot use. On a machine that has only the free-threaded build, the script installs everything except the parsers and says so: code files are still recorded by name, language, and length, but what they define is not read. Install a standard build, or set `PYTHON` to the path of one, to get the parsers. [Troubleshooting](../troubleshooting.md) has the pip message this shows up as.
+
+
 ## Conclusion
 
 You can now install Extractium™ either way, choose the extras a build needs, and confirm the install with the version flag and the test suite. Next, read [how to crawl a site](crawl-a-site.md) to set up your first build, or [running a build](../usage.md) for the command reference.

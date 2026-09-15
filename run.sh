@@ -44,10 +44,13 @@ CONFIG="${CONFIG:-config.yaml}"
 VENV_DIR="${VENV_DIR:-$HERE/.venv}"
 
 # The interpreter used to create the environment. Extractium needs 3.10
-# or newer, and a standard build: the free-threaded build (python3.13t,
-# python3.14t) cannot use the compiled wheels the parsers ship, so pip
-# would try to compile them and fail. When PYTHON is not set, the script
-# tries each name below and keeps the first standard build it finds.
+# or newer. A standard build is preferred: the free-threaded build
+# (python3.13t, python3.14t) cannot use the compiled wheels the code
+# parsers ship. PYTHON is checked even when it is set, because a copy of
+# this script saved before that build existed sets it to python3.
+# Otherwise each name below is tried and the first standard build is
+# kept. When only a free-threaded build exists, it is used and the
+# parsers are left out of the install.
 PYTHON="${PYTHON:-}"
 
 # Where Extractium is downloaded from, and which release, when this script
@@ -65,29 +68,49 @@ EXTRACTIUM_DIR="${EXTRACTIUM_DIR:-$HERE/extractium-src}"
 
 ### Check the interpreter ###
 
-# True when a command is a Python 3.10 or newer that is not free-threaded.
+# True when a command runs a Python 3.10 or newer that is not free-threaded.
 is_standard_python() {
     command -v "$1" >/dev/null 2>&1 && "$1" -c 'import sys, sysconfig
 sys.exit(0 if sys.version_info >= (3, 10) and not sysconfig.get_config_var("Py_GIL_DISABLED") else 1)' >/dev/null 2>&1
 }
 
-if [ -z "$PYTHON" ]; then
-    for candidate in python3 python3.14 python3.13 python3.12 python3.11 python3.10 python; do
+# True when a command runs any Python 3.10 or newer.
+is_any_python() {
+    command -v "$1" >/dev/null 2>&1 && "$1" -c 'import sys
+sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1
+}
+
+CANDIDATES="python3 python3.14 python3.13 python3.12 python3.11 python3.10 python"
+CHOSEN=""
+FREE_THREADED_ONLY=""
+if [ -n "$PYTHON" ] && is_standard_python "$PYTHON"; then
+    CHOSEN="$PYTHON"
+fi
+if [ -z "$CHOSEN" ]; then
+    for candidate in $CANDIDATES; do
         if is_standard_python "$candidate"; then
-            PYTHON="$candidate"
+            CHOSEN="$candidate"
             break
         fi
     done
 fi
-if [ -z "$PYTHON" ]; then
-    echo "No standard Python 3.10 or newer was found. The free-threaded build cannot use the" >&2
-    echo "parsers' wheels. Install a standard build, or set PYTHON to the path of one." >&2
+if [ -z "$CHOSEN" ]; then
+    for candidate in $PYTHON $CANDIDATES; do
+        if is_any_python "$candidate"; then
+            CHOSEN="$candidate"
+            FREE_THREADED_ONLY=1
+            break
+        fi
+    done
+fi
+if [ -z "$CHOSEN" ]; then
+    echo "No Python 3.10 or newer was found. Install one, or set PYTHON to the path of one." >&2
     exit 1
 fi
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
-    echo "Cannot find $PYTHON. Install Python 3.10 or newer, or set PYTHON to its path." >&2
-    exit 1
+if [ -n "$PYTHON" ] && [ "$PYTHON" != "$CHOSEN" ] && [ -z "$FREE_THREADED_ONLY" ]; then
+    echo "PYTHON names a free-threaded or older build; using $CHOSEN instead."
 fi
+PYTHON="$CHOSEN"
 
 ### Get Extractium if this script is on its own ###
 
@@ -177,35 +200,50 @@ fi
 
 ### Create the environment ###
 
-if [ ! -x "$VENV_DIR/bin/python" ] && [ ! -x "$VENV_DIR/Scripts/python.exe" ]; then
-    echo "Creating a virtual environment in $VENV_DIR ..."
-    "$PYTHON" -m venv "$VENV_DIR"
-fi
-
 # A virtual environment keeps its interpreter under bin/ on macOS and
 # Linux and under Scripts/ on Windows, which this script also reaches
 # through Git Bash and the Windows Subsystem for Linux.
-if [ -x "$VENV_DIR/bin/python" ]; then
-    VENV_PYTHON="$VENV_DIR/bin/python"
-else
-    VENV_PYTHON="$VENV_DIR/Scripts/python.exe"
-fi
+venv_python() {
+    if [ -x "$VENV_DIR/bin/python" ]; then
+        echo "$VENV_DIR/bin/python"
+    else
+        echo "$VENV_DIR/Scripts/python.exe"
+    fi
+}
+VENV_PYTHON="$(venv_python)"
 
-# An environment made earlier with a free-threaded Python would fail
-# inside pip with a message about building a parser. Say so plainly.
-if ! is_standard_python "$VENV_PYTHON"; then
-    echo "The environment in $VENV_DIR was made with a free-threaded Python, which cannot use" >&2
-    echo "the parsers' wheels. Delete that folder and run this script again." >&2
-    exit 1
+# An environment made earlier with a free-threaded Python cannot install
+# the parsers. It is made again with the standard build found above.
+if [ -x "$VENV_PYTHON" ] && [ -z "$FREE_THREADED_ONLY" ] && ! is_standard_python "$VENV_PYTHON"; then
+    echo "The environment in $VENV_DIR was made with a free-threaded Python. Making it again with $PYTHON ..."
+    rm -rf "$VENV_DIR"
+fi
+if [ ! -x "$VENV_PYTHON" ]; then
+    echo "Creating a virtual environment in $VENV_DIR ..."
+    "$PYTHON" -m venv "$VENV_DIR"
+    VENV_PYTHON="$(venv_python)"
 fi
 
 ### Install pinned dependencies ###
+
+# The lock file carries a hash for every package, so pip refuses anything
+# whose contents do not match what was locked. A free-threaded Python
+# installs from a copy of it without the code parsers, which have no
+# wheels for that build; everything else keeps its hash.
+LOCK="$HERE/requirements-lock.txt"
+if ! is_standard_python "$VENV_PYTHON"; then
+    echo "This Python is the free-threaded build, which cannot use the code parsers' wheels."
+    echo "Installing without them: code files are still recorded by name, language, and length,"
+    echo "but what they define is not read. Install a standard Python for that."
+    LOCK="$VENV_DIR/requirements-lock-without-parsers.txt"
+    "$VENV_PYTHON" "$HERE/tools/lock_without_parsers.py" "$HERE/requirements-lock.txt" "$LOCK"
+fi
 
 echo "Installing pinned dependencies ..."
 # The lock file carries a hash for every package, so pip refuses anything
 # whose contents do not match what was locked.
 "$VENV_PYTHON" -m pip install --quiet --upgrade pip
-"$VENV_PYTHON" -m pip install --quiet --require-hashes -r "$HERE/requirements-lock.txt"
+"$VENV_PYTHON" -m pip install --quiet --require-hashes -r "$LOCK"
 
 # Installed without dependencies, because the line above already put the
 # exact locked versions in place.

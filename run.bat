@@ -43,18 +43,27 @@ REM environments side by side.
 if not defined VENV_DIR set "VENV_DIR=%HERE%\.venv"
 
 REM The interpreter used to create the environment. Extractium needs Python
-REM 3.10 or newer, and a standard build: the free-threaded build (the one
-REM the launcher lists as 3.13t or 3.14t) cannot use the compiled wheels the
-REM parsers ship, so pip would try to compile them and fail. When PYTHON is
-REM not set, the script asks the launcher for one release after another and
-REM keeps the first standard build it finds.
-if not defined PYTHON call :choose_python
-if not defined PYTHON (
-    echo No standard Python 3.10 or newer was found. The free-threaded build cannot use the
-    echo parsers' wheels. Install a standard build from python.org, or set PYTHON to the path
-    echo of one, for example: set PYTHON="C:\Program Files\Python314\python.exe"
+REM 3.10 or newer. A standard build is preferred: the free-threaded build,
+REM the one the launcher lists as 3.13t or 3.14t and picks by default once
+REM installed, cannot use the compiled wheels the code parsers ship. PYTHON
+REM is checked even when it is set, because a copy of this script saved
+REM before that build existed sets it to the launcher's default. Otherwise
+REM the launcher is asked for one release after another, and the first
+REM standard build is kept. When only a free-threaded build exists, it is
+REM used and the parsers are left out of the install.
+set "CHOSEN="
+set "FREE_THREADED_ONLY="
+set "TRY_MODE=standard"
+if defined PYTHON call :try_python %PYTHON%
+if defined PYTHON if not defined CHOSEN set "REPLACING=1"
+if not defined CHOSEN call :choose_python
+if not defined CHOSEN (
+    echo No Python 3.10 or newer was found. Install one from python.org, or set PYTHON to the
+    echo path of one, for example: set PYTHON="C:\Program Files\Python314\python.exe"
     exit /b 1
 )
+if defined REPLACING if not defined FREE_THREADED_ONLY echo PYTHON names a free-threaded or older build; using %CHOSEN% instead.
+set "PYTHON=%CHOSEN%"
 
 REM Where Extractium is downloaded from, and which release, when this
 REM script was saved on its own rather than run from inside a checkout.
@@ -132,15 +141,37 @@ goto :handover
 
 :choose_python
 REM Tries the launcher's default, then each release from newest to oldest,
-REM then a python on the path, and keeps the first that is 3.10 or newer
-REM and not free-threaded. A candidate that is missing simply fails the
-REM check.
-for %%C in ("py -3" "py -3.14" "py -3.13" "py -3.12" "py -3.11" "py -3.10" "python") do (
-    if not defined PYTHON (
-        %%~C -c "import sys, sysconfig; sys.exit(0 if sys.version_info >= (3, 10) and not sysconfig.get_config_var('Py_GIL_DISABLED') else 1)" >nul 2>&1
-        if not errorlevel 1 set "PYTHON=%%~C"
-    )
-)
+REM then a python on the path. The first pass keeps the first standard
+REM build that is 3.10 or newer; the second, reached only when there is
+REM none, keeps any 3.10 or newer. A candidate that is missing simply
+REM fails the check.
+set "TRY_MODE=standard"
+for %%C in ("py -3" "py -3.14" "py -3.13" "py -3.12" "py -3.11" "py -3.10" "python") do if not defined CHOSEN call :try_python %%~C
+if defined CHOSEN goto :eof
+set "TRY_MODE=any"
+for %%C in ("py -3" "py -3.14" "py -3.13" "py -3.12" "py -3.11" "py -3.10" "python") do if not defined CHOSEN call :try_python %%~C
+if defined CHOSEN set "FREE_THREADED_ONLY=1"
+goto :eof
+
+:try_python
+REM Keeps the command given as the arguments when it runs a Python that is
+REM 3.10 or newer and, in standard mode, not free-threaded.
+if "%TRY_MODE%"=="any" goto :try_any
+%* -c "import sys, sysconfig; sys.exit(0 if sys.version_info >= (3, 10) and not sysconfig.get_config_var('Py_GIL_DISABLED') else 1)" >nul 2>&1
+goto :try_done
+:try_any
+%* -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+:try_done
+if not errorlevel 1 set "CHOSEN=%*"
+goto :eof
+
+:renew_free_threaded_venv
+REM An environment made earlier with a free-threaded Python cannot install
+REM the parsers. It is made again with the standard build found above.
+"%VENV_PYTHON%" -c "import sys, sysconfig; sys.exit(1 if sysconfig.get_config_var('Py_GIL_DISABLED') else 0)" >nul 2>&1
+if not errorlevel 1 goto :eof
+echo The environment in %VENV_DIR% was made with a free-threaded Python. Making it again with %PYTHON% ...
+rmdir /s /q "%VENV_DIR%"
 goto :eof
 
 :tag_from_landed
@@ -164,7 +195,9 @@ exit /b %errorlevel%
 
 REM ### Create the environment ###
 
-if not exist "%VENV_DIR%\Scripts\python.exe" (
+set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
+if exist "%VENV_PYTHON%" if not defined FREE_THREADED_ONLY call :renew_free_threaded_venv
+if not exist "%VENV_PYTHON%" (
     echo Creating a virtual environment in %VENV_DIR% ...
     %PYTHON% -m venv "%VENV_DIR%"
     if errorlevel 1 (
@@ -172,27 +205,28 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
         exit /b 1
     )
 )
-set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
-
-REM An environment made earlier with a free-threaded Python would fail
-REM inside pip with a message about building a parser. Say so plainly
-REM instead.
-"%VENV_PYTHON%" -c "import sys, sysconfig; sys.exit(1 if sysconfig.get_config_var('Py_GIL_DISABLED') else 0)" >nul 2>&1
-if errorlevel 1 (
-    echo The environment in %VENV_DIR% was made with a free-threaded Python, which cannot use
-    echo the parsers' wheels. Delete that folder and run this script again.
-    exit /b 1
-)
 
 REM ### Install pinned dependencies ###
+
+REM The lock file carries a hash for every package, so pip refuses anything
+REM whose contents do not match what was locked. A free-threaded Python
+REM installs from a copy of it without the code parsers, which have no
+REM wheels for that build; everything else keeps its hash.
+set "LOCK=%HERE%\requirements-lock.txt"
+"%VENV_PYTHON%" -c "import sys, sysconfig; sys.exit(1 if sysconfig.get_config_var('Py_GIL_DISABLED') else 0)" >nul 2>&1
+if errorlevel 1 (
+    echo This Python is the free-threaded build, which cannot use the code parsers' wheels.
+    echo Installing without them: code files are still recorded by name, language, and length,
+    echo but what they define is not read. Install a standard Python from python.org for that.
+    set "LOCK=%VENV_DIR%\requirements-lock-without-parsers.txt"
+    "%VENV_PYTHON%" "%HERE%\tools\lock_without_parsers.py" "%HERE%\requirements-lock.txt" "%VENV_DIR%\requirements-lock-without-parsers.txt"
+    if errorlevel 1 exit /b 1
+)
 
 echo Installing pinned dependencies ...
 "%VENV_PYTHON%" -m pip install --quiet --upgrade pip
 if errorlevel 1 exit /b 1
-
-REM The lock file carries a hash for every package, so pip refuses anything
-REM whose contents do not match what was locked.
-"%VENV_PYTHON%" -m pip install --quiet --require-hashes -r "%HERE%\requirements-lock.txt"
+"%VENV_PYTHON%" -m pip install --quiet --require-hashes -r "%LOCK%"
 if errorlevel 1 exit /b 1
 
 REM Installed without dependencies, because the line above already put the
