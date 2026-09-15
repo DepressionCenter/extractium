@@ -46,9 +46,9 @@ import threading
 
 # How long one file may take to read before the child is ended. A real
 # document of the largest size the readers accept is read in seconds;
-# a file that is still going after a minute is a file built to keep a
-# parser busy.
-READER_TIMEOUT_SECONDS = 60
+# a file that is still going after half a minute is a file built to
+# keep a parser busy.
+READER_TIMEOUT_SECONDS = 30
 
 # The most memory the child may use, where the platform can enforce it.
 # Generous for a document; a file that needs more than this to parse is

@@ -272,7 +272,7 @@ What is not read:
 - OpenDocument spreadsheets and presentations (`.ods`, `.odp`).
 - Pictures, comments, footnotes, headers, footers, and tracked deletions inside a file.
 
-A PDF is read in a separate process with a time limit of 60 seconds per file. A file that runs past it is skipped with `the reader gave up after 60 seconds`, and the next file starts a fresh process. The limit is there because a malformed PDF can keep a parser busy for a very long time, and a process can be stopped where a thread cannot.
+A PDF is read in a separate process with a time limit of 30 seconds per file. A file that runs past it is skipped with `the reader gave up after 30 seconds`, and the next file starts a fresh process. The limit is there because a malformed PDF can keep a parser busy for a very long time, and a process can be stopped where a thread cannot.
 
 On a `web` source, a link to a document file is fetched only when it is in scope, like any other link. Most document files sit on another host, such as a content-delivery network, so a `leaf_patterns` entry is usually needed to reach them:
 

@@ -221,7 +221,7 @@ where text was expected; the request landed on https://accounts.google.com/Servi
 
 **Fix.** Nothing, if the file is a scan. Run it through a text-recognition tool and publish the result, or publish the source document it was printed from, to have its words indexed. A PDF that does hold text but is skipped this way is worth reporting.
 
-### A PDF was skipped saying `the reader gave up after 60 seconds`
+### A PDF was skipped saying `the reader gave up after 30 seconds`
 
 **Cause.** Reading the file took longer than the limit. A malformed PDF can keep a parser busy for a very long time, so the reader runs in a separate process with a time limit, and a file that runs past it is skipped rather than allowed to stall the build. A very large ordinary file can reach the limit on a slow machine.
 
