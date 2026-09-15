@@ -3,16 +3,16 @@ Summary: The TeamDynamix (TDX) client-portal site handler: an on-by-default
 plugin the web source consults for teamdynamix.* URLs. It owns the
 portal's content selectors (#divMainContent, #questionsContent), the
 "Article - " and "Question Detail - " title prefix stripping, breadcrumb
-categories, and the portal's exclude patterns (login, print, file, tag,
-and category views). It is not a crawler: link discovery stays in
-extractium.sources.web. See docs/extractium-spec.md section 5.
+categories, and the portal's exclude patterns (login, print, file,
+person, tag, and category views, and narrowed question listings). It is
+not a crawler: link discovery stays in extractium.sources.web. See docs/extractium-spec.md section 5.
 
 This file is part of Extractium™
 extractium/sources/tdx.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -83,11 +83,31 @@ TDX_BREADCRUMB_SELECTORS = ("#tdBreadcrumb", ".breadcrumb")
 # leading class covers both places a parameter can start.
 PARAMETER_START = r"[/?&]"
 
+# The portal's question listing is one flat, paged list of every question,
+# unlike its knowledge base, which has no full listing. That flat list
+# also offers itself narrowed by category, by tag, by both, and by an
+# answered or unanswered Filter, each on every page, and each linking
+# to a subset of what the flat list links. Checked against the
+# Depression Center portal on 2026-09-14: the flat list reached all 31
+# questions across three pages; the other 84 listing views reached 31
+# between them and nothing the flat list did not. So a Questions listing
+# is crawled only in its flat form and its pages: the narrowed views are
+# kept off the crawl, and the knowledge-base listings below are not,
+# because there they are the only route to the articles. The portal
+# writes "not narrowed" as CategoryID=0 and TagID=0, which the lookahead
+# lets through. Both patterns are anchored to the Questions path so an
+# ordinary site's own parameters are left alone.
+#
+# A person page redirects to the institution's sign-in, and a listing
+# links to one for every question's author, so each is a wasted request.
 TDX_CRAWL_EXCLUDE_PATTERNS = (
     r"/Login\.aspx",
     r"/PrintArticle\?ID=",
     r"/FileOpen(?:[/?#]|$)",
     r"/FileDownload(?:[/?#]|$)",
+    r"/Questions\?(?:[^#]*&)?(?:CategoryID|TagID)=(?!0(?:[&#]|$))",
+    r"/Questions\?(?:[^#]*&)?Filter=",
+    r"/TDClient/[^/]+/[^/]+/People/",
 )
 
 # Category and tag listings link to real articles and questions and hold

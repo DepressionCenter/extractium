@@ -625,7 +625,7 @@ This is usually the right setting. Add patterns only when one build has to cover
 You get the two exclusion lists for free. Each list is the sum of two parts:
 
 1. Files that hold no readable text: images, archives, office documents, fonts, media, and source code. Always included.
-2. What each enabled site handler adds. The generic handler, which is always on, skips search forms, sign-in pages, print views, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, and file-download views, and puts its category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
+2. What each enabled site handler adds. The generic handler, which is always on, skips search forms, sign-in pages, print views, and per-person pages. The `tdx` handler adds the TeamDynamix portal's login, print, file-download, and person views, and every narrowed view of its question listing (by category, by tag, or by answered and unanswered), because the flat question listing already pages through every question. It puts the knowledge-base category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list.
 
 Category, tag, and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.
 

@@ -13,7 +13,7 @@ tests/test_web_source.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-10
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -648,6 +648,12 @@ NON_CONTENT_URLS = (
     "https://github.com/DepressionCenter/Repo/stargazers",
     "https://teamdynamix.umich.edu/TDClient/210/Org/Login.aspx",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/PrintArticle?ID=10904",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8464&Filter=answered",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?Filter=unanswered&Page=2",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200076&TagID=10475",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200076&TagID=0",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8464",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/People/Details?ID=0b0d00e0-d00a-ed00-ade0-c00000000eb0&popup=1",
     "https://example.org/Search",
     "https://example.org/Login",
 )
@@ -664,6 +670,14 @@ CONTENT_URLS = (
     "https://example.org/community",
     "https://example.org/security",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Article/10904/How-to-do-a-thing",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions/Details/100010",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?Page=2",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions/Categories",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB?CategoryID=1015",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/KB/TagID/8245",
+    "https://example.org/reports?Filter=recent",
+    "https://example.org/People/",
 )
 
 
@@ -723,7 +737,7 @@ def test_default_excludes_still_cover_everything_the_reference_excluded(referenc
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/Category/1015/All-Things-Data",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB?CategoryID=1015",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/CategoryID/1015",
-    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8245",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0",
     "https://teamdynamix.umich.edu/TDClient/210/Org/KB/TagID/8245",
     "https://github.com/DepressionCenter/Repo/tree/main/docs",
 ])
@@ -734,7 +748,9 @@ def test_listing_pages_are_followed_for_links_but_not_indexed(url):
     list. A TeamDynamix portal publishes no sitemap and no full article
     index, so these listings are the only route to most of what it holds:
     dropping them from the crawl would shrink the knowledge base to
-    whatever the home page happens to link to.
+    whatever the home page happens to link to. The portal's flat question
+    listing is the one exception the other way: it reaches every question
+    itself, so its narrowed views are the ones dropped.
     """
     assert not any(p.search(url) for p in _excludes("crawl")), url
     assert any(p.search(url) for p in _excludes("index")), url
@@ -746,9 +762,44 @@ def test_an_unfiltered_portal_listing_is_still_crawled():
     the crawl on sight of a tag parameter would skip the unfiltered
     listing too, which is the widest discovery page the portal has.
     """
-    url = "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0&Filter=unanswered"
+    url = "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0"
 
     assert not any(p.search(url) for p in _excludes("crawl"))
+
+
+@pytest.mark.parametrize("url", [
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0&Filter=answered",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8464&Filter=unanswered",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200080&Filter=answered",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?Filter=answered&Page=2",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200076&TagID=10475&Filter=answered",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200076&TagID=0",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=8464",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200076&TagID=10475",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=200076&Page=2",
+])
+def test_narrowed_portal_question_listings_are_not_crawled(url):
+    """
+    The portal's question listing is one flat, paged list of every
+    question, and it offers itself narrowed by category, by tag, by both,
+    and by an answered or unanswered filter. Measured against the
+    Depression Center portal, the flat list reached every question and
+    the 84 narrowed views reached nothing more, so the narrowed views
+    stay off the crawl.
+    """
+    assert any(p.search(url) for p in _excludes("crawl")), url
+
+
+@pytest.mark.parametrize("url", [
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?Page=3",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions?CategoryID=0&TagID=0&Page=2",
+    "https://teamdynamix.umich.edu/TDClient/210/Org/Questions/Details/100010",
+])
+def test_the_flat_portal_question_listing_and_its_pages_are_crawled(url):
+    """The flat list, its pages, and the questions themselves are the route to every question."""
+    assert not any(p.search(url) for p in _excludes("crawl")), url
 
 
 def test_index_defaults_are_a_superset_of_crawl_defaults():
