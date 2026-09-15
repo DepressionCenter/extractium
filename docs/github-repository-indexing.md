@@ -183,8 +183,9 @@ Defaults:
 | Archived | Included | Archived documentation is still documentation. Dropping it silently loses history. |
 | Empty | Skipped | Nothing to read. |
 | Disabled | Skipped | Nothing to read. |
+| Housekeeping (`.github`, `.github-private`) | Skipped | A name starting with a dot holds the account's profile, issue templates, and workflow templates, not a project's documentation. |
 
-Configuration overrides the first three.
+Configuration overrides the first three, and naming a housekeeping repository in `include_repos` reads it.
 
 ### Taking inventory before downloading
 

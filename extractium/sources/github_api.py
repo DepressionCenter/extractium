@@ -12,7 +12,7 @@ extractium/sources/github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-10
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -238,9 +238,11 @@ class GitHubApiSource:
                 continue
             try:
                 yield from self._read_repository(client, repository, tier, progress)
-            except GitHubNotFound as e:
+            except (GitHubNotFound, ValueError) as e:
                 # One repository disappearing between the listing and the
-                # read must not destroy an organization-wide build.
+                # read, or one whose listed name or branch is not shaped
+                # like a GitHub name, must not destroy an organization-wide
+                # build.
                 progress(f"  {full_name}: skipped ({e})")
             self.coverage[full_name] = tier
 
@@ -278,6 +280,12 @@ class GitHubApiSource:
         """
         name = repository.get("name") or ""
         if self.include_repos and name not in self.include_repos:
+            return False
+        if name.startswith(".") and not self.include_repos:
+            # ".github" and ".github-private" hold an account's profile,
+            # issue templates, and workflow templates, not a project's
+            # documentation. Naming one in include_repos still reads it.
+            progress(f"  {name}: skipped (an account housekeeping repository; name it in include_repos to read it)")
             return False
         if name in self.exclude_repos:
             progress(f"  {name}: skipped (excluded by exclude_repos)")

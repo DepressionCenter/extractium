@@ -12,7 +12,7 @@ tests/test_source_github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-11
+Last Modified: 2026-09-14
 Notes: See README file for documentation and full license information.
 """
 
@@ -298,6 +298,50 @@ def test_a_fork_an_empty_repository_and_a_disabled_one_are_left_out(fixture, fak
 
     assert any("example-fork" in line and "fork" in line for line in lines)
     assert any("example-empty" in line and "empty" in line for line in lines)
+
+
+def housekeeping_repository(fixture, name):
+    """The fixture's first repository under a dot-prefixed name, the way GitHub lists ".github"."""
+    entry = dict(fixture["repositories"][0])
+    entry["name"] = name
+    entry["full_name"] = f"example-org/{name}"
+    return entry
+
+
+def test_an_accounts_housekeeping_repositories_are_left_out_and_said_so(
+    fixture, fake_github_session_factory,
+):
+    """
+    ".github" and ".github-private" hold an account's profile and
+    templates, not a project's documentation, so an account listing
+    leaves them out. Each one is named in the log, like every exclusion.
+    """
+    lines = []
+    listing = fixture["repositories"] + [
+        housekeeping_repository(fixture, ".github"),
+        housekeeping_repository(fixture, ".github-private"),
+    ]
+    session = fake_github_session_factory(api_routes(fixture, repositories=listing))
+
+    documents = read(make_source(), session, progress=lines.append)
+
+    assert not any("/.github" in d.url for d in documents)
+    assert any(line.startswith("  .github:") and "housekeeping" in line for line in lines)
+    assert any(line.startswith("  .github-private:") and "housekeeping" in line for line in lines)
+
+
+def test_a_housekeeping_repository_named_in_include_repos_is_read(
+    fixture, fake_github_session_factory,
+):
+    """Naming ".github" is an explicit ask, and a GitHub name it is."""
+    fixture = {**fixture, "trees": {**fixture["trees"], ".github": fixture["trees"]["example-tools"]}}
+    listing = fixture["repositories"] + [housekeeping_repository(fixture, ".github")]
+    session = fake_github_session_factory(api_routes(fixture, repositories=listing))
+
+    documents = read(make_source(include_repos=(".github",)), session)
+
+    repositories = {d.url.split("/")[4] for d in documents if len(d.url.split("/")) > 4}
+    assert repositories == {".github"}
 
 
 def test_an_archived_repository_is_read_because_its_documentation_still_counts(
