@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/data-flow.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: What happens to content between the site it is read from and the
 files a build writes: the stages, the shape of the data at each one, the
 units and time zones every field uses, and the two places where content
@@ -161,6 +161,7 @@ So: assume any folder you point a local source at may hold protected health info
 | Build time | UTC, ISO 8601, with a `Z` suffix. Never a local time. |
 | Window offsets | UTF-16 code units, counted from the start of the section's text. |
 | Section length | At most 1,200 characters. Windows: at most 350, overlapping by 53. |
+| Text indexed whole | A crawled page, a repository file, or a page inside a repository whose text runs past 200,000 characters is indexed as a compact record (title, opening, headings, most frequent terms) rather than chunked in full. The log names each one. |
 | Text encoding | UTF-8 everywhere, in every file this tool writes. |
 | Vector storage | Whole numbers from -127 to 127, little-endian, divided by 127 on the way back. Or 32-bit floats, little-endian, with `--float32-vecs`. |
 | Keyword tokens | Lowercase runs of three or more ASCII letters or digits. |

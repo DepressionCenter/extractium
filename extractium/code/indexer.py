@@ -12,7 +12,7 @@ extractium/code/indexer.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -42,6 +42,7 @@ from extractium.code.ctags import Ctags
 from extractium.code.records import FileFacts, RepositoryFacts, SCHEMA_VERSION, as_data, from_data
 from extractium.code.tree_sitter import Engine
 from extractium.core import cache as caching
+from extractium.core import prose
 
 ### Limits ###
 
@@ -52,7 +53,9 @@ MAX_FILES = 3_000
 
 # A file longer than this is generated -- a bundled library, a compiled
 # template, a data table written as source. Parsing one costs a great
-# deal and tells a reader nothing.
+# deal and tells a reader nothing. A container file over it still has
+# its text read, because that is a regular-expression pass rather than
+# a parse; only the code inside it goes unparsed.
 MAX_FILE_CHARS = 1_500_000
 
 
@@ -99,7 +102,8 @@ class CodeIndexer:
             records.RepositoryFacts: one record per analyzed file, with
             imports resolved, calls labelled, and reverse edges filled
             in; plus the prose pulled out of any notebook, R Markdown
-            file, or page, keyed by path.
+            file, or page, keyed by path. Prose longer than
+            prose.MAX_PROSE_CHARS arrives as its compact record.
         """
         entries = [tuple(entry) for entry in entries]
         content = {path: text for path, text, _ in entries}
@@ -112,15 +116,25 @@ class CodeIndexer:
                 continue
             if not languages.is_code_path(path):
                 continue
-            if text is None or len(text) > MAX_FILE_CHARS:
+            if text is None:
                 skipped.append(f"{path}: too long to parse")
                 continue
-            facts = self.analyze_file(path, text, blob_sha)
+            contents = embedded.read(path, text)
+            if len(text) > MAX_FILE_CHARS:
+                if contents is None:
+                    skipped.append(f"{path}: too long to parse")
+                    continue
+                skipped.append(f"{path}: too long to parse its code; its text was indexed")
+                facts = _container_outline(path, text, contents)
+            else:
+                facts = self.analyze_file(path, text, blob_sha, contents)
             if facts is None:
                 continue
-            contents = embedded.read(path, text)
             if contents is not None and contents.prose.strip():
-                documentation[path] = (contents.title, contents.prose)
+                documentation[path] = (
+                    contents.title,
+                    prose.prose_for_index(contents.title, contents.prose, contents.headings),
+                )
             analyzed.append(facts)
 
         summarized = []
@@ -142,7 +156,7 @@ class CodeIndexer:
 
     ### One File ###
 
-    def analyze_file(self, path, text, blob_sha=""):
+    def analyze_file(self, path, text, blob_sha="", contents=None):
         """
         Reads one file at the best tier this machine can reach.
 
@@ -156,6 +170,9 @@ class CodeIndexer:
             text (str): the file's content.
             blob_sha (str): the file's Git object name, or an empty
                 string when there is none to cache against.
+            contents (embedded.Contents | None): what a container file
+                holds, when the caller has read it already, so the file
+                is not read twice.
 
         Returns:
             records.FileFacts | None: what the file holds, or None when
@@ -168,15 +185,15 @@ class CodeIndexer:
         if stored is not None:
             return stored
 
-        facts = self._read(path, text)
+        facts = self._read(path, text, contents)
         _store(blob_sha, key, facts)
         return facts
 
-    def _read(self, path, text):
+    def _read(self, path, text, contents=None):
         """The best records this machine can produce for one file."""
         container = languages.container_for_path(path)
         if container:
-            return self._read_container(path, text)
+            return self._read_container(path, text, contents)
 
         spec = languages.language_for_path(path)
         facts = self.engine.analyze(path, text, spec)
@@ -188,7 +205,7 @@ class CodeIndexer:
                 return tagged
         return facts
 
-    def _read_container(self, path, text):
+    def _read_container(self, path, text, contents=None):
         """
         The records for a file that holds another language inside it.
 
@@ -196,14 +213,9 @@ class CodeIndexer:
         delimiter named, and every line number is moved to where the
         block sits in the file a reader will open.
         """
-        contents = embedded.read(path, text)
-        outline = FileFacts(
-            path=path,
-            language=contents.kind if contents else "",
-            display=_container_display(contents.kind if contents else ""),
-            tier=languages.TIER_METADATA,
-            line_count=text.count("\n") + (1 if text and not text.endswith("\n") else 0),
-        )
+        if contents is None:
+            contents = embedded.read(path, text)
+        outline = _container_outline(path, text, contents)
         if contents is None:
             return outline
 
@@ -236,7 +248,7 @@ class CodeIndexer:
             tier=languages.TIER_TREE_SITTER if parsed else languages.TIER_METADATA,
             display=_container_display(contents.kind, spoken),
             symbols=tuple(symbols), imports=tuple(imports), calls=tuple(calls),
-            doc=_first_paragraph(contents.prose),
+            doc=prose.first_paragraph(contents.prose),
         )
 
     ### Summaries ###
@@ -320,6 +332,20 @@ def _store(blob_sha, key, facts):
         pass
 
 
+def _container_outline(path, text, contents):
+    """
+    The file-level record for a container before, or without, a parse
+    of the code inside it: path, kind, and length.
+    """
+    return FileFacts(
+        path=path,
+        language=contents.kind if contents else "",
+        display=_container_display(contents.kind if contents else ""),
+        tier=languages.TIER_METADATA,
+        line_count=text.count("\n") + (1 if text and not text.endswith("\n") else 0),
+    )
+
+
 def _container_display(kind, spoken=()):
     """What a container file is called, with the languages found inside it."""
     names = {
@@ -332,13 +358,3 @@ def _container_display(kind, spoken=()):
     return f"{base} ({', '.join(spoken)})" if spoken else base
 
 
-def _first_paragraph(prose):
-    """
-    The first paragraph of a container's prose, which is what its author
-    wrote to introduce it.
-    """
-    for block in (prose or "").split("\n\n"):
-        cleaned = " ".join(line.strip("# ").strip() for line in block.splitlines()).strip()
-        if cleaned:
-            return cleaned
-    return ""

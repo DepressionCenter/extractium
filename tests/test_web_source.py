@@ -13,7 +13,7 @@ tests/test_web_source.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -239,6 +239,37 @@ def test_seed_is_visited_even_if_it_matches_a_crawl_exclude_pattern(isolated_cor
     )
 
     assert [d.url for d in documents] == [seed]
+
+
+def test_a_page_whose_text_runs_past_the_ceiling_is_indexed_as_an_outline(
+    isolated_core_cache, fake_session_factory,
+):
+    """
+    A site that publishes everything on one page is one address with
+    hundreds of thousands of characters, and chunking it whole would
+    make thousands of sections for that one address. Its outline is
+    indexed instead, and the log says so.
+    """
+    seed = "https://example.org/everything"
+    html = (
+        "<html><head><title>Everything</title></head><body><main>"
+        "<h1>Everything</h1><p>All the resources, on one page.</p><h2>Guides</h2>"
+        + "<p>guide to peer support groups</p>" * 12_000
+        + "</main></body></html>"
+    )
+    lines = []
+    session = fake_session_factory({seed: html_response(html), "https://example.org/robots.txt": ROBOTS_ABSENT})
+
+    documents = crawl(make_source(seed), session, progress=lines.append)
+
+    assert len(documents) == 1
+    record = documents[0].content
+    assert isinstance(record, str)
+    assert record.startswith("Everything\n\nAll the resources, on one page.")
+    assert "Headings: Everything; Guides" in record
+    assert "guide, peer, support, groups" in record
+    assert "only this outline was indexed" in record
+    assert any("indexed as an outline" in line for line in lines)
 
 
 def test_max_pages_ceiling_stops_the_crawl(isolated_core_cache, fake_session_factory):

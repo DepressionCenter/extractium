@@ -11,7 +11,7 @@ extractium/code/embedded.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -73,15 +73,21 @@ class Contents:
             out. Indexed as documentation.
         blocks (tuple[Block, ...]): the code, in the order it appears.
         title (str): a heading read out of the file, when it has one.
+        headings (tuple[str, ...]): the section headings the reader
+            found, in order, for the compact record of a file too long
+            to index whole. Empty when the reader collects none; the
+            Markdown headings in the prose are read instead.
     """
 
     kind: str
     prose: str = ""
     blocks: tuple = ()
     title: str = ""
+    headings: tuple = ()
 
     def __post_init__(self):
         object.__setattr__(self, "blocks", tuple(self.blocks))
+        object.__setattr__(self, "headings", tuple(self.headings))
 
 
 ### Limits ###
@@ -334,7 +340,9 @@ JAVASCRIPT_TYPES = frozenset({
 TAG = re.compile(r"<[^>]+>")
 STYLE_ELEMENT = re.compile(r"<style\b[^>]*>.*?</style\s*>", re.I | re.S)
 HTML_TITLE = re.compile(r"<title[^>]*>(.*?)</title\s*>", re.I | re.S)
+HTML_HEADING = re.compile(r"<h([1-3])\b[^>]*>(.*?)</h\1\s*>", re.I | re.S)
 BLANK_RUN = re.compile(r"\n{3,}")
+WHITESPACE_RUN = re.compile(r"\s+")
 
 
 def read_html(text):
@@ -366,6 +374,12 @@ def read_html(text):
 
     stripped = SCRIPT_ELEMENT.sub(" ", text)
     stripped = STYLE_ELEMENT.sub(" ", stripped)
+    headings = tuple(
+        heading for heading in (
+            WHITESPACE_RUN.sub(" ", TAG.sub("", match.group(2))).strip()
+            for match in HTML_HEADING.finditer(stripped)
+        ) if heading
+    )
     prose = BLANK_RUN.sub("\n\n", TAG.sub(" ", stripped))
     prose = "\n".join(line.strip() for line in prose.splitlines())
     title = HTML_TITLE.search(text)
@@ -374,6 +388,7 @@ def read_html(text):
         prose=BLANK_RUN.sub("\n\n", prose).strip(),
         blocks=blocks,
         title=TAG.sub("", title.group(1)).strip() if title else "",
+        headings=headings,
     )
 
 

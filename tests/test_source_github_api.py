@@ -12,7 +12,7 @@ tests/test_source_github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -298,6 +298,72 @@ def test_a_fork_an_empty_repository_and_a_disabled_one_are_left_out(fixture, fak
 
     assert any("example-fork" in line and "fork" in line for line in lines)
     assert any("example-empty" in line and "empty" in line for line in lines)
+
+
+def with_extra_file(fixture, path, text):
+    """The fixture with one more file in example-tools, served through the archive route."""
+    sha = ("e" * 39 + "1")[:40]
+    while sha in fixture["blobs"]:
+        sha = sha[1:] + "e"
+    tree = dict(fixture["trees"]["example-tools"])
+    tree["tree"] = list(tree["tree"]) + [
+        {"path": path, "type": "blob", "size": len(text.encode("utf-8")), "sha": sha}
+    ]
+    return {
+        **fixture,
+        "trees": {**fixture["trees"], "example-tools": tree},
+        "blobs": {**fixture["blobs"], sha: text},
+    }
+
+
+def test_a_pages_text_is_indexed_as_a_document_beside_its_code_record(
+    fixture, fake_github_session_factory,
+):
+    """A page is code to the parser and prose to a reader; both records are kept."""
+    fixture = with_extra_file(fixture, "site/index.html", (
+        "<html><head><title>Search</title></head><body><h2>Ask</h2>"
+        "<p>Type a question and press Enter.</p><script>function go() {}</script></body></html>"
+    ))
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(), session)
+
+    pages = [d for d in documents if d.url.endswith("/site/index.html")]
+    assert {d.content_type for d in pages} >= {"text", "code_file"}
+    text = next(d for d in pages if d.content_type == "text")
+    assert "Type a question and press Enter." in text.content
+    assert "(Search)" in text.title
+
+
+def test_a_documentation_file_over_the_prose_ceiling_is_indexed_as_an_outline(
+    fixture, fake_github_session_factory,
+):
+    manual = "# Field manual\n\nHow the sensors are issued.\n\n" + "sensor issue return\n" * 15_000
+    fixture = with_extra_file(fixture, "docs/manual.md", manual)
+    lines = []
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(), session, progress=lines.append)
+
+    record = next(d for d in documents if d.url.endswith("/docs/manual.md"))
+    assert "only this outline was indexed" in record.content
+    assert "Headings: Field manual" in record.content
+    assert len(record.content) < 2_000
+    assert any("docs/manual.md" in line and "outline" in line for line in lines)
+
+
+def test_a_body_larger_than_the_ceiling_is_skipped_even_when_the_listing_understated_it(
+    fixture, fake_github_session_factory,
+):
+    fixture = with_extra_file(fixture, "docs/huge.md", "x" * 300)
+    fixture["trees"]["example-tools"]["tree"][-1]["size"] = 10     # the listing lies
+    lines = []
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(max_file_bytes=200), session, progress=lines.append)
+
+    assert not any(d.url.endswith("/docs/huge.md") for d in documents)
+    assert any("docs/huge.md" in line and "understated" in line for line in lines)
 
 
 def housekeeping_repository(fixture, name):
