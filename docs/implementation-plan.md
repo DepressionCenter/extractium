@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
@@ -492,6 +492,10 @@ Still not built: following a YouTube link found while crawling something else an
 ### After Phase 15
 
 What is left is listed here so a reader of this page knows what was deferred and what was ruled out, and why. A decision recorded here is meant to save somebody proposing the same thing again from first principles.
+
+#### Done since
+
+**Sources and pages read at the same time.** Issue #50, finished 2026-09-15 on branch `feat-parallel-sources`. Sources run in threads, a crawl keeps several fetches in flight, and the pause between requests moved into the session, per host, so the rate a site sees is unchanged. Documents keep file order and a crawl keeps its one-at-a-time order, so the outputs are the same and only the wall-clock time changes. The `parallel_sources` and `parallel_pages` settings, both 4 by default, are in the configuration reference.
 
 #### Still open
 

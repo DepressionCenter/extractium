@@ -7,7 +7,10 @@ This module offers three transports: `plain`, an ordinary session;
 default, which tries a plain request first and retries once over the
 browser handshake only when the answer is a challenge. The crawler's own
 User-Agent is sent either way: only the shape of the handshake changes.
-Every host's transport is decided once and reported once.
+Every host's transport is decided once and reported once. The session
+the build fetches through also paces requests per host, so a site is
+asked at most once per `delay_seconds` however many sources and workers
+are reading it.
 
 This file is part of Extractium™
 extractium/core/transport.py
@@ -33,8 +36,9 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-12"
+__date__ = "2026-09-15"
 
+import threading
 import time
 from urllib.parse import urlsplit
 
@@ -169,12 +173,17 @@ class AutoSession:
         self.browser = None
         self.transport_by_host = {}
         self.unavailable_hosts = set()
+        # Sources run in threads, so a host's transport is decided and
+        # reported under a lock: two workers reaching one host at the same
+        # moment would otherwise both announce it.
+        self._lock = threading.Lock()
 
     def _browser(self):
         """The browser session, built on first use."""
-        if self.browser is None:
-            self.browser = self.browser_factory()
-        return self.browser
+        with self._lock:
+            if self.browser is None:
+                self.browser = self.browser_factory()
+            return self.browser
 
     def get(self, url, **kwargs):
         """
@@ -211,17 +220,17 @@ class AutoSession:
             # robots.txt is a static file the protection never challenges,
             # so its answer says nothing about how the host's pages will be
             # served and does not settle the host's transport.
-            if host not in self.transport_by_host and not is_robots(url):
-                self.transport_by_host[host] = TRANSPORT_PLAIN
-                self.progress(PLAIN_REPORT.format(host=host))
+            if not is_robots(url):
+                self._settle(host, TRANSPORT_PLAIN, PLAIN_REPORT)
             return response
 
         try:
             browser = self._browser()
         except TransportUnavailable:
-            if host not in self.unavailable_hosts:
-                self.unavailable_hosts.add(host)
-                self.progress(UNAVAILABLE_REPORT.format(host=host))
+            with self._lock:
+                if host not in self.unavailable_hosts:
+                    self.unavailable_hosts.add(host)
+                    self.progress(UNAVAILABLE_REPORT.format(host=host))
             return response
 
         if self.delay_seconds > 0:
@@ -229,10 +238,22 @@ class AutoSession:
         retried = getattr(browser, method)(url, **kwargs)
         # The host keeps the browser transport even when the retry was
         # refused too: the plain transport is known not to work there.
-        if self.transport_by_host.get(host) != TRANSPORT_BROWSER:
-            self.transport_by_host[host] = TRANSPORT_BROWSER
-            self.progress(BROWSER_REPORT.format(host=host))
+        self._settle(host, TRANSPORT_BROWSER, BROWSER_REPORT)
         return retried
+
+    def _settle(self, host, mode, report):
+        """
+        Records a host's transport and reports it, once. The plain
+        transport is recorded only for a host with no decision yet; the
+        browser transport replaces a plain decision, because a challenge
+        after a plain answer means the plain transport stopped working.
+        """
+        with self._lock:
+            current = self.transport_by_host.get(host)
+            if current == mode or (mode == TRANSPORT_PLAIN and current is not None):
+                return
+            self.transport_by_host[host] = mode
+            self.progress(report.format(host=host))
 
     def summary_lines(self):
         """
@@ -252,27 +273,131 @@ class AutoSession:
             self.browser.close()
 
 
+### Pacing ###
+
+class HostPacer:
+    """
+    Keeps the requests to one host at least `delay_seconds` apart, however
+    many threads are sending them.
+
+    Politeness is a promise to a site rather than to a source. Sources run
+    at the same time, and a crawl keeps several fetches in flight, so the
+    pause between requests cannot live in any one of them: two sources
+    reading one host would together send twice the rate the setting
+    promises. Every request asks here first and waits its turn for that
+    host alone. Hosts never wait for one another, and the request itself
+    runs outside the wait, so several answers from one host may be in
+    flight at once while their starts stay one delay apart.
+
+    Args:
+        delay_seconds (float): the least time between two request starts
+            to the same host; 0 or less means no pacing at all.
+        clock (Callable[[], float]): a monotonic clock, in seconds.
+        sleep (Callable[[float], None]): how the wait is taken.
+    """
+
+    def __init__(self, delay_seconds=0.0, clock=time.monotonic, sleep=time.sleep):
+        self.delay_seconds = float(delay_seconds or 0.0)
+        self.clock = clock
+        self.sleep = sleep
+        self._lock = threading.Lock()
+        self._host_locks = {}
+        self._next_start = {}
+
+    def wait(self, host):
+        """
+        Blocks until a request to `host` may start, then claims that start.
+
+        Args:
+            host (str): the lowercased host name, or an empty string for an
+                address without one, which is paced like any other host.
+        """
+        if self.delay_seconds <= 0:
+            return
+        with self._lock:
+            host_lock = self._host_locks.setdefault(host, threading.Lock())
+        with host_lock:
+            pause = self._next_start.get(host, 0.0) - self.clock()
+            if pause > 0:
+                self.sleep(pause)
+            self._next_start[host] = self.clock() + self.delay_seconds
+
+
+class PacedSession:
+    """
+    A session that applies a HostPacer to every request before handing it
+    to the session underneath.
+
+    Every source in a build fetches through the one session the command
+    line makes, so this is the one place a per-host rule reaches every
+    request, robots.txt included. The wrapper answers the same `get`,
+    `post`, `close`, and `summary_lines` the fetch layer and the command
+    line use, and any other attribute is read from the session underneath.
+
+    Args:
+        session: the session that sends the requests.
+        pacer (HostPacer): the per-host pacing rule.
+    """
+
+    def __init__(self, session, pacer):
+        self.session = session
+        self.pacer = pacer
+
+    def get(self, url, **kwargs):
+        """Fetches one URL once its host's turn has come."""
+        self.pacer.wait(host_of(url))
+        return self.session.get(url, **kwargs)
+
+    def post(self, url, **kwargs):
+        """Sends one request with a body once its host's turn has come."""
+        self.pacer.wait(host_of(url))
+        return self.session.post(url, **kwargs)
+
+    def summary_lines(self):
+        """The session's summary lines, or none when it keeps no summary."""
+        if hasattr(self.session, "summary_lines"):
+            return self.session.summary_lines()
+        return []
+
+    def close(self):
+        """Closes the session underneath."""
+        self.session.close()
+
+    def __getattr__(self, name):
+        # Reached only for attributes this wrapper does not define, so a
+        # caller that inspects the session underneath still can.
+        return getattr(self.session, name)
+
+
 def make_session(mode=DEFAULT_TRANSPORT, progress=None, delay_seconds=0.0):
     """
     The session a build should fetch through, for one transport setting.
+
+    Whatever the mode, the session paces requests per host: a host is
+    asked at most once per `delay_seconds`, across every source and every
+    worker in the build. See HostPacer.
 
     Args:
         mode (str): one of TRANSPORT_MODES.
         progress (Callable[[str], None] | None): where the per-host
             transport lines go.
-        delay_seconds (float): the build's pause between requests.
+        delay_seconds (float): the least time between two requests to
+            the same host.
 
     Returns:
-        A session with a requests-style `get` and `close`.
+        PacedSession: a session with a requests-style `get`, `post`, and
+        `close`, whose `session` attribute is the transport underneath.
 
     Raises:
         ValueError: for a mode that is not one of TRANSPORT_MODES.
         TransportUnavailable: for `browser` when curl_cffi is missing.
     """
     if mode == TRANSPORT_PLAIN:
-        return requests.Session()
-    if mode == TRANSPORT_BROWSER:
-        return browser_session()
-    if mode == TRANSPORT_AUTO:
-        return AutoSession(progress=progress, delay_seconds=delay_seconds)
-    raise ValueError(f"transport must be one of {', '.join(TRANSPORT_MODES)}, not {mode!r}.")
+        session = requests.Session()
+    elif mode == TRANSPORT_BROWSER:
+        session = browser_session()
+    elif mode == TRANSPORT_AUTO:
+        session = AutoSession(progress=progress, delay_seconds=delay_seconds)
+    else:
+        raise ValueError(f"transport must be one of {', '.join(TRANSPORT_MODES)}, not {mode!r}.")
+    return PacedSession(session, HostPacer(delay_seconds))

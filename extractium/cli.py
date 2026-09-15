@@ -15,7 +15,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,12 +34,14 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-14"
+__date__ = "2026-09-15"
 
 import argparse
 import dataclasses
 import os
 import sys
+import threading
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 
 from extractium import __version__
 from extractium import init as init_command
@@ -68,6 +70,11 @@ EXIT_OUTPUT = 4            # an output could not be written
 
 ### Progress And Messages ###
 
+# Sources report from their own threads, so each line is written whole
+# under a lock rather than as text and newline in two writes.
+_WRITE_LOCK = threading.Lock()
+
+
 def write_line(message, stream):
     """
     Writes one line to a stream, whatever characters it holds.
@@ -80,7 +87,9 @@ def write_line(message, stream):
     """
     encoding = getattr(stream, "encoding", None) or "utf-8"
     safe = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
-    print(safe, file=stream, flush=True)
+    with _WRITE_LOCK:
+        stream.write(safe + "\n")
+        stream.flush()
 
 
 def progress_to_stderr(message):
@@ -104,7 +113,13 @@ def fail(message, code):
 
 def run_sources(config, registry, session, cache, progress):
     """
-    Runs every configured source in file order and collects its documents.
+    Runs every configured source and collects its documents, in file order.
+
+    Up to `parallel_sources` of them run at the same time, each in its own
+    thread, over the one session, which paces requests per host so no
+    site is asked faster than `delay_seconds` allows. Their documents are
+    still returned in file order, so the rule that the first source to
+    reach a page keeps it does not depend on which thread finished first.
 
     Args:
         config (extractium.config.Config): the validated configuration.
@@ -130,6 +145,7 @@ def run_sources(config, registry, session, cache, progress):
         delay_seconds=config.delay_seconds,
         user_agent=config.user_agent,
         respect_robots_txt=config.respect_robots_txt,
+        parallel_pages=getattr(config, "parallel_pages", 1),
         # Deny by default: a GitHub account is read only when this build
         # asked for it, either in a source or in the github_owners
         # setting. Otherwise one link in one README could pull thousands
@@ -138,10 +154,8 @@ def run_sources(config, registry, session, cache, progress):
             accounts_named_by(config.sources) | {o.lower() for o in config.github_owners}
         )),
     )
-    documents = []
     ran = []
     for entry in config.sources:
-        progress(f"Source: {entry.type}")
         source = registry.get_source(entry.type)(entry.options)
         # Optional protocol hook: a source that takes part in a crawl
         # learns the enabled site handlers and the global crawl settings
@@ -149,14 +163,7 @@ def run_sources(config, registry, session, cache, progress):
         if hasattr(source, "configure"):
             source.configure(registry, settings)
         ran.append((entry, source))
-        # The configuration owns the display name, not the source: only the
-        # person who wrote the file knows which web source is the main site
-        # and which is a program microsite. Applying it here means no
-        # source, built-in or plugin, has to carry the setting itself.
-        documents.extend(
-            dataclasses.replace(document, source_label=entry.label)
-            for document in source.fetch(session, cache, progress)
-        )
+    documents = fetch_sources(ran, session, cache, progress, getattr(config, "parallel_sources", 1))
     # Links a crawl found and held back, such as videos linked from a
     # page, are offered to every source that reads such links, once every
     # source has run, so the order of the sources list does not decide
@@ -175,6 +182,97 @@ def run_sources(config, registry, session, cache, progress):
         if hasattr(source, "gone_pages"):
             gone.update(retain.page_key(url) for url in source.gone_pages())
     return documents, collect_notes(source for _, source in ran), gone
+
+
+def fetch_sources(ran, session, cache, progress, workers=1):
+    """
+    Runs the sources' fetch methods and returns every document, in the
+    order the sources were listed.
+
+    With one worker, or one source, each source runs to the end before
+    the next starts, and the log is exactly one source's lines after
+    another's. With more, up to `workers` sources run at once in threads,
+    and every progress line is prefixed with its source's label so the
+    interleaved log still reads.
+
+    A failure in one source stops the build as it always has: the other
+    sources are told to stop at their next progress line, and the failed
+    source's own error is raised once they have. Ctrl+C is handled the
+    same way, so the wait for the running sources ends within a page
+    rather than at the end of a crawl.
+
+    Args:
+        ran (Sequence[tuple]): (entry, source) pairs, in file order, with
+            each source already constructed and configured.
+        session: the HTTP session every source requests through.
+        cache (dict): fetch cache metadata, read and updated in place.
+        progress (Callable[[str], None]): receives one line per event.
+        workers (int): how many sources may run at once; 1 or more.
+
+    Returns:
+        list: every document produced, labelled with its source's label,
+        in source order.
+    """
+    if workers <= 1 or len(ran) <= 1:
+        documents = []
+        for entry, source in ran:
+            documents.extend(_fetch_documents(entry, source, session, cache, progress))
+        return documents
+
+    stop = threading.Event()
+    results = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [
+            pool.submit(_fetch_documents, entry, source, session, cache,
+                        _labelled_progress(progress, entry.label, stop))
+            for entry, source in ran
+        ]
+        try:
+            done, _ = wait(futures, return_when=FIRST_EXCEPTION)
+            failed = next((f for f in futures if f in done and f.exception() is not None), None)
+            if failed is not None:
+                stop.set()
+                pool.shutdown(wait=True, cancel_futures=True)
+                failed.result()
+            results = [future.result() for future in futures]
+        except BaseException:
+            # Ctrl+C lands here, in the thread that waits; the sources
+            # learn of it at their next progress line.
+            stop.set()
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
+    return [document for documents in results for document in documents]
+
+
+def _fetch_documents(entry, source, session, cache, progress):
+    """One source's documents, each carrying the label its configuration entry gives it."""
+    progress(f"Source: {entry.type}")
+    # The configuration owns the display name, not the source: only the
+    # person who wrote the file knows which web source is the main site
+    # and which is a program microsite. Applying it here means no
+    # source, built-in or plugin, has to carry the setting itself.
+    return [
+        dataclasses.replace(document, source_label=entry.label)
+        for document in source.fetch(session, cache, progress)
+    ]
+
+
+def _labelled_progress(progress, label, stop):
+    """
+    A progress callback for one source running beside others: it prefixes
+    every line with the source's label, and it ends the source once the
+    build has been told to stop.
+
+    Every source reports at least once per page, so raising here unwinds a
+    source within a page of the stop being asked for. That is what lets a
+    Ctrl+C, or another source's failure, end the build promptly instead of
+    after the longest crawl.
+    """
+    def report(line):
+        if stop.is_set():
+            raise KeyboardInterrupt
+        progress(f"{label} | {line}")
+    return report
 
 
 def carry_forward_pages(config, documents, gone, progress):

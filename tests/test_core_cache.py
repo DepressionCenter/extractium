@@ -14,7 +14,7 @@ tests/test_core_cache.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,11 +33,12 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-15"
 
 import hashlib
 import json
 import os
+import threading
 
 from extractium.core import cache, fetch
 from tests.conftest import FakeResponse
@@ -72,6 +73,39 @@ def test_save_cache_meta_writes_atomically_no_leftover_tmp_file(isolated_core_ca
     with open(cache.CACHE_META_PATH, encoding="utf-8") as f:
         assert json.load(f) == meta
     assert not os.path.exists(cache.CACHE_META_PATH + ".tmp")
+
+
+def test_saves_from_several_threads_leave_readable_files_and_no_leftovers(isolated_core_cache):
+    """
+    Sources run in threads and share the metadata dict. A save must
+    neither trip over another thread adding to the dict nor collide with
+    another save on the temporary file it writes through.
+    """
+    meta = {}
+    errors = []
+
+    def worker(number):
+        try:
+            for step in range(40):
+                url = f"https://example.org/{number}/{step}"
+                meta[url] = {"etag": str(step), "fetched_at": float(step)}
+                cache.save_page_text(url, f"page {number} {step}")
+                cache.save_cache_meta(meta)
+        except Exception as error:   # noqa: BLE001 - the point is to catch anything
+            errors.append(error)
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    cache.save_cache_meta(meta)
+    assert cache.load_cache_meta() == meta
+    assert len(os.listdir(cache.CACHE_PAGES_DIR)) == 160
+    assert not [name for name in os.listdir(cache.CACHE_DIR) if name.endswith(".tmp")]
+    assert not [name for name in os.listdir(cache.CACHE_PAGES_DIR) if name.endswith(".tmp")]
 
 
 def test_cache_page_path_is_sha1_of_url_under_pages_dir(isolated_core_cache):

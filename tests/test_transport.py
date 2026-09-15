@@ -5,8 +5,10 @@ once over the browser handshake and keeping that choice per host, a plain
 refusal left alone, the plain and browser settings never switching, the
 per-host report made once, the pause taken before a retry, the browser
 package's absence reported rather than fatal, conditional requests passing
-through unchanged, and the fetch layer storing nothing from a challenge.
-No test loads the native library and none contacts a live site.
+through unchanged, the fetch layer storing nothing from a challenge, and
+the per-host pacer every build's session applies: one request per delay
+per host, hosts independent of one another, and threads sharing one host
+kept apart. No test loads the native library and none contacts a live site.
 
 This file is part of Extractium™
 tests/test_transport.py
@@ -32,9 +34,10 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-12"
+__date__ = "2026-09-15"
 
 import os
+import threading
 
 import pytest
 import requests
@@ -290,7 +293,8 @@ def test_closing_closes_both_sessions_and_a_browser_session_that_was_never_built
 def test_the_plain_setting_is_an_ordinary_session_that_never_switches():
     session = transport.make_session("plain")
 
-    assert isinstance(session, requests.Session)
+    assert isinstance(session, transport.PacedSession)
+    assert isinstance(session.session, requests.Session)
     assert not hasattr(session, "transport_by_host")
 
 
@@ -308,13 +312,145 @@ def test_the_automatic_setting_is_the_default_and_builds_nothing_native_until_ch
 
     session = transport.make_session()
 
-    assert isinstance(session, transport.AutoSession)
+    assert isinstance(session, transport.PacedSession)
+    assert isinstance(session.session, transport.AutoSession)
     assert session.browser is None
 
 
 def test_an_unknown_setting_is_refused():
     with pytest.raises(ValueError, match="transport must be one of"):
         transport.make_session("proxy")
+
+
+# ---------------------------------------------------------------------------
+# Pacing per host
+# ---------------------------------------------------------------------------
+
+class FakeClock:
+    """A clock that advances only when something sleeps on it."""
+
+    def __init__(self):
+        self.now = 100.0
+        self.sleeps = []
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(round(seconds, 6))
+        self.now += seconds
+
+
+def test_the_pacer_waits_only_the_remainder_of_the_delay():
+    clock = FakeClock()
+    pacer = transport.HostPacer(0.5, clock=clock, sleep=clock.sleep)
+
+    pacer.wait("example.org")          # first request: no wait
+    clock.now += 0.2                   # the request took 0.2 s
+    pacer.wait("example.org")          # 0.3 s left of the delay
+
+    assert clock.sleeps == [0.3]
+
+
+def test_a_request_that_took_longer_than_the_delay_waits_nothing():
+    clock = FakeClock()
+    pacer = transport.HostPacer(0.5, clock=clock, sleep=clock.sleep)
+
+    pacer.wait("example.org")
+    clock.now += 2
+    pacer.wait("example.org")
+
+    assert clock.sleeps == []
+
+
+def test_hosts_are_paced_independently():
+    clock = FakeClock()
+    pacer = transport.HostPacer(0.5, clock=clock, sleep=clock.sleep)
+
+    pacer.wait("example.org")
+    pacer.wait("portal.example.edu")   # another host: no wait
+    pacer.wait("example.org")          # the first host again: the whole delay
+
+    assert clock.sleeps == [0.5]
+
+
+def test_no_delay_means_no_pacing_at_all():
+    clock = FakeClock()
+    pacer = transport.HostPacer(0, clock=clock, sleep=clock.sleep)
+
+    for _ in range(3):
+        pacer.wait("example.org")
+
+    assert clock.sleeps == []
+
+
+def test_threads_sharing_one_host_start_one_delay_apart():
+    """
+    Politeness is a promise to the site, so it must hold across threads:
+    however many workers ask, the starts on one host stay a delay apart.
+    """
+    pacer = transport.HostPacer(0.05)
+    starts = []
+    lock = threading.Lock()
+
+    def worker():
+        pacer.wait("example.org")
+        with lock:
+            starts.append(transport.time.monotonic())
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    gaps = [later - earlier for earlier, later in zip(sorted(starts), sorted(starts)[1:])]
+    assert len(starts) == 4
+    assert all(gap >= 0.045 for gap in gaps), gaps
+
+
+def test_the_paced_session_waits_before_every_get_and_post():
+    clock = FakeClock()
+    inner = FakeSession({PAGE: page(), OTHER: page()})
+    inner.post = lambda url, **kwargs: inner.get(url, **kwargs)
+    session = transport.PacedSession(inner, transport.HostPacer(1.0, clock=clock, sleep=clock.sleep))
+
+    session.get(PAGE)
+    session.post(OTHER)
+
+    assert [call["url"] for call in inner.calls] == [PAGE, OTHER]
+    assert clock.sleeps == [1.0]
+
+
+def test_the_paced_session_passes_the_summary_and_other_attributes_through():
+    recorder = Recorder()
+    auto_session, *_ = auto({PAGE: challenge()}, {PAGE: page()}, progress=recorder)
+    session = transport.PacedSession(auto_session, transport.HostPacer(0))
+
+    session.get(PAGE)
+
+    assert session.summary_lines() == auto_session.summary_lines()
+    assert session.transport_by_host == {"example.org": "browser"}
+    assert transport.PacedSession(FakeSession({}), transport.HostPacer(0)).summary_lines() == []
+
+
+def test_make_session_paces_with_the_build_s_delay():
+    session = transport.make_session("plain", delay_seconds=0.75)
+
+    assert session.pacer.delay_seconds == 0.75
+
+
+def test_a_host_s_transport_is_reported_once_even_from_several_threads():
+    recorder = Recorder()
+    session, *_ = auto({PAGE: page(), OTHER: page()}, progress=recorder)
+
+    threads = [threading.Thread(target=session.get, args=(url,)) for url in (PAGE, OTHER) * 3]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert recorder.lines == [transport.PLAIN_REPORT.format(host="example.org")]
 
 
 def test_the_browser_session_says_what_to_install_when_its_package_is_missing(monkeypatch):

@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-14
+# Last Modified: 2026-09-15
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -226,9 +226,19 @@ sources:
 # pattern is broader than you meant, the crawl still stops here.
 #max_pages: 10000
 
-# Seconds to wait between requests, so the crawl stays polite to the site
-# it is reading. Use 0 for no wait.
+# The least time, in seconds, between two requests to the same site, so the
+# crawl stays polite to the site it is reading. It holds across every source
+# and every worker in the build. Use 0 for no wait.
 #delay_seconds: 0.5
+
+# How many sources run at the same time, and how many page fetches one web
+# crawl keeps in flight. Both change how long a build takes and nothing
+# else: a site is never asked faster than delay_seconds allows, and pages
+# are indexed in the same order either way. While several sources run,
+# each progress line starts with the label of its source. Set both to 1 to
+# run everything one after another with a plain log.
+#parallel_sources: 4
+#parallel_pages: 4
 
 # Extra GitHub accounts this build may follow links into. A GitHub account
 # is read only when you named it: as a source, or here. Without this, one
