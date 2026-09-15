@@ -89,6 +89,17 @@ To run a build by hand in the meantime, use the command the install put in the v
 The same rule holds anywhere: do not name a folder after a Python package you have installed, or run a build from the folder above one.
 
 
+### The build script fails while installing, with "Failed to build 'tree-sitter-..."
+
+**Cause.** The environment was created with a free-threaded Python (the build the launcher lists as `3.13t` or `3.14t`). Every parser grammar publishes compiled `abi3` wheels only, which a free-threaded interpreter cannot use, so pip fell back to the grammar's source archive, which does not build. The scripts now look for a standard build before creating the environment, and say so when an existing environment was made with a free-threaded one.
+
+**Fix.** Delete the `.venv` folder next to the script and run it again. If the only Python on the machine is free-threaded, install a standard build from python.org, or set `PYTHON` to the path of one before running the script:
+
+```
+set PYTHON="C:\Program Files\Python314\python.exe"
+```
+
+
 ## Running the build
 
 ### The script says `No published release was found`
