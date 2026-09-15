@@ -218,7 +218,9 @@ The `okf` source reads a bundle in this format back, from this tool or any other
 | Site handler | `tdx` | TeamDynamix portals: content selectors, title prefix stripping, recovery of a title the portal cut short, breadcrumb categories, `/TDClient/<n>/<slug>/` scope, portal exclude patterns. |
 | Site handler | `youtube` | Recognition only, in both directions. Every address on a YouTube host is refused for crawling, because the page is a shell around a player and its words are in the caption track. The count held back is reported once with the advice to add a video source. A channel, playlist, or watch address given as a crawl seed is offered to the `youtube` source instead, in whichever form it was written, which is the same seed promotion the GitHub handler performs. Videos linked from crawled pages are collected for the `youtube` source to decide about. Extracts nothing. |
 | Site handler | `github` | GitHub and generic git hosts: blob-to-raw rewriting for Markdown and text, wiki and release-notes extraction, repo root and tree pages as link hops only, code-host exclude patterns, and the account guardrail (section 6). |
-| Source | `local` | Markdown, text, and HTML files under a folder. Guardrail in section 7. |
+| Site handler | `google_docs` | Google Docs, Sheets, and Slides files shared with the link, on `docs.google.com`. Claims a file's address only, folds its `/edit`, `/view`, and `/preview` link shapes into one address through the protocol's `canonical_url` hook, and requests the plain-text export (CSV for the first sheet of a spreadsheet) the way the GitHub handler requests a raw file. The export is served from a delivery host, which the `landing_allowed` hook accepts. A file that is not shared answers with a sign-in page, which the fetch layer refuses with the landing address named; nothing is retried with a credential. Forms, Drive folders, and the sign-in host are on its exclude list. Reached only through `include_patterns`, because the host is off-site for every seed. Checked against Google on 2026-09-15: `docs.google.com/robots.txt` allows `/document`, `/spreadsheets`, and `/presentation` for every agent, a shared presentation answered its text export as `text/plain` from `googleusercontent.com`, and a shared document did the same with a byte-order mark, which the fetch layer drops. |
+| Source | `local` | Markdown, text, and HTML files under a folder, plus Word, OpenDocument, and RTF files with `read_documents` on. Guardrail in section 7. |
+| Source | Document readers | `extractium/readers/`: Word (`.docx`) and OpenDocument text (`.odt`) read with `zipfile` and `xml.etree`, and RTF read by a small parser of the text runs, all standard library. Headings, paragraphs, lists, and tables become Markdown-like text, so the chunker cuts a document at its headings, and the title, subject, keywords, and description from the file's properties are read too, with the last three indexed as the document's first paragraph. The format is decided from the first bytes; the binary `.doc` is refused by name; an archive entry over its ceiling and any XML part carrying a document type declaration are refused before parsing. Behind `read_documents` on the `web`, `local`, and `github_api` sources, off by default: on a crawl, a document link in scope is fetched as bytes and indexed once however many addresses reach it; in a repository, one request per file with the text cached under the blob name; in a folder, the document globs join the defaults. |
 | Source | `github_api` | Organization, user, or single-repository ingestion through the REST API: complete tree inventory, documentation and project manifests in full, blob caching by SHA. Three tiers, tried in order and applied to an explicit source and to a GitHub `web` seed alike: authenticated API, unauthenticated API with identical capability, then a documentation-only crawl that runs no code analysis. A token raises the request budget. It never widens what may be published. Only accounts you named are read, whatever links to them (section 6). See [GitHub repository indexing](github-repository-indexing.md). |
 | Source | `youtube` | Captions only. No key is needed: a channel may be named by handle, by custom address, by watch-page address, or by id, and anything but an id is resolved once against the channel's own page and stored. Listings come from the Data API when `YOUTUBE_API_KEY` is set and from YouTube's own pages when it is not, and a channel's uploads playlist is derived from its id rather than asked for. The keyless path stops where YouTube's robots.txt does, at the newest hundred of a listing, and says which listings it stopped short on. Paging further, and the one browser-identity retry a refused page gets, both require `respect_robots_txt: false`. A channel's uploads and the playlists it shows are both read, and a video in a playlist that another channel published is left out unless `only_channel_videos` is turned off, because a playlist holds whatever its owner chose. A video linked from a page another source crawled is offered to this source after every source has run, and is read only when its publisher is known and is a channel this source names. That rule is not relaxed by `only_channel_videos`, and a source naming no channel reads no linked video. YouTube blocks cloud-provider IP ranges, so transcripts are fetched on a person's computer and stored under `cache_dir` to be committed. A CI run reuses that store and does not reach YouTube at all. Nothing stored is revalidated, because revalidating is the thing a runner cannot do. Each stretch of a transcript is one parent, addressed at the moment it begins, so a citation opens the video at the quoted words. `llms.txt` and the OKF bundle group those stretches back into one video. The caption library is an optional install (`extractium[youtube]`), so a build that reads only stored transcripts does not need it. A video whose captions are off is skipped and counted, not fatal. |
 | Source | GitHub code structure | Tree-sitter analysis of repository code, inside the `github_api` source: signatures, documentation, imports, calls labelled `resolved`, `probable`, or `unresolved`, reverse edges, and repository and account maps. Never raw code bodies, and no language model. A symbol record links to its lines on GitHub instead of copying them. The parser set is the `extractium[code]` extra, pinned in the lock file the build scripts install from; a developer install without it still records every source file at the file-metadata tier. Universal Ctags is an optional second parser, run with an argument array, no shell, and no configuration file. No R grammar is published for Python, so R falls to Ctags or to a file-level record. Stata always does. Notebooks, R Markdown, Lua Server Pages, and HTML have their prose indexed and their embedded code parsed, and a notebook's saved outputs are never read. See [GitHub repository indexing](github-repository-indexing.md). |
@@ -227,7 +229,7 @@ The `okf` source reads a bundle in this format back, from this tool or any other
 
 Decided against: a speech-to-text fallback for videos without captions. Of 65 videos sampled from a real channel on 2026-09-11, 64 had English captions, 37 of those generated by YouTube itself, and none had captions missing or disabled. The one gap was a video captioned in Spanish only, which the `languages` setting covers. Decoding media to recover speech this project can already read as text is a large dependency and a malformed-input risk for a problem that did not occur. Video indexing is therefore captions from YouTube only: no other video host, and no local media file. An organization that needs those can write a source plug-in.
 
-Explicitly out: spreadsheet extraction, OAuth connectors to cloud drives (sync to a local folder instead), SQL connectors (contributed plug-ins), and MCP as a core concern (servers are thin examples over the client libraries; section 9.3).
+Explicitly out: spreadsheet files (a shared Google Sheet is read through its CSV export; `.xlsx` and `.ods` files are not read), OAuth connectors to cloud drives (sync to a local folder instead), SQL connectors (contributed plug-ins), and MCP as a core concern (servers are thin examples over the client libraries; section 9.3).
 
 
 ## 6. Crawler etiquette
@@ -360,6 +362,7 @@ sources:
     extra_crawl_exclude_patterns: []  # added to whichever list applies
     extra_index_exclude_patterns: []
     site_handlers: [tdx, github]    # omit = all installed; [] = generic only
+    read_documents: false           # fetch and read linked Word, OpenDocument, and RTF files
   - type: web
     label: Example Library
     seed_urls:                      # several starting points, still one crawl
@@ -369,6 +372,7 @@ sources:
     label: Internal Notes
     path: ./internal-docs
     include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
+    read_documents: false           # true adds **/*.docx, **/*.odt, **/*.rtf to the globs
   - type: github_api
     label: Example Repositories
     org: example-org                # exactly one of org, user, or url
@@ -378,6 +382,7 @@ sources:
     include_archived: true
     include_code: true              # read the structure of the code, not only the docs
     ctags_fallback: true            # let Universal Ctags read languages no grammar covers
+    read_documents: false           # read Word, OpenDocument, and RTF files, one request each
     max_file_bytes: 2000000         # uses GITHUB_TOKEN from the environment when set
   - type: dspace
     label: Example Repository
@@ -420,8 +425,9 @@ extractium/
 ├── extractium/                  # Python package (the engine)
 │   ├── core/                    # fetch, cache, chunk, embed, bm25, dedup, calibration,
 │   │                            # phi_lint, registry, models, build
-│   ├── sources/                 # web (core crawler); site handlers generic, tdx, github, youtube;
-│   │                            # sources local, okf, github_api, dspace, youtube
+│   ├── sources/                 # web (core crawler); site handlers generic, tdx, github, youtube,
+│   │                            # google_docs; sources local, okf, github_api, dspace, youtube
+│   ├── readers/                 # Word, OpenDocument, and RTF readers, standard library only
 │   ├── code/                    # Tree-sitter registry, engine, query files, embedded-code
 │   │                            # extraction, relationships, rendering, ctags fallback
 │   ├── adapters/                # container, llmstxt, sqlite_out, okf

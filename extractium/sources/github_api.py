@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-15"
 
 import re
 
@@ -41,6 +41,7 @@ from extractium.core import cache as caching
 from extractium.core.fetch import DEFAULT_USER_AGENT, normalise
 from extractium.core.models import Document
 from extractium.core import prose
+from extractium.readers import documents as readers
 from extractium.sources import github_files as files
 from extractium.sources.github_client import (
     GitHubClient,
@@ -114,7 +115,7 @@ class GitHubApiSource:
         options (Mapping): the validated options of a `github_api` entry:
             exactly one of org, user, or url; include_repos,
             exclude_repos, include_forks, include_archived, include_code,
-            ctags_fallback, and max_file_bytes.
+            ctags_fallback, read_documents, and max_file_bytes.
 
     Attributes:
         coverage (dict[str, int]): repository full name to the tier that
@@ -140,6 +141,9 @@ class GitHubApiSource:
         self.include_archived = bool(options.get("include_archived", True))
         self.include_code = bool(options.get("include_code", True))
         self.ctags_fallback = bool(options.get("ctags_fallback", True))
+        # Word, OpenDocument, and RTF files are read into text only when
+        # asked for, because each costs a request of its own.
+        self.read_documents = bool(options.get("read_documents", False))
         self.max_file_bytes = int(options.get("max_file_bytes") or 2_000_000)
         self.analyzed = {}
         self.registry = None
@@ -482,6 +486,8 @@ class GitHubApiSource:
             kind = files.classify(path)
             if kind is None or (kind == "code" and not self.include_code):
                 continue
+            if kind == "document" and not self.read_documents:
+                continue
             size = entry.get("size")
             if size is not None and size > self.max_file_bytes:
                 progress(
@@ -509,22 +515,48 @@ class GitHubApiSource:
         if not wanted:
             return {}
         full_name = f"{owner}/{name}"
-        size_kib = repository.get("size") or 0
 
         # Whatever a previous build already read costs nothing to read
         # again, and is taken out of the plan before a route is chosen. A
         # repository nobody has changed therefore needs no download at all.
         bodies, outstanding = self._from_cache(wanted)
-        if not outstanding:
-            progress(f"  {full_name}: every file unchanged since the last build")
-            return bodies
 
+        # A document file is bytes, never text in an archive, so it is
+        # requested on its own and read into text here. The text is what
+        # the cache keeps for it, under the same blob name.
+        document_entries = {
+            path: entry for path, entry in outstanding.items()
+            if files.classify(path) == "document"
+        }
+        outstanding = {
+            path: entry for path, entry in outstanding.items() if path not in document_entries
+        }
+        if outstanding:
+            bodies.update(self._download_text(
+                client, owner, name, branch, repository, full_name, outstanding, progress
+            ))
+        elif not document_entries:
+            progress(f"  {full_name}: every file unchanged since the last build")
+        if document_entries:
+            bodies.update(self._download_documents(
+                client, owner, name, full_name, document_entries, progress
+            ))
+        return bodies
+
+    def _download_text(self, client, owner, name, branch, repository, full_name, outstanding,
+                       progress):
+        """
+        The text files still to read, from one archive where that is
+        possible and one request each where it is not.
+        """
+        size_kib = repository.get("size") or 0
+        bodies = {}
         if size_kib <= MAX_ARCHIVE_REPOSITORY_KIB:
             progress(f"  {full_name}: reading {len(outstanding)} file(s) from one archive")
             try:
                 fetched = client.archive_files(owner, name, branch, outstanding)
                 self._cache(outstanding, fetched)
-                return {**bodies, **fetched}
+                return fetched
             except (GitHubUnavailable, GitHubNotFound) as e:
                 # An archive that cannot be read is not the end of the
                 # repository; its files can still be asked for one by one.
@@ -550,6 +582,40 @@ class GitHubApiSource:
                 progress(f"  {full_name}/{path}: skipped (no longer in the repository)")
             except ValueError as e:
                 progress(f"  {full_name}/{path}: skipped ({e})")
+        return bodies
+
+    def _download_documents(self, client, owner, name, full_name, entries, progress):
+        """
+        The document files still to read, one request each, turned into
+        text by the readers. A file the reader refuses is named with the
+        reason, and one that holds no text is named too.
+        """
+        budget = client.rate_limit.budget
+        if budget is not None and budget < len(entries):
+            progress(
+                f"  {full_name}: skipped its {len(entries)} document file(s); reading them "
+                f"needs more requests than are left. Setting GITHUB_TOKEN raises the budget."
+            )
+            return {}
+
+        bodies = {}
+        for path, entry in entries.items():
+            try:
+                data = client.blob_bytes(owner, name, entry["sha"])
+                text = readers.read_document(data, path).indexed_text
+            except GitHubNotFound:
+                progress(f"  {full_name}/{path}: skipped (no longer in the repository)")
+                continue
+            except ValueError as e:
+                # A reader's refusal is a ValueError too, and its message
+                # says what was wrong with the file.
+                progress(f"  {full_name}/{path}: skipped ({e})")
+                continue
+            if not text.strip():
+                progress(f"  {full_name}/{path}: skipped (the document holds no text)")
+                continue
+            bodies[path] = text
+        self._cache(entries, bodies)
         return bodies
 
     def _from_cache(self, wanted):
@@ -615,6 +681,10 @@ class GitHubApiSource:
                 f"  {full_name}/{path}: indexed as an outline ({len(text)} characters is over "
                 f"the {prose.MAX_PROSE_CHARS} the index takes whole)"
             )
+        elif files.classify(path) == "document":
+            # A reader's text carries Markdown headings, and the chunker
+            # cuts at them only once they are rendered as tags.
+            content = readers.content_node(text)
         return Document(
             url=self._url_for(owner, name, branch, path),
             title=title,

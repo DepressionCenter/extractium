@@ -52,8 +52,10 @@ from extractium.sources.github_api import (
     GitHubSourceError,
     owner_and_repository,
 )
+from extractium.core import cache as caching
 from extractium.sources.github_client import API_ROOT
 from extractium.sources.web import CrawlSettings
+from tests import document_fixtures as document_files
 from tests.conftest import FakeApiResponse
 
 FIXTURE_PATH = pathlib.Path(__file__).parent / "fixtures" / "github" / "example_org.json"
@@ -858,3 +860,97 @@ def test_no_document_a_source_produces_is_marked_local(fixture, fake_github_sess
     documents = read(make_source(), session)
 
     assert documents and all(isinstance(d, Document) and d.local is False for d in documents)
+
+
+# ---------------------------------------------------------------------------
+# Document files
+# ---------------------------------------------------------------------------
+
+DOCUMENT_SHA = "d" * 40
+DOCUMENT_PATH = "docs/plan.docx"
+DOCUMENT_URL = f"https://github.com/example-org/example-tools/blob/main/{DOCUMENT_PATH}"
+DOCUMENT_BLOB_ROUTE = f"{API_ROOT}/repos/example-org/example-tools/git/blobs/{DOCUMENT_SHA}"
+
+
+def with_document_file(fixture, path=DOCUMENT_PATH, sha=DOCUMENT_SHA):
+    """The fixture with one Word file in example-tools, served through the blob route only."""
+    tree = dict(fixture["trees"]["example-tools"])
+    tree["tree"] = list(tree["tree"]) + [
+        {"path": path, "type": "blob", "size": len(document_files.SAMPLE_DOCX), "sha": sha}
+    ]
+    return {**fixture, "trees": {**fixture["trees"], "example-tools": tree}}
+
+
+def document_routes(fixture, data=document_files.SAMPLE_DOCX):
+    routes = api_routes(with_document_file(fixture))
+    routes[DOCUMENT_BLOB_ROUTE] = FakeApiResponse(content=data)
+    return routes
+
+
+def test_a_word_file_is_read_into_text_when_read_documents_is_on(fixture, fake_github_session_factory):
+    session = fake_github_session_factory(document_routes(fixture))
+
+    by_url = {d.url: d for d in read(make_source(read_documents=True), session)}
+
+    document = by_url[DOCUMENT_URL]
+    assert document.content_type == "text"
+    assert document.source_type == "github"
+    assert document.title == "example-org/example-tools: docs/plan.docx"
+    assert document.categories == ("example-org", "example-tools", "docs")
+    assert document.content.find("h2").get_text() == "Middle School"
+    assert "Keywords: depression, anxiety, classroom" in document.content.get_text()
+    assert [c["url"] for c in session.calls].count(DOCUMENT_BLOB_ROUTE) == 1
+
+
+def test_word_files_are_left_alone_by_default(fixture, fake_github_session_factory):
+    session = fake_github_session_factory(document_routes(fixture))
+
+    urls = [d.url for d in read(make_source(), session)]
+
+    assert DOCUMENT_URL not in urls
+    assert not any(DOCUMENT_SHA in c["url"] for c in session.calls)
+
+
+def test_the_text_read_from_a_word_file_is_cached_under_its_blob_name(fixture, fake_github_session_factory):
+    session = fake_github_session_factory(document_routes(fixture))
+    read(make_source(read_documents=True), session)
+
+    cached = caching.load_github_blob(DOCUMENT_SHA)
+    assert cached.startswith("Subject: Classroom mental health resources")
+    assert "# Youth Mental Health Resources" in cached
+
+    again = fake_github_session_factory(document_routes(fixture))
+    by_url = {d.url: d for d in read(make_source(read_documents=True), again)}
+    assert DOCUMENT_URL in by_url
+    assert by_url[DOCUMENT_URL].content.find("h2").get_text() == "Middle School"
+    assert not any(DOCUMENT_SHA in c["url"] for c in again.calls)
+
+
+def test_a_word_file_the_reader_refuses_is_named_with_the_reason(fixture, fake_github_session_factory):
+    session = fake_github_session_factory(document_routes(fixture, data=b"not a document"))
+    lines = []
+
+    urls = [d.url for d in read(make_source(read_documents=True), session, progress=lines.append)]
+
+    assert DOCUMENT_URL not in urls
+    assert any(
+        "docs/plan.docx: skipped (not a Word, OpenDocument, or RTF file)" in line for line in lines
+    )
+
+
+def test_a_word_file_over_the_size_ceiling_is_skipped_by_the_inventory(fixture, fake_github_session_factory):
+    session = fake_github_session_factory(document_routes(fixture))
+    lines = []
+
+    read(make_source(read_documents=True, max_file_bytes=100), session, progress=lines.append)
+
+    assert any("docs/plan.docx: skipped" in line and "byte ceiling" in line for line in lines)
+    assert not any(DOCUMENT_SHA in c["url"] for c in session.calls)
+
+
+def test_a_word_file_is_classified_as_a_document_and_the_binary_format_is_not():
+    assert github_files.classify("docs/plan.docx") == "document"
+    assert github_files.classify("docs/plan.odt") == "document"
+    assert github_files.classify("docs/plan.rtf") == "document"
+    assert github_files.classify("docs/plan.doc") is None
+    assert github_files.content_type_for("docs/plan.docx") == "text"

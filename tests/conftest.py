@@ -73,14 +73,26 @@ def reference():
 class FakeResponse:
     """
     Minimal stand-in for requests.Response, covering only what
-    fetch()/_store_fetched_page() read: status_code, headers, text, and
-    raise_for_status().
+    fetch()/_store_fetched_page() and fetch_bytes() read: status_code,
+    headers, text, content, and raise_for_status(). `url`, where the
+    request landed, is set only by a test that scripts a redirect.
+
+    Args:
+        status_code (int): the HTTP status to report.
+        headers (dict | None): response headers.
+        text (str): the body as text.
+        content (bytes | None): the body as bytes; the text encoded as
+            UTF-8 when None.
+        url (str | None): the address the request landed on.
     """
 
-    def __init__(self, status_code=200, headers=None, text=""):
+    def __init__(self, status_code=200, headers=None, text="", content=None, url=None):
         self.status_code = status_code
         self.headers = CaseInsensitiveDict(headers or {})
         self.text = text
+        self.content = text.encode("utf-8") if content is None else content
+        if url is not None:
+            self.url = url
 
     def raise_for_status(self):
         if self.status_code >= 400:

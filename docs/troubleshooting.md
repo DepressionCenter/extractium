@@ -186,6 +186,23 @@ Put that address in the settings file instead of the short link. If you want the
 
 **Fix.** Often nothing: the page is indexed once, by whichever source reached it first, and the count is there so the overlap is visible rather than silent. If the count is large, the two sources are mostly duplicates of each other and one of them can go. If you want both, and want them separate, narrow one with `include_patterns` so their scopes do not meet.
 
+### A Google Doc is skipped, and the message says the request landed on `accounts.google.com`
+
+**Cause.** The file is not shared as "anyone with the link". Its export answers with a sign-in page instead of the text, and the build never signs in:
+
+```text
+SKIP https://docs.google.com/document/d/EXAMPLEID/export?format=txt -- answered text/html
+where text was expected; the request landed on https://accounts.google.com/ServiceLogin?...
+```
+
+**Fix.** Share the file with the link, or accept that it stays out of the index. A file that is shared answers its export as plain text and is indexed under `https://docs.google.com/document/d/EXAMPLEID`.
+
+### A Word file linked from a site is not in the index
+
+**Cause.** One of three things. The source's `read_documents` setting is off, which is the default, so the link was dropped as a file that is not text. Or the file is on another host, such as a content-delivery network, and no `include_patterns` entry covers it. Or the file is in the old binary `.doc` format, which has no reader.
+
+**Fix.** Set `read_documents: true` on the source, add an include pattern for the host that serves the files, and save any `.doc` file as `.docx`. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading Word, OpenDocument, and RTF files".
+
 ### Every page is skipped with a message about `robots.txt`
 
 **Cause.** The site's `robots.txt` could not be read. Extractium fails closed: if the rules are unknown, no page on that site is fetched. One real example is a portal that answers a request for `robots.txt` with 406 when the request accepts only HTML.

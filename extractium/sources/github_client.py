@@ -12,7 +12,7 @@ extractium/sources/github_client.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-15"
 
 import collections
 import codecs
@@ -548,6 +548,36 @@ class GitHubClient:
         text = response.text
         caching.save_github_blob(blob_sha, text)
         return text
+
+    def blob_bytes(self, owner, name, blob_sha):
+        """
+        Reads one file body as bytes, for a file a document reader turns
+        into text. Nothing is cached here: the caller stores the text it
+        read under the same blob SHA, so the next build reads that.
+
+        Args:
+            owner (str): the account that owns the repository.
+            name (str): the repository name.
+            blob_sha (str): the file's Git object name.
+
+        Returns:
+            bytes: the file as stored.
+
+        Raises:
+            ValueError: if blob_sha is not a Git object name.
+            GitHubNotFound: if the blob has vanished since the inventory.
+            GitHubUnavailable: for a throttled or failed request.
+        """
+        # The path derivation is what checks the SHA's shape; the path
+        # itself is not used.
+        caching.github_blob_path(blob_sha)
+        owner = _checked(owner, "owner name")
+        name = _checked(name, "repository name")
+        response = self._get(
+            f"{self.api_root}/repos/{owner}/{name}/git/blobs/{blob_sha}",
+            accept="application/vnd.github.raw",
+        )
+        return response.content
 
     def archive_files(self, owner, name, ref, wanted_paths):
         """

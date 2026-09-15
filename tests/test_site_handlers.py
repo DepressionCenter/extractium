@@ -40,7 +40,7 @@ from bs4 import BeautifulSoup
 
 from extractium.core import chunk
 from extractium.core.models import CONTENT_TYPES, SOURCE_TYPES, SiteHandler
-from extractium.sources import generic, github, tdx
+from extractium.sources import generic, github, google_docs, tdx
 
 TDX_URL = "https://teamdynamix.umich.edu/TDClient/210/Test/KB/ArticleDet?ID=1"
 WIKI_URL = "https://github.com/example-org/example-repo/wiki/Setup-Guide"
@@ -52,7 +52,9 @@ GENERIC_URL = "https://example.org/about"
 PAGES_URL = "https://example-org.github.io/tools/catalogue"
 PAGES_ROOT_URL = "https://example-org.github.io/"
 
-BUILT_IN_HANDLERS = (generic.GenericHandler, tdx.TdxHandler, github.GitHubHandler)
+BUILT_IN_HANDLERS = (
+    generic.GenericHandler, tdx.TdxHandler, github.GitHubHandler, google_docs.GoogleDocsHandler,
+)
 
 
 def _soup_from_fixture(fixtures_dir, name):

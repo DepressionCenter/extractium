@@ -131,9 +131,18 @@ def sqlite_file_name(slug):
 DEFAULT_CONTAINER_FILE = container_file_name(DEFAULT_SLUG)
 DEFAULT_SQLITE_FILE = sqlite_file_name(DEFAULT_SLUG)
 
-# Files a local source reads when no include_globs are given. PDF and
-# Office formats need extra dependencies and are not read.
+# Files a local source reads when no include_globs are given. PDF files
+# are not read.
 DEFAULT_LOCAL_INCLUDE_GLOBS = ("**/*.md", "**/*.txt", "**/*.html")
+
+# Added to the default globs when a local source turns read_documents on.
+DOCUMENT_INCLUDE_GLOBS = ("**/*.docx", "**/*.odt", "**/*.rtf")
+
+# Whether a web, local, or github_api source reads Word, OpenDocument,
+# and RTF files into text. Off, because each file is a request of its
+# own for a web crawl and for the GitHub API, and because reading a
+# document is a step the operator should choose.
+DEFAULT_READ_DOCUMENTS = False
 
 # Caption languages a YouTube source asks for when none are given.
 DEFAULT_YOUTUBE_LANGUAGES = ("en",)
@@ -273,13 +282,13 @@ SOURCE_OPTION_KEYS = {
     "web": frozenset({
         "seed_url", "seed_urls", "include_patterns", "crawl_exclude_patterns",
         "index_exclude_patterns", "extra_crawl_exclude_patterns",
-        "extra_index_exclude_patterns", "site_handlers",
+        "extra_index_exclude_patterns", "site_handlers", "read_documents",
     }),
-    "local": frozenset({"path", "include_globs"}),
+    "local": frozenset({"path", "include_globs", "read_documents"}),
     "github_api": frozenset({
         "org", "user", "url", "include_repos", "exclude_repos",
         "include_forks", "include_archived", "include_code", "ctags_fallback",
-        "max_file_bytes",
+        "max_file_bytes", "read_documents",
     }),
     "youtube": frozenset({
         "channel_id", "playlist_ids", "video_ids", "languages",
@@ -788,16 +797,24 @@ def _read_web_source(entry, source):
         # None means "every installed handler"; an empty tuple means "the
         # generic fallback only".
         "site_handlers": _read_text_list(entry, "site_handlers", None, source),
+        "read_documents": _read_bool(entry, "read_documents", DEFAULT_READ_DOCUMENTS, source),
     }
 
 
 def _read_local_source(entry, source):
-    """Validates the options of a local source entry."""
+    """
+    Validates the options of a local source entry. Turning read_documents
+    on adds the document globs to the default list, so a folder of Word
+    files is read without the operator restating the defaults.
+    """
+    read_documents = _read_bool(entry, "read_documents", DEFAULT_READ_DOCUMENTS, source)
+    default_globs = DEFAULT_LOCAL_INCLUDE_GLOBS + (DOCUMENT_INCLUDE_GLOBS if read_documents else ())
     return {
         "path": _read_required_text(entry, "path", source, hint=" (the folder to read)"),
         "include_globs": _read_text_list(
-            entry, "include_globs", DEFAULT_LOCAL_INCLUDE_GLOBS, source, label="glob patterns"
+            entry, "include_globs", default_globs, source, label="glob patterns"
         ),
+        "read_documents": read_documents,
     }
 
 
@@ -838,6 +855,7 @@ def _read_github_api_source(entry, source):
         "ctags_fallback": _read_bool(
             entry, "ctags_fallback", DEFAULT_GITHUB_CTAGS_FALLBACK, source
         ),
+        "read_documents": _read_bool(entry, "read_documents", DEFAULT_READ_DOCUMENTS, source),
         "max_file_bytes": _read_positive_int(
             entry, "max_file_bytes", DEFAULT_GITHUB_MAX_FILE_BYTES, source
         ),

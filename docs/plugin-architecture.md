@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/plugin-architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: The three plugin kinds, the registry's resolution order, the
 three protocols with every member and every optional hook, how a source,
 a site handler, and an adapter each fit into a build, and a minimal
@@ -35,7 +35,7 @@ Extractium™ reads content through sources, reads web pages through site handle
 | Kind | Produces | Acts | Built-in examples |
 |---|---|---|---|
 | Source | `Document` records | Once per entry in the settings file's `sources:` list, at the start of a build | `web`, `local`, `okf`, `github_api`, `dspace`, `youtube` |
-| Site handler | An `Extraction` from a fetched page | Once per URL the `web` source visits, for the first handler that recognizes the URL | `generic`, `tdx`, `github`, `youtube` |
+| Site handler | An `Extraction` from a fetched page | Once per URL the `web` source visits, for the first handler that recognizes the URL | `generic`, `tdx`, `github`, `youtube`, `google_docs` |
 | Adapter | Files under the output folder | Once per entry in the `outputs:` list, at the end of a build | `container`, `llmstxt`, `sqlite`, `okf` |
 
 Everything between the sources and the adapters is the core engine and is not pluggable: chunking, embedding, the near-duplicate collapse, the keyword and calibration statistics, and the build step that turns every document into one `Compendium`. A plug-in never fetches inside an adapter and never embeds inside a source. That rule is what keeps a build to one crawl and one embedding pass, whatever the outputs.
@@ -103,6 +103,8 @@ A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text
 | `configure(settings)` | No | Receives the build's global crawl settings after construction, for a handler whose rules depend on what the settings file says. |
 | `allows(url)` | No | May veto a URL the crawl would otherwise follow. Every handler that defines it is asked about every URL, whatever `matches` says, and one refusal keeps the URL out of scope. The GitHub handler uses it to keep a crawl to the accounts the settings file names. |
 | `offer_source(seed_url)` | No | May name a better source for a crawl's seed, as a tuple of the source name and its options. Consulted for the seed only, never for a link found mid-crawl. The GitHub and YouTube handlers use it to hand a seed to the source that reads that host properly. |
+| `canonical_url(url)` | No | May fold the several addresses one page is linked under into one, returning the address the crawl visits and records. Consulted for every seed and discovered link the handler matches, before anything else is decided about the address. The Google Docs handler folds `/edit`, `/view`, and `/preview` links to one file address this way. |
+| `landing_allowed(url, final_url)` | No | May say that a request for a page the handler reads is expected to land at another address, so the crawl does not treat that landing as a redirect off the site. Consulted only when a request was redirected somewhere the scope would refuse. The Google Docs handler accepts the delivery host its exports are served from. |
 
 An `Extraction` carries `title`, `node` (the content node to chunk, or plain text), and `categories` (the page's hierarchy, outermost first). A handler reads a page. It never discovers links. Link discovery stays in the web source, so the crawl is one graph however many handlers are enabled.
 

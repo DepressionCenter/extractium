@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-10"
+__date__ = "2026-09-15"
 
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -517,7 +517,7 @@ class SiteHandler(Protocol):
     A handler reads a page; it never discovers links, so the crawl stays
     one graph however many handlers are enabled.
 
-    Five methods are optional, and a handler that defines none behaves
+    Seven methods are optional, and a handler that defines none behaves
     exactly as the required five describe:
 
     - `scope_prefix(seed_url)` may narrow the default crawl scope for a
@@ -539,6 +539,17 @@ class SiteHandler(Protocol):
     - `offer_source(seed_url)` may name a better source for a crawl's
       seed, as `(source name, options)`. It is consulted for the seed
       only, so a link found mid-crawl never redirects the build.
+    - `canonical_url(url)` may fold the several addresses one page is
+      linked under into one, which the crawl then visits once and
+      records on the document. It is consulted for every seed and every
+      discovered link the handler matches, before anything else is
+      decided about the address. A handler that does not define it
+      leaves every address as written.
+    - `landing_allowed(url, final_url)` may say that a request for a
+      page it reads is expected to land at another address, such as an
+      export served from a delivery host, so the crawl does not treat
+      that landing as a redirect off the site. Consulted only when a
+      request was redirected somewhere the scope would refuse.
 
     Class attributes:
         name: registry key and the value used in `site_handlers:`.

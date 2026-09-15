@@ -32,9 +32,11 @@ __date__ = "2026-09-09"
 
 import pytest
 
-from extractium.config import DEFAULT_LOCAL_INCLUDE_GLOBS
+from extractium.config import DEFAULT_LOCAL_INCLUDE_GLOBS, DOCUMENT_INCLUDE_GLOBS
 from extractium.core.models import LOCAL_URL_PREFIX, Document, Source
+from extractium.readers import documents
 from extractium.sources.local import LocalSource
+from tests import document_fixtures as document_files
 
 # Long enough that the chunker keeps each file as a section of its own.
 BODY = (
@@ -219,3 +221,72 @@ def test_a_file_saved_in_another_encoding_still_yields_a_document(folder):
 
     assert isinstance(document, Document)
     assert BODY in document.content
+
+
+# ---------------------------------------------------------------------------
+# Document files
+# ---------------------------------------------------------------------------
+
+DOCUMENT_GLOBS = DEFAULT_LOCAL_INCLUDE_GLOBS + DOCUMENT_INCLUDE_GLOBS
+
+
+def read_documents(path, globs=DOCUMENT_GLOBS, progress=None):
+    """Every document the source yields with read_documents on."""
+    source = LocalSource({"path": str(path), "include_globs": globs, "read_documents": True})
+    return list(source.fetch(None, None, progress or (lambda line: None)))
+
+
+def test_a_word_file_is_skipped_with_the_reason_when_read_documents_is_off(folder):
+    """A glob may select a Word file while the switch is off; it is named, never read as text."""
+    lines = []
+    urls = [d.url for d in read(folder, globs=DOCUMENT_GLOBS, progress=lines.append)]
+    assert "local:notes.docx" not in urls
+    assert "  skipped (read_documents is off): local:notes.docx" in lines
+
+
+def test_word_opendocument_and_rtf_files_are_read_when_read_documents_is_on(folder):
+    (folder / "notes.docx").write_bytes(document_files.SAMPLE_DOCX)
+    (folder / "sub" / "protocol.odt").write_bytes(document_files.SAMPLE_ODT)
+    (folder / "plan.rtf").write_bytes(document_files.SAMPLE_RTF)
+
+    by_url = {d.url: d for d in read_documents(folder)}
+
+    assert by_url["local:notes.docx"].title == "Youth Mental Health Resources"
+    assert by_url["local:sub/protocol.odt"].title == "Intake Protocol"
+    assert by_url["local:plan.rtf"].title == "Classroom Plan"
+    for url in ("local:notes.docx", "local:sub/protocol.odt", "local:plan.rtf"):
+        assert by_url[url].local is True
+        assert by_url[url].source_type == "local"
+        assert by_url[url].content_type == "text"
+        assert "Keywords: depression, anxiety, classroom" in by_url[url].content.get_text()
+
+
+def test_the_binary_word_format_is_reported_as_unreadable(folder):
+    (folder / "old.doc").write_bytes(document_files.OLE_HEADER)
+    lines = []
+
+    urls = [d.url for d in read_documents(folder, globs=("**/*.doc",), progress=lines.append)]
+
+    assert urls == []
+    assert any(
+        "skipped (the binary .doc format is not read" in line and "local:old.doc" in line
+        for line in lines
+    )
+
+
+def test_a_file_that_is_not_a_document_is_skipped_with_the_reason(folder):
+    lines = []
+    urls = [d.url for d in read_documents(folder, progress=lines.append)]
+    assert "local:notes.docx" not in urls
+    assert "  skipped (not a Word, OpenDocument, or RTF file): local:notes.docx" in lines
+
+
+def test_a_document_over_the_ceiling_is_skipped_before_it_is_read(folder, monkeypatch):
+    monkeypatch.setattr(documents, "MAX_DOCUMENT_BYTES", 100)
+    (folder / "notes.docx").write_bytes(document_files.SAMPLE_DOCX)
+    lines = []
+
+    urls = [d.url for d in read_documents(folder, progress=lines.append)]
+
+    assert "local:notes.docx" not in urls
+    assert any("byte ceiling for a document): local:notes.docx" in line for line in lines)

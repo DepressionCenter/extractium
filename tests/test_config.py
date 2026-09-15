@@ -897,3 +897,36 @@ def test_the_gzip_option_must_be_true_or_false():
             "sources": [{"type": "web", "label": "Site", "seed_url": SEED}],
             "outputs": [{"type": "container", "gzip": "yes"}],
         })
+
+
+# ---------------------------------------------------------------------------
+# Reading document files
+# ---------------------------------------------------------------------------
+
+def test_read_documents_is_off_by_default_on_every_source_that_has_it():
+    cfg = config.config_from_mapping({"sources": [
+        web(),
+        {"type": "local", "label": "Internal Notes", "path": "./internal-docs"},
+        {"type": "github_api", "label": "Example Repositories", "org": "example-org"},
+    ]})
+    assert [s.options["read_documents"] for s in cfg.sources] == [False, False, False]
+
+
+def test_read_documents_must_be_a_boolean():
+    with pytest.raises(config.ConfigError, match="read_documents must be true or false"):
+        config.config_from_mapping({"sources": [web(read_documents="yes")]})
+
+
+def test_a_local_source_reading_documents_adds_their_globs_to_the_defaults():
+    source = config.config_from_mapping({"sources": [
+        {"type": "local", "label": "Internal Notes", "path": "docs", "read_documents": True},
+    ]}).sources[0]
+    assert source.options["include_globs"] == (
+        config.DEFAULT_LOCAL_INCLUDE_GLOBS + config.DOCUMENT_INCLUDE_GLOBS
+    )
+
+    custom = config.config_from_mapping({"sources": [
+        {"type": "local", "label": "Internal Notes", "path": "docs", "read_documents": True,
+         "include_globs": ["**/*.docx"]},
+    ]}).sources[0]
+    assert custom.options["include_globs"] == ("**/*.docx",)

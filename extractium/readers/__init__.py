@@ -1,16 +1,18 @@
 """
-Summary: Built-in source and site-handler plugins package. Sources (web,
-local, github_api, dspace, youtube, okf) produce documents; site
-handlers (generic, tdx, github, youtube, google_docs) extract content
-from the pages the web source visits. Each
-registers through the same plugin registry an external plugin would use,
-per docs/extractium-spec.md section 2.
+Summary: Readers that turn a document file's bytes into text with its
+heading structure kept, so the chunker can cut a Word, OpenDocument, or
+RTF file at its headings the way it cuts a web page. Every reader uses
+the standard library alone, refuses input it cannot account for, and
+never writes a file. The web crawl, the GitHub source, and the local
+source hand bytes to `extractium.readers.documents.read_document` when
+their `read_documents` setting is on. See docs/configuration.md under
+"Reading Word, OpenDocument, and RTF files".
 
 This file is part of Extractium™
-extractium/sources/__init__.py
+extractium/readers/__init__.py
 
 Author(s): Gabriel Mongefranco.
-Created: 2026-08-17
+Created: 2026-09-15
 Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
@@ -30,4 +32,4 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-15"
