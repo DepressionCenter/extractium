@@ -62,3 +62,7 @@ build/
 
 # Ignore packages an example installs for itself
 node_modules/
+
+# Ignore the reports a build writes where it runs
+phi-lint-report.json
+phi-lint-report.txt

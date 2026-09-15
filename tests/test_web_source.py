@@ -1580,7 +1580,9 @@ def test_a_leaf_that_redirects_off_the_leaf_host_is_skipped(isolated_core_cache,
 
     documents, lines = leaf_crawl(session)
 
-    assert [d.url for d in documents] == [DOC_SEED, LEAF_SECOND]
+    # The second leaf landed inside the leaf scope, so it is recorded
+    # under the address it really has.
+    assert [d.url for d in documents] == [DOC_SEED, f"{LEAF_HOST}/handout/two-renamed"]
     assert any(line.startswith(f"  SKIP {LEAF_PAGE} -- it redirects to {OTHER_PAGE}") for line in lines)
 
 
@@ -1632,3 +1634,75 @@ def test_no_leaf_patterns_means_no_leaf_line_and_no_leaves(isolated_core_cache, 
 
     assert [d.url for d in documents] == [DOC_SEED]
     assert not any(line.startswith("Leaf pats:") for line in lines)
+
+SHORT_ARTICLE = f"{TDX_ORIGIN}/TDClient/210/ExampleOrg/KB/ArticleDet?ID=12942"
+LONG_ARTICLE = f"{TDX_ORIGIN}/TDClient/210/ExampleOrg/KB/Article/12942/Hiring-the-Right-Support"
+
+
+def article_page(*links):
+    anchors = "".join(f'<a href="{link}">more</a>' for link in links)
+    return (
+        "<html><head><title>Article - Hiring the Right Support</title></head><body>"
+        '<div id="divMainContent"><p>Synthetic article body, long enough to clear the sixty character minimum.</p>'
+        f"{anchors}</div></body></html>"
+    )
+
+
+def test_a_page_that_redirects_inside_the_site_is_recorded_where_it_landed_and_read_once(
+    isolated_core_cache, fake_session_factory
+):
+    """
+    A portal's short link to an article lands on the article's long
+    address, which the article's own pages link. Both are one page.
+    """
+    session = fake_session_factory({
+        f"{TDX_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        SHORT_ARTICLE: FakeResponse(200, {"Content-Type": "text/html"}, article_page(LONG_ARTICLE), url=LONG_ARTICLE),
+        LONG_ARTICLE: html_response(article_page()),
+    })
+    lines = []
+
+    documents = crawl(make_source(SHORT_ARTICLE), session, progress=lines.append)
+
+    assert [d.url for d in documents] == [LONG_ARTICLE]
+    assert [c["url"] for c in session.calls if "Article" in c["url"]] == [SHORT_ARTICLE]
+    assert f"       (landed on {LONG_ARTICLE})" in lines
+
+
+def test_a_page_that_redirects_to_one_already_read_is_not_indexed_again(
+    isolated_core_cache, fake_session_factory
+):
+    session = fake_session_factory({
+        f"{TDX_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        LONG_ARTICLE: html_response(article_page(SHORT_ARTICLE)),
+        SHORT_ARTICLE: FakeResponse(200, {"Content-Type": "text/html"}, article_page(), url=LONG_ARTICLE),
+    })
+    lines = []
+
+    documents = crawl(make_source(LONG_ARTICLE), session, progress=lines.append)
+
+    assert [d.url for d in documents] == [LONG_ARTICLE]
+    assert f"       (landed on {LONG_ARTICLE}, which was already read; not indexed again)" in lines
+
+
+def test_a_request_a_handler_rewrote_keeps_the_page_s_own_address(isolated_core_cache, fake_session_factory):
+    """A GitHub blob page is fetched from the raw host; landing there is not a redirect."""
+    root = "https://github.com/example-org/example-repo"
+    blob = f"{root}/blob/main/docs/setup.md"
+    raw = "https://raw.githubusercontent.com/example-org/example-repo/main/docs/setup.md"
+    session = fake_session_factory({
+        "https://github.com/robots.txt": ROBOTS_ABSENT,
+        "https://raw.githubusercontent.com/robots.txt": ROBOTS_ABSENT,
+        root: page_with_links(blob),
+        raw: FakeResponse(
+            200, {"Content-Type": "text/plain"},
+            "# Setup\n\nA guide long enough to clear the minimum section size.\n", url=raw,
+        ),
+    })
+    lines = []
+
+    documents = crawl(make_source(root, include_patterns=(r"github\.com/example-org/",)), session, progress=lines.append)
+
+    assert blob in [d.url for d in documents]
+    assert raw not in [d.url for d in documents]
+    assert not any("landed on" in line for line in lines)

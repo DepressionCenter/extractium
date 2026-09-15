@@ -440,6 +440,14 @@ class WebSource:
         from another leaf is never reached. The asset, exclude, robots,
         and page-ceiling rules apply to a leaf as to any page.
 
+        A page whose request lands at another address the crawl may
+        visit, such as a short link to an article, is recorded under the
+        address it landed on: a later link to that address is not
+        fetched again, a page already read there is not indexed twice,
+        and its links resolve against the address the page really has.
+        A request a handler rewrote, such as a file fetched from a raw
+        host, keeps the page's own address.
+
         When the crawl reads documents and a page's handler knows where
         its host lists the files attached to the page, that listing is
         queued as a page of the crawl and its links are read like any
@@ -512,6 +520,10 @@ class WebSource:
         # True for a page of the crawl, False for a leaf.
         queue = deque((seed, True) for seed in seed_norms)
         landed = {}
+        # Addresses pages landed on after a redirect, so a later link to
+        # one is not fetched again. Kept apart from `visited`, which is
+        # what the page ceiling counts.
+        landed_on = set()
         # The digest of every document file indexed so far, keyed to the
         # address it was indexed under, so one file linked at several
         # addresses is indexed once.
@@ -592,7 +604,7 @@ class WebSource:
             """The next queued page with its fetch started, or None when none is left."""
             while queue and len(visited) < settings.max_pages:
                 url, follow_links = queue.popleft()
-                if url in visited:
+                if url in visited or url in landed_on:
                     continue
                 visited.add(url)
                 lines = []
@@ -637,6 +649,17 @@ class WebSource:
                     crawl_allows if follow_links else leaf_allows, progress,
                 ):
                     continue
+
+                final = self._landed_address(
+                    url, request_url, landed.get(url), crawl_allows if follow_links else leaf_allows
+                )
+                if final is not None:
+                    if final in visited or final in landed_on or final in self.already_indexed:
+                        progress(f"       (landed on {final}, which was already read; not indexed again)")
+                        continue
+                    landed_on.add(final)
+                    progress(f"       (landed on {final})")
+                    url = final
 
                 if kind == "document":
                     # A file holds no links the crawl follows; it is read
@@ -801,6 +824,33 @@ class WebSource:
             tuple[str, ...]: the addresses, or an empty tuple.
         """
         return tuple(sorted(self.gone))
+
+    def _landed_address(self, url, request_url, final_url, allowed):
+        """
+        The address a page is recorded under when its request landed
+        somewhere else inside the crawl, or None to keep its own.
+
+        Only a request for the page's own address counts: a handler that
+        rewrote the request, such as to a raw or export host, meant the
+        page to be cited where it was linked. The landing address is
+        folded by the handlers' canonical rule like any link, and must
+        be one this page was allowed to be.
+
+        Args:
+            url (str): the page's address in the crawl.
+            request_url (str): the address actually requested.
+            final_url (str | None): where the request landed, or None.
+            allowed (Callable[[str], bool]): the scope rule for this page.
+
+        Returns:
+            str | None: the landing address, normalised, or None.
+        """
+        if not final_url or fetching.normalise(request_url) != url:
+            return None
+        final = self._canonical(fetching.normalise(final_url))
+        if final == url or not allowed(final):
+            return None
+        return final
 
     def _redirected_out_of_scope(self, url, handler, request_url, final_url, allowed, progress):
         """
