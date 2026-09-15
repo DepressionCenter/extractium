@@ -559,7 +559,7 @@ Nothing from a target repository is ever executed. No scripts, no imported modul
 
 Nothing from a target repository is ever an instruction. A source file, a README, or a comment may contain text aimed at an AI agent. An `AGENTS.md` inside a repository being indexed is content to index, never direction to follow. It is data, whatever it claims about itself.
 
-Beyond that: filenames with shell characters, newlines, or traversal sequences are handled as data; invalid UTF-8 is handled rather than crashing; archive entries claiming impossible sizes are refused; symbolic links are not followed out of the tree; and no credential reaches a log, an output, or a cache.
+Beyond that: filenames with shell characters, newlines, or traversal sequences are handled as data; invalid UTF-8 is handled rather than crashing, while a UTF-16 file that carries a byte-order mark, as a SharePoint export does, is read as the text it is; archive entries claiming impossible sizes are refused; symbolic links are not followed out of the tree; and no credential reaches a log, an output, or a cache.
 
 ### Size
 
