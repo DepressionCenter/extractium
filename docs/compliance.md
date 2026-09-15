@@ -193,7 +193,7 @@ Optional dependencies, installed with an extra or by hand:
 |---|---|---|
 | [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) and fifteen language grammars (`code` extra, carried by the lock file) | Parse a repository's source files so a search can find a definition and what calls it, never copying a source body. | MIT, each |
 | [Universal Ctags](https://ctags.io/) (installed on the machine, not with pip) | Reads the languages no grammar covers, when present. Run with an argument array, no shell, and no configuration file. | GPL-2.0-or-later |
-| [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api) (`youtube` extra) | Fetches a video's caption track. | MIT |
+| [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api) (`youtube` extra, carried by the lock file) | Fetches a video's caption track. | MIT |
 
 Development dependencies (`dev` extra and the lock file):
 

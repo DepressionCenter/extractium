@@ -185,7 +185,8 @@ sources:
   # needed: without one, the newest hundred videos of each listing are
   # read, which is where YouTube's robots.txt stops the crawler; set
   # YOUTUBE_API_KEY in the environment to read a whole channel. Fetching
-  # captions needs the optional install: pip install "extractium[youtube]".
+  # captions needs the optional install, pip install "extractium[youtube]",
+  # which the build scripts already include.
   #
   # YouTube refuses caption requests from cloud-provider addresses, so a
   # scheduled build cannot fetch a transcript. Build once on your own
