@@ -64,12 +64,20 @@ sources:
     #  - '/TDClient/000/ExampleOrg/'         # this portal's knowledge base
     #  - 'example\.org/research-services/'   # one folder of a second site
     #  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
+
+    # Single pages on other hosts that this site links to: a shared Google
+    # file, a handout on a file host. A page matching one of these is
+    # fetched and indexed when a page of the site links to it, and its own
+    # links are never followed, so the crawl never spreads to that host.
+    # Unlike include_patterns, the automatic scope stays as it is.
+    #leaf_patterns:
     #  - '^https://docs\.google\.com/'       # Google Docs, Sheets, and Slides shared with the link
+    #  - '^https://files\.example\.org/'     # handouts on a file host
 
     # Whether a link to a Word, OpenDocument, or RTF file is fetched and its
     # text indexed, with the file's own headings, keywords, and description.
     # Off by default. Such files usually sit on another host, so pair this
-    # with an include pattern for the host that serves them. The old binary
+    # with a leaf pattern for the host that serves them. The old binary
     # .doc format and PDF files are not read.
     #read_documents: true
 

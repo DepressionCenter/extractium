@@ -1,8 +1,8 @@
 """
 Summary: The web-crawl source, the one crawler in Extractium: a
 queue-driven crawl from a seed URL, kept in scope by the same-origin or
-prefix rules of extractium.core.fetch and by the operator's include and
-exclude patterns. Host-specific reading of pages is delegated to
+prefix rules of extractium.core.fetch and by the operator's include,
+leaf, and exclude patterns. Host-specific reading of pages is delegated to
 site-handler plugins (generic, tdx, github), consulted per URL with
 generic always last, so this module never branches on a host name. See
 docs/extractium-spec.md sections 2.1, 5, and 6.
@@ -293,8 +293,10 @@ class WebSource:
 
     Args:
         options (Mapping): the validated options of a `web` entry in the
-            configuration file: seed_url, include_patterns,
-            crawl_exclude_patterns, index_exclude_patterns (None for
+            configuration file: seed_url, include_patterns, leaf_patterns
+            (single pages on other hosts, fetched when a page in the
+            crawl's own scope links to them and never followed for links
+            of their own), crawl_exclude_patterns, index_exclude_patterns (None for
             either exclude list means "asset patterns plus the enabled
             handlers' defaults"), extra_crawl_exclude_patterns and
             extra_index_exclude_patterns (added on top of whichever list
@@ -326,6 +328,7 @@ class WebSource:
         # the set: the handler offer, and progress lines that name the crawl.
         self.seed_url = self.seed_urls[0]
         self.include_patterns = tuple(options.get("include_patterns") or ())
+        self.leaf_patterns = tuple(options.get("leaf_patterns") or ())
         self.read_documents = bool(options.get("read_documents", False))
         self.already_indexed = set(options.get("already_indexed") or ())
         # Pages the server confirmed gone during this crawl, so an
@@ -405,6 +408,14 @@ class WebSource:
         not yielded. Every page counts toward max_pages whether or not it
         yields a document.
 
+        A link that is out of scope but matches a leaf pattern is fetched
+        and indexed as a leaf when the page linking to it sits inside the
+        scope derived from a seed: the site itself, not a host reached
+        through an include pattern. A leaf's own links are never read, so
+        a leaf never starts a crawl of its host, and a leaf linked only
+        from another leaf is never reached. The asset, exclude, robots,
+        and page-ceiling rules apply to a leaf as to any page.
+
         Up to `parallel_pages` fetches are kept in flight, but pages are
         taken from the queue, have their links read, and are yielded in
         the order a one-at-a-time crawl would use, and each page's own
@@ -447,6 +458,7 @@ class WebSource:
         auto_prefix = tuple(scope_prefix_for(self.handlers, seed) for seed in self.seed_urls)
         origin = tuple(fetching.get_origin(seed) for seed in self.seed_urls)
         include_res = fetching.compile_patterns(self.include_patterns)
+        leaf_res = fetching.compile_patterns(self.leaf_patterns)
         crawl_exclude_res = fetching.compile_patterns(self.crawl_exclude_patterns)
         index_exclude_res = fetching.compile_patterns(self.index_exclude_patterns)
         robots = fetching.RobotsPolicy(
@@ -460,17 +472,46 @@ class WebSource:
             progress(f"Seed:         {seed}")
         progress(f"Auto prefix:  {', '.join(dict.fromkeys(auto_prefix))}")
         progress(f"Include pats: {list(self.include_patterns) or '(auto -- prefix only)'}")
+        if self.leaf_patterns:
+            progress(f"Leaf pats:    {list(self.leaf_patterns)}")
         progress(f"Site handlers: {[h.name for h in self.handlers]}")
 
         seed_norms = [self._canonical(fetching.normalise(seed)) for seed in self.seed_urls]
         visited = set()
         queued = set(seed_norms)   # dedup before download
-        queue = deque(seed_norms)
+        # Each entry is an address and whether its links are followed:
+        # True for a page of the crawl, False for a leaf.
+        queue = deque((seed, True) for seed in seed_norms)
         landed = {}
         # The digest of every document file indexed so far, keyed to the
         # address it was indexed under, so one file linked at several
         # addresses is indexed once.
         seen_documents = {}
+
+        def crawl_allows(link):
+            """Whether a link is a page of this crawl: in scope, and allowed by every handler."""
+            return fetching.in_scope(
+                link, auto_prefix, origin, include_res, crawl_exclude_res, readable_re
+            ) and handlers_allow(self.handlers, link)
+
+        def leaf_allows(link):
+            """
+            Whether a link is a leaf: an address a leaf pattern names,
+            fetched for its own content and never followed. The asset,
+            exclude, and handler rules apply to it as to any page, so a
+            leaf pattern for a file host reaches only what can be read.
+            """
+            if not any(r.search(link) for r in leaf_res):
+                return False
+            if fetching.is_asset(link, readable_re):
+                return False
+            if any(r.search(link) for r in crawl_exclude_res):
+                return False
+            return handlers_allow(self.handlers, link)
+
+        def in_primary_scope(url):
+            """Whether a page sits inside the scope derived from a seed, whatever the include patterns say."""
+            return any(url.startswith(prefix) for prefix in auto_prefix)
 
         def start_fetch(url, lines):
             """
@@ -511,13 +552,13 @@ class WebSource:
         def next_page():
             """The next queued page with its fetch started, or None when none is left."""
             while queue and len(visited) < settings.max_pages:
-                url = queue.popleft()
+                url, follow_links = queue.popleft()
                 if url in visited:
                     continue
                 visited.add(url)
                 lines = []
                 handler, request_url, kind, result = start_fetch(url, lines)
-                return len(visited), url, handler, request_url, kind, lines, result
+                return len(visited), url, follow_links, handler, request_url, kind, lines, result
             return None
 
         depth = max(1, int(settings.parallel_pages))
@@ -533,13 +574,16 @@ class WebSource:
                     in_flight.append(page)
                 if not in_flight:
                     break
-                ordinal, url, handler, request_url, kind, lines, result = in_flight.popleft()
+                ordinal, url, follow_links, handler, request_url, kind, lines, result = \
+                    in_flight.popleft()
                 progress(f"[{ordinal:4d}] {url}")
                 fetched = None if result is None else result.result()
                 for line in lines:
                     progress(line)
                 if fetched is None:
                     continue
+                if not follow_links:
+                    progress("       (leaf; its links are not followed)")
 
                 # Where a request actually lands is checked against the
                 # scope like any discovered link: a page may redirect off
@@ -550,8 +594,8 @@ class WebSource:
                 ):
                     continue
                 if not is_seed and self._redirected_out_of_scope(
-                    url, handler, request_url, landed.get(url), auto_prefix, origin, include_res,
-                    crawl_exclude_res, progress,
+                    url, handler, request_url, landed.get(url),
+                    crawl_allows if follow_links else leaf_allows, progress,
                 ):
                     continue
 
@@ -567,17 +611,22 @@ class WebSource:
 
                 soup = fetched if kind == "html" else markdown_text_to_soup(fetched, url)
 
-                # Enqueue new in-scope links, deduped before download.
-                for link in extract_links(soup, url):
-                    link = self._canonical(link)
-                    if link not in visited and link not in queued:
+                # Enqueue new in-scope links, deduped before download. A
+                # leaf's links are not read at all, so a leaf hands nothing
+                # to the queue and nothing to another source.
+                if follow_links:
+                    from_primary = in_primary_scope(url)
+                    for link in extract_links(soup, url):
+                        link = self._canonical(link)
+                        if link in visited or link in queued:
+                            continue
                         observe_link(self.handlers, link)
-                        in_scope = fetching.in_scope(
-                            link, auto_prefix, origin, include_res, crawl_exclude_res, readable_re
-                        )
-                        if in_scope and handlers_allow(self.handlers, link):
+                        if crawl_allows(link):
                             queued.add(link)
-                            queue.append(link)
+                            queue.append((link, True))
+                        elif from_primary and leaf_allows(link):
+                            queued.add(link)
+                            queue.append((link, False))
 
                 # Index exclusion only prevents indexing, not crawling.
                 if any(r.search(url) for r in index_exclude_res):
@@ -710,8 +759,7 @@ class WebSource:
         """
         return tuple(sorted(self.gone))
 
-    def _redirected_out_of_scope(self, url, handler, request_url, final_url, auto_prefix, origin,
-                                 include_res, crawl_exclude_res, progress):
+    def _redirected_out_of_scope(self, url, handler, request_url, final_url, allowed, progress):
         """
         Whether a page landed somewhere the crawl may not go, and says so
         if it did.
@@ -734,8 +782,9 @@ class WebSource:
                 from the raw host; landing there is no redirect.
             final_url (str | None): where the request landed, or None
                 when the session does not report it.
-            auto_prefix, origin, include_res, crawl_exclude_res: the
-                crawl's scope, as in_scope takes them.
+            allowed (Callable[[str], bool]): whether an address is one
+                this page was allowed to be: the crawl's scope rule for a
+                page of the crawl, the leaf rule for a leaf.
             progress (Callable[[str], None]): receives the skip line.
 
         Returns:
@@ -745,8 +794,7 @@ class WebSource:
             return False
         if hasattr(handler, "landing_allowed") and handler.landing_allowed(url, final_url):
             return False
-        if fetching.in_scope(final_url, auto_prefix, origin, include_res, crawl_exclude_res) \
-                and handlers_allow(self.handlers, final_url):
+        if allowed(final_url):
             return False
         progress(
             f"  SKIP {url} -- it redirects to {final_url}, which is outside what this "

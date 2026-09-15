@@ -215,6 +215,26 @@ def _as_prefixes(value):
     return (value,) if isinstance(value, str) else tuple(value)
 
 
+def is_asset(url, readable_re=None):
+    """
+    Whether an address names a file that holds no text the build can
+    read: an image, an archive, a font, media, source code, or an office
+    file no enabled reader turns into text.
+
+    Args:
+        url (str): the candidate URL.
+        readable_re (re.Pattern | None): addresses of files a reader turns
+            into text for this crawl, which are not assets. None means no
+            file of any kind is readable.
+
+    Returns:
+        bool: True when the address is left alone.
+    """
+    if not ASSET_RE.search(url):
+        return False
+    return readable_re is None or not readable_re.search(url)
+
+
 def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res, readable_re=None):
     """
     Decides whether a discovered link should be crawled.
@@ -250,7 +270,7 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res, readable_
             return False
 
     # Skip binary assets, unless a reader turns this kind into text.
-    if ASSET_RE.search(url) and not (readable_re is not None and readable_re.search(url)):
+    if is_asset(url, readable_re):
         return False
 
     # Include check

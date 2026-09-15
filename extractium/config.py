@@ -280,7 +280,7 @@ SUGGESTED_SOURCE_LABELS = {
 # its options are passed through for that plugin to check.
 SOURCE_OPTION_KEYS = {
     "web": frozenset({
-        "seed_url", "seed_urls", "include_patterns", "crawl_exclude_patterns",
+        "seed_url", "seed_urls", "include_patterns", "leaf_patterns", "crawl_exclude_patterns",
         "index_exclude_patterns", "extra_crawl_exclude_patterns",
         "extra_index_exclude_patterns", "site_handlers", "read_documents",
     }),
@@ -778,6 +778,9 @@ def _read_web_source(entry, source):
         "seed_urls": seeds,
         "seed_url": seeds[0],
         "include_patterns": _read_patterns(entry, "include_patterns", DEFAULT_INCLUDE_PATTERNS, source),
+        # Single pages on other hosts, fetched when a page in the crawl's
+        # own scope links to them, and never followed for links themselves.
+        "leaf_patterns": _read_patterns(entry, "leaf_patterns", (), source),
         # None for either exclude list means "asset patterns plus the
         # enabled handlers' defaults", completed by the web source.
         "crawl_exclude_patterns": _read_patterns(

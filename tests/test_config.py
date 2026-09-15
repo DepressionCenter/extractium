@@ -930,3 +930,24 @@ def test_a_local_source_reading_documents_adds_their_globs_to_the_defaults():
          "include_globs": ["**/*.docx"]},
     ]}).sources[0]
     assert custom.options["include_globs"] == ("**/*.docx",)
+
+
+def test_leaf_patterns_are_read_and_default_to_nothing():
+    plain = config.config_from_mapping(minimal()).sources[0]
+    assert plain.options["leaf_patterns"] == ()
+
+    source = config.config_from_mapping({"sources": [web(
+        leaf_patterns=[r"^https://docs\.google\.com/", r"^https://files\.example\.org/"],
+    )]}).sources[0]
+    assert source.options["leaf_patterns"] == (
+        r"^https://docs\.google\.com/", r"^https://files\.example\.org/",
+    )
+
+
+def test_leaf_patterns_are_validated_like_the_other_pattern_lists():
+    with pytest.raises(config.ConfigError, match="leaf_patterns must be a list of patterns"):
+        config.config_from_mapping({"sources": [web(leaf_patterns="docs\\.google\\.com")]})
+    with pytest.raises(config.ConfigError, match="leaf_patterns entry 1 is not a valid"):
+        config.config_from_mapping({"sources": [web(leaf_patterns=["/docs/["])]})
+    with pytest.raises(config.ConfigError, match="leaf_patterns entry 1 is blank"):
+        config.config_from_mapping({"sources": [web(leaf_patterns=[" "])]})

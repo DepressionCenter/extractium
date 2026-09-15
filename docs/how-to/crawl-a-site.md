@@ -41,8 +41,8 @@ A settings file lists sources. Each one has a type, a label, and a few options. 
 | A GitHub organization, user, or repository | `github_api` | The account or repository, as `org`, `user`, or `url`. Read through the API, never page by page. A `web` source whose seed is a GitHub address does the same thing by itself. |
 | A DSpace repository, such as a university library's | `dspace` | The interface address, the reader address, and the collections to read. Collections are listed, never discovered. |
 | A YouTube channel, playlist, or video | `youtube` | The channel as you would type it in a browser. Each stretch of a caption track becomes a section cited at the moment it was said. |
-| A Google Docs, Sheets, or Slides file shared with the link | `web` | An `include_patterns` entry for `docs.google.com` on the crawl that links to it. The file is read through its export, and one that is not shared is reported and skipped. |
-| Word, OpenDocument, or RTF files linked from a site, kept in a repository, or in a folder | `web`, `github_api`, or `local` | `read_documents: true` on that source. The text is indexed with its headings, and the file's own keywords and description with it. |
+| A Google Docs, Sheets, or Slides file shared with the link | `web` | A `leaf_patterns` entry for `docs.google.com` on the crawl that links to it. The file is read through its export, and one that is not shared is reported and skipped. |
+| Word, OpenDocument, or RTF files linked from a site, kept in a repository, or in a folder | `web`, `github_api`, or `local` | `read_documents: true` on that source, with a `leaf_patterns` entry for the host that serves the files when it is not the site itself. The text is indexed with its headings, and the file's own keywords and description with it. |
 | A folder on your own computer | `local` | The folder path. Nothing from it reaches an output unless that output sets `include_local: true`. |
 | A knowledge bundle another build wrote | `okf` | The folder of an Open Knowledge Format bundle, from Extractium™ or any other tool. Each concept keeps the address it was read from. |
 
@@ -72,11 +72,12 @@ Read that list with three questions:
 
 ## Step 3: Tune the patterns
 
-Three lists on a `web` source decide what is fetched and what is indexed. Each holds regular expressions matched against the whole URL.
+Four lists on a `web` source decide what is fetched and what is indexed. Each holds regular expressions matched against the whole URL.
 
 | List | What it does | Default |
 |---|---|---|
 | `include_patterns` | Pages the crawl may visit. A URL must match one of them. | Empty, which means the crawl works out its scope from the seed URL: the site, or the portal's own folder. |
+| `leaf_patterns` | Single pages on other hosts that the site links to, such as shared Google files or handouts on a file host. Each is fetched and indexed, and its links are never followed. The scope from the seed stays as it is. | Empty. |
 | `crawl_exclude_patterns` | Pages the crawl must not fetch at all. Checked after the include list, so an entry here always wins. | Files that are not readable text, plus what each enabled site handler adds: search forms, logins, print views, tag pages, and code-host housekeeping pages. |
 | `index_exclude_patterns` | Pages the crawl may visit and follow links from, but whose own content stays out of the index. | The same defaults. Use it for menu and category pages. |
 | `extra_crawl_exclude_patterns`, `extra_index_exclude_patterns` | The same two lists, added to the defaults instead of replacing them. | Empty. |
@@ -90,7 +91,7 @@ The usual sequence is:
 
 Wrap every pattern in single quotes so YAML keeps a backslash as you typed it, and escape a dot that should match a dot: `'example\.edu'`. The full rules, including the order the checks run in and what the built-in exclusions cover, are in the [configuration reference](../configuration.md) under "How the URL patterns work".
 
-Word, OpenDocument, and RTF files are dropped as files that are not text unless the source sets `read_documents: true`. Most sites keep such files on another host, so that setting usually goes with an `include_patterns` entry for the host that serves them. The same page of the configuration reference explains both under "Reading Word, OpenDocument, and RTF files".
+Word, OpenDocument, and RTF files are dropped as files that are not text unless the source sets `read_documents: true`. Most sites keep such files on another host, so that setting usually goes with a `leaf_patterns` entry for the host that serves them. The same page of the configuration reference explains both under "Reading Word, OpenDocument, and RTF files" and "Single pages on another host".
 
 
 ## Step 4: Decide about the two environment variables
@@ -114,7 +115,8 @@ A build explains itself as it runs. When several sources run at once, which is t
 | `SKIP <url> -- disallowed by robots.txt` | The site's `robots.txt` forbids that page to crawlers. | Nothing, unless you own the site. Then `respect_robots_txt: false` is your statement that you do. |
 | `SKIP <url> -- <reason>` | The page could not be fetched: a refusal, a timeout, or an address that is not a page. | Read the reason. A whole site skipped because its `robots.txt` could not be read is deliberate: the rules are unknown, so the crawl fails closed. |
 | `SKIP <seed> -- it redirects to <address>, which is outside what this source may crawl` | The seed is a short link to somewhere else. | Use the address the message names as the seed. |
-| `SKIP <url> -- it redirects to <address>, ... so what arrived is not this site's content` | A page inside the site sent the crawler somewhere the crawl may not go: another host, or an excluded address. | Nothing, unless that other place should be indexed. Then add it to `include_patterns` or as a source of its own. |
+| `SKIP <url> -- it redirects to <address>, ... so what arrived is not this site's content` | A page inside the site sent the crawler somewhere the crawl may not go: another host, or an excluded address. | Nothing, unless that other place should be indexed. Then add it to `leaf_patterns` for a single page, to `include_patterns` for a whole site, or as a source of its own. |
+| `(leaf; its links are not followed)` | The page above it is on another host and was reached through `leaf_patterns`. It is indexed, and nothing it links to is fetched. | Nothing. |
 | `transport: <host> served over the browser transport` | The site answered a bot-protection challenge, and the build read it over a browser-shaped connection while still naming itself. | Nothing. The summary lists the host again so the choice is on record. See [reading a site behind bot protection](../bot-protection-transport.md). |
 | `already indexed by an earlier source, skipped: <url>` | Two sources reached the same page, and the first one kept it. | Nothing, unless it happens to many pages. Then fold the overlapping source into the first one as a second `seed_urls` entry. |
 | `N linked video(s) were left out: ...` | Pages linked to videos, and no `youtube` source in the build could confirm that a channel it names published them. | Nothing, unless the videos are yours. Then name the channel on the `youtube` source. A source naming no channel reads no linked video. |
