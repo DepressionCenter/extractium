@@ -131,6 +131,22 @@ def test_the_lock_file_pins_every_code_parser(lock_text):
 # The run scripts
 # ---------------------------------------------------------------------------
 
+def test_the_lock_file_pins_the_caption_library(lock_text):
+    """
+    The build scripts are how a build is made on a person's own
+    computer, which is the only kind of machine YouTube answers caption
+    requests from, so the lock they install from has to carry the
+    caption library or no scripted build can fetch a transcript.
+    """
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^youtube = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
+    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
+    assert wanted == {"youtube-transcript-api"}
+    assert wanted <= pinned
+    assert "--extra youtube" in lock_text
+
+
 def test_the_posix_script_is_valid_shell():
     if shutil.which("bash") is None:
         pytest.skip("bash is not installed on this machine")

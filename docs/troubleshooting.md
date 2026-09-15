@@ -520,9 +520,9 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### `fetching captions needs youtube-transcript-api`
 
-**Cause.** A transcript has to be fetched and the caption package is not installed.
+**Cause.** A transcript has to be fetched and the caption package is not installed. The build scripts and the scheduled workflow install it from the lock file, so this line means a developer install that did not name the `youtube` extra, or a lock file regenerated without it.
 
-**Fix.** `pip install "extractium[youtube]"`. You need this on the machine that fetches transcripts, not on one that only reads stored ones.
+**Fix.** `pip install "extractium[youtube]"` in a developer install. In a scripted install, regenerate the lock file with `--extra youtube`, as [how to install](how-to/install.md) shows. You need the package on the machine that fetches transcripts, not on one that only reads stored ones.
 
 ### `listing a channel or playlist needs a YouTube Data API key`
 

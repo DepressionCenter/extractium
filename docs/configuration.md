@@ -489,7 +489,7 @@ If YouTube does refuse the machine partway through, the build keeps every video 
 
 #### What you need installed
 
-Fetching captions needs one extra package:
+Fetching captions needs one extra package. The build scripts and the scheduled workflow install it from the lock file. A developer install names it:
 
 ```bash
 pip install "extractium[youtube]"
