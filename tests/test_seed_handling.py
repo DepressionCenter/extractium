@@ -301,7 +301,9 @@ def test_a_seed_redirecting_into_an_include_pattern_is_allowed(
         "seed_url": seed, "include_patterns": (r"portal\.example/kb",),
     }).fetch(session, {}, quiet))
 
-    assert [d.url for d in documents] == [seed]
+    # Recorded where it landed, since that address is inside the scope
+    # the operator named; a link to it later is then not a second page.
+    assert [d.url for d in documents] == [landed]
 
 
 def test_a_page_that_redirects_off_the_site_is_not_indexed_as_the_site(

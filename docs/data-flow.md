@@ -84,7 +84,7 @@ A video is read from its captions and never from its audio. The caption track co
 | `categories` | The hierarchy from the source, outermost first. Empty when there is none. |
 | `local` | True when it was read from a folder on this machine. |
 
-One page is indexed once, however many sources reached it. Two sources can cover overlapping ground without meaning to: a website and a section of it, a portal and a short link into one of its articles. The first source to produce a page keeps it, the later ones are told they were too late, and the build says how many pages that happened to. Pages are compared by their address in normalised form, so two addresses differing only by a trailing slash or a fragment count as one page.
+One page is indexed once, however many sources reached it. Two sources can cover overlapping ground without meaning to: a website and a section of it, a portal and a short link into one of its articles. The first source to produce a page keeps it, the later ones are told they were too late, and the build says how many pages that happened to. Pages are compared by their address in normalised form, so two addresses differing only by a trailing slash or a fragment count as one page. A page whose address redirects to another address on the same site, such as a portal's short link to an article, is recorded under the address it landed on, so the two are one page too.
 
 ### 3. Sections and windows
 
