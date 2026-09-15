@@ -11,7 +11,7 @@ extractium/code/tree_sitter.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -90,7 +90,7 @@ BODY_NODE_TYPES = frozenset({
 # Comment markers, removed so documentation reads as prose. Kept in one
 # place because every language spells the same idea differently.
 COMMENT_MARKERS = re.compile(
-    r"^\s*(?:///?!?|#+|--+|%+|;+|<#|#>|/\*+|\*+/|\*|\"\"\"|''')|(?:\*/|\"\"\"|''')\s*$"
+    r"^\s*(?:///?!?|#+|--+|%+|;+|<#|#>|/\*+|\*+/|\*|\"\"\"|'''|(?i:rem\b)|::)|(?:\*/|\"\"\"|''')\s*$"
 )
 WHITESPACE_RUN = re.compile(r"\s+")
 

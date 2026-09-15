@@ -15,7 +15,7 @@ tests/test_code_analysis.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -87,6 +87,7 @@ def test_a_file_is_matched_to_its_language_by_name_alone():
     assert languages.language_for_path("src/app.py").name == "python"
     assert languages.language_for_path("src/Client.cs").name == "csharp"
     assert languages.language_for_path("analysis/summary.R").name == "r"
+    assert languages.language_for_path("tools/Build.CMD").name == "batch"
     assert languages.language_for_path("notes.txt") is None
 
 
@@ -245,6 +246,24 @@ def test_kotlin_swift_powershell_and_matlab_each_yield_their_definitions(parsers
     assert named(swift, "Compendium.search").kind == "method"
     assert named(powershell, "Write-Step").kind == "function"
     assert named(matlab, "summarize_recording").doc.startswith("Returns the mean")
+
+
+def test_a_batch_file_yields_its_labels_and_the_commands_it_runs(parsers_installed):
+    """
+    A batch file has no functions. A label is where "call" and "goto"
+    land, so it is recorded as one, named colon and all, with the comment
+    on the line after it as its documentation. The commands the file runs
+    are its calls.
+    """
+    facts = analyze("Sample.bat")
+
+    assert facts.tier == languages.TIER_TREE_SITTER
+    assert facts.display == "Windows batch"
+    build = named(facts, ":build")
+    assert build.kind == "function"
+    assert build.doc == "Runs one build from the settings file named as the first argument."
+    assert named(facts, ":end").doc == ""
+    assert {call.name for call in facts.calls} >= {"echo", "python"}
 
 
 def test_a_language_with_no_published_grammar_keeps_its_outline(parsers_installed):

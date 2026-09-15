@@ -12,7 +12,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -109,6 +109,22 @@ def test_the_lock_file_keeps_its_license_header(lock_text):
 
 def test_the_lock_file_records_how_it_was_generated(lock_text):
     assert "uv pip compile" in lock_text
+
+
+def test_the_lock_file_pins_every_code_parser(lock_text):
+    """
+    The build scripts and the scheduled workflow install from the lock
+    file alone, so a grammar missing from it is a language no scripted
+    build can parse. The lock is generated with the code extra for that
+    reason, and this keeps it from drifting back.
+    """
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^code = \[(.*?)^\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
+    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
+
+    assert wanted
+    assert wanted <= pinned, f"not pinned: {sorted(wanted - pinned)}"
 
 
 # ---------------------------------------------------------------------------

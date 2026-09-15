@@ -3,7 +3,7 @@ This file is part of Extractium™
 tests/fixtures/code/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-10
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Summary: What the code fixtures in this folder are, why they carry no
 license header of their own, and which test reads each one.
 Notes: See README file for documentation and full license information.
@@ -41,6 +41,7 @@ This folder holds one small file per language the code analysis reads. They are 
 | `sample.sql` | A view and a routine, with the query underneath each one left out of the record |
 | `Sample.kt`, `Sample.swift` | Classes, methods, and the documentation written above each |
 | `Sample.ps1` | Functions with parameter blocks, and `Import-Module` |
+| `Sample.bat` | Labels as the nearest thing a batch file has to functions, the comment after a label as its documentation, and the commands the file runs |
 | `sample.m` | MATLAB functions, whose documentation sits under the signature rather than above it |
 | `sample.R` | A language with no published grammar: the Ctags path, and the file-metadata path |
 | `sample.ipynb` | A notebook, including stored outputs that must never be read |
