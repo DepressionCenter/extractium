@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: How Extractium reads GitHub repositories: the three-tier
 ingestion ladder, the account guardrail, authentication, repository
 selection, file filtering, caching, and the lightweight static code
@@ -230,11 +230,27 @@ And these files, wherever they are: binaries, images, audio, video, archives, co
 
 Submodules are not followed. The `.gitmodules` file itself may be indexed as configuration.
 
-### A ceiling on file size
+### The ceilings
 
-`max_file_bytes` sets a maximum size per file, with a conservative default. Nothing above it is downloaded or parsed.
+`max_file_bytes` sets a maximum size per file, with a conservative default of 2,000,000 bytes. Nothing above it is downloaded or parsed. It is the only ceiling a settings file changes. The others are fixed, and each exists because some repository has been seen to go past it with files that mean nothing to a reader:
+
+| Ceiling | Value | What happens past it |
+|---|---|---|
+| File size, `max_file_bytes` | 2,000,000 bytes | The file is not downloaded. Checked against the inventory and again against the downloaded body, in case the listing understated it. |
+| Text indexed whole | 200,000 characters | A documentation file or a page's text longer than this is indexed as a compact record: its title, its opening paragraph, its headings, and the forty terms it uses most, with a line saying the file was indexed that way. About 35,000 words, so a manual passes whole and a rendered data table does not. |
+| Parse length | 1,500,000 characters | A code file longer than this is recorded by name, language, and length and not parsed. A page, notebook, or R Markdown file over it still has its text indexed; only the code inside goes unparsed. |
+| Code files per repository | 3,000 | Files past the ceiling are named in the log and not parsed. A repository with more is a monorepo or a vendored tree, and a directory of thousands of tiny generated files is exactly what this stops. |
+| Code blocks per container | 500 | Cells or chunks past it are not parsed. A generated notebook can hold thousands. |
+| Notebook size | 20,000,000 bytes | Not read. Larger than `max_file_bytes`, so it applies only when that ceiling was raised. |
+| Symbols from Universal Ctags | 2,000 per file | Later tags are dropped. |
+| Definition depth | 3 levels | A definition nested deeper is a helper inside a helper and is not recorded. |
+| Signature, documentation, constant value | 400, 800, and 80 characters | Cut, with an ellipsis. |
+| Archive held in memory | 80,000,000 bytes, or a repository GitHub reports over 60,000 KiB | The repository is read one file at a time instead. |
+| Listing pages | 100 pages of 100 | An account with more repositories than that is outside what one knowledge base holds. |
 
 A skipped file always produces a progress event naming the repository, the path, and the reason. A selected file is never dropped in silence. An index quietly missing its largest documentation file is worse than one that says it skipped it.
+
+A page whose content is written by script indexes as nearly nothing, because scripts are code and not text: a SchemaSpy `columns.html` holds its whole dictionary in one script as JSON, and its text is a dozen column headings. The per-table pages beside it carry the same columns as real tables, and those are what the index holds.
 
 ### Downloading: one archive, or one file at a time
 
@@ -487,7 +503,7 @@ Individual variables and every identifier occurrence are deliberately left out. 
 
 Tests are indexed, not skipped. A test is often the clearest statement of what something is supposed to do, what inputs it accepts, and how it fails.
 
-A few limits keep the records useful: a definition nested more than three levels deep is skipped as a helper inside a helper, a name like `__author__` is skipped as header boilerplate, and a file over about 1.5 million characters is not parsed at all. The progress log names every file left out and why.
+A few limits keep the records useful: a definition nested more than three levels deep is skipped as a helper inside a helper, a name like `__author__` is skipped as header boilerplate, and a file over about 1.5 million characters is not parsed at all, though a page or notebook that long still has its text indexed. The table under "The ceilings" above lists every limit. The progress log names every file left out and why.
 
 ### File and symbol records
 

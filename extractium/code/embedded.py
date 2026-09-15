@@ -11,7 +11,7 @@ extractium/code/embedded.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,9 +34,11 @@ __date__ = "2026-09-10"
 
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 
 from extractium.code import languages
+from extractium.core.bm25 import tokenize
 
 ### What Comes Out Of A Container ###
 
@@ -73,15 +75,21 @@ class Contents:
             out. Indexed as documentation.
         blocks (tuple[Block, ...]): the code, in the order it appears.
         title (str): a heading read out of the file, when it has one.
+        headings (tuple[str, ...]): the section headings the reader
+            found, in order, for the compact record of a file too long
+            to index whole. Empty when the reader collects none; the
+            Markdown headings in the prose are read instead.
     """
 
     kind: str
     prose: str = ""
     blocks: tuple = ()
     title: str = ""
+    headings: tuple = ()
 
     def __post_init__(self):
         object.__setattr__(self, "blocks", tuple(self.blocks))
+        object.__setattr__(self, "headings", tuple(self.headings))
 
 
 ### Limits ###
@@ -95,6 +103,35 @@ MAX_NOTEBOOK_BYTES = 20_000_000
 # The most cells or chunks read from one file. A generated notebook can
 # hold thousands, and what a reader wants from one is its shape.
 MAX_BLOCKS = 500
+
+# The most characters of one file's text indexed whole. Under this, a
+# page or a document is chunked in full. Over it, a compact record
+# stands in for the text: the title, the opening paragraph, the
+# headings, and the terms used most, with a line saying so. A search
+# still finds the file by what it is about, and the index does not
+# grow by thousands of chunks for one file, which at this length is
+# generated far more often than written. About 35,000 words, so a
+# manual passes and a rendered data table does not.
+MAX_PROSE_CHARS = 200_000
+
+# How much of a long file its compact record quotes.
+MAX_RECORD_HEADINGS = 40
+MAX_RECORD_TERMS = 40
+MAX_RECORD_OPENING_CHARS = 1_000
+
+# English function words, left out of a compact record's term list
+# because they say nothing about what a file holds. Kept short on
+# purpose: a term that survives this list and is still frequent is a
+# term the file is about.
+STOPWORDS = frozenset("""
+the and for with that this from are was were not but all any can has have
+had its our your their they them then than when what which who whom will
+would should could may might must shall into onto out over under about
+above below between after before during each every some such only also
+more most other another same very just here there where how why been being
+does did done use used using one two three you his her she him let get got
+per via etc see set new off own too yes non
+""".split())
 
 
 ### Names A Container Uses For A Language ###
@@ -334,7 +371,9 @@ JAVASCRIPT_TYPES = frozenset({
 TAG = re.compile(r"<[^>]+>")
 STYLE_ELEMENT = re.compile(r"<style\b[^>]*>.*?</style\s*>", re.I | re.S)
 HTML_TITLE = re.compile(r"<title[^>]*>(.*?)</title\s*>", re.I | re.S)
+HTML_HEADING = re.compile(r"<h([1-3])\b[^>]*>(.*?)</h\1\s*>", re.I | re.S)
 BLANK_RUN = re.compile(r"\n{3,}")
+WHITESPACE_RUN = re.compile(r"\s+")
 
 
 def read_html(text):
@@ -366,6 +405,12 @@ def read_html(text):
 
     stripped = SCRIPT_ELEMENT.sub(" ", text)
     stripped = STYLE_ELEMENT.sub(" ", stripped)
+    headings = tuple(
+        heading for heading in (
+            WHITESPACE_RUN.sub(" ", TAG.sub("", match.group(2))).strip()
+            for match in HTML_HEADING.finditer(stripped)
+        ) if heading
+    )
     prose = BLANK_RUN.sub("\n\n", TAG.sub(" ", stripped))
     prose = "\n".join(line.strip() for line in prose.splitlines())
     title = HTML_TITLE.search(text)
@@ -374,7 +419,90 @@ def read_html(text):
         prose=BLANK_RUN.sub("\n\n", prose).strip(),
         blocks=blocks,
         title=TAG.sub("", title.group(1)).strip() if title else "",
+        headings=headings,
     )
+
+
+### What Is Indexed For A Long File ###
+
+def first_paragraph(prose):
+    """
+    The first paragraph of a file's text, which is what its author wrote
+    to introduce it. Markdown heading marks are dropped.
+    """
+    for block in (prose or "").split("\n\n"):
+        cleaned = " ".join(line.strip("# ").strip() for line in block.splitlines()).strip()
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def headings_in(prose):
+    """The Markdown headings a text carries, in order."""
+    found = []
+    for line in (prose or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            heading = stripped.lstrip("#").strip()
+            if heading:
+                found.append(heading)
+    return tuple(found)
+
+
+def frequent_terms(text, limit=MAX_RECORD_TERMS):
+    """
+    The terms a text uses most, most frequent first, with function words
+    and bare numbers left out. Tokenized the way the keyword index is,
+    so a term listed here is a term a search can match.
+    """
+    counts = Counter(
+        term for term in tokenize(text) if term not in STOPWORDS and not term.isdigit()
+    )
+    return tuple(term for term, _ in counts.most_common(limit))
+
+
+def compact_record(title, prose, headings=()):
+    """
+    A stand-in for a file too long to index whole.
+
+    Args:
+        title (str): the file's title, or an empty string.
+        prose (str): the whole text.
+        headings (Iterable[str]): the headings a reader collected; the
+            Markdown headings in the prose are used when it is empty.
+
+    Returns:
+        str: the title, the opening paragraph, the headings, the terms
+        used most, and a line saying the file was indexed this way.
+        Every sentence in it is quoted or counted from the file; nothing
+        is described that nobody wrote.
+    """
+    lines = [title] if title else []
+    opening = first_paragraph(prose)[:MAX_RECORD_OPENING_CHARS].strip()
+    if opening and opening != title:
+        lines += ["", opening]
+    found = tuple(headings) or headings_in(prose)
+    if found:
+        lines += ["", "Headings: " + "; ".join(found[:MAX_RECORD_HEADINGS])]
+    terms = frequent_terms(prose)
+    if terms:
+        lines += ["", "Terms used most: " + ", ".join(terms)]
+    lines += ["", (
+        f"This file holds {len(prose):,} characters of text, more than the "
+        f"{MAX_PROSE_CHARS:,} this index takes whole, so only this outline was "
+        "indexed. Open the file for the rest."
+    )]
+    return "\n".join(lines).strip()
+
+
+def prose_for_index(title, prose, headings=()):
+    """
+    The text to index for one file: the text itself when it is under
+    MAX_PROSE_CHARS, and its compact record when it is not.
+    """
+    if len(prose) <= MAX_PROSE_CHARS:
+        return prose
+    return compact_record(title, prose, headings)
 
 
 ### The One Way In ###

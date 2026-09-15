@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -243,7 +243,7 @@ Only Markdown, plain text, and HTML are read. PDF, Word, and spreadsheet files w
 | `include_archived` | true or false | `true` | Reads archived repositories. On by default, because archived documentation is still documentation. |
 | `include_code` | true or false | `true` | Reads the structure of the repository's code as well as its documentation. See "Reading the code" below. |
 | `ctags_fallback` | true or false | `true` | Lets Universal Ctags read the languages no grammar covers, when it is installed. Set it to `false` to keep a build from launching any other program at all. |
-| `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. |
+| `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. Raise it for a repository whose documentation is a few large files; a text file over 200,000 characters is then indexed as an outline rather than whole, as [GitHub repository indexing](github-repository-indexing.md) explains under "The ceilings". |
 
 Give exactly one of `org`, `user`, or `url`. Two is an error, not a request for both.
 

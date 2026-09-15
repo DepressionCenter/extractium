@@ -12,7 +12,7 @@ extractium/sources/github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -35,6 +35,7 @@ __date__ = "2026-09-09"
 
 import re
 
+from extractium.code import embedded
 from extractium.code import render as code_render
 from extractium.code.indexer import CodeIndexer
 from extractium.core import cache as caching
@@ -345,10 +346,20 @@ class GitHubApiSource:
             text = bodies.get(path)
             if text is None:
                 continue
+            # The inventory's size is what the ceiling was checked
+            # against, and a listing can understate one or omit it. A
+            # character is at least one byte, so a body with more
+            # characters than the ceiling has bytes is over it.
+            if len(text) > self.max_file_bytes:
+                progress(
+                    f"  {full_name}/{path}: skipped ({len(text)} characters is over the "
+                    f"{self.max_file_bytes} byte ceiling; the listing understated its size)"
+                )
+                continue
             if files.classify(path) == "code":
                 code.append((path, text, entry.get("sha") or ""))
                 continue
-            document = self._document_for(owner, name, branch, path, text)
+            document = self._document_for(owner, name, branch, path, text, progress)
             if document is None:
                 progress(f"  {full_name}/{path}: skipped (no readable text)")
                 continue
@@ -588,15 +599,26 @@ class GitHubApiSource:
         """
         return f"{GITHUB_WEB_ROOT}/{owner}/{name}/blob/{branch}/{path}"
 
-    def _document_for(self, owner, name, branch, path, text):
-        """One indexed repository file, or None when it holds no text."""
+    def _document_for(self, owner, name, branch, path, text, progress=None):
+        """
+        One indexed repository file, or None when it holds no text. A
+        file longer than the prose ceiling is indexed as its compact
+        record, and the progress log says so.
+        """
         if not text or not text.strip():
             return None
         full_name = f"{owner}/{name}"
+        title = files.title_for(full_name, path)
+        content = embedded.prose_for_index(title, text)
+        if content is not text and progress is not None:
+            progress(
+                f"  {full_name}/{path}: indexed as an outline ({len(text)} characters is over "
+                f"the {embedded.MAX_PROSE_CHARS} the index takes whole)"
+            )
         return Document(
             url=self._url_for(owner, name, branch, path),
-            title=files.title_for(full_name, path),
-            content=text,
+            title=title,
+            content=content,
             source_type="github",
             content_type=files.content_type_for(path),
             categories=files.categories_for(owner, name, path),

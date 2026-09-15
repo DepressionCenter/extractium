@@ -15,7 +15,7 @@ tests/test_code_analysis.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -923,6 +923,60 @@ def test_an_enormous_file_is_named_rather_than_parsed(parsers_installed):
 
     assert analysis.files == ()
     assert any("too long to parse" in reason for reason in analysis.skipped)
+
+
+def test_a_container_too_long_to_parse_still_yields_its_text():
+    """
+    A page's text is a regular-expression pass, which costs nothing, so
+    a page over the parse ceiling keeps its text and loses only the
+    parse of the code inside it. The log says which of the two happened.
+    """
+    page = (
+        "<html><head><title>Big table</title></head><body><h1>Columns</h1>\n"
+        + "<p>row</p>\n" * 200_000
+        + "<script>function go() {}</script></body></html>"
+    )
+
+    analysis, prose = CodeIndexer().analyze("example/repo", [("site/columns.html", page, "")])
+
+    assert [facts.path for facts in analysis.files] == ["site/columns.html"]
+    assert analysis.files[0].tier == languages.TIER_METADATA
+    assert any("its text was indexed" in reason for reason in analysis.skipped)
+    title, text = prose["site/columns.html"]
+    assert title == "Big table"
+    assert "Headings: Columns" in text
+    assert "only this outline was indexed" in text     # over the prose ceiling as well
+
+
+def test_a_compact_record_quotes_the_title_opening_headings_and_terms():
+    prose = (
+        "A guide to the glucose monitors the study issues.\n\n# Devices\n\n"
+        + "glucose sensor readings arrive nightly " * 8_000
+        + "\n\n# Support\n\nCall the help desk."
+    )
+
+    record = embedded.compact_record("Monitor guide", prose)
+
+    assert record.startswith("Monitor guide\n\nA guide to the glucose monitors the study issues.")
+    assert "Headings: Devices; Support" in record
+    assert "Terms used most: glucose, sensor, readings, arrive, nightly" in record
+    assert "only this outline was indexed" in record
+    assert len(record) < 2_000
+
+
+def test_text_under_the_prose_ceiling_is_indexed_whole():
+    text = "# Short\n\nA few words.\n"
+
+    assert embedded.prose_for_index("Short", text) == text
+    assert embedded.prose_for_index("", "x" * embedded.MAX_PROSE_CHARS) == "x" * embedded.MAX_PROSE_CHARS
+    assert "only this outline" in embedded.prose_for_index("", "x " * embedded.MAX_PROSE_CHARS)
+
+
+def test_an_html_page_reports_its_headings(parsers_installed):
+    contents = embedded.read("site/index.html", read_fixture("sample.html"))
+
+    assert contents.headings                          # the fixture carries at least one
+    assert all(isinstance(heading, str) and heading for heading in contents.headings)
 
 
 def test_an_empty_file_produces_a_record_rather_than_nothing(parsers_installed):
