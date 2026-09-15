@@ -412,8 +412,10 @@ Each language below was checked against the dependency gate on 2026-09-10, and W
 | PowerShell | `.ps1`, `.psm1`, `.psd1` | Parsed; Universal Ctags when the grammar will not load | `tree-sitter-powershell`, MIT |
 | Windows batch | `.bat`, `.cmd` | Parsed: each label is a function, named as written, and every command run is a call | `tree-sitter-batch`, MIT |
 | MATLAB | `.m` | Parsed, unless the file opens like Objective-C | `tree-sitter-matlab`, MIT |
+| Go | `.go` | Parsed; a method is recorded under its own name, with its receiver kept in the signature | `tree-sitter-go`, MIT |
+| Rust | `.rs` | Parsed; an `impl` block is recorded as a class named for its type, so its methods belong to that type | `tree-sitter-rust`, MIT |
 | R | `.R`, `.r` | Universal Ctags, or its outline | None published |
-| C, C++, Java, Go, Ruby, PHP, Rust, Perl, Julia, SAS | Their usual extensions | Universal Ctags, or its outline | None taken; see below |
+| C, C++, Java, Ruby, PHP, Perl, Julia, SAS | Their usual extensions | Universal Ctags, or its outline | None taken; see below |
 | Stata, Visual Basic | `.do`, `.ado`; `.vb`, `.bas` | Its outline | None published |
 
 Two languages are included specifically for this field:
@@ -423,7 +425,7 @@ Two languages are included specifically for this field:
 
 R is the gap, and it is a bigger one than Stata. A great deal of the analysis code in health research is written in R. There is no R grammar on the Python package index: a search of the whole index on 2026-09-10 found 289 packages whose name starts with `tree-sitter`, and not one of them is R. So an R file is read by Universal Ctags where that is installed, and recorded with its path, language, length, and link where it is not. Publishing an R grammar, or installing Universal Ctags, is what closes this.
 
-The ten languages read by Universal Ctags alone are not the field's languages: grammars exist for most of them, and one can be added the way the others were when a repository in scope needs it. Until then a file in one of them is recorded with its symbols where Ctags is installed and with its outline where it is not.
+The eight languages read by Universal Ctags alone are not the field's languages: grammars exist for most of them, and one can be added the way the others were when a repository in scope needs it. Go and Rust were added that way, when a repository in scope turned out to be written in Go. Until then a file in one of them is recorded with its symbols where Ctags is installed and with its outline where it is not.
 
 Stata has no maintained grammar and no Ctags parser, so a Stata file carries its path, language, length, and link and nothing more. A pattern-matching reader was considered and rejected. It would be a parser that lies at the edges of the language, and a file honestly labelled as unparsed is better than a file described wrongly.
 
@@ -480,11 +482,11 @@ Where a query is adapted from a grammar's own tag queries, its license and attri
 
 Before a grammar became a dependency, each was checked and recorded for: a license compatible with GPL v3 or later; wheels for Windows, macOS, and Linux with no compiler; support for the project's Python range; active maintenance; no known critical vulnerability; and a version that the existing lock process can pin.
 
-What the gate found, on 2026-09-10, and for the batch grammar on 2026-09-15: every grammar in the table above is published under the MIT license. Each ships wheels for Windows, macOS, and Linux that need no compiler, and each declares Python 3.9 or 3.10 as its floor, covering this project's range. Every version is pinned in `pyproject.toml` under the `code` extra, and the lock file is generated with that extra, so the build scripts and the scheduled workflow install the parsers with everything else.
+What the gate found, on 2026-09-10, and for the batch, Go, and Rust grammars on 2026-09-15: every grammar in the table above is published under the MIT license. Each ships wheels for Windows, macOS, and Linux that need no compiler, and each declares Python 3.9 or 3.10 as its floor, covering this project's range. Every version is pinned in `pyproject.toml` under the `code` extra, and the lock file is generated with that extra, so the build scripts and the scheduled workflow install the parsers with everything else.
 
 The set is still an extra rather than a requirement of the package: a developer install names it, as `pip install -e ".[code]"`, and a computer without it still records every code file with its path, language, length, and link. A test holds the lock file to the extra, so a grammar cannot be added to one and left out of the other.
 
-A bundle was evaluated and rejected. `tree-sitter-language-pack` ships 371 languages, including R, under one MIT license, and it looked like the answer to the R gap. From version 1.0.0 it stopped shipping the grammars: the package is two megabytes, and it downloads compiled grammars from the network the first time a language is used. That is a build quietly fetching native code mid-crawl, which is the same supply-chain risk this project refused when it removed the reference script's install-at-import helper. The version that still bundled its grammars is a year old and on a line nobody maintains. So the individual grammar packages were taken instead: fifteen packages, each pinned, each auditable, and none of them fetches anything at run time.
+A bundle was evaluated and rejected. `tree-sitter-language-pack` ships 371 languages, including R, under one MIT license, and it looked like the answer to the R gap. From version 1.0.0 it stopped shipping the grammars: the package is two megabytes, and it downloads compiled grammars from the network the first time a language is used. That is a build quietly fetching native code mid-crawl, which is the same supply-chain risk this project refused when it removed the reference script's install-at-import helper. The version that still bundled its grammars is a year old and on a line nobody maintains. So the individual grammar packages were taken instead: seventeen packages, each pinned, each auditable, and none of them fetches anything at run time.
 
 ### What is extracted
 

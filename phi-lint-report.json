@@ -3,7 +3,7 @@
   "mode": "local",
   "limitation": "0 pattern matches (this does not confirm absence of PHI)",
   "documentsScanned": 0,
-  "documentsSkipped": 27,
+  "documentsSkipped": 2,
   "matchCount": 0,
   "countsByPattern": {},
   "countsByTier": {

@@ -338,7 +338,7 @@ Code analysis needs the parser set, which is an optional install:
 pip install "extractium[code]"
 ```
 
-Without it a build still reads every source file and records its path, language, length, and link, but not what is inside it. The same is true of a language nobody has published a grammar for. Python, JavaScript, TypeScript, shell, Lua, C#, SQL, Kotlin, Swift, PowerShell, and MATLAB are parsed. R is not: no R grammar is published for Python, so an R file is read by Universal Ctags where that is installed and recorded by name where it is not. Stata is recorded by name everywhere. The repository's own summary record names which of these happened, so a reader can see the gap.
+Without it a build still reads every source file and records its path, language, length, and link, but not what is inside it. The same is true of a language nobody has published a grammar for. Python, JavaScript, TypeScript, shell, Lua, C#, SQL, Kotlin, Swift, PowerShell, MATLAB, Go, and Rust are parsed. R is not: no R grammar is published for Python, so an R file is read by Universal Ctags where that is installed and recorded by name where it is not. Stata is recorded by name everywhere. The repository's own summary record names which of these happened, so a reader can see the gap.
 
 Notebooks, R Markdown, Quarto, Lua Server Pages, and HTML pages are read twice over: their prose is indexed as documentation, and the code inside them is parsed with the language it is written in. A notebook's saved outputs are never read, because they can hold printed rows of real data.
 

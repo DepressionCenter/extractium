@@ -84,7 +84,7 @@ BODY_NODE_TYPES = frozenset({
     "declaration_list", "compound_statement", "body", "do_statement",
     "class_declaration_list", "function_definition_body", "accessor_list",
     "create_query", "class_body_list", "protocol_body", "enum_class_body",
-    "script_block_body",
+    "script_block_body", "field_declaration_list",
 })
 
 # Comment markers, removed so documentation reads as prose. Kept in one

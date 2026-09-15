@@ -43,6 +43,8 @@ This folder holds one small file per language the code analysis reads. They are 
 | `Sample.ps1` | Functions with parameter blocks, and `Import-Module` |
 | `Sample.bat` | Labels as the nearest thing a batch file has to functions, the comment after a label as its documentation, and the commands the file runs |
 | `sample.m` | MATLAB functions, whose documentation sits under the signature rather than above it |
+| `sample.go` | A package, a struct, an interface, a method written beside its receiver, a constant, and grouped imports |
+| `sample.rs` | A struct, a trait, an impl block whose methods belong to the type it implements, a module, a constant, `use`, and a macro call |
 | `sample.R` | A language with no published grammar: the Ctags path, and the file-metadata path |
 | `sample.ipynb` | A notebook, including stored outputs that must never be read |
 | `sample.Rmd` | R and Python chunks in one document, and the prose around them |
