@@ -190,3 +190,16 @@ def test_an_okf_source_needs_a_path_and_nothing_else():
         config.config_from_mapping({"sources": [{"type": "okf", "label": "Bundle"}]})
     with pytest.raises(config.ConfigError, match="unrecognized setting"):
         config.config_from_mapping({"sources": [{"type": "okf", "label": "Bundle", "path": "x", "globs": []}]})
+
+def test_max_pages_stops_the_source_after_that_many_concept_files(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    from extractium.sources.web import CrawlSettings
+
+    folder = bundle_from(sample_compendium(fixtures_dir, fake_embed_chunks_core), tmp_path)
+    source = OkfSource({"path": str(folder)})
+    source.configure(None, CrawlSettings(max_pages=1))
+    lines = []
+
+    documents = list(source.fetch(None, None, lines.append))
+
+    assert len(documents) == 1 and source.read == 1
+    assert "  max_pages: the ceiling of 1 concept file(s) was reached; anything past it was not read" in lines

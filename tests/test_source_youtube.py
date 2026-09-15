@@ -1770,9 +1770,10 @@ def test_a_stored_transcript_is_unaffected_by_a_block(api_key_set, caption_libra
 class FakeSettings:
     """The two crawl settings this source reads."""
 
-    def __init__(self, delay_seconds=0.0, respect_robots_txt=True):
+    def __init__(self, delay_seconds=0.0, respect_robots_txt=True, max_pages=None):
         self.delay_seconds = delay_seconds
         self.respect_robots_txt = respect_robots_txt
+        self.max_pages = max_pages
         self.user_agent = "Extractium/test (+https://example.org)"
 
 
@@ -2024,3 +2025,20 @@ def test_a_linked_video_the_source_already_read_is_not_read_again():
     assert again == []
     assert built.found_offered == 0
     assert len(reader.calls) == 1
+
+def test_max_pages_stops_the_source_after_that_many_videos(api_key_set):
+    """A video is one page: the third of three is neither listed as read nor fetched."""
+    VIDEO_C = "VIDEOCCCCCC"
+    reader = FakeReader({v: caption_lines(4) for v in (VIDEO_A, VIDEO_B, VIDEO_C)})
+    session = FakeYouTubeSession({
+        "videos": videos_page({VIDEO_A: "A", VIDEO_B: "B", VIDEO_C: "C"}),
+    })
+    built = source(reader=reader, video_ids=(VIDEO_A, VIDEO_B, VIDEO_C))
+    built.configure(None, FakeSettings(max_pages=2))
+    lines = []
+
+    documents = list(built.fetch(session, {}, lines.append))
+
+    assert {d.url.split("v=")[1].split("&")[0] for d in documents} == {VIDEO_A, VIDEO_B}
+    assert [call["video_id"] for call in reader.calls] == [VIDEO_A, VIDEO_B]
+    assert "  max_pages: the ceiling of 2 video(s) was reached; anything past it was not read" in lines

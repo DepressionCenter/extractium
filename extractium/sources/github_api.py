@@ -38,6 +38,7 @@ import re
 from extractium.code import render as code_render
 from extractium.code.indexer import CodeIndexer
 from extractium.core import cache as caching
+from extractium.core.ceiling import PageCeiling
 from extractium.core.fetch import DEFAULT_USER_AGENT, normalise
 from extractium.core.models import Document
 from extractium.core import prose
@@ -148,6 +149,7 @@ class GitHubApiSource:
         self.analyzed = {}
         self.registry = None
         self.settings = None
+        self.ceiling = None
         self.coverage = {}
         self.acquired = set()
         self.mapped = set()
@@ -164,8 +166,9 @@ class GitHubApiSource:
             registry (extractium.core.registry.Registry): where plugin
                 classes are looked up.
             settings (extractium.sources.web.CrawlSettings): the page
-                ceiling, the delay, the User-Agent, robots.txt handling,
-                and the allowed GitHub accounts.
+                ceiling, under which a file counts as one page, the
+                delay, the User-Agent, robots.txt handling, and the
+                allowed GitHub accounts.
         """
         self.registry = registry
         self.settings = settings
@@ -237,9 +240,15 @@ class GitHubApiSource:
         twice when it tries again lower down.
         """
         selected = self._selected_repositories(client, progress)
+        ceiling = self._page_ceiling()
         for repository in selected:
             full_name = repository.get("full_name") or f"{self.owner}/{repository.get('name')}"
             if full_name in self.coverage:
+                continue
+            if ceiling.reached:
+                # Not read at all, and not marked as read: the summary
+                # then says truthfully which repositories the index holds.
+                progress(f"  {full_name}: not read; max_pages was reached")
                 continue
             try:
                 yield from self._read_repository(client, repository, tier, progress)
@@ -251,6 +260,7 @@ class GitHubApiSource:
                 progress(f"  {full_name}: skipped ({e})")
             self.coverage[full_name] = tier
 
+        ceiling.report(progress)
         owner_map = self._owner_map(selected)
         if owner_map is not None:
             yield owner_map
@@ -341,6 +351,10 @@ class GitHubApiSource:
             path: entry for path, entry in wanted.items()
             if normalise(self._url_for(owner, name, branch, path)) not in self.acquired
         }
+        # The ceiling is applied before the download, so a file past it
+        # costs no request. A code file is a file like any other here.
+        ceiling = self._page_ceiling()
+        wanted = {path: entry for path, entry in wanted.items() if ceiling.allow()}
         bodies = self._download(client, owner, name, branch, repository, wanted, progress)
 
         indexed = 0
@@ -395,6 +409,12 @@ class GitHubApiSource:
             yield self._repository_map(
                 repository, full_name, owner, name, branch, indexed, tier, code_lines,
             )
+
+    def _page_ceiling(self):
+        """The build's page ceiling, a file counting as one page, kept across tiers."""
+        if self.ceiling is None:
+            self.ceiling = PageCeiling.for_settings(self.settings, "file")
+        return self.ceiling
 
     ### Reading The Code ###
 

@@ -13,7 +13,7 @@ extractium/sources/youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -38,6 +38,7 @@ import re
 import time
 
 from extractium.core import cache as cache_module
+from extractium.core.ceiling import PageCeiling
 from extractium.core.fetch import DEFAULT_USER_AGENT
 from extractium.core.models import Document
 from extractium.sources.youtube_client import (
@@ -268,6 +269,7 @@ class YouTubeSource:
         # the tests drive the source through, so a test needs neither the
         # network nor the transcript library.
         self.reader = None
+        self.ceiling = None
         self.coverage = ()
         self.stored = 0
         self.fetched = 0
@@ -277,9 +279,10 @@ class YouTubeSource:
         """
         Adopts the build's global crawl settings.
 
-        Only two of them apply here: how the build introduces itself, and
-        how long it waits between requests. Videos are read through an
-        interface rather than crawled, so nothing else is used.
+        Three of them apply here: how the build introduces itself, how
+        long it waits between requests, and `max_pages`, under which a
+        video counts as one page. Videos are read through an interface
+        rather than crawled, so nothing else is used.
 
         Args:
             registry (extractium.core.registry.Registry): unused; a
@@ -426,7 +429,10 @@ class YouTubeSource:
         """
         missing = []
         produced = 0
+        ceiling = self._page_ceiling()
         for video_id in video_ids:
+            if not ceiling.allow():
+                break
             try:
                 record, from_store = self._video(client, video_id, titles, progress)
             except _Blocked as e:
@@ -459,6 +465,17 @@ class YouTubeSource:
         self.without_captions += tuple(missing)
         if missing:
             progress(f"  {len(missing)} video(s) had no captions to read")
+        ceiling.report(progress)
+
+    def _page_ceiling(self):
+        """
+        The build's page ceiling, a video counting as one page. One
+        counter serves both the configured videos and the linked ones,
+        so the ceiling is per source, as it is for a crawl.
+        """
+        if self.ceiling is None:
+            self.ceiling = PageCeiling.for_settings(self.settings, "video")
+        return self.ceiling
 
     ### Choosing What To Read ###
 

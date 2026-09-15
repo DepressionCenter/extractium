@@ -243,8 +243,10 @@ sources:
 # changed.
 #cache_dir: .kb_cache
 
-# The most pages one build may visit. This is a safety net: if an include
-# pattern is broader than you meant, the crawl still stops here.
+# The most a source may read: web pages for a crawl, videos, deposits, or
+# files for the other kinds. This is a safety net: if an include pattern
+# is broader than you meant, the crawl still stops here, and a small value
+# makes a quick trial of every source.
 #max_pages: 10000
 
 # The least time, in seconds, between two requests to the same site, so the
