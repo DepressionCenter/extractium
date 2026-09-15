@@ -184,6 +184,7 @@ Two sources may share a label on purpose. Two sibling collections of one reposit
 | `seed_url` | text | one of these two is required | The page the crawl starts from. Must begin with `http://` or `https://`. |
 | `seed_urls` | list of text | one of these two is required | Several pages to start from, for a site whose sections do not link to one another. Still one crawl. |
 | `include_patterns` | list of patterns | empty (see below) | Pages the crawl is allowed to visit. |
+| `leaf_patterns` | list of patterns | empty | Single pages on other hosts that the site links to. Fetched and indexed, never followed for links. See "Single pages on another host" below. |
 | `crawl_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl must not fetch. |
 | `index_exclude_patterns` | list of patterns | asset files plus what the enabled handlers add | Pages the crawl may visit, but whose content stays out of the index. |
 | `extra_crawl_exclude_patterns` | list of patterns | empty | Pages the crawl must not fetch, added to the list above rather than replacing it. The usual way to keep one site's own navigation out. |
@@ -255,7 +256,7 @@ What is not read:
 - OpenDocument spreadsheets and presentations (`.ods`, `.odp`).
 - Pictures, comments, footnotes, headers, footers, and tracked deletions inside a file.
 
-On a `web` source, a link to a document file is fetched only when it is in scope, like any other link. Most document files sit on another host, such as a content-delivery network, so an `include_patterns` entry is usually needed to reach them:
+On a `web` source, a link to a document file is fetched only when it is in scope, like any other link. Most document files sit on another host, such as a content-delivery network, so a `leaf_patterns` entry is usually needed to reach them:
 
 ```yaml
 sources:
@@ -263,9 +264,8 @@ sources:
     label: Example Program
     seed_url: https://program.example.org/
     read_documents: true
-    include_patterns:
-      - '^https://program\.example\.org/'
-      - '^https://files\.example\.org/.*\.docx'
+    leaf_patterns:
+      - '^https://files\.example\.org/'
 ```
 
 A file is never followed for links, so a document on another host never starts a crawl of that host. The same file linked under two addresses, such as with and without a download flag, is fetched twice but indexed once. A file larger than 20,000,000 bytes is skipped and named. A file that answers with a web page, such as a sign-in page, is skipped with the landing address named.
@@ -663,7 +663,7 @@ The check reads shapes, not meaning. It will miss things, and it will flag thing
 
 ## How the URL patterns work
 
-The three pattern lists on a web source hold regular expressions. Each pattern is matched against the whole URL, and upper and lower case are treated the same. Wrap patterns in single quotes so YAML keeps your backslashes as you typed them. This section is the full rule set; [how to crawl a site](how-to/crawl-a-site.md) shows the usual way of arriving at a good set of patterns, one trial run at a time.
+The four pattern lists on a web source hold regular expressions. Each pattern is matched against the whole URL, and upper and lower case are treated the same. Wrap patterns in single quotes so YAML keeps your backslashes as you typed them. This section is the full rule set; [how to crawl a site](how-to/crawl-a-site.md) shows the usual way of arriving at a good set of patterns, one trial run at a time.
 
 ### The order of the checks
 
@@ -673,8 +673,9 @@ For each link the crawler finds:
 2. Files that are not readable text are dropped: images, archives, office documents, fonts, media, and source code files. With `read_documents` on, Word, OpenDocument, and RTF files pass this check and are read.
 3. `include_patterns` decides what is in scope. If the list is empty, the crawler works the scope out from the seed URL instead (see below). If the list has entries, a URL must match at least one.
 4. `crawl_exclude_patterns` removes what is left. An exclusion always wins over an inclusion.
+5. A link dropped by the first check gets one more chance: if it matches an entry in `leaf_patterns`, and the page linking to it is inside the scope worked out from the seed, it is fetched as a leaf. The second and fourth checks apply to it too. See "Single pages on another host" below.
 
-Pages that survive all four checks are fetched. A fetched page whose URL matches `index_exclude_patterns` still has its links followed, but its own text is left out of the index. That is what you want for menu and category pages: they lead to real articles but say nothing themselves.
+Pages that survive the checks are fetched. A fetched page whose URL matches `index_exclude_patterns` still has its links followed, but its own text is left out of the index. That is what you want for menu and category pages: they lead to real articles but say nothing themselves.
 
 ### Automatic scope
 
@@ -684,6 +685,27 @@ Leaving `include_patterns` out (the default) keeps the crawl close to home:
 - Any other URL keeps the crawl on the same site, meaning the same scheme and host.
 
 This is usually the right setting. Add patterns only when one build has to cover more than one place.
+
+### Single pages on another host
+
+Some sites keep their content elsewhere: a program page whose handouts are Google Docs, or whose files sit on a content-delivery network. An `include_patterns` entry for the other host would reach them, but it would also follow every link found there, and it replaces the automatic scope, so the site itself has to be restated. `leaf_patterns` is for this case.
+
+A leaf is a page on another host that a page of the site links to. It is fetched and indexed under the source's label, and its own links are never read, so the crawl never spreads to the other host. A leaf linked only from another leaf is never reached, and neither is one linked only from a page on a second site that `include_patterns` added: the page linking to a leaf has to be inside the scope worked out from the seed. The automatic scope stays as it is, so nothing has to be restated.
+
+```yaml
+sources:
+  - type: web
+    label: Example Program
+    seed_url: https://program.example.org/
+    read_documents: true
+    leaf_patterns:
+      - '^https://docs\.google\.com/'
+      - '^https://files\.example\.org/'
+```
+
+Everything else applies to a leaf as to any page. A file that is not readable text is left alone, so a leaf pattern for a file host reaches its Word files with `read_documents` on and never its PDF, image, or video files. A `crawl_exclude_patterns` entry wins over a leaf pattern. The other host's `robots.txt` is read and obeyed. A leaf counts toward `max_pages`. A leaf that redirects somewhere no leaf pattern covers is skipped with the landing address named. The log marks each leaf with `(leaf; its links are not followed)` under its line, and lists the patterns as `Leaf pats:` at the start of the crawl.
+
+A link that is inside the crawl's own scope is followed as usual even when a leaf pattern also matches it. Leaf patterns only ever add pages; they never take a page out of the crawl.
 
 ### What the built-in exclusions cover
 
@@ -706,15 +728,14 @@ For each page it fetches, the crawler asks the enabled site handlers, in order, 
 
 A Google Docs, Sheets, or Slides file shared as "anyone with the link" can be read without a key or a sign-in. The `google_docs` handler, on by default, requests the file's export instead of its editing page: plain text for a document or a presentation, and the first sheet as CSV for a spreadsheet. The file is indexed under its one address, `https://docs.google.com/document/d/<id>`, whether it was linked as `/edit`, `/edit?usp=sharing`, `/view`, or `/preview`, and its title is the first line of the export.
 
-Google's hosts are off-site for every seed, so a file is reached only through an `include_patterns` entry:
+Google's hosts are off-site for every seed, so a file is reached only through a `leaf_patterns` entry (or an `include_patterns` entry, which also works but restates the site):
 
 ```yaml
 sources:
   - type: web
     label: Example Program
     seed_url: https://program.example.org/
-    include_patterns:
-      - '^https://program\.example\.org/'
+    leaf_patterns:
       - '^https://docs\.google\.com/'
 ```
 

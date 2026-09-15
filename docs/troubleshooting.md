@@ -197,11 +197,17 @@ where text was expected; the request landed on https://accounts.google.com/Servi
 
 **Fix.** Share the file with the link, or accept that it stays out of the index. A file that is shared answers its export as plain text and is indexed under `https://docs.google.com/document/d/EXAMPLEID`.
 
+### A page on another host that the site links to is not in the index
+
+**Cause.** Off-site links are dropped unless a pattern covers them. A `leaf_patterns` entry covers a single page the site links to; an `include_patterns` entry covers a whole second site. A leaf is also only reached from a page inside the scope worked out from the seed, never from another leaf, and never from a second site that `include_patterns` added.
+
+**Fix.** Add a `leaf_patterns` entry for the host, in single quotes with the dots escaped: `'^https://files\.example\.org/'`. The log then lists it as `Leaf pats:` at the start of the crawl and marks each page it reached with `(leaf; its links are not followed)`. The [configuration reference](configuration.md) explains the rule under "Single pages on another host".
+
 ### A Word file linked from a site is not in the index
 
-**Cause.** One of three things. The source's `read_documents` setting is off, which is the default, so the link was dropped as a file that is not text. Or the file is on another host, such as a content-delivery network, and no `include_patterns` entry covers it. Or the file is in the old binary `.doc` format, which has no reader.
+**Cause.** One of three things. The source's `read_documents` setting is off, which is the default, so the link was dropped as a file that is not text. Or the file is on another host, such as a content-delivery network, and no `leaf_patterns` or `include_patterns` entry covers it. Or the file is in the old binary `.doc` format, which has no reader.
 
-**Fix.** Set `read_documents: true` on the source, add an include pattern for the host that serves the files, and save any `.doc` file as `.docx`. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading Word, OpenDocument, and RTF files".
+**Fix.** Set `read_documents: true` on the source, add a `leaf_patterns` entry for the host that serves the files, and save any `.doc` file as `.docx`. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading Word, OpenDocument, and RTF files".
 
 ### Every page is skipped with a message about `robots.txt`
 

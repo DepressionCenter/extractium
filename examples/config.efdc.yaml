@@ -121,20 +121,19 @@ sources:
   #
   #    The site is one page whose resources are elsewhere: Google Docs and
   #    Slides shared with the link, and Word files on the site's content
-  #    delivery network. The include patterns let the crawl reach both,
-  #    and read_documents turns the Word files into text. The first pattern
-  #    restates the site itself, because an include list replaces the
-  #    automatic scope rather than adding to it. A Google file that is not
-  #    shared is reported and skipped; the PDF and video files on the
-  #    delivery network are left out.
+  #    delivery network. The leaf patterns let the crawl read a page on
+  #    either host when the site links to it, without following any link
+  #    found there, so the crawl's own scope stays the site. read_documents
+  #    turns the Word files into text. A Google file that is not shared is
+  #    reported and skipped; the PDF and video files on the delivery
+  #    network are left out as files that hold no readable text.
   - label: Peer-to-Peer Depression Awareness Program Resource Center
     type: web
     seed_url: https://p2p.depressioncenter.org/
     read_documents: true
-    include_patterns:
-      - '^https://p2p\.depressioncenter\.org/'
+    leaf_patterns:
       - '^https://docs\.google\.com/'
-      - '^https://cdn\.sanity\.io/files/.*\.docx'
+      - '^https://cdn\.sanity\.io/files/'
 
   # 6. The center's YouTube channel, indexed from its captions: each stretch
   #    of a transcript is a section cited at the moment it was said.

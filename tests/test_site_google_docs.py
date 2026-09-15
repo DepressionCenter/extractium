@@ -278,3 +278,28 @@ def test_google_files_are_off_site_without_an_include_pattern(isolated_core_cach
 
     assert not any("docs.google.com" in d.url for d in documents)
     assert not any("docs.google.com" in c["url"] for c in session.calls)
+
+
+def test_a_shared_document_is_reached_through_a_leaf_pattern_and_indexed_under_its_one_address(
+    isolated_core_cache, fake_session_factory, doc_export,
+):
+    """
+    The usual way to reach a shared file: the site stays in its own
+    scope, and a leaf pattern lets the crawl read what it links to on
+    docs.google.com without crawling anything there.
+    """
+    session = fake_session_factory({
+        SEED_ROBOTS_URL: ROBOTS_ABSENT,
+        GOOGLE_ROBOTS_URL: ROBOTS_ABSENT,
+        SEED: resources_page(DOC_EDIT_URL, DOC_VIEW_URL),
+        DOC_EXPORT: text_response(doc_export),
+    })
+    source = make_source(SEED, handlers=HANDLERS, leaf_patterns=(r"^https://docs\.google\.com/",))
+    lines = []
+
+    documents = crawl(source, session, progress=lines.append)
+
+    assert [d.url for d in documents] == [SEED, DOC_CANONICAL]
+    assert documents[1].title == "Post-Test Survey Instructions"
+    assert [c["url"] for c in session.calls].count(DOC_EXPORT) == 1
+    assert "       (leaf; its links are not followed)" in lines

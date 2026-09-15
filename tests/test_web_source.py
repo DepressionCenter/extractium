@@ -1303,3 +1303,206 @@ def test_a_handler_folds_the_addresses_of_one_page_so_it_is_fetched_once(
     assert [d.url for d in documents] == [DOC_SEED, article]
     assert [c["url"] for c in session.calls].count(article) == 1
     assert not any("?ref=" in c["url"] for c in session.calls)
+
+
+# ---------------------------------------------------------------------------
+# Leaf patterns: single pages on other hosts
+# ---------------------------------------------------------------------------
+
+LEAF_HOST = "https://files.example.net"
+LEAF_PAGE = f"{LEAF_HOST}/handout/one"
+LEAF_SECOND = f"{LEAF_HOST}/handout/two"
+LEAF_PATTERNS = (r"^https://files\.example\.net/",)
+OTHER_SITE = "https://partner.example.com"
+OTHER_PAGE = f"{OTHER_SITE}/about"
+
+
+def leaf_page(text, *links):
+    anchors = "".join(f'<a href="{link}">more</a>' for link in links)
+    return html_response(
+        f"<html><head><title>{text}</title></head><body><main><p>{text} text long enough to be "
+        f"kept as a section of its own by the chunker.</p>{anchors}</main></body></html>"
+    )
+
+
+def leaf_crawl(session, **options):
+    lines = []
+    options.setdefault("leaf_patterns", LEAF_PATTERNS)
+    source = make_source(DOC_SEED, **options)
+    documents = crawl(source, session, progress=lines.append)
+    return documents, lines
+
+
+def test_a_leaf_linked_from_the_seed_is_indexed_and_its_links_are_not_followed(
+    isolated_core_cache, fake_session_factory,
+):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(LEAF_PAGE),
+        LEAF_PAGE: leaf_page("Handout one", LEAF_SECOND, f"{DOC_ORIGIN}/never"),
+        LEAF_SECOND: leaf_page("Handout two"),
+    })
+
+    documents, lines = leaf_crawl(session)
+
+    assert [d.url for d in documents] == [DOC_SEED, LEAF_PAGE]
+    leaf = documents[1]
+    assert leaf.title == "Handout one"
+    assert leaf.source_type == "web"
+    requested = [c["url"] for c in session.calls]
+    assert LEAF_SECOND not in requested
+    assert f"{DOC_ORIGIN}/never" not in requested
+    assert "Leaf pats:    ['^https://files\\\\.example\\\\.net/']" in lines
+    assert lines.index("       (leaf; its links are not followed)") == lines.index(f"[   2] {LEAF_PAGE}") + 1
+
+
+def test_a_leaf_linked_only_from_another_leaf_is_never_reached(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(LEAF_PAGE),
+        LEAF_PAGE: leaf_page("Handout one", LEAF_SECOND),
+        LEAF_SECOND: leaf_page("Handout two"),
+    })
+
+    documents, _ = leaf_crawl(session)
+
+    assert [d.url for d in documents] == [DOC_SEED, LEAF_PAGE]
+
+
+def test_a_leaf_linked_only_from_a_page_reached_through_an_include_pattern_is_not_fetched(
+    isolated_core_cache, fake_session_factory,
+):
+    """
+    A leaf is a page the site itself points to. A second site reached
+    through an include pattern is crawled, but its links do not carry
+    the same authority, or one include pattern would pull in every
+    handout every partner site links to.
+    """
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{OTHER_SITE}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(OTHER_PAGE),
+        OTHER_PAGE: leaf_page("Partner", LEAF_PAGE),
+        LEAF_PAGE: leaf_page("Handout one"),
+    })
+
+    documents, _ = leaf_crawl(
+        session, include_patterns=(r"^https://example\.org/", r"^https://partner\.example\.com/")
+    )
+
+    assert [d.url for d in documents] == [DOC_SEED, OTHER_PAGE]
+    assert LEAF_PAGE not in [c["url"] for c in session.calls]
+
+
+def test_a_crawl_exclude_pattern_wins_over_a_leaf_pattern(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(LEAF_PAGE, LEAF_SECOND),
+        LEAF_PAGE: leaf_page("Handout one"),
+        LEAF_SECOND: leaf_page("Handout two"),
+    })
+
+    documents, _ = leaf_crawl(session, extra_crawl_exclude_patterns=(r"/handout/two$",))
+
+    assert [d.url for d in documents] == [DOC_SEED, LEAF_PAGE]
+    assert LEAF_SECOND not in [c["url"] for c in session.calls]
+
+
+def test_an_asset_on_a_leaf_host_is_not_fetched_but_a_readable_document_is(
+    isolated_core_cache, fake_session_factory,
+):
+    picture = f"{LEAF_HOST}/handout/cover.png"
+    pdf = f"{LEAF_HOST}/handout/plan.pdf"
+    docx = f"{LEAF_HOST}/handout/plan.docx"
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(picture, pdf, docx),
+        docx: document_response(document_files.SAMPLE_DOCX),
+    })
+
+    without, _ = leaf_crawl(session)
+    assert [d.url for d in without] == [DOC_SEED]
+    assert not any(c["url"].startswith(LEAF_HOST + "/handout") for c in session.calls)
+
+    with_readers, lines = leaf_crawl(session, read_documents=True)
+    assert [d.url for d in with_readers] == [DOC_SEED, docx]
+    assert with_readers[1].title == "Youth Mental Health Resources"
+    requested = [c["url"] for c in session.calls]
+    assert picture not in requested and pdf not in requested
+
+
+def test_a_leaf_that_redirects_off_the_leaf_host_is_skipped(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(LEAF_PAGE, LEAF_SECOND),
+        LEAF_PAGE: FakeResponse(
+            200, {"Content-Type": "text/html"}, "<html><body><main><p>Moved elsewhere</p></main></body></html>",
+            url=OTHER_PAGE,
+        ),
+        LEAF_SECOND: FakeResponse(
+            200, {"Content-Type": "text/html"},
+            "<html><head><title>Two</title></head><body><main><p>Still a handout, long enough to keep.</p></main></body></html>",
+            url=f"{LEAF_HOST}/handout/two-renamed",
+        ),
+    })
+
+    documents, lines = leaf_crawl(session)
+
+    assert [d.url for d in documents] == [DOC_SEED, LEAF_SECOND]
+    assert any(line.startswith(f"  SKIP {LEAF_PAGE} -- it redirects to {OTHER_PAGE}") for line in lines)
+
+
+def test_a_leaf_is_subject_to_robots_and_the_page_ceiling(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        f"{LEAF_HOST}/robots.txt": robots_response("User-agent: *\nDisallow: /handout/two\n"),
+        DOC_SEED: page_with_links(LEAF_PAGE, LEAF_SECOND, f"{LEAF_HOST}/handout/three"),
+        LEAF_PAGE: leaf_page("Handout one"),
+        LEAF_SECOND: leaf_page("Handout two"),
+        f"{LEAF_HOST}/handout/three": leaf_page("Handout three"),
+    })
+
+    documents, lines = leaf_crawl(session, settings=web.CrawlSettings(max_pages=3, delay_seconds=0))
+
+    assert [d.url for d in documents] == [DOC_SEED, LEAF_PAGE]
+    assert f"  SKIP {LEAF_SECOND} -- disallowed by robots.txt" in lines
+    assert f"{LEAF_HOST}/handout/three" not in [c["url"] for c in session.calls]
+    assert "Crawled 3 page(s)." in lines
+
+
+def test_a_link_in_the_crawl_s_own_scope_is_followed_even_when_a_leaf_pattern_also_matches(
+    isolated_core_cache, fake_session_factory,
+):
+    inner = f"{DOC_ORIGIN}/handout/inner"
+    deeper = f"{DOC_ORIGIN}/handout/deeper"
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(inner),
+        inner: leaf_page("Inner", deeper),
+        deeper: leaf_page("Deeper"),
+    })
+
+    documents, lines = leaf_crawl(session, leaf_patterns=(r"/handout/",))
+
+    assert [d.url for d in documents] == [DOC_SEED, inner, deeper]
+    assert "       (leaf; its links are not followed)" not in lines
+
+
+def test_no_leaf_patterns_means_no_leaf_line_and_no_leaves(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(LEAF_PAGE),
+        LEAF_PAGE: leaf_page("Handout one"),
+    })
+    lines = []
+
+    documents = crawl(make_source(DOC_SEED), session, progress=lines.append)
+
+    assert [d.url for d in documents] == [DOC_SEED]
+    assert not any(line.startswith("Leaf pats:") for line in lines)
