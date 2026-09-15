@@ -106,6 +106,13 @@ CONTENT_TYPES = frozenset({
 LOCAL_URL_PREFIX = "local:"
 
 # A parent id is the first 16 hexadecimal characters of a SHA-1 digest.
+# The fields an enrichment pass fills on a section: a summary, tags,
+# keywords, when the pass ran (UTC, ISO 8601), and which version of it.
+# Every section carries them, None until a pass has written them, so
+# an adapter writes a value when there is one and nothing when there
+# is not, and the container's layout is the same either way.
+ENRICHMENT_FIELDS = ("summary", "tags", "keywords", "enriched_at", "enrich_ver")
+
 PARENT_ID_RE = re.compile(r"^[0-9a-f]{16}$")
 
 # Storage types the container format allows for vector components.
@@ -280,6 +287,12 @@ class Parent:
         categories (tuple[str, ...]): hierarchy, outermost first.
         local (bool): True when the parent came from a local source.
         weight (float): per-document multiplier; greater than zero.
+        summary (str | None): a short summary an enrichment pass wrote.
+        tags (tuple[str, ...] | None): tags an enrichment pass wrote.
+        keywords (tuple[str, ...] | None): the phrases an enrichment
+            pass found this section to be about, most telling first.
+        enriched_at (str | None): when the pass ran, UTC, ISO 8601.
+        enrich_ver (str | None): which version of the pass wrote them.
     """
 
     id: str
@@ -293,6 +306,11 @@ class Parent:
     categories: tuple = ()
     local: bool = False
     weight: float = 1.0
+    summary: object = None
+    tags: object = None
+    keywords: object = None
+    enriched_at: object = None
+    enrich_ver: object = None
 
     def __post_init__(self):
         if not isinstance(self.id, str) or not PARENT_ID_RE.match(self.id):
@@ -307,6 +325,17 @@ class Parent:
             raise ValueError(f"weight must be a number greater than zero; got {self.weight!r}.")
         _check_local_marker(self.u, self.local)
         object.__setattr__(self, "categories", tuple(self.categories))
+        for name in ("summary", "enriched_at", "enrich_ver"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{name} must be text or None; got {value!r}.")
+        for name in ("tags", "keywords"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            if isinstance(value, str) or not all(isinstance(item, str) for item in value):
+                raise ValueError(f"{name} must be a list of text values or None; got {value!r}.")
+            object.__setattr__(self, name, tuple(value))
 
 
 @dataclass(frozen=True)
@@ -517,7 +546,7 @@ class SiteHandler(Protocol):
     A handler reads a page; it never discovers links, so the crawl stays
     one graph however many handlers are enabled.
 
-    Seven methods are optional, and a handler that defines none behaves
+    Eight methods are optional, and a handler that defines none behaves
     exactly as the required five describe:
 
     - `scope_prefix(seed_url)` may narrow the default crawl scope for a
@@ -550,6 +579,11 @@ class SiteHandler(Protocol):
       export served from a delivery host, so the crawl does not treat
       that landing as a redirect off the site. Consulted only when a
       request was redirected somewhere the scope would refuse.
+    - `attachment_listing_urls(soup, url)` may name the addresses where
+      the page's host lists the files attached to the page, when that
+      list is not in the page itself. While the source reads documents,
+      each is queued as a page of the crawl and its links are read like
+      any page's. Consulted for pages whose links are followed.
 
     Class attributes:
         name: registry key and the value used in `site_handlers:`.
@@ -557,6 +591,11 @@ class SiteHandler(Protocol):
         default_crawl_exclude_patterns: regular expressions added to the
             crawl's exclude list while this handler is enabled.
         default_index_exclude_patterns: the same for the index list.
+        document_url_patterns: optional. Regular expressions for
+            addresses on the handler's host that serve a document file
+            without naming its extension. While a source reads
+            documents, such an address is fetched as a file and read,
+            and the same pattern in the exclude lists is set aside.
     """
 
     name: ClassVar[str]

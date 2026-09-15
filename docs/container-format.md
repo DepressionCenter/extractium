@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -107,6 +107,13 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `categories` | list of text | Hierarchy taken from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when the source has none. |
 | `local` | true or false | `true` when the parent came from a local-filesystem source. |
 | `weight` | number | Per-document multiplier applied after rank fusion. `1.0` unless a source or plugin sets otherwise. |
+| `summary` | text | A short summary an enrichment pass wrote. Present only when one has. |
+| `tags` | list of text | Tags an enrichment pass wrote. Present only when one has. |
+| `keywords` | list of text | The phrases an enrichment pass found the section to be about, most telling first. Present only when one has. |
+| `enriched_at` | text | When the enrichment pass ran, UTC, ISO 8601. Present only when one has. |
+| `enrich_ver` | text | Which version of the enrichment pass wrote the fields above. Present only when one has. |
+
+The last five fields appear on a parent only when an enrichment pass set them; a reader treats an absent one as null. No enrichment pass ships yet, so today's files carry none of them and are laid out exactly as before the fields were defined. That is why adding them did not change the version: a reader that does not know them loses nothing by ignoring them.
 
 Field names `t`, `x`, and `u` are short on purpose: with thousands of parents, key names are a measurable share of the file.
 

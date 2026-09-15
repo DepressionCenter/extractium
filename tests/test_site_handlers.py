@@ -35,6 +35,8 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-04"
 
+import re
+
 import pytest
 from bs4 import BeautifulSoup
 
@@ -484,3 +486,47 @@ def test_handler_index_excludes_are_a_superset_of_its_crawl_excludes(handler_cla
     """A page never worth fetching is never worth indexing either."""
     handler = handler_class()
     assert set(handler.default_crawl_exclude_patterns) <= set(handler.default_index_exclude_patterns)
+
+def test_tdx_names_its_attachment_address_as_a_document_and_excludes_it_by_default():
+    """
+    The address is a document only to a crawl with a reader; to any other
+    it is a download with no page behind it, so it sits on both exclude lists.
+    """
+    handler = tdx.TdxHandler()
+    address = "https://teamdynamix.example.edu/TDClient/210/ExampleOrg/Shared/FileOpen?AttachmentID=abc&ItemID=1"
+
+    assert any(re.search(pattern, address) for pattern in handler.document_url_patterns)
+    assert set(handler.document_url_patterns) <= set(handler.default_crawl_exclude_patterns)
+    assert set(handler.document_url_patterns) <= set(handler.default_index_exclude_patterns)
+
+def test_tdx_folds_the_view_and_download_links_of_an_attachment_into_one_address():
+    handler = tdx.TdxHandler()
+    flagless = (
+        "https://teamdynamix.example.edu/TDClient/210/ExampleOrg/Shared/FileOpen"
+        "?AttachmentID=abc&ItemID=1&ItemComponent=26"
+    )
+
+    assert handler.canonical_url(flagless + "&IsInline=0") == flagless
+    assert handler.canonical_url(flagless + "&IsInline=-1") == flagless
+    assert handler.canonical_url(flagless) == flagless
+    article = "https://teamdynamix.example.edu/TDClient/210/ExampleOrg/KB/ArticleDet?ID=1&IsInline=0"
+    assert handler.canonical_url(article) == article
+
+
+def test_tdx_reads_the_attachment_listing_address_from_the_article_s_script():
+    handler = tdx.TdxHandler()
+    url = "https://teamdynamix.example.edu/TDClient/210/ExampleOrg/KB/Article/10603/MiNap"
+    page = BeautifulSoup(
+        "<html><head><script>$(function () { new TeamDynamix.AttachmentHandler({"
+        " baseControllerUrl: '/TDClient/210/ExampleOrg/Shared/Attachments',"
+        " antiForgeryToken: 'EXAMPLE', itemId: 10603, componentId: 26, readOnly: false }); });"
+        "</script></head><body></body></html>",
+        "html.parser",
+    )
+
+    assert handler.attachment_listing_urls(page, url) == (
+        "https://teamdynamix.example.edu/TDClient/210/ExampleOrg/Shared/Attachments"
+        "/RenderAttachmentSection?itemID=10603&componentID=26",
+    )
+    plain = BeautifulSoup("<html><body><p>A listing page with no such script.</p></body></html>", "html.parser")
+    assert handler.attachment_listing_urls(plain, url) == ()

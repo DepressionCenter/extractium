@@ -88,7 +88,7 @@ One page is indexed once, however many sources reached it. Two sources can cover
 
 ### 3. Sections and windows
 
-The chunker cuts the content at its second- and third-level headings. Each piece is a section: at most 1,200 characters, with any longer run split into several sections that share a heading. A section is what a search returns and what an answer cites.
+The chunker cuts the content at its second- and third-level headings. Each piece is a section: at most 1,200 characters, with any longer run split into several sections that share a heading. A section is what a search returns and what an answer cites. Every section also carries five fields for an enrichment step, which would add a summary, tags, keywords, when it ran, and its version. No such step ships yet, so they are empty in every build, and the outputs leave them out or write them as null.
 
 Each section is then cut into windows of at most 350 characters, overlapping by about 53, so a fact sitting at a boundary still lands whole inside at least one window. A window is what gets searched.
 

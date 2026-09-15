@@ -207,7 +207,7 @@ where text was expected; the request landed on https://accounts.google.com/Servi
 
 **Cause.** One of three things. The source's `read_documents` setting is off, which is the default, so the link was dropped as a file that is not text. Or the file is on another host, such as a content-delivery network, and no `leaf_patterns` or `include_patterns` entry covers it. Or the file is in the old binary `.doc` format, which has no reader.
 
-**Fix.** Set `read_documents: true` on the source, add a `leaf_patterns` entry for the host that serves the files, and save any `.doc` file as `.docx`. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading document files".
+**Fix.** Set `read_documents: true` on the source, add a `leaf_patterns` entry for the host that serves the files, and save any `.doc` file as `.docx`. The files attached to an article on a TeamDynamix portal need no pattern, because they are served from inside the portal's own folder; the setting alone reads them. The log names every file it read (`document: <title>`) and every one it skipped, with the reason. The [configuration reference](configuration.md) explains the setting under "Reading document files".
 
 ### `reading a PDF needs pypdf, which is not installed`
 

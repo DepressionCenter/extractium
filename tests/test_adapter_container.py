@@ -33,6 +33,7 @@ __date__ = "2026-09-08"
 
 import json
 import struct
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -328,3 +329,25 @@ def test_write_with_gzip_is_reproducible(tmp_path, fixtures_dir, fake_embed_chun
     (second,) = ContainerAdapter().write(compendium, tmp_path / "b", {"file": "c.json.gz", "gzip": True})
 
     assert first.read_bytes() == second.read_bytes()
+
+def test_the_header_leaves_out_enrichment_fields_until_a_pass_sets_them(fixtures_dir, fake_embed_chunks_core):
+    """
+    A file with no enrichment is laid out exactly as before there was
+    any, which is what keeps the version at 4 and the snapshot unchanged.
+    """
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    plain = build_header(compendium)["parents"]
+
+    assert all("keywords" not in record and "summary" not in record for record in plain)
+
+    enriched = replace(
+        compendium.parents[0], keywords=("sleep study", "smartwatch"), tags=("research",), enrich_ver="test-1",
+    )
+    record = build_header(replace(compendium, parents=(enriched, *compendium.parents[1:])))["parents"][0]
+
+    assert record["keywords"] == ["sleep study", "smartwatch"]
+    assert record["tags"] == ["research"]
+    assert record["enrich_ver"] == "test-1"
+    assert "summary" not in record and "enriched_at" not in record
+    assert list(record)[:11] == list(plain[0])

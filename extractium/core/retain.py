@@ -12,7 +12,7 @@ extractium/core/retain.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,6 +40,7 @@ from urllib.parse import urlparse
 from extractium.core import cache
 from extractium.core.chunk import _children_for, assign_parent_ids
 from extractium.core.fetch import normalise
+from extractium.core.models import ENRICHMENT_FIELDS
 
 ### Constants ###
 
@@ -59,8 +60,10 @@ REBUILD_INCREMENTAL = "incremental"
 REBUILD_MODES = (REBUILD_FULL, REBUILD_INCREMENTAL)
 
 # The fields a section carries besides its heading and text, recorded so
-# a carried-forward section is the record it was.
-SECTION_FIELDS = ("source_type", "content_type", "source_label", "categories", "weight")
+# a carried-forward section is the record it was, enrichment included.
+SECTION_FIELDS = (
+    "source_type", "content_type", "source_label", "categories", "weight", *ENRICHMENT_FIELDS,
+)
 
 
 ### Manifest ###
@@ -231,6 +234,7 @@ def _parents_from(record):
             "categories": tuple(record.get("categories") or ()),
             "local": False,
             "weight": record.get("weight", 1.0),
+            **{field: record.get(field) for field in ENRICHMENT_FIELDS},
         })
     return assign_parent_ids(parents)
 

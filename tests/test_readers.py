@@ -207,6 +207,9 @@ def test_the_title_is_the_first_heading_else_the_properties_title_else_a_short_f
     assert documents.document_title(heading_and_property, "plan") == "Youth Mental Health Resources"
     short_line = "A short opening line\n\nMore text.\n"
     assert documents.document_title(read(short_line, title="Properties Title"), "plan") == "Properties Title"
+    # A PDF made from a Word file often declares the Word file's name.
+    assert documents.document_title(read(short_line, title="Sample Plan.docx"), "plan") == "Sample Plan"
+    assert documents.document_title(read(short_line, title=" .PDF "), "plan") == "A short opening line"
     assert documents.document_title(read(short_line), "plan") == "A short opening line"
     assert documents.document_title(read(("word " * 40).strip() + "\n\nMore.\n"), "plan") == "plan"
     assert documents.document_title(read("| a | b |\n|---|---|\n"), "plan") == "plan"
@@ -305,6 +308,15 @@ def test_a_name_is_taken_from_the_address_for_a_file_that_declares_none():
     assert documents.name_from_url("https://cdn.example.org/files/p/0a1b.docx/youth-resources") == "Youth Resources"
     assert documents.name_from_url("https://example.org/files/ethics-consent_form.docx?dl") == "Ethics Consent Form"
     assert documents.name_from_url("https://example.org/") == "Document"
+
+
+def test_the_name_the_server_gave_wins_over_the_address():
+    url = "https://teamdynamix.example.edu/TDClient/210/Org/Shared/FileOpen?AttachmentID=abc"
+
+    assert documents.name_from_url(url) == "Fileopen"
+    assert documents.name_from_url(url, "Sample Data manager Job Description.pdf") == "Sample Data Manager Job Description"
+    assert documents.name_from_url(url, "C:\\Users\\someone\\ethics_form.docx") == "Ethics Form"
+    assert documents.name_from_url(url, "   ") == "Fileopen"
 
 
 # ---------------------------------------------------------------------------

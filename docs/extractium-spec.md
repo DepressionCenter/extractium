@@ -125,6 +125,8 @@ Site handler: takes part in the web crawl for URLs it recognizes. Not a crawler,
 | `extract(soup, url)` | Returns the title, the content node, and the categories list, or nothing when the page holds no indexable content and is only a link-discovery hop. |
 | `source_type`, `content_type(url)` | Metadata values recorded on every parent. See section 3.4. |
 | `default_crawl_exclude_patterns`, `default_index_exclude_patterns` | Patterns the handler adds to the crawl when it is enabled. |
+| `document_url_patterns` | Optional. Addresses on the handler's host that serve a document file without naming its extension. While the source reads documents they are fetched as files and read, and the same patterns are set aside from the handler's exclude lists. |
+| `attachment_listing_urls(soup, url)` | Optional. The addresses where the page's host lists the files attached to it, when that list is not in the page. While the source reads documents each is queued as a page of the crawl and its links are read; consulted for pages whose links are followed. |
 | `scope_prefix(seed_url)` | Optional. May narrow the default crawl scope for a seed on a host the handler knows, returning the prefix the crawl stays inside, or None. Consulted only when the source has no include patterns. |
 | `observe_link(url)` | Optional. Sees every link the crawl discovers, in scope or not, before the scope check, and returns nothing. For a handler that collects addresses another source should read. |
 | `configure(settings)` | Optional. Receives the build's global crawl settings after construction, for a handler whose rules depend on what the settings file says. |
@@ -184,7 +186,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
 | `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
-| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: reserved for an enrichment pass (section 10), and null until one exists. Adapters write them when present and skip them when null. |
+| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section and null until an enrichment pass (section 10) fills them. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list. `llms.txt` does not carry them yet. |
 
 ### 3.5 Embeddings
 
@@ -265,7 +267,7 @@ A local folder can hold content that must never be published. The rules:
 
 ## 8. Cache
 
-- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators and content hashes), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `previous-build.json` is the manifest of the last build's published sections, which an incremental rebuild carries unseen pages forward from. It never holds a section read from a local folder. `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
+- `.kb_cache/` holds `pages/` (fetched text), `meta.json` (validators, content hashes, and the file name a server gave a document), `github/` (`repositories/` for metadata and trees, `blobs/` for file bodies keyed by blob SHA, and `analysis/` for parser output keyed by blob SHA and parser signature), `repository/` (the text a DSpace repository extracted from each deposit), and `youtube/` (`videos/` and `listings/`). `previous-build.json` is the manifest of the last build's published sections, which an incremental rebuild carries unseen pages forward from. It never holds a section read from a local folder. `embeddings/` and `enrichment/` are reserved for delta builds. Nothing under `github/` ever holds a token, and nothing under `youtube/` ever holds a key.
 - Revalidation uses conditional GET (`If-None-Match`, `If-Modified-Since`, honoring 304), not HEAD probing: several servers omit validators on HEAD.
 - A content SHA-256 is stored per page so a future delta build can skip unchanged chunks.
 - On GitHub Actions, `.kb_cache/` persists between runs through the cache action, keyed on a hash of the configuration file.
@@ -305,7 +307,7 @@ The two Tier 2 servers share a protocol core with the Node examples (`examples/m
 
 ## 10. Enrichment (reserved)
 
-The data model reserves fields for an enrichment pass that does not exist yet. If one is added, these are its rules:
+Every section carries the fields for an enrichment pass that does not exist yet (section 3.4), null until one runs. If one is added, these are its rules:
 
 - A local language model only (small instruct model), GPU-gated, delta-only, parent-only. No API calls, ever.
 - It populates the reserved nullable fields (section 3.4) through the `.kb_cache/enrichment/` layer.

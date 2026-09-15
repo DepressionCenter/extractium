@@ -306,3 +306,34 @@ def test_readable_files_pass_the_asset_check_and_leave_the_default_excludes():
     assert r"\.docx$" not in fetch.asset_exclude_patterns(readable=("docx",))
     assert r"\.pdf$" in fetch.asset_exclude_patterns(readable=("docx",))
     assert fetch.ASSET_EXCLUDE_PATTERNS == fetch.asset_exclude_patterns()
+
+def test_the_served_file_name_is_read_from_the_content_disposition_header():
+    def named(value):
+        return fetch.served_file_name(FakeResponse(200, {"Content-Disposition": value}))
+
+    assert named('attachment; filename="Job Description.pdf"') == "Job Description.pdf"
+    assert named("inline; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf") == "r\u00e9sum\u00e9.pdf"
+    # A folder part or a control character in the name is untrusted input
+    # and never reaches the title.
+    assert named('attachment; filename="..\\\\..\\\\evil\x07.pdf"') == "evil.pdf"
+    assert named('attachment; filename="/tmp/plan.pdf"') == "plan.pdf"
+    assert named("attachment") == ""
+    assert fetch.served_file_name(FakeResponse(200, {})) == ""
+
+
+def test_fetch_bytes_records_the_served_file_name_with_the_validators(
+    isolated_core_cache, fake_session_factory
+):
+    url = "https://example.org/Shared/FileOpen?AttachmentID=abc"
+    session = fake_session_factory({url: FakeResponse(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'attachment; filename="Plan.pdf"',
+        "ETag": '"v1"',
+    }, content=b"%PDF-1.4 x")})
+    cache_meta = {}
+
+    data = fetch.fetch_bytes(session, url, cache_meta, 1000)
+
+    assert data == b"%PDF-1.4 x"
+    assert cache_meta[url]["name"] == "Plan.pdf"
+    assert cache_meta[url]["etag"] == '"v1"'

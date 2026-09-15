@@ -34,6 +34,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
 import hashlib
+import re
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -264,7 +265,9 @@ def default_exclude_patterns(handlers, kind, readable=()):
         handlers (Iterable): the enabled handler instances.
         kind (str): "crawl" or "index".
         readable (Iterable[str]): file extensions a reader turns into
-            text for this crawl, left off the asset patterns.
+            text for this crawl, left off the asset patterns. When any
+            are given, the addresses a handler names as documents are
+            left off its exclusions too.
 
     Returns:
         tuple[str, ...]: regular expression strings, each once, asset
@@ -273,10 +276,31 @@ def default_exclude_patterns(handlers, kind, readable=()):
     attribute = f"default_{kind}_exclude_patterns"
     patterns = list(fetching.asset_exclude_patterns(readable))
     for handler in handlers:
+        # An address a handler says serves a document file is kept off
+        # the crawl only while no reader could turn the file into text.
+        documents = getattr(handler, "document_url_patterns", ()) if readable else ()
         for pattern in getattr(handler, attribute):
-            if pattern not in patterns:
+            if pattern not in patterns and pattern not in documents:
                 patterns.append(pattern)
     return tuple(patterns)
+
+
+def document_url_re(handlers):
+    """
+    The addresses a crawl that reads documents fetches as files: any
+    address that names a document extension, plus the addresses each
+    enabled handler says serve a file without one.
+
+    Args:
+        handlers (Iterable): the enabled handler instances.
+
+    Returns:
+        re.Pattern: matches an address the crawl reads as a document.
+    """
+    patterns = [readers.DOCUMENT_URL_RE.pattern]
+    for handler in handlers:
+        patterns.extend(getattr(handler, "document_url_patterns", ()))
+    return re.compile("|".join(f"(?:{pattern})" for pattern in patterns), re.I)
 
 
 ### Source ###
@@ -416,6 +440,11 @@ class WebSource:
         from another leaf is never reached. The asset, exclude, robots,
         and page-ceiling rules apply to a leaf as to any page.
 
+        When the crawl reads documents and a page's handler knows where
+        its host lists the files attached to the page, that listing is
+        queued as a page of the crawl and its links are read like any
+        page's; the listing itself yields no document.
+
         Up to `parallel_pages` fetches are kept in flight, but pages are
         taken from the queue, have their links read, and are yielded in
         the order a one-at-a-time crawl would use, and each page's own
@@ -466,7 +495,7 @@ class WebSource:
         )
         # Addresses of files a reader turns into text, which pass the
         # asset filter; None when this crawl reads no documents.
-        readable_re = readers.DOCUMENT_URL_RE if self.read_documents else None
+        readable_re = document_url_re(self.handlers) if self.read_documents else None
 
         for seed in self.seed_urls:
             progress(f"Seed:         {seed}")
@@ -512,6 +541,16 @@ class WebSource:
         def in_primary_scope(url):
             """Whether a page sits inside the scope derived from a seed, whatever the include patterns say."""
             return any(url.startswith(prefix) for prefix in auto_prefix)
+
+        def listings_for(handler, soup, url):
+            """
+            The addresses where a page's host lists the files attached to
+            the page, from a handler that knows them, read for their links
+            only while this crawl reads documents; nothing otherwise.
+            """
+            if readable_re is None or not hasattr(handler, "attachment_listing_urls"):
+                return ()
+            return [fetching.normalise(listing) for listing in handler.attachment_listing_urls(soup, url)]
 
         def start_fetch(url, lines):
             """
@@ -603,7 +642,8 @@ class WebSource:
                     # A file holds no links the crawl follows; it is read
                     # into text and indexed, or skipped with the reason.
                     document = self._document_for(
-                        url, handler, fetched, index_exclude_res, seen_documents, progress
+                        url, handler, fetched, index_exclude_res, seen_documents, progress,
+                        served_as=cache.get(request_url, {}).get("name", ""),
                     )
                     if document is not None:
                         yield document
@@ -616,7 +656,7 @@ class WebSource:
                 # to the queue and nothing to another source.
                 if follow_links:
                     from_primary = in_primary_scope(url)
-                    for link in extract_links(soup, url):
+                    for link in [*extract_links(soup, url), *listings_for(handler, soup, url)]:
                         link = self._canonical(link)
                         if link in visited or link in queued:
                             continue
@@ -668,7 +708,8 @@ class WebSource:
             return fetching.normalise(handler.canonical_url(url))
         return url
 
-    def _document_for(self, url, handler, data, index_exclude_res, seen_documents, progress):
+    def _document_for(self, url, handler, data, index_exclude_res, seen_documents, progress,
+                      served_as=""):
         """
         The document for one fetched file, or None with the reason
         reported: the address is on the index exclude list or was read by
@@ -684,6 +725,8 @@ class WebSource:
             seen_documents (dict): digest to the address a file was
                 indexed under, updated here.
             progress (Callable[[str], None]): receives the reason line.
+            served_as (str): the file name the server gave in its answer,
+                recorded by the fetch; an empty string when it gave none.
         """
         if any(r.search(url) for r in index_exclude_res):
             return None
@@ -705,7 +748,7 @@ class WebSource:
             progress("       (the document holds no text)")
             return None
         seen_documents[digest] = url
-        title = readers.document_title(read, readers.name_from_url(url))
+        title = readers.document_title(read, readers.name_from_url(url, served_as))
         progress(f"       document: {title[:70]}")
         return Document(
             url=url,

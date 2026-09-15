@@ -12,7 +12,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -41,7 +41,7 @@ from extractium.core.chunk import chunk_document
 from extractium.core.fetch import normalise
 from extractium.core.dedup import drop_near_duplicates, remap_parents_after_dedup
 from extractium.core.embed import quantize_int8
-from extractium.core.models import Children, Compendium, EmbeddingInfo, Parent
+from extractium.core.models import ENRICHMENT_FIELDS, Children, Compendium, EmbeddingInfo, Parent
 
 ### Constants ###
 
@@ -50,7 +50,9 @@ from extractium.core.models import Children, Compendium, EmbeddingInfo, Parent
 DEFAULT_SITE_NAME = "Knowledge Base"
 
 # The parent fields a Parent record is built from, in the order the
-# dataclass declares them.
+# dataclass declares them. The enrichment fields follow, read with a
+# default because a parent carried forward from an older manifest
+# may not have them.
 PARENT_FIELDS = (
     "id", "t", "x", "u", "host", "source_type", "content_type",
     "source_label", "categories", "local", "weight",
@@ -191,7 +193,13 @@ def chunk_documents(documents, progress):
 
 def _parent_records(parents):
     """Validated Parent records from the chunker's parent dicts, in build order."""
-    return tuple(Parent(**{field: parent[field] for field in PARENT_FIELDS}) for parent in parents)
+    return tuple(
+        Parent(
+            **{field: parent[field] for field in PARENT_FIELDS},
+            **{field: parent.get(field) for field in ENRICHMENT_FIELDS},
+        )
+        for parent in parents
+    )
 
 
 def _children_columns(parents, children):

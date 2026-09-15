@@ -14,7 +14,7 @@ extractium/adapters/okf.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -194,10 +194,28 @@ def pages_with_sections(parents):
                 "source_label": parent.source_label,
                 "content_type": parent.content_type,
                 "categories": tuple(parent.categories),
+                "summary": None,
+                "tags": [],
+                "keywords": [],
                 "sections": [],
             }
         page["sections"].append((section_title(parent.t), parent.x))
+        _fold_enrichment(page, parent)
     return list(pages.values())
+
+
+def _fold_enrichment(page, parent):
+    """
+    Adds what an enrichment pass wrote on one section to its page: the
+    first section's summary as the page's, and every tag and keyword
+    once, in the order the sections carry them.
+    """
+    if page["summary"] is None and parent.summary:
+        page["summary"] = parent.summary
+    for field in ("tags", "keywords"):
+        for value in getattr(parent, field) or ():
+            if value not in page[field]:
+                page[field].append(value)
 
 
 def page_text(page):
@@ -341,8 +359,9 @@ def concept_type(content_type):
 
 def tags_for(page):
     """
-    The `tags` list: the name of the source, the kind of document, and
-    whatever category path the source recorded, outermost first.
+    The `tags` list: the name of the source, the kind of document,
+    whatever category path the source recorded, outermost first, and
+    the tags an enrichment pass wrote on the page's sections.
 
     Blanks are dropped and repeats removed, so a page whose category
     repeats its source name is tagged once.
@@ -353,7 +372,10 @@ def tags_for(page):
     Returns:
         list[str]: distinct, non-blank tags, in that order.
     """
-    candidates = [page["source_label"], concept_type(page["content_type"]), *page["categories"]]
+    candidates = [
+        page["source_label"], concept_type(page["content_type"]),
+        *page["categories"], *page.get("tags", ()),
+    ]
     tags = {}
     for tag in candidates:
         if isinstance(tag, str) and tag.strip():
@@ -366,7 +388,9 @@ def front_matter(page, built_at, name=None):
     The YAML block at the top of a concept file.
 
     `type` is the one field the format requires; the rest are the
-    recommended ones. `resource` is the address the page was read from, so
+    recommended ones, plus `keywords` when an enrichment pass wrote any.
+    The description is the page's summary when a pass wrote one, else an
+    excerpt of its text. `resource` is the address the page was read from, so
     a reader can go back to the original. For a file read from a local
     folder that address is the "local:" form the build stores, which names
     a path relative to the source folder and never a path on anyone's
@@ -383,15 +407,18 @@ def front_matter(page, built_at, name=None):
         dict: the front-matter fields, in the order they are written.
     """
     name = name or page["title"]
-    return {
+    fields = {
         "type": concept_type(page["content_type"]),
         "title": name,
-        "description": excerpt(page_text(page)),
+        "description": page.get("summary") or excerpt(page_text(page)),
         "resource": page["url"],
         "tags": tags_for(page),
-        "generated": {"by": PRODUCER, "at": built_at},
-        "sources": [{"resource": page["url"], "title": name}],
     }
+    if page.get("keywords"):
+        fields["keywords"] = list(page["keywords"])
+    fields["generated"] = {"by": PRODUCER, "at": built_at}
+    fields["sources"] = [{"resource": page["url"], "title": name}]
+    return fields
 
 
 def render_front_matter(fields):

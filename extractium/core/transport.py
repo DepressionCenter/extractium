@@ -149,6 +149,12 @@ class AutoSession:
     A host that was never challenged keeps the plain transport. Nothing
     from either session is written anywhere; cookies live and die with
     the sessions, and the fetch cache stores page text and validators only.
+
+    Like a requests session, it has a `headers` mapping: what is put
+    there is sent with every request, over either transport, under
+    whatever the request itself names. A library that takes a requests
+    session to talk through, such as the caption reader, writes its
+    own defaults there.
     """
 
     def __init__(self, plain=None, browser_factory=browser_session, progress=None,
@@ -173,6 +179,9 @@ class AutoSession:
         self.browser = None
         self.transport_by_host = {}
         self.unavailable_hosts = set()
+        # Kept here rather than on the plain session, so a host that
+        # switched to the browser transport still receives them.
+        self.headers = requests.structures.CaseInsensitiveDict()
         # Sources run in threads, so a host's transport is decided and
         # reported under a lock: two workers reaching one host at the same
         # moment would otherwise both announce it.
@@ -211,6 +220,10 @@ class AutoSession:
 
     def _request(self, method, url, **kwargs):
         """One request by either method, with the per-host transport rule applied."""
+        if self.headers:
+            merged = requests.structures.CaseInsensitiveDict(self.headers)
+            merged.update(kwargs.get("headers") or {})
+            kwargs["headers"] = dict(merged)
         host = host_of(url)
         if self.transport_by_host.get(host) == TRANSPORT_BROWSER:
             return getattr(self._browser(), method)(url, **kwargs)

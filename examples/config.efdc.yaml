@@ -70,9 +70,12 @@ sources:
   #    The crawl keeps itself inside this portal's own folder rather than
   #    wandering into the rest of teamdynamix.umich.edu.
   #    Short link: https://michmed.org/efdc-kb
+  #    The files attached to articles (Word, PDF, and the other formats
+  #    the readers handle) are read as documents of their own.
   - label: U-M Health Research Resource Library
     type: web
     seed_url: https://teamdynamix.umich.edu/TDClient/210/DepressionCenter/Home/
+    read_documents: true
 
   # 2. Depression Center Open Source Hub. This site links out to many repositories under
   #    other people's GitHub accounts, in its curated list of research tools

@@ -131,6 +131,38 @@ def test_the_retry_sends_the_same_headers_so_the_crawler_still_names_itself():
     assert browser.calls[0]["timeout"] == 5
 
 
+def test_headers_set_on_the_session_are_sent_over_both_transports():
+    """
+    The caption library writes its defaults to the session's headers, the
+    way it would on a requests session, and expects them on every request.
+    """
+    session, plain, browser, _ = auto({PAGE: challenge()}, {PAGE: page()})
+    session.headers.update({"Accept-Language": "en-US"})
+
+    session.get(PAGE, headers={"User-Agent": "Extractium"}, timeout=5)
+
+    expected = {"Accept-Language": "en-US", "User-Agent": "Extractium"}
+    assert plain.calls[0]["headers"] == expected
+    assert browser.calls[0]["headers"] == expected
+
+
+def test_a_request_s_own_header_wins_over_the_session_s_whatever_its_case():
+    session, plain, _, _ = auto({PAGE: page()})
+    session.headers["Accept-Language"] = "en-US"
+
+    session.get(PAGE, headers={"accept-language": "fr"}, timeout=5)
+
+    assert plain.calls[0]["headers"] == {"accept-language": "fr"}
+
+
+def test_a_session_with_no_headers_of_its_own_passes_a_request_through_unchanged():
+    session, plain, _, _ = auto({PAGE: page()})
+
+    session.get(PAGE, timeout=5)
+
+    assert plain.calls[0]["headers"] == {}
+
+
 def test_a_post_follows_the_same_transport_rule_as_a_get():
     """
     A listing that pages through a site's own interface posts its
