@@ -79,7 +79,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 | `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json` for the container and `<slug>.sqlite` for the database, so `slug: efdc-compendium` publishes `efdc-compendium.json`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
-| `max_pages` | whole number | `10000` | The most pages one build may visit. Must be 1 or more. |
+| `max_pages` | whole number | `10000` | The most pages one web crawl may visit. Each `web` source counts its own pages against it, so two `web` sources may visit twice as many between them, and the other source kinds do not use it. Must be 1 or more. |
 | `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
 | `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |

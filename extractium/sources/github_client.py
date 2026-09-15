@@ -34,6 +34,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-09"
 
 import collections
+import codecs
 import io
 import os
 import re
@@ -615,6 +616,31 @@ def _read_capped(response, ceiling):
     return buffer.getvalue()
 
 
+# A file exported from SharePoint, or saved by many Windows tools, is
+# UTF-16 with a byte-order mark, and it is text all the same. The mark
+# decides the encoding. Without one, only UTF-8 is trusted, because
+# guessing an encoding turns a binary file into a page of noise.
+UTF16_MARKS = (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
+
+
+def _decoded_text(data):
+    """
+    The text of one file's bytes, or None when they are not text.
+
+    Args:
+        data (bytes): the file as it sits in the archive.
+
+    Returns:
+        str | None: the text, with any byte-order mark removed; None
+        when the bytes are neither UTF-8 nor UTF-16 marked as such.
+    """
+    encoding = "utf-16" if data.startswith(UTF16_MARKS) else "utf-8-sig"
+    try:
+        return data.decode(encoding)
+    except UnicodeDecodeError:
+        return None
+
+
 def _files_from_archive(payload, wanted, report):
     """
     Pulls the wanted files out of an in-memory archive.
@@ -635,10 +661,11 @@ def _files_from_archive(payload, wanted, report):
                 extracted = archive.extractfile(member)
                 if extracted is None:
                     continue
-                try:
-                    files[path] = extracted.read().decode("utf-8")
-                except UnicodeDecodeError:
+                text = _decoded_text(extracted.read())
+                if text is None:
                     report(f"  {path}: not text; skipped")
+                    continue
+                files[path] = text
     except tarfile.TarError as e:
         raise GitHubUnavailable(f"the repository archive could not be read ({e}).") from e
     return files

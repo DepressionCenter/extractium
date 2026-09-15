@@ -33,6 +33,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-09"
 
+import codecs
 import io
 import tarfile
 import time
@@ -545,19 +546,50 @@ def test_an_archive_that_is_not_a_readable_archive_is_reported():
         client.archive_files("example-org", "example-tools", "main", {"README.md"})
 
 
-def test_an_archive_entry_that_is_not_text_is_skipped_with_a_message():
+def archive_holding_bytes(path, data):
+    """One archive entry with exactly these bytes, the way GitHub would ship it."""
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
-        info = tarfile.TarInfo("example-org-example-tools-abc/README.md")
-        data = b"\xff\xfe\x00binary"
+        info = tarfile.TarInfo(f"example-org-example-tools-abc/{path}")
         info.size = len(data)
         archive.addfile(info, io.BytesIO(data))
+    return buffer.getvalue()
+
+
+def test_an_archive_entry_that_is_not_text_is_skipped_with_a_message():
     lines = []
     session = FakeGitHubSession({
         f"{API_ROOT}/repos/example-org/example-tools/tarball/main":
-            FakeApiResponse(status_code=200, content=buffer.getvalue()),
+            FakeApiResponse(status_code=200, content=archive_holding_bytes(
+                "README.md", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe"
+            )),
     })
     client = GitHubClient(session, progress=lines.append)
 
     assert client.archive_files("example-org", "example-tools", "main", {"README.md"}) == {}
     assert any("not text" in line for line in lines)
+
+
+@pytest.mark.parametrize("encoding", ["utf-16-le", "utf-16-be", "utf-8"])
+def test_an_archive_entry_marked_with_a_byte_order_mark_is_read_as_text(encoding):
+    """
+    A SharePoint export, and many files saved on Windows, are UTF-16 with
+    a byte-order mark. They are text, and the mark says how to read them.
+    The mark itself is dropped, so the text starts with its first
+    character and not with an invisible one.
+    """
+    marks = {"utf-16-le": codecs.BOM_UTF16_LE, "utf-16-be": codecs.BOM_UTF16_BE, "utf-8": codecs.BOM_UTF8}
+    text = "<!DOCTYPE html>\n<title>Teams</title>\n"
+    lines = []
+    session = FakeGitHubSession({
+        f"{API_ROOT}/repos/example-org/example-tools/tarball/main":
+            FakeApiResponse(status_code=200, content=archive_holding_bytes(
+                "Teams.html", marks[encoding] + text.encode(encoding)
+            )),
+    })
+    client = GitHubClient(session, progress=lines.append)
+
+    files = client.archive_files("example-org", "example-tools", "main", {"Teams.html"})
+
+    assert files == {"Teams.html": text}
+    assert not any("not text" in line for line in lines)
