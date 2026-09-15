@@ -42,6 +42,7 @@ from extractium.code.ctags import Ctags
 from extractium.code.records import FileFacts, RepositoryFacts, SCHEMA_VERSION, as_data, from_data
 from extractium.code.tree_sitter import Engine
 from extractium.core import cache as caching
+from extractium.core import prose
 
 ### Limits ###
 
@@ -102,7 +103,7 @@ class CodeIndexer:
             imports resolved, calls labelled, and reverse edges filled
             in; plus the prose pulled out of any notebook, R Markdown
             file, or page, keyed by path. Prose longer than
-            embedded.MAX_PROSE_CHARS arrives as its compact record.
+            prose.MAX_PROSE_CHARS arrives as its compact record.
         """
         entries = [tuple(entry) for entry in entries]
         content = {path: text for path, text, _ in entries}
@@ -132,7 +133,7 @@ class CodeIndexer:
             if contents is not None and contents.prose.strip():
                 documentation[path] = (
                     contents.title,
-                    embedded.prose_for_index(contents.title, contents.prose, contents.headings),
+                    prose.prose_for_index(contents.title, contents.prose, contents.headings),
                 )
             analyzed.append(facts)
 
@@ -247,7 +248,7 @@ class CodeIndexer:
             tier=languages.TIER_TREE_SITTER if parsed else languages.TIER_METADATA,
             display=_container_display(contents.kind, spoken),
             symbols=tuple(symbols), imports=tuple(imports), calls=tuple(calls),
-            doc=embedded.first_paragraph(contents.prose),
+            doc=prose.first_paragraph(contents.prose),
         )
 
     ### Summaries ###

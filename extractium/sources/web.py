@@ -12,7 +12,7 @@ extractium/sources/web.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from extractium.core import fetch as fetching
 from extractium.core.chunk import extract_links, markdown_text_to_soup
 from extractium.core.models import Document
+from extractium.core import prose
 from extractium.sources.generic import GenericHandler
 
 ### Constants ###
@@ -498,7 +499,7 @@ class WebSource:
             yield Document(
                 url=url,
                 title=extraction.title,
-                content=extraction.node,
+                content=self._content_to_index(extraction, progress),
                 source_type=handler.source_type,
                 content_type=handler.content_type(url),
                 categories=extraction.categories,
@@ -506,6 +507,26 @@ class WebSource:
             self._pause()
 
         progress(f"Crawled {len(visited)} page(s).")
+
+    def _content_to_index(self, extraction, progress):
+        """
+        The content node itself, or its compact record when the page's
+        text runs past the ceiling the index takes whole. A site that
+        publishes everything on one page, or a rendered report, would
+        otherwise become thousands of sections for one address.
+        """
+        text = extraction.node.get_text("\n\n", strip=True)
+        if len(text) <= prose.MAX_PROSE_CHARS:
+            return extraction.node
+        headings = [
+            heading.get_text(" ", strip=True)
+            for heading in extraction.node.find_all(["h1", "h2", "h3"])
+        ]
+        progress(
+            f"       indexed as an outline ({len(text)} characters is over the "
+            f"{prose.MAX_PROSE_CHARS} the index takes whole)"
+        )
+        return prose.compact_record(extraction.title, text, headings)
 
     def gone_pages(self):
         """

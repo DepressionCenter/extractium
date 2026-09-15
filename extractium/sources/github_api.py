@@ -35,12 +35,12 @@ __date__ = "2026-09-09"
 
 import re
 
-from extractium.code import embedded
 from extractium.code import render as code_render
 from extractium.code.indexer import CodeIndexer
 from extractium.core import cache as caching
 from extractium.core.fetch import DEFAULT_USER_AGENT, normalise
 from extractium.core.models import Document
+from extractium.core import prose
 from extractium.sources import github_files as files
 from extractium.sources.github_client import (
     GitHubClient,
@@ -609,11 +609,11 @@ class GitHubApiSource:
             return None
         full_name = f"{owner}/{name}"
         title = files.title_for(full_name, path)
-        content = embedded.prose_for_index(title, text)
+        content = prose.prose_for_index(title, text)
         if content is not text and progress is not None:
             progress(
                 f"  {full_name}/{path}: indexed as an outline ({len(text)} characters is over "
-                f"the {embedded.MAX_PROSE_CHARS} the index takes whole)"
+                f"the {prose.MAX_PROSE_CHARS} the index takes whole)"
             )
         return Document(
             url=self._url_for(owner, name, branch, path),

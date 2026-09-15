@@ -42,6 +42,7 @@ import sys
 
 import pytest
 
+from extractium.core import prose
 from extractium.code import embedded, languages, render
 from extractium.code.ctags import Ctags, _symbols_from
 from extractium.code.indexer import CodeIndexer
@@ -949,13 +950,13 @@ def test_a_container_too_long_to_parse_still_yields_its_text():
 
 
 def test_a_compact_record_quotes_the_title_opening_headings_and_terms():
-    prose = (
+    text = (
         "A guide to the glucose monitors the study issues.\n\n# Devices\n\n"
         + "glucose sensor readings arrive nightly " * 8_000
         + "\n\n# Support\n\nCall the help desk."
     )
 
-    record = embedded.compact_record("Monitor guide", prose)
+    record = prose.compact_record("Monitor guide", text)
 
     assert record.startswith("Monitor guide\n\nA guide to the glucose monitors the study issues.")
     assert "Headings: Devices; Support" in record
@@ -967,9 +968,9 @@ def test_a_compact_record_quotes_the_title_opening_headings_and_terms():
 def test_text_under_the_prose_ceiling_is_indexed_whole():
     text = "# Short\n\nA few words.\n"
 
-    assert embedded.prose_for_index("Short", text) == text
-    assert embedded.prose_for_index("", "x" * embedded.MAX_PROSE_CHARS) == "x" * embedded.MAX_PROSE_CHARS
-    assert "only this outline" in embedded.prose_for_index("", "x " * embedded.MAX_PROSE_CHARS)
+    assert prose.prose_for_index("Short", text) == text
+    assert prose.prose_for_index("", "x" * prose.MAX_PROSE_CHARS) == "x" * prose.MAX_PROSE_CHARS
+    assert "only this outline" in prose.prose_for_index("", "x " * prose.MAX_PROSE_CHARS)
 
 
 def test_an_html_page_reports_its_headings(parsers_installed):

@@ -172,6 +172,8 @@ Two sources may share a label on purpose. Two sibling collections of one reposit
 | `extra_index_exclude_patterns` | list of patterns | empty | Pages to leave out of the index, added to the list above rather than replacing it. |
 | `site_handlers` | list of names | every installed handler | Which site handlers take part. `[]` means the generic handler only. The generic handler always takes part, and always last. |
 
+A page whose text runs past 200,000 characters, such as a site that publishes everything on one page, is indexed as an outline (its title, opening paragraph, headings, and most frequent terms) rather than chunked whole, and the log says so. The same ceiling applies to repository files; [GitHub repository indexing](github-repository-indexing.md) lists it with the others under "The ceilings".
+
 A short entry is normal:
 
 ```yaml

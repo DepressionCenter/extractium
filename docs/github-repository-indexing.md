@@ -237,7 +237,7 @@ Submodules are not followed. The `.gitmodules` file itself may be indexed as con
 | Ceiling | Value | What happens past it |
 |---|---|---|
 | File size, `max_file_bytes` | 2,000,000 bytes | The file is not downloaded. Checked against the inventory and again against the downloaded body, in case the listing understated it. |
-| Text indexed whole | 200,000 characters | A documentation file or a page's text longer than this is indexed as a compact record: its title, its opening paragraph, its headings, and the forty terms it uses most, with a line saying the file was indexed that way. About 35,000 words, so a manual passes whole and a rendered data table does not. |
+| Text indexed whole | 200,000 characters | A documentation file or a page's text longer than this, here and in a web crawl alike, is indexed as a compact record: its title, its opening paragraph, its headings, and the forty terms it uses most, with a line saying the file was indexed that way. About 35,000 words, so a manual passes whole and a rendered data table does not. |
 | Parse length | 1,500,000 characters | A code file longer than this is recorded by name, language, and length and not parsed. A page, notebook, or R Markdown file over it still has its text indexed; only the code inside goes unparsed. |
 | Code files per repository | 3,000 | Files past the ceiling are named in the log and not parsed. A repository with more is a monorepo or a vendored tree, and a directory of thousands of tiny generated files is exactly what this stops. |
 | Code blocks per container | 500 | Cells or chunks past it are not parsed. A generated notebook can hold thousands. |

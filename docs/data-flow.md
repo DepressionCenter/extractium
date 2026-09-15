@@ -161,7 +161,7 @@ So: assume any folder you point a local source at may hold protected health info
 | Build time | UTC, ISO 8601, with a `Z` suffix. Never a local time. |
 | Window offsets | UTF-16 code units, counted from the start of the section's text. |
 | Section length | At most 1,200 characters. Windows: at most 350, overlapping by 53. |
-| Text indexed whole | A repository file or page over 200,000 characters of text is indexed as a compact record (title, opening, headings, most frequent terms) rather than chunked in full. |
+| Text indexed whole | A crawled page, a repository file, or a page inside a repository whose text runs past 200,000 characters is indexed as a compact record (title, opening, headings, most frequent terms) rather than chunked in full. The log names each one. |
 | Text encoding | UTF-8 everywhere, in every file this tool writes. |
 | Vector storage | Whole numbers from -127 to 127, little-endian, divided by 127 on the way back. Or 32-bit floats, little-endian, with `--float32-vecs`. |
 | Keyword tokens | Lowercase runs of three or more ASCII letters or digits. |
