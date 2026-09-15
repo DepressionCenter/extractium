@@ -335,3 +335,36 @@ def test_the_rebuild_setting_is_full_by_default_and_checked():
                                        "rebuild": "incremental"}).rebuild == "incremental"
     with pytest.raises(config.ConfigError, match="rebuild must be one of"):
         config.config_from_mapping({"sources": [{"type": "web", "label": "S", "seed_url": SEED}], "rebuild": "append"})
+
+def test_a_carried_forward_section_keeps_what_an_enrichment_pass_wrote(
+    isolated_core_cache, fixtures_dir, fake_embed_chunks_core,
+):
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+    first = dataclasses.replace(
+        compendium.parents[0], summary="About sleep.", tags=("research",), keywords=("sleep study",),
+        enriched_at="2026-09-15T00:00:00Z", enrich_ver="test-1",
+    )
+    key = retain.page_key(first.u)
+
+    retain.save_manifest(dataclasses.replace(compendium, parents=(first, *compendium.parents[1:])))
+    previous = retain.load_previous()
+
+    record = previous["pages"][key]
+    assert record["summary"] == "About sleep."
+    assert record["tags"] == ["research"] and record["keywords"] == ["sleep study"]
+    assert record["enriched_at"] == "2026-09-15T00:00:00Z" and record["enrich_ver"] == "test-1"
+
+    others = [other for other in previous["pages"] if other != key]
+    (_, parents, _, _), = retain.carry_forward(previous, others, [], [first.source_label])
+    carried = build._parent_records(parents)[0]
+    assert carried.keywords == ("sleep study",) and carried.tags == ("research",)
+    assert carried.summary == "About sleep." and carried.enrich_ver == "test-1"
+
+
+def test_a_manifest_written_before_enrichment_carries_forward_with_the_fields_empty(previous_manifest):
+    (_, parents, _, _), = retain.carry_forward(
+        previous_manifest, ["https://example.org/seen"], ["https://example.org/gone"], ["Site"]
+    )
+
+    assert parents[0]["keywords"] is None and parents[0]["summary"] is None
+    assert build._parent_records(parents)[0].keywords is None

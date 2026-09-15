@@ -12,7 +12,7 @@ extractium/adapters/sqlite_out.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,6 +40,7 @@ import numpy as np
 
 from extractium import __version__
 from extractium.adapters.base import output_compendium, prepare_out_dir
+from extractium.core.models import ENRICHMENT_FIELDS
 from extractium.adapters.container import (
     CONTAINER_FORMAT,
     CONTAINER_VERSION,
@@ -83,7 +84,14 @@ CREATE TABLE parents (
     source_label TEXT NOT NULL,
     categories   TEXT NOT NULL,
     local        INTEGER NOT NULL,
-    weight       REAL NOT NULL
+    weight       REAL NOT NULL,
+    -- What an enrichment pass wrote, NULL until one has. `tags` and
+    -- `keywords` are JSON arrays of text; `enriched_at` is UTC, ISO 8601.
+    summary      TEXT,
+    tags         TEXT,
+    keywords     TEXT,
+    enriched_at  TEXT,
+    enrich_ver   TEXT
 );
 
 -- Grain: one row per search window. A window is a slice of one section's
@@ -182,6 +190,17 @@ def meta_rows(compendium):
 
 ### Table Rows ###
 
+def _enrichment_values(parent):
+    """The enrichment columns of one row: lists as JSON arrays, None as NULL."""
+    values = []
+    for field in ENRICHMENT_FIELDS:
+        value = getattr(parent, field)
+        if isinstance(value, tuple):
+            value = json.dumps(list(value), ensure_ascii=False)
+        values.append(value)
+    return tuple(values)
+
+
 def parent_rows(compendium):
     """One row per section, in build order, categories as a JSON array."""
     return [
@@ -190,6 +209,7 @@ def parent_rows(compendium):
             parent.source_type, parent.content_type, parent.source_label,
             json.dumps(list(parent.categories), ensure_ascii=False),
             int(parent.local), parent.weight,
+            *_enrichment_values(parent),
         )
         for pid, parent in enumerate(compendium.parents)
     ]
@@ -287,8 +307,9 @@ class SqliteAdapter:
                                    meta_rows(compendium))
             connection.executemany(
                 "INSERT INTO parents (pid, id, t, x, u, host, source_type, content_type, "
-                "source_label, categories, local, weight) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                "source_label, categories, local, weight, "
+                "summary, tags, keywords, enriched_at, enrich_ver) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
                 parent_rows(compendium),
             )
             connection.executemany(

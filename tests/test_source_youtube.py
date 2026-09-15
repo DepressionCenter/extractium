@@ -741,6 +741,22 @@ def test_the_caption_library_is_only_needed_when_a_transcript_is_fetched(monkeyp
         yc.transcript_reader()
 
 
+def test_the_caption_reader_accepts_the_session_a_build_makes():
+    """
+    The build's session is the automatic one wrapped in the pacer, and
+    the caption library sets a header on whatever session it is given.
+    """
+    pytest.importorskip("youtube_transcript_api")
+    from extractium.core import transport
+
+    session = transport.make_session(transport.TRANSPORT_AUTO)
+    try:
+        yc.transcript_reader(session)
+        assert session.headers["Accept-Language"] == "en-US"
+    finally:
+        session.close()
+
+
 ### The Store ###
 
 def test_a_transcript_is_stored_and_read_back():

@@ -4,15 +4,18 @@ plugin the web source consults for teamdynamix.* URLs. It owns the
 portal's content selectors (#divMainContent, #questionsContent), the
 "Article - " and "Question Detail - " title prefix stripping, breadcrumb
 categories, and the portal's exclude patterns (login, print, file,
-person, tag, and category views, and narrowed question listings). It is
-not a crawler: link discovery stays in extractium.sources.web. See docs/extractium-spec.md section 5.
+person, tag, and category views, and narrowed question listings). It
+also names where the portal lists an article's attachments and the
+address a document reader fetches each one from. It is not a
+crawler: link discovery stays in extractium.sources.web. See
+docs/extractium-spec.md section 5.
 
 This file is part of Extractium™
 extractium/sources/tdx.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +37,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-04"
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from extractium.core.models import Extraction
 from extractium.sources.generic import UNTITLED, page_title, select_content
@@ -72,6 +75,36 @@ TDX_FULL_TITLE_META = "og:title"
 # the page itself.
 TDX_BREADCRUMB_SELECTORS = ("#tdBreadcrumb", ".breadcrumb")
 
+# An article's attachments are served at one address that names the
+# file by identifier alone, so nothing in it says "pdf" or "docx":
+# /Shared/FileOpen?AttachmentID=<id>&ItemID=<article>&ItemComponent=26.
+# With a document reader on, the crawl fetches these as files and reads
+# the ones a reader handles; with none, they stay off the crawl, since
+# the answer is never a page. The server names the file in its answer,
+# and that name is what the document is titled by when the file itself
+# offers none.
+TDX_ATTACHMENT_PATTERNS = (r"/FileOpen(?:[/?#]|$)",)
+TDX_ATTACHMENT_RE = re.compile(TDX_ATTACHMENT_PATTERNS[0])
+
+# The portal links each attachment twice, once to view (IsInline=-1) and
+# once to download (IsInline=0), and serves the same bytes at the address
+# with no flag at all, with the file name in the answer. That flagless
+# address is the one the crawl visits.
+TDX_ATTACHMENT_INLINE_PARAMETER = "isinline"
+
+# The list of an article's attachments is not in the article's page. The
+# portal's script fetches it from the attachment controller named in the
+# page's own script, for the article's item and component numbers, and
+# puts the fragment it gets back into an empty container. The fragment's
+# links are the FileOpen addresses above, so the crawl fetches the same
+# listing and reads its links like any page's. The controller path is
+# page content, so it is resolved against the page and then held to
+# the crawl's scope like any other link.
+TDX_ATTACHMENT_CONTROLLER_RE = re.compile(r"baseControllerUrl:\s*'([^']+)'")
+TDX_ATTACHMENT_ITEM_RE = re.compile(r"\bitemId:\s*(\d+)")
+TDX_ATTACHMENT_COMPONENT_RE = re.compile(r"\bcomponentId:\s*(\d+)")
+TDX_ATTACHMENT_LISTING = "{controller}/RenderAttachmentSection?itemID={item}&componentID={component}"
+
 # Portal pages with no article content: sign-in, print views, file
 # downloads, and tag listings.
 # The portal identifies a tag or a category in a query string, as
@@ -103,7 +136,7 @@ PARAMETER_START = r"[/?&]"
 TDX_CRAWL_EXCLUDE_PATTERNS = (
     r"/Login\.aspx",
     r"/PrintArticle\?ID=",
-    r"/FileOpen(?:[/?#]|$)",
+    *TDX_ATTACHMENT_PATTERNS,
     r"/FileDownload(?:[/?#]|$)",
     r"/Questions\?(?:[^#]*&)?(?:CategoryID|TagID)=(?!0(?:[&#]|$))",
     r"/Questions\?(?:[^#]*&)?Filter=",
@@ -225,6 +258,7 @@ class TdxHandler:
     source_type = "kb"
     default_crawl_exclude_patterns = TDX_CRAWL_EXCLUDE_PATTERNS
     default_index_exclude_patterns = TDX_INDEX_EXCLUDE_PATTERNS
+    document_url_patterns = TDX_ATTACHMENT_PATTERNS
 
     def matches(self, url):
         """True for any URL on a teamdynamix.* host."""
@@ -261,6 +295,52 @@ class TdxHandler:
     def expects_html(self, url):
         """Every portal page is HTML."""
         return True
+
+    def canonical_url(self, url):
+        """
+        One address per attachment: the view link, the download link,
+        and the flagless address all serve the same file, and the
+        flagless one is what is visited. Every other address is left
+        as written.
+        """
+        if not TDX_ATTACHMENT_RE.search(url):
+            return url
+        parsed = urlparse(url)
+        query = [
+            (name, value) for name, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if name.lower() != TDX_ATTACHMENT_INLINE_PARAMETER
+        ]
+        return urlunparse(parsed._replace(query=urlencode(query)))
+
+    def attachment_listing_urls(self, soup, url):
+        """
+        The address the portal lists this article's attachments at, read
+        from the script that would load them into the page, or nothing
+        for a page without that script (a listing, a question, or a
+        portal page of another kind).
+
+        Args:
+            soup (bs4.BeautifulSoup): the parsed page.
+            url (str): the page's address, which the controller path is
+                resolved against.
+
+        Returns:
+            tuple[str, ...]: at most one address.
+        """
+        for script in soup.find_all("script"):
+            text = script.string or script.get_text()
+            if "AttachmentHandler" not in text:
+                continue
+            controller = TDX_ATTACHMENT_CONTROLLER_RE.search(text)
+            item = TDX_ATTACHMENT_ITEM_RE.search(text)
+            component = TDX_ATTACHMENT_COMPONENT_RE.search(text)
+            if controller and item and component:
+                listing = TDX_ATTACHMENT_LISTING.format(
+                    controller=controller.group(1).rstrip("/"),
+                    item=item.group(1), component=component.group(1),
+                )
+                return (urljoin(url, listing),)
+        return ()
 
     def extract(self, soup, url):
         """

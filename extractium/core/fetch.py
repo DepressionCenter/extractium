@@ -33,6 +33,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
+import email.message
 import hashlib
 import re
 import time
@@ -472,6 +473,34 @@ def _content_type_fits(content_type, expect_html):
     return lowered.startswith("text/") and "text/html" not in lowered
 
 
+def served_file_name(response):
+    """
+    The file name an answer's Content-Disposition header gives, without
+    any folder part or unprintable character, or an empty string when
+    the header is absent or names no file.
+
+    A server that hands out files by identifier names the file only
+    here, so this is what such a document is titled by when the file
+    itself offers no title. The header is untrusted input; it is used
+    as a display name and never as a path.
+
+    Args:
+        response: any object with a `headers` mapping.
+
+    Returns:
+        str: the bare file name, or an empty string.
+    """
+    headers = getattr(response, "headers", None) or {}
+    value = headers.get("content-disposition") or headers.get("Content-Disposition") or ""
+    if not value:
+        return ""
+    message = email.message.Message()
+    message["Content-Disposition"] = value
+    name = message.get_filename() or ""
+    name = name.replace("\\", "/").rsplit("/", 1)[-1]
+    return "".join(ch for ch in name if ch.isprintable()).strip()
+
+
 def _mismatch_line(r, url, content_type, expected):
     """
     The progress line for an answer of the wrong kind, naming where the
@@ -533,7 +562,8 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html, progress=None)
 def _store_fetched_document(r, url, session, cache_meta, max_bytes, progress=None):
     """
     Checks that a document answer is not a web page and not over the
-    ceiling, writes the bytes to the cache, and records fresh metadata.
+    ceiling, writes the bytes to the cache, and records fresh metadata,
+    with the file name the server gave when it gave one.
 
     Args:
         r (requests.Response): the successful (200) response.
@@ -558,6 +588,9 @@ def _store_fetched_document(r, url, session, cache_meta, max_bytes, progress=Non
         return None
     cache.save_document_bytes(url, data)
     _record_fetch(url, session, cache_meta, r, hashlib.sha256(data).hexdigest())
+    name = served_file_name(r)
+    if name:
+        cache_meta[url]["name"] = name
     return data
 
 

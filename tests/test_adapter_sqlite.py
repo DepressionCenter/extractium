@@ -32,6 +32,7 @@ __date__ = "2026-09-09"
 
 import json
 import sqlite3
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -282,3 +283,25 @@ def test_dropping_local_content_leaves_every_table_consistent(tmp_path, mixed):
         path,
         "SELECT COUNT(*) FROM bm25_postings WHERE cid >= (SELECT COUNT(*) FROM children);",
     )[0][0] == 0
+
+def test_the_enrichment_columns_are_null_until_a_pass_fills_them(tmp_path, compendium):
+    path = write(compendium, tmp_path)
+
+    rows = query(path, "SELECT summary, tags, keywords, enriched_at, enrich_ver FROM parents;")
+
+    assert rows and all(row == (None,) * 5 for row in rows)
+
+
+def test_an_enriched_section_is_stored_with_its_lists_as_json(tmp_path, compendium):
+    enriched = replace(
+        compendium.parents[0], summary="About sleep.", tags=("research",), keywords=("sleep study",),
+        enriched_at="2026-09-15T00:00:00Z", enrich_ver="test-1",
+    )
+    path = write(replace(compendium, parents=(enriched, *compendium.parents[1:])), tmp_path)
+
+    (row,) = query(path, "SELECT summary, tags, keywords, enriched_at, enrich_ver FROM parents WHERE pid = 0;")
+
+    assert row[0] == "About sleep."
+    assert json.loads(row[1]) == ["research"]
+    assert json.loads(row[2]) == ["sleep study"]
+    assert row[3:] == ("2026-09-15T00:00:00Z", "test-1")

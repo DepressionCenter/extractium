@@ -261,7 +261,7 @@ What is read from a PDF:
 
 - The text of each page, in order. A page becomes one paragraph, or several where the file's own layout leaves blank lines.
 - Headings that say where you are. A PDF with bookmarks gets a heading from each bookmark, placed before the page it points to with the page number appended, so a manual is cut at its chapters and a citation names the page. A PDF without bookmarks gets a `Page N` heading before every page, unless it has only one.
-- The title, subject, and keywords from the file's document properties. The subject and keywords open the indexed text, as for the other formats. The title is the properties title, then the first line of the first page when it is short, then the file name; a heading the reader made from a page number is never a title.
+- The title, subject, and keywords from the file's document properties. The subject and keywords open the indexed text, as for the other formats. The title is the properties title, then the first line of the first page when it is short, then the file name; a heading the reader made from a page number is never a title. A properties title that ends in a file extension, as a PDF made from a Word file often has, loses the extension.
 
 What is not read:
 
@@ -287,6 +287,8 @@ sources:
 ```
 
 A file is never followed for links, so a document on another host never starts a crawl of that host. The same file linked under two addresses, such as with and without a download flag, is fetched twice but indexed once. A file larger than 20,000,000 bytes is skipped and named. A file that answers with a web page, such as a sign-in page, is skipped with the landing address named.
+
+On a TeamDynamix portal, the list of files attached to an article is not in the article's page; the portal loads it separately. With `read_documents` on, the crawl fetches that list for each article, one request per article that counts as a page, and reads the files it links. Each file is served at an address that names it by identifier alone, such as `Shared/FileOpen?AttachmentID=...&ItemID=...`, so the format is decided from the bytes, and the document is titled by the file name the portal sends when the file itself carries no title. The portal links every file twice, to view and to download; the crawl fetches it once. With the setting off, neither the list nor the files are fetched.
 
 On a `local` source, turning the setting on adds `**/*.docx`, `**/*.odt`, `**/*.rtf`, and `**/*.pdf` to the default globs. A document file your own globs select while the setting is off is skipped with a line saying so, never read as text.
 

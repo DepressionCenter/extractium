@@ -10,7 +10,7 @@ extractium/adapters/container.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -39,6 +39,7 @@ import numpy as np
 
 from extractium import __version__
 from extractium.adapters.base import output_compendium, prepare_out_dir
+from extractium.core.models import ENRICHMENT_FIELDS
 
 ### Constants ###
 
@@ -109,6 +110,40 @@ def embedding_header(embedding):
     return header
 
 
+def parent_record(parent):
+    """
+    One parent as the header writes it: every field the format lists on
+    every parent, and an enrichment field only when a pass has set it,
+    so a file with no enrichment is laid out exactly as before there was
+    any.
+
+    Args:
+        parent (extractium.core.models.Parent): the section.
+
+    Returns:
+        dict: the parent's fields, in the order docs/container-format.md
+        lists them.
+    """
+    record = {
+        "id": parent.id,
+        "t": parent.t,
+        "x": parent.x,
+        "u": parent.u,
+        "host": parent.host,
+        "source_type": parent.source_type,
+        "content_type": parent.content_type,
+        "source_label": parent.source_label,
+        "categories": list(parent.categories),
+        "local": parent.local,
+        "weight": parent.weight,
+    }
+    for field in ENRICHMENT_FIELDS:
+        value = getattr(parent, field)
+        if value is not None:
+            record[field] = list(value) if isinstance(value, tuple) else value
+    return record
+
+
 def build_header(compendium):
     """
     The complete JSON header of one container.
@@ -131,22 +166,7 @@ def build_header(compendium):
         "sourceCount": compendium.source_count,
         "embedding": embedding_header(compendium.embedding),
         "offsetUnit": OFFSET_UNIT,
-        "parents": [
-            {
-                "id": parent.id,
-                "t": parent.t,
-                "x": parent.x,
-                "u": parent.u,
-                "host": parent.host,
-                "source_type": parent.source_type,
-                "content_type": parent.content_type,
-                "source_label": parent.source_label,
-                "categories": list(parent.categories),
-                "local": parent.local,
-                "weight": parent.weight,
-            }
-            for parent in compendium.parents
-        ],
+        "parents": [parent_record(parent) for parent in compendium.parents],
         "children": {
             "pid": list(compendium.children.pid),
             "start": list(compendium.children.start),

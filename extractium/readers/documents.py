@@ -280,23 +280,27 @@ def is_document_path(path):
     return suffix in DOCUMENT_EXTENSIONS or suffix in UNREADABLE_EXTENSIONS
 
 
-def name_from_url(url):
+def name_from_url(url, served_as=""):
     """
-    A display name for a document taken from its address: the file's
+    A display name for a document: the name the server gave the file
+    when it gave one, else a name taken from its address: the file's
     own name when the address carries one after the stored name, else
-    the last path segment, without the extension and with word
-    separators turned into spaces.
+    the last path segment. The extension is dropped and word separators
+    become spaces either way.
 
     Args:
         url (str): the document's address.
+        served_as (str): the file name the server named in its answer,
+            or an empty string. A portal that serves attachments by
+            identifier names the file this way and nowhere else.
 
     Returns:
         str: for example "Youth Mental Health Resources", or "Document"
-        when the address holds no usable name.
+        when neither holds a usable name.
     """
     segments = [unquote(segment) for segment in urlparse(url).path.split("/") if segment]
-    name = ""
-    for position, segment in enumerate(segments):
+    name = served_as.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    for position, segment in enumerate(segments if not name else ()):
         if re.search(r"\.(" + "|".join(DOCUMENT_EXTENSIONS) + r")$", segment, re.I):
             # The segment after the stored name is the file's own name
             # when a content-delivery network serves it that way.
@@ -392,11 +396,22 @@ def _read_pdf_isolated(data):
         raise DocumentError(str(e)) from None
 
 
+def without_document_extension(title):
+    """
+    A declared title with a trailing document extension dropped. A PDF
+    made from a Word file often declares the Word file's name as its
+    title, and the extension is no part of what the file is called.
+    """
+    stem = re.sub(r"\.(" + "|".join(DOCUMENT_EXTENSIONS) + r")$", "", title.strip(), flags=re.I)
+    return stem.strip()
+
+
 def document_title(read, fallback):
     """
     The title a document is indexed under: the first heading in its
-    text, else the title its properties declare, else its first line
-    when that is short enough to be one, else the fallback.
+    text, else the title its properties declare, without a trailing
+    file extension, else its first line when that is short enough to
+    be one, else the fallback.
 
     A heading in the text comes first because it is what a reader of
     the file sees, and a properties title can be left over from the
@@ -426,7 +441,8 @@ def document_title(read, fallback):
         if len(stripped) <= MAX_TITLE_CHARS and not stripped.startswith("|"):
             first_line = html.unescape(stripped.lstrip("\\"))
         break
-    return read.properties.get("title") or first_line or fallback
+    declared = without_document_extension(read.properties.get("title") or "")
+    return declared or first_line or fallback
 
 
 def content_node(markdown):

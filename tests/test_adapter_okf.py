@@ -35,6 +35,7 @@ __date__ = "2026-09-11"
 
 import pathlib
 import re
+from dataclasses import replace
 
 import pytest
 import yaml
@@ -623,3 +624,27 @@ def test_a_concept_file_the_tool_wrote_for_a_page_no_longer_indexed_is_removed(
     assert by_hand.exists()
     assert (folder / "index.md").exists() and (folder / "log.md").exists()
     assert all(path.exists() for path in kept)
+
+def test_what_an_enrichment_pass_wrote_reaches_the_front_matter(tmp_path, fake_embed_chunks_core):
+    compendium = one_page_compendium(fake_embed_chunks_core, source_label="Staff Handbook")
+    first = replace(
+        compendium.parents[0], summary="Leave rules in one page.", tags=("policy",),
+        keywords=("annual leave", "sick leave"),
+    )
+
+    folder = bundle_of(replace(compendium, parents=(first, *compendium.parents[1:])), tmp_path)
+
+    fields, _ = front_matter_of(concept_files(folder)[0])
+    assert fields["description"] == "Leave rules in one page."
+    assert fields["tags"][-1] == "policy"
+    assert fields["keywords"] == ["annual leave", "sick leave"]
+    assert list(fields) == ["type", "title", "description", "resource", "tags", "keywords", "generated", "sources"]
+
+
+def test_the_front_matter_has_no_keywords_until_a_pass_writes_some(tmp_path, fake_embed_chunks_core):
+    compendium = one_page_compendium(fake_embed_chunks_core)
+
+    fields, _ = front_matter_of(concept_files(bundle_of(compendium, tmp_path))[0])
+
+    assert "keywords" not in fields
+    assert list(fields) == ["type", "title", "description", "resource", "tags", "generated", "sources"]

@@ -356,3 +356,26 @@ def test_protocols_are_distinct_kinds():
     """An adapter must never be mistaken for a source, whatever its name."""
     assert not isinstance(GoodAdapter(), models.Source)
     assert not isinstance(GoodSource({}), models.Adapter)
+
+def test_parent_enrichment_fields_are_none_until_a_pass_fills_them():
+    parent = make_parent()
+
+    assert (parent.summary, parent.tags, parent.keywords, parent.enriched_at, parent.enrich_ver) == (None,) * 5
+
+
+def test_parent_enrichment_lists_become_tuples_and_bad_values_are_refused():
+    parent = make_parent(
+        summary="About sleep research.", tags=["sleep", "research"], keywords=["smartwatch"],
+        enriched_at="2026-09-15T00:00:00Z", enrich_ver="test-1",
+    )
+
+    assert parent.tags == ("sleep", "research")
+    assert parent.keywords == ("smartwatch",)
+    with pytest.raises(ValueError, match="tags"):
+        make_parent(tags="sleep")
+    with pytest.raises(ValueError, match="keywords"):
+        make_parent(keywords=[1, 2])
+    with pytest.raises(ValueError, match="summary"):
+        make_parent(summary=["not text"])
+    with pytest.raises(ValueError, match="enriched_at"):
+        make_parent(enriched_at=1757894400)

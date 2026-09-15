@@ -44,6 +44,7 @@ from bs4 import BeautifulSoup
 # any test monkeypatches, so (unlike extractium.core.cache from
 # extractium.core.fetch) a direct value import is safe here.
 from extractium.core.fetch import normalise
+from extractium.core.models import ENRICHMENT_FIELDS
 
 ### Constants ###
 
@@ -340,7 +341,8 @@ def chunk_document(document):
     Returns:
         tuple[list[dict], list[dict]]: (parents, children). Every parent
         dict holds id, t, x, u, host, source_type, content_type,
-        source_label, categories, local, and weight; every child is a copy of its
+        source_label, categories, local, weight, and the enrichment
+        fields, each None until a pass fills it; every child is a copy of its
         parent with its own `x`, its `start` and `end` offsets into the
         parent's text, and a page-local `pid`.
     """
@@ -355,4 +357,6 @@ def chunk_document(document):
         parent["categories"] = tuple(document.categories)
         parent["local"] = document.local
         parent["weight"] = document.weight
+        for field in ENRICHMENT_FIELDS:
+            parent[field] = None
     return parents, _children_for(parents)

@@ -1258,6 +1258,127 @@ def test_reading_documents_drops_their_extensions_from_both_default_exclude_list
     assert r"\.xlsx$" in on.crawl_exclude_patterns and r"\.doc$" in on.crawl_exclude_patterns
 
 
+TDX_ORIGIN = "https://teamdynamix.example.edu"
+TDX_SEED = f"{TDX_ORIGIN}/TDClient/210/ExampleOrg/Home"
+TDX_CONTROLLER = "/TDClient/210/ExampleOrg/Shared/Attachments"
+TDX_LISTING = f"{TDX_ORIGIN}{TDX_CONTROLLER}/RenderAttachmentSection?itemID=10603&componentID=26"
+# The flagless address the crawl visits; the portal links it with
+# IsInline=-1 (view) and IsInline=0 (download) as well.
+TDX_ATTACHMENT = (
+    f"{TDX_ORIGIN}/TDClient/210/ExampleOrg/Shared/FileOpen"
+    "?AttachmentID=8b649680-e1ff-4626-9912-4f3314f8f5ed&ItemID=10603&ItemComponent=26"
+)
+# A Word file with no heading, no properties, and an opening line too
+# long to serve as a title, so the only name it can take is the served one.
+UNTITLED_DOCX = document_files.make_docx(
+    document_files.word_paragraph("This attachment opens with a long sentence. " * 5)
+)
+
+
+def portal_article(controller=TDX_CONTROLLER):
+    """
+    An article as the portal serves it: the body, an empty attachment
+    container, and the script that would fill the container from the
+    attachment controller. No attachment link is in the page itself.
+"""
+    script = (
+        "<script>$(function () { var attachmentHandler = new TeamDynamix.AttachmentHandler({"
+        " containerSelector: '.js-article-attachments',"
+        f" baseControllerUrl: '{controller}',"
+        " antiForgeryToken: 'EXAMPLE_TOKEN', itemId: 10603, componentId: 26, readOnly: false }); });</script>"
+    )
+    return html_response(
+        f"<html><head><title>Article - MiNap</title>{script}</head><body>"
+        '<div id="divMainContent"><p>Synthetic article body, long enough to clear the sixty character minimum.</p></div>'
+        '<div id="divAttachments" class="js-article-attachments"></div></body></html>'
+    )
+
+
+def attachment_listing():
+    """The fragment the portal answers with: every file linked to view and to download."""
+    return html_response(
+        '<div class="panel"><div class="media">'
+        f'<a href="{TDX_ATTACHMENT}&amp;IsInline=-1">Sample Data manager Job Description.docx</a> '
+        f'<a href="{TDX_ATTACHMENT}&amp;IsInline=0">Download</a></div></div>'
+    )
+
+
+def test_a_portal_article_s_attachments_are_listed_fetched_once_and_named_by_the_portal(
+    isolated_core_cache, fake_session_factory
+):
+    """
+    The list of attachments is fetched from where the article's script
+    says it is; each file, linked twice there, is visited once at its
+    flagless address, read from its bytes, and named by the answer's
+    Content-Disposition header.
+    """
+    session = fake_session_factory({
+        f"{TDX_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        TDX_SEED: portal_article(),
+        TDX_LISTING: attachment_listing(),
+        TDX_ATTACHMENT: FakeResponse(200, {
+            "Content-Type": DOCUMENT_TYPE,
+            "Content-Disposition": 'attachment; filename="Sample Data manager Job Description.docx"',
+        }, content=UNTITLED_DOCX),
+    })
+    lines = []
+
+    documents = crawl(make_source(TDX_SEED, read_documents=True), session, progress=lines.append)
+
+    article, attachment = documents
+    assert article.title == "MiNap"
+    assert attachment.url == TDX_ATTACHMENT
+    assert attachment.title == "Sample Data Manager Job Description"
+    assert attachment.source_type == "kb"
+    assert attachment.content_type == "text"
+    assert "       document: Sample Data Manager Job Description" in lines
+    calls = [c["url"] for c in session.calls]
+    assert calls.count(TDX_LISTING) == 1
+    assert calls.count(TDX_ATTACHMENT) == 1
+    assert not any("IsInline" in call for call in calls)
+
+
+def test_a_portal_s_attachment_list_is_not_fetched_without_a_reader(
+    isolated_core_cache, fake_session_factory
+):
+    session = fake_session_factory({
+        f"{TDX_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        TDX_SEED: portal_article(),
+    })
+
+    documents = crawl(make_source(TDX_SEED), session)
+
+    assert [d.title for d in documents] == ["MiNap"]
+    assert TDX_LISTING not in [c["url"] for c in session.calls]
+
+
+def test_an_attachment_list_a_page_names_off_the_portal_is_not_fetched(
+    isolated_core_cache, fake_session_factory
+):
+    """The controller path is page content, so it is held to the crawl's scope like any link."""
+    session = fake_session_factory({
+        f"{TDX_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        TDX_SEED: portal_article(controller="https://files.example.net/Shared/Attachments"),
+    })
+
+    documents = crawl(make_source(TDX_SEED, read_documents=True), session)
+
+    assert [d.title for d in documents] == ["MiNap"]
+    assert not any("files.example.net" in c["url"] for c in session.calls)
+
+
+def test_reading_documents_sets_the_portal_s_attachment_exclusion_aside():
+    off = make_source(TDX_SEED)
+    on = make_source(TDX_SEED, read_documents=True)
+    (attachment,) = tdx.TDX_ATTACHMENT_PATTERNS
+
+    assert attachment in off.crawl_exclude_patterns and attachment in off.index_exclude_patterns
+    assert attachment not in on.crawl_exclude_patterns and attachment not in on.index_exclude_patterns
+    # Every other portal exclusion stays, reader or no reader.
+    assert r"/FileDownload(?:[/?#]|$)" in on.crawl_exclude_patterns
+    assert r"/Login\.aspx" in on.crawl_exclude_patterns
+
+
 class _FoldingHandler:
     """A handler that folds a page's tracking parameter away, so one page has one address."""
 
