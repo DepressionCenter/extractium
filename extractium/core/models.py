@@ -35,6 +35,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
 import re
+import urllib.parse
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import ClassVar, Protocol, runtime_checkable
@@ -105,14 +106,26 @@ CONTENT_TYPES = frozenset({
 # output file.
 LOCAL_URL_PREFIX = "local:"
 
-# A parent id is the first 16 hexadecimal characters of a SHA-1 digest.
+# The query parameter a video's address carries the moment in, and the
+# source type whose addresses carry it. A video's sections are each
+# addressed at the moment they begin, which is what makes a citation
+# open the video at the quoted words; anything that works per page
+# wants the video itself, so it drops this one parameter and keeps the
+# rest. Scoped to that source type because "t" means something else
+# elsewhere, and dropping it from another site's address would break
+# the link.
+MOMENT_PARAM = "t"
+MOMENT_SOURCE_TYPE = "youtube"
+
 # The fields an enrichment pass fills on a section: a summary, tags,
 # keywords, when the pass ran (UTC, ISO 8601), and which version of it.
 # Every section carries them, None until a pass has written them, so
 # an adapter writes a value when there is one and nothing when there
-# is not, and the container's layout is the same either way.
+# is not, and the container's layout is the same either way. The
+# keyword step (extractium.core.keywords) fills all but the summary.
 ENRICHMENT_FIELDS = ("summary", "tags", "keywords", "enriched_at", "enrich_ver")
 
+# A parent id is the first 16 hexadecimal characters of a SHA-1 digest.
 PARENT_ID_RE = re.compile(r"^[0-9a-f]{16}$")
 
 # Storage types the container format allows for vector components.
@@ -124,6 +137,36 @@ UTC_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$
 # A progress callback receives one short human-readable line per event.
 # The caller decides where it goes: standard error, a CI log, or nowhere.
 Progress = Callable[[str], None]
+
+
+def page_address_of(url, source_type):
+    """
+    The address of the page a section belongs to.
+
+    For almost every source this is the section's own address, because
+    a page and its sections share one. A video is the exception: each
+    stretch of a transcript is addressed at the moment it begins, so
+    one video has as many addresses as it has sections, and this folds
+    them back into the video.
+
+    Args:
+        url (str): the section's address.
+        source_type (str): the section's source type.
+
+    Returns:
+        str: the page's address. Unchanged for every source but a video.
+    """
+    if source_type != MOMENT_SOURCE_TYPE:
+        return url
+    split = urllib.parse.urlsplit(url)
+    kept = [
+        (name, value)
+        for name, value in urllib.parse.parse_qsl(split.query, keep_blank_values=True)
+        if name != MOMENT_PARAM
+    ]
+    return urllib.parse.urlunsplit(
+        (split.scheme, split.netloc, split.path, urllib.parse.urlencode(kept), split.fragment)
+    )
 
 
 def _require_text(value, name):

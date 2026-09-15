@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: How to keep a knowledge base current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
@@ -55,10 +55,10 @@ You need Python 3.10 or newer and the script for your operating system, either o
 
 The script downloads Extractium™ when it is on its own, creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium™ into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes, and it stops at 25 pages so you can check the page list in `dist/llms.txt` before building everything. Later runs reuse the environment and the model and build the whole site.
 
-The lock file holds the runtime dependencies only, so a build made this way reads a repository's documentation and records its source files by name without reading what is inside them. To analyze code on a schedule as well, regenerate the lock file with the optional parser set included:
+The lock file carries the runtime dependencies and four optional extras: the code parsers, the caption library, the PDF reader, and the keyword extractor. A build made this way therefore analyzes code, reads stored transcripts, reads PDF files, and names every section with keywords. To regenerate the lock file after changing a dependency, run the command recorded in its header:
 
 ```bash
-uv pip compile pyproject.toml --extra code --universal --python-version 3.11 --generate-hashes -o requirements-lock.txt
+uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashes --extra code --extra youtube --extra pdf --extra keywords -o requirements-lock.txt
 ```
 
 Keep the header at the top of the file when you do. The command that produced the list is recorded on the line below it.

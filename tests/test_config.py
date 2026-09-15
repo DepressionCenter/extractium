@@ -222,6 +222,20 @@ def test_respect_robots_txt_must_be_a_boolean():
         config.config_from_mapping(minimal(respect_robots_txt="yes"))
 
 
+def test_keywords_default_on():
+    assert config.config_from_mapping(minimal()).keywords is True
+    assert config.DEFAULT_KEYWORDS is True
+
+
+def test_keywords_can_be_switched_off():
+    assert config.config_from_mapping(minimal(keywords=False)).keywords is False
+
+
+def test_keywords_must_be_a_boolean():
+    with pytest.raises(config.ConfigError, match="keywords must be true or false, not str"):
+        config.config_from_mapping(minimal(keywords="yes"))
+
+
 def test_phi_lint_must_be_a_known_mode():
     with pytest.raises(config.ConfigError, match="phi_lint must be one of all, local, off"):
         config.config_from_mapping(minimal(phi_lint="always"))

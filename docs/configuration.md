@@ -88,6 +88,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 | `transport` | `auto`, `browser`, or `plain` | `auto` | How the crawler opens its connections. `auto` makes an ordinary request and, only when the answer is a bot-protection challenge, retries once over a browser-shaped handshake, keeping that choice for the host. `browser` uses the handshake from the first request. `plain` never does. The crawler's own `user_agent` is sent either way. See "How a site behind bot protection is read" below. |
 | `rebuild` | `full` or `incremental` | `full` | What happens to a page this build did not see. `full` publishes exactly what was read. `incremental` also keeps the pages of the last build that this one did not reach, unless the server confirmed them gone. See "Full and incremental rebuilds" below. |
 | `phi_lint` | `local`, `all`, or `off` | `local` | Which content the check for protected health information scans. |
+| `keywords` | true or false | `true` | Whether every section is named with keywords and every page with tags, from the text alone. Needs the `keywords` extra; without it the build says so once and goes on. See "Keywords and tags" below. |
 | `github_owners` | list of text | empty | Extra GitHub accounts this build may follow links into. See "Which GitHub accounts a build reads" below. |
 
 Quote the value when you turn the check off (`phi_lint: 'off'`). YAML reads a bare `off` as the word false, and the build refuses it with a message naming the setting.
@@ -656,6 +657,32 @@ The Open Knowledge Format output follows the compendium in both modes: a concept
 
 ```yaml
 rebuild: incremental
+```
+
+
+## Keywords and tags
+
+Every section is named with up to five keywords, and every page with tags, so a reader can see what a section is about without reading it and can filter pages by subject. No language model is involved. The build works from the text and from the vectors it computes anyway:
+
+1. A statistical extractor, YAKE, proposes up to fifteen candidate phrases of one to three words from the section's own text. It scores a phrase by how often its words occur, where they first appear, whether they are capitalized, and how varied the words around them are.
+2. The candidates are embedded with the same model the build uses for search, and ranked by how close each one sits to the section's own vector. The five closest that do not repeat one another are the section's keywords, closest first: a phrase whose words all lie inside a phrase already chosen, or that contains one, is passed over. That is why a phrase that names the subject outranks one that merely occurs often.
+3. A page's tags are the categories its source recorded, outermost first, then the keywords at least half of its sections share, the most widely shared first, up to eight. A one-section page is tagged with its categories and its keywords.
+
+Where they appear:
+
+| Output | What it carries |
+|---|---|
+| Container | `keywords` and `tags` on every section, with `enriched_at` (UTC) and `enrich_ver`. |
+| SQLite | The same four columns on `parents`, the lists as JSON arrays. |
+| Open Knowledge Format | The tags in each concept file's tag list, and a `keywords` list in its front matter. |
+| `llms.txt` | Each page's entry ends with `Keywords: ...`: the page's shared keywords or, when its sections share none, the first section's. |
+
+What was found is stored under `<cache_dir>/enrichment/keywords.json`, keyed by section, with a digest of the text it came from. A rebuild names afresh only the sections whose text changed, and embeds nothing for the rest.
+
+The extractor is the `keywords` extra. The build script installs it from the lock file; a developer install names it (`pip install -e ".[keywords]"`). Without it, the build prints one line saying so and goes on, and every output leaves the fields empty. To switch the step off:
+
+```yaml
+keywords: false
 ```
 
 

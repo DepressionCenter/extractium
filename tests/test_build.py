@@ -269,6 +269,57 @@ def test_build_compendium_names_the_index_after_the_first_page_unless_told_other
     assert named.name == "Example Org"
 
 
+class RecordingKeywordPass:
+    """Stands in for the keyword step: writes fixed fields and records what it was given."""
+
+    def __init__(self):
+        self.calls = []
+
+    def run(self, sections, children, vecs, embedder, computed_at, progress):
+        self.calls.append((len(sections), len(children), vecs.shape, computed_at))
+        for section in sections:
+            section["keywords"] = ("peer support",)
+            section["tags"] = ("Guides", "peer support")
+            section["enriched_at"] = computed_at
+            section["enrich_ver"] = "keywords-test"
+        progress("named")
+
+
+def test_build_compendium_runs_the_keyword_step_after_compaction_and_keeps_what_it_wrote(
+    fixtures_dir, fake_embed_chunks_core
+):
+    documents = [
+        document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team"),
+        document_from_fixture(fixtures_dir, "page_boilerplate_b.html", "https://example.org/project"),
+    ]
+    step = RecordingKeywordPass()
+    lines = []
+
+    compendium = build.build_compendium(
+        documents, embedder=fake_embed_chunks_core, built_at="2026-01-02T03:04:05Z",
+        keywords=step, progress=lines.append,
+    )
+
+    # The step saw the compacted sections and the surviving windows, one
+    # float vector per window, and the build time the records carry.
+    assert step.calls == [(len(compendium.parents), len(compendium.children.pid), (len(compendium.children.pid), 384), "2026-01-02T03:04:05Z")]
+    assert all(parent.keywords == ("peer support",) for parent in compendium.parents)
+    assert all(parent.tags == ("Guides", "peer support") for parent in compendium.parents)
+    assert all(parent.enriched_at == "2026-01-02T03:04:05Z" for parent in compendium.parents)
+    assert all(parent.enrich_ver == "keywords-test" for parent in compendium.parents)
+    assert lines.index("named") > lines.index(next(line for line in lines if line.startswith("Kept ")))
+
+
+def test_build_compendium_leaves_the_enrichment_fields_alone_without_a_keyword_step(
+    fixtures_dir, fake_embed_chunks_core
+):
+    document = document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team")
+
+    compendium = build.build_compendium([document], embedder=fake_embed_chunks_core)
+
+    assert all(parent.keywords is None and parent.tags is None for parent in compendium.parents)
+
+
 def test_build_compendium_reports_each_stage_through_the_progress_callback(
     fixtures_dir, fake_embed_chunks_core
 ):

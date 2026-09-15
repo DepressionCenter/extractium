@@ -345,3 +345,65 @@ def test_write_keeps_local_content_out_unless_the_output_opted_in(
         assert "Internal note" not in path.read_text(encoding="utf-8")
         assert "local:" not in path.read_text(encoding="utf-8")
     assert any("Internal note" in path.read_text(encoding="utf-8") for path in included)
+
+
+# ---------------------------------------------------------------------------
+# Keywords
+# ---------------------------------------------------------------------------
+
+def a_parent(**fields):
+    """One section with every required field, plus whatever the test sets."""
+    from extractium.core.models import Parent
+
+    values = {
+        "id": "0123456789abcdef", "t": "Page -- Section", "x": "Some text.",
+        "u": "https://example.org/page", "host": "example.org", "source_type": "web",
+        "content_type": "page", "source_label": "Website",
+    }
+    values.update(fields)
+    return Parent(**values)
+
+
+def with_enrichment(compendium, **fields):
+    """The same compendium with every section carrying the given enrichment fields."""
+    parents = tuple(dataclasses.replace(parent, **fields) for parent in compendium.parents)
+    return dataclasses.replace(compendium, parents=parents)
+
+
+def test_index_entries_end_with_the_pages_shared_keywords(fixtures_dir, fake_embed_chunks_core):
+    compendium = with_enrichment(
+        sample_compendium(fixtures_dir, fake_embed_chunks_core),
+        categories=("Guides",), tags=("Guides", "peer support", "sleep"), keywords=("other",),
+    )
+
+    entries = [line for line in llmstxt.render_index(compendium).splitlines() if line.startswith("- ")]
+
+    assert entries
+    assert all(line.endswith(" Keywords: peer support, sleep.") for line in entries)
+
+
+def test_index_entries_fall_back_to_the_first_sections_keywords_when_the_page_shares_none(
+    fixtures_dir, fake_embed_chunks_core
+):
+    compendium = with_enrichment(
+        sample_compendium(fixtures_dir, fake_embed_chunks_core),
+        categories=("Guides",), tags=("Guides",), keywords=("caffeine", "screens"),
+    )
+
+    entries = [line for line in llmstxt.render_index(compendium).splitlines() if line.startswith("- ")]
+
+    assert all(line.endswith(" Keywords: caffeine, screens.") for line in entries)
+
+
+def test_index_entries_carry_no_keyword_line_when_no_step_ran(fixtures_dir, fake_embed_chunks_core):
+    compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
+
+    assert "Keywords:" not in llmstxt.render_index(compendium)
+
+
+def test_keywords_named_prefers_shared_tags_over_the_sections_own_keywords():
+    parent = a_parent(categories=("Guides",), tags=("Guides", "sleep"), keywords=("caffeine",))
+
+    assert llmstxt.keywords_named(parent) == ("sleep",)
+    assert llmstxt.keywords_named(a_parent(tags=("Guides",), categories=("Guides",), keywords=("caffeine",))) == ("caffeine",)
+    assert llmstxt.keywords_named(a_parent()) == ()

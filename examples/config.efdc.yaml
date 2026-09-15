@@ -266,6 +266,11 @@ parallel_pages: 4
 # information, only what it matched.
 phi_lint: all
 
+# Keywords on every section and tags on every page, so a reader can filter
+# by subject and llms.txt says what each page is about. The build script
+# installs the extractor from the lock file.
+keywords: true
+
 # GitHub accounts this build may follow links into, beyond the ones its own
 # sources name. Source 3 names DepressionCenter, so that account is already
 # allowed and needs no entry here.

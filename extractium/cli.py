@@ -47,6 +47,7 @@ from extractium import __version__
 from extractium import init as init_command
 from extractium.config import ConfigError, load_config
 from extractium.core import cache as caching
+from extractium.core import keywords as keywording
 from extractium.core import phi_lint
 from extractium.core import retain
 from extractium.core.build import page_key_of
@@ -472,6 +473,36 @@ def print_summary(compendium, written, notes=()):
         write_line(f"  coverage : {note}", sys.stdout)
 
 
+### Keywords ###
+
+def keyword_pass_for(config, progress):
+    """
+    The keyword step this build runs, or None.
+
+    None when the settings switch keywords off, and also when the
+    extractor library is not installed: the build then says what is
+    missing and how to add it, and goes on, because a knowledge base
+    without keywords is still a knowledge base.
+
+    Args:
+        config (extractium.config.Config): the validated settings.
+        progress (Callable[[str], None]): receives the line about a
+            missing library.
+
+    Returns:
+        extractium.core.keywords.KeywordPass | None
+    """
+    if not config.keywords:
+        return None
+    if not keywording.keyword_library_available():
+        progress(
+            "Keywords: the keywords extra is not installed, so no section is named with "
+            "keywords and no page with tags. Install it with: pip install \"extractium[keywords]\""
+        )
+        return None
+    return keywording.KeywordPass(load=caching.load_keywords, save=caching.save_keywords)
+
+
 ### Build Command ###
 
 def run_build(args):
@@ -536,6 +567,7 @@ def run_build(args):
         float32_vecs=args.float32_vecs,
         progress=progress_to_stderr,
         retained=kept,
+        keywords=keyword_pass_for(config, progress_to_stderr),
     )
     if compendium is None:
         return fail(

@@ -1,9 +1,10 @@
 """
 Summary: The one build step. Turns the documents every source produced
 into a single scored Compendium: chunk into parents and children, embed
-the children once, drop near-duplicates, compact orphaned parents, build
-the BM25 keyword statistics, compute the calibration statistics, and
-quantize the vectors. Every adapter serializes the record this returns,
+the children once, drop near-duplicates, compact orphaned parents, name
+each parent with keywords and each page with tags when a keyword step
+is given, build the BM25 keyword statistics, compute the calibration
+statistics, and quantize the vectors. Every adapter serializes the record this returns,
 so one crawl and one embedding pass feed every output format. See
 docs/extractium-spec.md section 2 and docs/container-format.md.
 
@@ -226,7 +227,7 @@ def _children_columns(parents, children):
 
 
 def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
-                     progress=None, built_at=None, retained=()):
+                     progress=None, built_at=None, retained=(), keywords=None):
     """
     Builds one scored Compendium from the documents a build's sources
     produced. This is the only place embedding runs.
@@ -235,7 +236,9 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
     the BM25 statistics, because the postings index into the child list as
     it is finally shipped; parent compaction must follow the collapse,
     because a section whose every window was a duplicate has no content
-    left to cite.
+    left to cite; the keyword step follows compaction, so it names only
+    sections that will be published, and uses the windows' vectors
+    before they are quantized.
 
     Args:
         documents (Iterable[extractium.core.models.Document]): what the
@@ -257,6 +260,10 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
             build, as extractium.core.retain.carry_forward returns them:
             already chunked, appended after the documents and embedded
             with them, so every later step treats them as any other page.
+        keywords (extractium.core.keywords.KeywordPass | None): names
+            every section with keywords and every page with tags. None
+            leaves the enrichment fields as the sections carry them,
+            which is what a library caller and a test want.
 
     Returns:
         Compendium | None: the scored result, or None when the documents
@@ -294,6 +301,11 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
     parents, children = remap_parents_after_dedup(parents, children)
     report(f"Kept {len(parents)} section(s) and {len(children)} search window(s).")
 
+    ### Name ###
+    built_at = built_at or utc_now()
+    if keywords is not None:
+        keywords.run(parents, children, vecs, embedder, built_at, report)
+
     ### Score ###
     bm25 = build_bm25_index(children)
     calibration = compute_calibration_stats(vecs)
@@ -308,7 +320,7 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
 
     return Compendium(
         name=name or first_title or DEFAULT_SITE_NAME,
-        built_at=built_at or utc_now(),
+        built_at=built_at,
         parents=_parent_records(parents),
         children=_children_columns(parents, children),
         vectors=stored_vecs,

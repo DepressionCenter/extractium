@@ -5,8 +5,8 @@
 # Last Modified: 2026-09-15
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
-# (single package; runtime deps, dev/code/youtube/pdf extras, console script,
-# pytest configuration).
+# (single package; runtime deps, dev/code/youtube/pdf/keywords extras,
+# console script, pytest configuration).
 #
 # Copyright © 2026 The Regents of the University of Michigan
 #
@@ -117,6 +117,18 @@ youtube = ["youtube-transcript-api>=1.2.4,<2.0.0"]
 # a child process that is ended if it runs too long. The floor is the
 # newest release at the time of the check, past every published fix.
 pdf = ["pypdf>=6.18.1,<7.0.0"]
+# Naming every section with keywords and every page with tags
+# (extractium.core.keywords). Optional so that a build which switches
+# keywords off carries no extractor; a build without it says so and
+# goes on. Checked against the dependency gate in
+# docs/github-repository-indexing.md on 2026-09-15: LGPL-3.0, a pure
+# Python wheel, Python 3.10 or newer, released 2026-02, no published
+# advisory. It pulls in segtok (MIT, pure Python), tabulate (MIT, pure
+# Python), and jellyfish (MIT, wheels for Windows, macOS, and Linux);
+# click, networkx, numpy, and regex it also names are in the lock file
+# already through the embedding stack. Nothing it does reaches the
+# network: its stop-word lists ship inside the wheel.
+keywords = ["yake>=0.7.3,<0.8.0"]
 
 [project.scripts]
 extractium = "extractium.cli:main"

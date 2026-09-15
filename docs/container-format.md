@@ -113,7 +113,7 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `enriched_at` | text | When the enrichment pass ran, UTC, ISO 8601. Present only when one has. |
 | `enrich_ver` | text | Which version of the enrichment pass wrote the fields above. Present only when one has. |
 
-The last five fields appear on a parent only when an enrichment pass set them; a reader treats an absent one as null. No enrichment pass ships yet, so today's files carry none of them and are laid out exactly as before the fields were defined. That is why adding them did not change the version: a reader that does not know them loses nothing by ignoring them.
+The last five fields appear on a parent only when an enrichment step set them; a reader treats an absent one as null. The keyword step, on by default, sets `tags`, `keywords`, `enriched_at`, and `enrich_ver` on every parent. `summary` waits for a summary pass, and a build with keywords switched off, or without the `keywords` extra installed, writes none of the five. Adding the fields did not change the version: a reader that does not know them loses nothing by ignoring them.
 
 Field names `t`, `x`, and `u` are short on purpose: with thousands of parents, key names are a measurable share of the file.
 

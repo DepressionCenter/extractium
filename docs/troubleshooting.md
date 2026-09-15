@@ -180,6 +180,18 @@ which is outside what this source may crawl.
 
 Put that address in the settings file instead of the short link. If you want the short link kept anyway, add an `include_patterns` entry that covers where it lands.
 
+### The log says `Keywords: the keywords extra is not installed`
+
+**Cause.** The build was asked to name sections with keywords, which is the default, but the extractor library is not in this Python environment. The build script installs it from the lock file; a developer install has to name the extra.
+
+**Fix.** Install it and run the build again:
+
+```
+pip install -e ".[keywords]"
+```
+
+Or set `keywords: false` in the settings file to leave the fields empty on purpose. Either way the build finishes; the line is a notice, not an error.
+
 ### The build says it skipped pages an earlier source had already indexed
 
 **Cause.** Two sources are covering the same ground. A website and a section of it, or a portal and a short link into one of its articles.

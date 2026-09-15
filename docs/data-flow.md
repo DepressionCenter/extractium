@@ -46,13 +46,15 @@ flowchart TD
     D --> E[Embed each window once]
     E --> F[Drop near-duplicate windows]
     F --> G[Compact sections with no windows left]
-    G --> H[Keyword and calibration statistics]
+    G --> N[Name sections with keywords and pages with tags]
+    N --> H[Keyword and calibration statistics]
     H -->|one Compendium| I[Adapters]
     I --> J[out_dir: compendium.json or .json.gz, llms.txt, llms-full.txt, compendium.sqlite, okf/]
     C -.reads and updates.-> K[(.kb_cache)]
+    N -.reads and updates.-> K
 ```
 
-The same thing in words, for anyone whose reader does not show the diagram: the settings file names the sources and the outputs. The registry finds the matching plugins. Each source fetches pages, using and updating the cache folder, and hands back document records. The chunker cuts each document into sections and then into smaller windows. Every window is embedded once. Near-identical windows are dropped, and any section left with no windows is removed with them. The keyword and calibration statistics are then built over what survives. That single result, the compendium, goes to each adapter, and each adapter writes it into the output folder in its own format: the index file, the two llms.txt files, a database, or a folder of Markdown.
+The same thing in words, for anyone whose reader does not show the diagram: the settings file names the sources and the outputs. The registry finds the matching plugins. Each source fetches pages, using and updating the cache folder, and hands back document records. The chunker cuts each document into sections and then into smaller windows. Every window is embedded once. Near-identical windows are dropped, and any section left with no windows is removed with them. Each surviving section is then named with keywords and each page with tags, reusing from the cache folder what an earlier build found for a section whose text has not changed. The keyword and calibration statistics are then built over what survives. That single result, the compendium, goes to each adapter, and each adapter writes it into the output folder in its own format: the index file, the two llms.txt files, a database, or a folder of Markdown.
 
 
 ## What the data looks like at each stage
@@ -88,7 +90,7 @@ One page is indexed once, however many sources reached it. Two sources can cover
 
 ### 3. Sections and windows
 
-The chunker cuts the content at its second- and third-level headings. Each piece is a section: at most 1,200 characters, with any longer run split into several sections that share a heading. A section is what a search returns and what an answer cites. Every section also carries five fields for an enrichment step, which would add a summary, tags, keywords, when it ran, and its version. No such step ships yet, so they are empty in every build, and the outputs leave them out or write them as null.
+The chunker cuts the content at its second- and third-level headings. Each piece is a section: at most 1,200 characters, with any longer run split into several sections that share a heading. A section is what a search returns and what an answer cites. Every section also carries five enrichment fields: a summary, tags, keywords, when they were written, and by which version of the step. The keyword step at stage 6 fills all but the summary, which stays empty until a summary step exists. The outputs leave an empty field out or write it as null.
 
 Each section is then cut into windows of at most 350 characters, overlapping by about 53, so a fact sitting at a boundary still lands whole inside at least one window. A window is what gets searched.
 
@@ -110,7 +112,11 @@ Windows that are near-identical to one already kept are dropped, which is what r
 
 Two windows from the same page are never collapsed into each other. The point of this step is to remove boilerplate that many pages share; two passages of one article are not that, however alike they look. The comparison sees the section heading followed by the passage, so without this rule an article with a long title would have every passage sharing a long identical prefix, and real content would be thrown away as duplication. A page's own repetitions are kept, which costs a handful of windows in a corpus.
 
-### 6. Statistics
+### 6. Keywords and tags
+
+Each section is named with up to five keywords and each page with tags. A statistical extractor proposes candidate phrases from the section's own text. The candidates are embedded with the same model as the windows and ranked by how close each sits to the section's vector, the mean of its windows' vectors, and the closest five that do not repeat one another are its keywords. A page's tags are its source's categories, then the keywords at least half of its sections share. Nothing here reaches the network or a language model. What was found is stored under `enrichment/keywords.json` in the cache folder, keyed by section id with a digest of the text, so a rebuild recomputes only sections whose text changed. The step needs the `keywords` extra; without it, or with `keywords: false`, the fields stay empty.
+
+### 7. Statistics
 
 Two sets of numbers are built over what survives, in this order:
 
@@ -119,11 +125,11 @@ Two sets of numbers are built over what survives, in this order:
 
 The keyword statistics must be built after the collapse, because they refer to windows by position in the final list.
 
-### 7. The compendium
+### 8. The compendium
 
 One record holding the sections, the window columns, the vectors, how the vectors were made, the keyword statistics, and the calibration figures, plus the index name and the build time. The build time is UTC, ISO 8601, ending in `Z`, always. Every adapter serializes this record and nothing else. With `rebuild: incremental`, pages the last build published and this build did not see are rebuilt from the manifest and join the record before embedding, unless the server confirmed them gone; see the [configuration reference](configuration.md).
 
-### 8. The output folder
+### 9. The output folder
 
 See [Running a Build](usage.md) for what each file is. Adapters never fetch a URL and never run the model; if one did, the promise of one crawl and one embedding pass would be gone.
 
@@ -167,11 +173,12 @@ So: assume any folder you point a local source at may hold protected health info
 | Text encoding | UTF-8 everywhere, in every file this tool writes. |
 | Vector storage | Whole numbers from -127 to 127, little-endian, divided by 127 on the way back. Or 32-bit floats, little-endian, with `--float32-vecs`. |
 | Keyword tokens | Lowercase runs of three or more ASCII letters or digits. |
+| `enriched_at` | UTC, ISO 8601, ending in `Z`: the time of the build that first named the section. |
 
 
 ## The cache
 
-Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, a `repository/` folder of the text a DSpace repository extracted from each deposit, and `previous-build.json`, the manifest of the last build's published sections that an incremental rebuild carries pages forward from. The manifest never holds content read from a local folder. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
+Fetched pages and their validators are kept in `.kb_cache` so a rebuild only downloads what changed. It holds page bodies, a `meta.json` of validators and content hashes, a `github/` folder of file bodies read through the GitHub API, a `repository/` folder of the text a DSpace repository extracted from each deposit, `previous-build.json`, the manifest of the last build's published sections that an incremental rebuild carries pages forward from, and an `enrichment/` folder holding the keywords the last build found for each section, keyed by section id and text digest. The manifest never holds content read from a local folder. Add it to your `.gitignore`. Deleting it costs a slower next build and nothing else.
 
 What the parsers found in a code file is stored beside the file body, under the same blob name, together with everything that result depended on: which engine read it, its version, the grammar, the grammar's version, this project's own extraction rules, and the shape of the records. A build reads that back only when every one of them still matches, so upgrading a grammar or editing a query file reparses rather than serving what the old one found.
 

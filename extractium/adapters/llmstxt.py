@@ -11,7 +11,7 @@ extractium/adapters/llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -66,8 +66,9 @@ HOSTS_SHOWN = 3
 # these are plain paragraphs (https://llmstxt.org/).
 INDEX_ORIENTATION = (
     "This file is an index, not the content itself. Each entry below names one "
-    "page, links to it, and quotes the opening of its text, so you can judge "
-    "whether a page answers your question before fetching it. Each heading "
+    "page, links to it, quotes the opening of its text, and lists the keywords "
+    "it is about when the build found any, so you can judge whether a page "
+    "answers your question before fetching it. Each heading "
     "names one of the sources this knowledge base was built from, and the "
     "entries under it are the pages that came from that source.",
     f"{FULL_FILE}, written alongside this file, holds the complete text of every "
@@ -87,6 +88,28 @@ FULL_ORIENTATION = (
 
 ### Page Grouping ###
 
+def keywords_named(parent):
+    """
+    The keywords an index entry lists for the page a section belongs to.
+
+    The page's own tags come first, less the categories the source
+    recorded, because those are the keywords most of its sections
+    share. A page whose sections share none is described by its first
+    section's keywords instead, so a page is not left without any
+    merely for being about several things.
+
+    Args:
+        parent (extractium.core.models.Parent): the page's first section.
+
+    Returns:
+        tuple[str, ...]: the keywords, most telling first; empty when
+        no keyword step ran.
+    """
+    categories = set(parent.categories)
+    shared = tuple(tag for tag in (parent.tags or ()) if tag not in categories)
+    return shared or tuple(parent.keywords or ())
+
+
 def pages_in_order(parents):
     """
     One entry per page, in the order that page first appears.
@@ -101,8 +124,8 @@ def pages_in_order(parents):
             output may write, in build order.
 
     Returns:
-        list[dict]: url, title, source_label, and the first section's
-        text, in first-appearance order.
+        list[dict]: url, title, source_label, the first section's text,
+        and the page's keywords, in first-appearance order.
     """
     pages = {}
     for parent in parents:
@@ -114,6 +137,7 @@ def pages_in_order(parents):
             "title": page_title(parent.t),
             "source_label": parent.source_label,
             "text": parent.x,
+            "keywords": keywords_named(parent),
         }
     return list(pages.values())
 
@@ -216,7 +240,10 @@ def _preamble(compendium, page_count, orientation):
 def render_index(compendium):
     """
     The llms.txt body: a heading, a summary, and one link per page grouped
-    under the name of the source it came from.
+    under the name of the source it came from. An entry ends with the
+    page's keywords when the build found any, inside the entry's own
+    line, because the convention allows nothing but list items under a
+    heading.
 
     Grouping by the source's name rather than by its kind is what lets a
     reader tell a main website from a program microsite, since both are
@@ -236,7 +263,10 @@ def render_index(compendium):
         lines.append(f"## {title}")
         lines.append("")
         for page in group:
-            lines.append(f"- {link(page['title'], page['url'])}: {excerpt(page['text'])}")
+            entry = f"- {link(page['title'], page['url'])}: {excerpt(page['text'])}"
+            if page["keywords"]:
+                entry += f" Keywords: {', '.join(page['keywords'])}."
+            lines.append(entry)
         lines.append("")
     return "\n".join(lines).rstrip("\n") + "\n"
 

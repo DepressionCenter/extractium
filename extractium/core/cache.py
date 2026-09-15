@@ -83,6 +83,14 @@ CACHE_YOUTUBE_DIR = os.path.join(CACHE_DIR, "youtube")
 CACHE_YOUTUBE_VIDEOS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "videos")
 CACHE_YOUTUBE_LISTINGS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "listings")
 
+# What the keyword step found for every section of the last build,
+# keyed by section id and checked against a digest of the section's
+# text, so a rebuild names afresh only the sections whose text changed.
+# Kept apart from the page cache because it is derived from the build's
+# own sections, not from anything a server said.
+CACHE_ENRICHMENT_DIR = os.path.join(CACHE_DIR, "enrichment")
+CACHE_KEYWORDS_PATH = os.path.join(CACHE_ENRICHMENT_DIR, "keywords.json")
+
 # A blob SHA is a Git object name: forty hexadecimal characters and
 # nothing else. Checked before it is used in a path, because the SHA
 # arrives in an API response, which is untrusted input like any other.
@@ -160,6 +168,7 @@ def use_cache_dir(path):
     global CACHE_GITHUB_REPOSITORIES_DIR, CACHE_GITHUB_ANALYSIS_DIR
     global CACHE_REPOSITORY_DIR
     global CACHE_YOUTUBE_DIR, CACHE_YOUTUBE_VIDEOS_DIR, CACHE_YOUTUBE_LISTINGS_DIR
+    global CACHE_ENRICHMENT_DIR, CACHE_KEYWORDS_PATH
     CACHE_DIR = str(path)
     CACHE_META_PATH = os.path.join(CACHE_DIR, "meta.json")
     CACHE_PAGES_DIR = os.path.join(CACHE_DIR, "pages")
@@ -171,6 +180,8 @@ def use_cache_dir(path):
     CACHE_YOUTUBE_DIR = os.path.join(CACHE_DIR, "youtube")
     CACHE_YOUTUBE_VIDEOS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "videos")
     CACHE_YOUTUBE_LISTINGS_DIR = os.path.join(CACHE_YOUTUBE_DIR, "listings")
+    CACHE_ENRICHMENT_DIR = os.path.join(CACHE_DIR, "enrichment")
+    CACHE_KEYWORDS_PATH = os.path.join(CACHE_ENRICHMENT_DIR, "keywords.json")
 
 
 ### Cache Metadata ###
@@ -209,6 +220,44 @@ def save_cache_meta(cache_meta):
         snapshot = dict(cache_meta)
         os.makedirs(CACHE_DIR, exist_ok=True)
         _write_atomically(CACHE_META_PATH, lambda f: json.dump(snapshot, f))
+
+
+### Keyword Store ###
+
+def load_keywords():
+    """
+    Reads what the keyword step stored for the last build's sections.
+
+    Returns:
+        dict: the stored document, as extractium.core.keywords wrote it.
+        Empty if the file is missing or cannot be parsed, which costs
+        the next build a fresh pass over every section rather than
+        failing it.
+    """
+    if os.path.exists(CACHE_KEYWORDS_PATH):
+        try:
+            with open(CACHE_KEYWORDS_PATH, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+        except (OSError, ValueError):
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
+    return {}
+
+
+def save_keywords(document):
+    """
+    Atomically writes what the keyword step found, for the next build.
+
+    Args:
+        document (dict): the store, as extractium.core.keywords builds it.
+
+    Raises:
+        OSError: if the folder or file cannot be written.
+    """
+    os.makedirs(CACHE_ENRICHMENT_DIR, exist_ok=True)
+    _write_atomically(
+        CACHE_KEYWORDS_PATH, lambda f: json.dump(document, f, ensure_ascii=False, indent=1)
+    )
 
 
 ### Page File Paths ###
