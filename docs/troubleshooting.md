@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -242,9 +242,9 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### The log says `the parser set is not installed`
 
-**Cause.** Code analysis is an optional install, and this machine does not have it.
+**Cause.** The parsers are the `code` extra. The build scripts and the scheduled workflow install it from the lock file, so this line means a developer install that did not name the extra, or a lock file regenerated without it.
 
-**Fix.** `pip install "extractium[code]"`. Until then every source file is still indexed, with its path, language, length, and link, but not what is inside it.
+**Fix.** `pip install -e ".[code]"` in a developer install. In a scripted install, regenerate the lock file with `--extra code`, as [how to install](how-to/install.md) shows. Until then every source file is still indexed, with its path, language, length, and link, but not what is inside it.
 
 ### No definitions were found in your R files
 

@@ -11,7 +11,7 @@ extractium/code/languages.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -255,6 +255,21 @@ LANGUAGES = (
         grammar_license="MIT",
         comment_nodes=("comment",),
         captures=("definition.class", "definition.function", "name", "doc", "import", "call"),
+        ctags_language="PowerShell",
+    ),
+    # A batch file has no functions: a label is where "call" and "goto"
+    # land, so each label is recorded as a function, named as the file
+    # writes it, colon included. A label has no body of its own, which is
+    # why the commands a script runs are attributed to the file rather
+    # than to the label they follow.
+    LanguageSpec(
+        name="batch", display="Windows batch",
+        extensions=(".bat", ".cmd"),
+        module="tree_sitter_batch", distribution="tree-sitter-batch",
+        grammar_license="MIT",
+        comment_nodes=("comment",),
+        captures=("definition.function", "name", "doc", "call"),
+        ctags_language="DosBatch",
     ),
     LanguageSpec(
         name="matlab", display="MATLAB",

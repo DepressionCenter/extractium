@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/install.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: How to install Extractium: the supported Python versions, the
 build script and the developer install, the optional extras and what
 each is for, what the lock file pins, what the first build downloads,
@@ -57,7 +57,7 @@ When the script is on its own, it first downloads the latest release of Extracti
 
 The script then creates a virtual environment in `.venv`, installs the exact package versions recorded in the lock file, installs Extractium™ into it, writes `config.yaml` from your answers, runs a first build limited to 25 pages, and prints what to do next. Running it again reuses the environment, skips the questions, and builds the whole site. See [how to run a weekly build](run-a-weekly-build.md) for the options the script accepts.
 
-The script installs the runtime dependencies only. A build made this way indexes documentation, records a repository's source files by name, and reads video captions that were already stored, but it does not analyze code and does not fetch new captions. For either of those, use option 2, or regenerate the lock file with the extra included, as described below.
+The script installs the runtime dependencies and the code parsers, so a build made this way indexes documentation and the structure of a repository's code. It reads video captions that were already stored but does not fetch new ones. For that, use option 2, or regenerate the lock file with the `youtube` extra included, as described below.
 
 
 ## Option 2: the Python development environment
@@ -91,7 +91,7 @@ The core install reads websites, GitHub documentation, DSpace repositories, know
 | Extra | What it adds | When you need it |
 |---|---|---|
 | `dev` | `pytest` and `pytest-cov`, the test tools. | To run the test suite. |
-| `code` | The Tree-sitter parser and its language grammars. | To index the structure of a repository's code: what each file defines, imports, and calls. Without it, every source file is still recorded by name, language, and length. |
+| `code` | The Tree-sitter parser and its language grammars. | To index the structure of a repository's code: what each file defines, imports, and calls. The build script installs it from the lock file already; a developer install has to name it. Without it, every source file is still recorded by name, language, and length. |
 | `youtube` | The caption library. | To fetch captions from YouTube. Without it, a build still reads transcripts already stored under `cache_dir`. |
 
 Universal Ctags is a fourth optional piece, and it is not a Python package. When it is installed on your computer, the code analysis uses it for languages that have no Tree-sitter grammar, such as R. Install it with your system's package manager, or leave it out. A build tells you which files it could not analyze and why.
@@ -101,17 +101,17 @@ Two environment variables are optional as well. `GITHUB_TOKEN` raises the reques
 
 ## What the lock file pins
 
-`requirements-lock.txt` at the repository root records the exact version and the hash of every runtime dependency. The build scripts and the scheduled workflow install from it with `--require-hashes`, so a package whose contents do not match what was locked is refused rather than installed. The development install does not use the lock file: `pip install -e .` resolves versions from the ranges in `pyproject.toml`.
+`requirements-lock.txt` at the repository root records the exact version and the hash of every runtime dependency and of the code parsers. The build scripts and the scheduled workflow install from it with `--require-hashes`, so a package whose contents do not match what was locked is refused rather than installed. The development install does not use the lock file: `pip install -e .` resolves versions from the ranges in `pyproject.toml`.
 
 The lock file is generated for every platform at once, so it lists packages that install on Linux only. Those are the CUDA libraries the embedding stack can use on a machine with a graphics card. A Linux install downloads them, which adds several gigabytes compared to a Windows or macOS install. The build does not need them and runs on the processor either way.
 
 To regenerate the file after changing a dependency, run the command recorded in its header. It needs the `uv` tool:
 
 ```bash
-uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashes -o requirements-lock.txt
+uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashes --extra code -o requirements-lock.txt
 ```
 
-Add `--extra code` to include the parser set, or `--extra youtube` for the caption library, when a scheduled build needs one of them. Keep the license header at the top of the file when you do.
+Keep `--extra code`: a test checks that every parser named in `pyproject.toml` is pinned in the lock. Add `--extra youtube` as well when a scheduled build has to fetch captions. Keep the license header at the top of the file when you do.
 
 
 ## What the first build downloads
