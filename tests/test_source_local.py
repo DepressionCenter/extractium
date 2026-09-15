@@ -244,6 +244,19 @@ def test_a_word_file_is_skipped_with_the_reason_when_read_documents_is_off(folde
     assert "  skipped (read_documents is off): local:notes.docx" in lines
 
 
+def test_a_pdf_file_is_read_when_read_documents_is_on(folder):
+    pytest.importorskip("pypdf")
+    (folder / "report.pdf").write_bytes(document_files.SAMPLE_PDF)
+
+    by_url = {d.url: d for d in read_documents(folder)}
+
+    document = by_url["local:report.pdf"]
+    assert document.title == "Properties Title"
+    assert document.content_type == "text"
+    assert document.content.find("h2").get_text() == "Page 1"
+    assert "Keywords: depression, anxiety, classroom" in document.content.get_text()
+
+
 def test_word_opendocument_and_rtf_files_are_read_when_read_documents_is_on(folder):
     (folder / "notes.docx").write_bytes(document_files.SAMPLE_DOCX)
     (folder / "sub" / "protocol.odt").write_bytes(document_files.SAMPLE_ODT)
@@ -278,7 +291,7 @@ def test_a_file_that_is_not_a_document_is_skipped_with_the_reason(folder):
     lines = []
     urls = [d.url for d in read_documents(folder, progress=lines.append)]
     assert "local:notes.docx" not in urls
-    assert "  skipped (not a Word, OpenDocument, or RTF file): local:notes.docx" in lines
+    assert "  skipped (not a Word, OpenDocument, RTF, or PDF file): local:notes.docx" in lines
 
 
 def test_a_document_over_the_ceiling_is_skipped_before_it_is_read(folder, monkeypatch):

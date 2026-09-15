@@ -1,10 +1,13 @@
 """
-Summary: Synthetic Word, OpenDocument, and RTF files for the tests, built
-in memory so no binary fixture is committed and every byte of each file
-is visible in this module. Each builder produces a file with a known
+Summary: Synthetic Word, OpenDocument, RTF, and PDF files for the tests,
+built in memory so no binary fixture is committed and every byte of each
+file is visible in this module. Each builder produces a file with a known
 structure: a title heading, body paragraphs, a second-level heading, a
-list, and a table, so a test can assert the exact text a reader produces.
-Nothing here is real content.
+list, and a table, or for a PDF a few pages of text with an outline and
+properties, so a test can assert the exact text a reader produces. Also
+holds two functions the isolation tests run in the reader's child
+process: one that never finishes and one that dies. Nothing here is real
+content.
 
 This file is part of Extractium™
 tests/document_fixtures.py
@@ -33,6 +36,8 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
 import io
+import os
+import time
 import zipfile
 from xml.sax.saxutils import escape
 
@@ -246,3 +251,202 @@ SAMPLE_RTF_MARKDOWN = (
     "Last line.\n\n"
     "Example site\n"
 )
+
+
+### PDF ###
+
+def pdf_string(text):
+    """A PDF literal string: parentheses and backslashes escaped."""
+    return "(" + text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") + ")"
+
+
+def content_stream(paragraphs):
+    """
+    A page's content: each paragraph is a string or a list of lines, set
+    in Helvetica, with a gap larger than a line between paragraphs.
+    """
+    ops = ["BT", "/F1 12 Tf", "14 TL", "72 720 Td"]
+    for index, paragraph in enumerate(paragraphs):
+        if index:
+            ops.append("0 -40 Td")
+        lines = paragraph if isinstance(paragraph, (list, tuple)) else [paragraph]
+        for line_index, line in enumerate(lines):
+            if line_index:
+                ops.append("T*")
+            ops.append(pdf_string(line) + " Tj")
+    ops.append("ET")
+    return "\n".join(ops).encode("latin-1")
+
+
+def make_pdf(pages, properties=None, outline=(), encrypted=False, prefix=b""):
+    """
+    A small PDF, one content stream per page, with a classic cross-reference
+    table so a reader finds every object where the table says it is.
+
+    Args:
+        pages (list): one entry per page, each a list of paragraphs for
+            content_stream. An empty list is a page with no text.
+        properties (dict | None): document information entries by their
+            PDF key without the slash, such as "Title" and "Keywords".
+        outline (Sequence[tuple[int, str, int]]): bookmarks as (nesting
+            level from 1, title, page index) in reading order.
+        encrypted (bool): whether to add a standard security handler
+            entry with placeholder keys, which is enough for a reader to
+            see the file as encrypted.
+        prefix (bytes): bytes to put before the header, which the format
+            allows and a reader must skip.
+    """
+    objects = []
+
+    def add(body):
+        objects.append(body)
+        return len(objects)
+
+    catalog = add(None)
+    pages_obj = add(None)
+    font = add(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    page_numbers = []
+    for paragraphs in pages:
+        stream = content_stream(paragraphs)
+        contents = add(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
+        page_numbers.append(add(
+            b"<< /Type /Page /Parent %d 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>" % (pages_obj, font, contents)
+        ))
+    objects[pages_obj - 1] = (
+        b"<< /Type /Pages /Kids [" + b" ".join(b"%d 0 R" % n for n in page_numbers)
+        + b"] /Count %d >>" % len(page_numbers)
+    )
+    info = None
+    if properties:
+        entries = b" ".join(
+            b"/%s %s" % (key.encode("ascii"), pdf_string(value).encode("latin-1"))
+            for key, value in properties.items()
+        )
+        info = add(b"<< " + entries + b" >>")
+    outlines = None
+    if outline:
+        # Each bookmark is an object: siblings linked by /Prev and /Next,
+        # children by /First and /Last, every one naming its /Parent.
+        outlines = add(None)
+        entry_numbers = [add(None) for _ in outline]
+        parents = {}
+        children = {}
+        stack = []
+        for position, (level, _, _) in enumerate(outline):
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            parent = stack[-1][1] if stack else outlines
+            parents[entry_numbers[position]] = parent
+            children.setdefault(parent, []).append(entry_numbers[position])
+            stack.append((level, entry_numbers[position]))
+        for position, (level, title, page_index) in enumerate(outline):
+            number = entry_numbers[position]
+            siblings = children[parents[number]]
+            at = siblings.index(number)
+            parts = [
+                b"/Title " + pdf_string(title).encode("latin-1"),
+                b"/Parent %d 0 R" % parents[number],
+                b"/Dest [%d 0 R /Fit]" % page_numbers[page_index],
+            ]
+            if at:
+                parts.append(b"/Prev %d 0 R" % siblings[at - 1])
+            if at + 1 < len(siblings):
+                parts.append(b"/Next %d 0 R" % siblings[at + 1])
+            own = children.get(number)
+            if own:
+                parts.append(b"/First %d 0 R /Last %d 0 R /Count %d" % (own[0], own[-1], len(own)))
+            objects[number - 1] = b"<< " + b" ".join(parts) + b" >>"
+        top = children[outlines]
+        objects[outlines - 1] = b"<< /Type /Outlines /First %d 0 R /Last %d 0 R /Count %d >>" % (
+            top[0], top[-1], len(top),
+        )
+    catalog_body = b"<< /Type /Catalog /Pages %d 0 R" % pages_obj
+    if outlines:
+        catalog_body += b" /Outlines %d 0 R /PageMode /UseOutlines" % outlines
+    objects[catalog - 1] = catalog_body + b" >>"
+    encrypt = None
+    if encrypted:
+        encrypt = add(
+            b"<< /Filter /Standard /V 1 /R 2 /Length 40 /P -1 /O <"
+            + b"00" * 32 + b"> /U <" + b"00" * 32 + b"> >>"
+        )
+
+    out = bytearray(prefix + b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref_at = len(out)
+    out += b"xref\n0 %d\n" % (len(objects) + 1)
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    trailer = b"<< /Size %d /Root %d 0 R" % (len(objects) + 1, catalog)
+    if info:
+        trailer += b" /Info %d 0 R" % info
+    if encrypt:
+        trailer += b" /Encrypt %d 0 R /ID [<" % encrypt + b"01" * 16 + b"> <" + b"01" * 16 + b">]"
+    trailer += b" >>"
+    out += b"trailer\n" + trailer + b"\nstartxref\n%d\n%%%%EOF\n" % xref_at
+    return bytes(out)
+
+
+PDF_PROPERTIES = {
+    "Title": SAMPLE_PROPERTIES["title"],
+    "Subject": SAMPLE_PROPERTIES["subject"],
+    "Keywords": SAMPLE_PROPERTIES["keywords"],
+}
+
+# Two pages, no outline: each page gets a heading, the first line of the
+# first page stands alone so it can serve as the title, and the other
+# wrapped lines of a paragraph are joined by a space.
+SAMPLE_PDF = make_pdf(
+    [[["Youth Mental Health Resources", "for Middle School"], BODY], ["Page two text."]],
+    properties=PDF_PROPERTIES,
+)
+SAMPLE_PDF_MARKDOWN = (
+    "## Page 1\n\n"
+    "Youth Mental Health Resources\n\n"
+    f"for Middle School {BODY}\n\n"
+    "## Page 2\n\n"
+    "Page two text.\n"
+)
+SAMPLE_PDF_PROPERTIES_PARAGRAPH = (
+    "Subject: Classroom mental health resources\n"
+    "Keywords: depression, anxiety, classroom\n"
+)
+
+# Three pages with bookmarks: the headings come from the bookmarks, with
+# the page each points to, and a nested bookmark is one level deeper.
+OUTLINED_PDF = make_pdf(
+    [["Cover text."], ["Chapter one text."], ["Section text."]],
+    outline=[(1, "Chapter 1", 1), (2, "Section 1.1", 2), (1, "Chapter 2", 2)],
+)
+OUTLINED_PDF_MARKDOWN = (
+    "Cover text.\n\n"
+    "## Chapter 1 (page 2)\n\n"
+    "Chapter one text.\n\n"
+    "### Section 1.1 (page 3)\n\n"
+    "## Chapter 2 (page 3)\n\n"
+    "Section text.\n"
+)
+
+SINGLE_PAGE_PDF = make_pdf([["Only page."]])
+EMPTY_PAGE_PDF = make_pdf([[]])
+ENCRYPTED_PDF = make_pdf([["Secret text."]], encrypted=True)
+TRUNCATED_PDF = SAMPLE_PDF[: len(SAMPLE_PDF) // 2]
+JUNK_PREFIX_PDF = make_pdf([["Hello"]], prefix=b"junk\n")
+
+
+### Functions Run In The Reader's Child Process ###
+
+def sleep_reader(data):
+    """A reader that never finishes in time, for the timeout test."""
+    time.sleep(30)
+    return data
+
+
+def crash_reader(data):
+    """A reader that dies without answering, for the crash test."""
+    os._exit(3)

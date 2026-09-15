@@ -102,9 +102,9 @@ SKIP_PATH_PREFIXES = ("renv/library/", "renv/staging/", ".rproj.user/")
 
 # Extensions whose bytes are not indexable text: binaries, media,
 # archives, compiled objects, stored data, and fonts. Word, OpenDocument,
-# and RTF files are absent because a reader turns them into text when
-# the source's read_documents setting is on; the binary .doc format has
-# no reader and stays here.
+# RTF, and PDF files are absent because a reader turns them into text
+# when the source's read_documents setting is on; the binary .doc format
+# has no reader and stays here.
 SKIP_EXTENSIONS = frozenset({
     "exe", "dll", "so", "dylib", "o", "obj", "a", "lib", "class", "jar", "war",
     "pyc", "pyo", "pyd", "wasm", "bin", "dat", "db", "sqlite", "sqlite3",
@@ -113,7 +113,7 @@ SKIP_EXTENSIONS = frozenset({
     "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "ico", "webp", "avif", "heic", "psd", "ai",
     "mp3", "mp4", "wav", "ogg", "m4a", "flac", "webm", "mov", "avi", "wmv", "mkv",
     "woff", "woff2", "ttf", "eot", "otf",
-    "pdf", "doc", "xls", "xlsx", "ppt", "pptx", "ods", "odp",
+    "doc", "xls", "xlsx", "ppt", "pptx", "ods", "odp",
     "map",
 })
 
@@ -227,7 +227,7 @@ def classify(path):
         None when the file is not read at all. A code file is not
         chunked as prose: what is indexed for one is the structure the
         parsers find in it, which is why it carries a label of its own.
-        A document is a Word, OpenDocument, or RTF file, read only when
+        A document is a Word, OpenDocument, RTF, or PDF file, read only when
         the source's read_documents setting is on.
     """
     if not path or path.endswith("/") or is_skipped_path(path):
@@ -247,7 +247,7 @@ def classify(path):
 
 
 def is_document(path):
-    """True when the file at path is a Word, OpenDocument, or RTF file a reader turns into text."""
+    """True when the file at path is a Word, OpenDocument, RTF, or PDF file a reader turns into text."""
     return _extension(_name(path)) in documents.DOCUMENT_EXTENSIONS
 
 

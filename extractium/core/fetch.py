@@ -148,7 +148,7 @@ ASSET_EXCLUDE_PATTERNS = asset_exclude_patterns()
 DOCUMENT_ACCEPT_HEADERS = {
     "Accept": (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document, "
-        "application/vnd.oasis.opendocument.text, application/rtf, "
+        "application/vnd.oasis.opendocument.text, application/rtf, application/pdf, "
         "application/octet-stream;q=0.9, */*;q=0.5"
     ),
 }

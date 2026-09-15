@@ -40,7 +40,7 @@ import pytest
 
 from extractium.core import chunk
 from extractium.core.models import Document
-from extractium.readers import documents, office
+from extractium.readers import documents, isolated, office
 from tests import document_fixtures as files
 
 
@@ -112,7 +112,7 @@ def test_the_binary_word_format_is_refused_by_name():
 
 
 def test_a_file_of_no_known_format_is_refused():
-    with pytest.raises(documents.DocumentError, match="not a Word, OpenDocument, or RTF file"):
+    with pytest.raises(documents.DocumentError, match="not a Word, OpenDocument, RTF, or PDF file"):
         documents.read_document(b"just some bytes", "x.docx")
 
 
@@ -279,6 +279,8 @@ def test_the_content_node_cuts_at_the_headings_the_reader_kept():
     ("https://example.org/files/plan.DOCX?dl", True),
     ("https://example.org/files/plan.odt#top", True),
     ("https://example.org/files/plan.rtf", True),
+    ("https://example.org/files/report.pdf", True),
+    ("https://cdn.example.org/files/p/prod/0a1b2c.pdf/annual-report", True),
     ("https://cdn.example.org/files/p/prod/0a1b2c.docx/youth-resources", True),
     ("https://cdn.example.org/files/p/prod/0a1b2c.docx/youth-resources.docx?dl", True),
     ("https://example.org/files/plan.doc", False),
@@ -293,6 +295,7 @@ def test_which_addresses_count_as_documents(url, expected):
 def test_which_file_names_count_as_documents():
     assert documents.is_document_path("notes/plan.docx") is True
     assert documents.is_document_path("notes/PLAN.RTF") is True
+    assert documents.is_document_path("notes/report.pdf") is True
     assert documents.is_document_path("notes/old.doc") is True    # recognised, then refused by the reader
     assert documents.is_document_path("notes/plan.md") is False
     assert documents.is_document_path("notes/plan") is False
@@ -302,3 +305,155 @@ def test_a_name_is_taken_from_the_address_for_a_file_that_declares_none():
     assert documents.name_from_url("https://cdn.example.org/files/p/0a1b.docx/youth-resources") == "Youth Resources"
     assert documents.name_from_url("https://example.org/files/ethics-consent_form.docx?dl") == "Ethics Consent Form"
     assert documents.name_from_url("https://example.org/") == "Document"
+
+
+# ---------------------------------------------------------------------------
+# PDF files
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def pypdf_installed():
+    """Skips a test when the optional pdf extra is not installed."""
+    pytest.importorskip("pypdf")
+
+
+def test_a_pdf_reads_page_by_page_with_a_heading_per_page(pypdf_installed):
+    read = documents.read_document(files.SAMPLE_PDF, "plan.pdf")
+
+    assert read.text == files.SAMPLE_PDF_MARKDOWN
+    assert read.properties == {
+        "title": "Properties Title",
+        "subject": "Classroom mental health resources",
+        "keywords": "depression, anxiety, classroom",
+    }
+    assert read.indexed_text.startswith(files.SAMPLE_PDF_PROPERTIES_PARAGRAPH)
+
+
+def test_a_pdf_with_bookmarks_takes_its_headings_from_them(pypdf_installed):
+    assert documents.read_document(files.OUTLINED_PDF, "manual.pdf").text == files.OUTLINED_PDF_MARKDOWN
+
+
+def test_a_single_page_pdf_gets_no_page_heading(pypdf_installed):
+    assert documents.read_document(files.SINGLE_PAGE_PDF, "one.pdf").text == "Only page.\n"
+
+
+def test_a_pdf_title_comes_from_its_properties_or_its_first_line_and_never_from_a_page_heading(
+    pypdf_installed,
+):
+    """
+    The headings in a PDF's text were made by the reader from page
+    numbers and bookmarks, so "Page 1" must never become a title.
+    """
+    with_properties = documents.read_document(files.SAMPLE_PDF, "plan.pdf")
+    without = documents.read_document(files.OUTLINED_PDF, "manual.pdf")
+    bare = documents.read_document(
+        files.make_pdf([[["First line.", "A wrapped second line of the same block."]], ["More."]]),
+        "bare.pdf",
+    )
+
+    assert documents.document_title(with_properties, "plan") == "Properties Title"
+    assert documents.document_title(without, "manual") == "Cover text."
+    assert documents.document_title(bare, "bare") == "First line."
+    assert documents.document_title(
+        documents.ReadDocument(text="## Page 1\n\n" + "x" * 200 + "\n", properties={}, headings_are_titles=False),
+        "fallback",
+    ) == "fallback"
+
+
+def test_a_pdf_holding_no_text_is_reported_as_likely_scanned(pypdf_installed):
+    with pytest.raises(documents.DocumentError, match="holds no text; it is likely scanned images"):
+        documents.read_document(files.EMPTY_PAGE_PDF, "scan.pdf")
+
+
+def test_an_encrypted_pdf_is_refused(pypdf_installed):
+    with pytest.raises(documents.DocumentError, match="encrypted files are not read"):
+        documents.read_document(files.ENCRYPTED_PDF, "locked.pdf")
+
+
+def test_a_truncated_pdf_is_refused_with_the_reason(pypdf_installed):
+    with pytest.raises(documents.DocumentError, match="the PDF could not be read"):
+        documents.read_document(files.TRUNCATED_PDF, "cut.pdf")
+
+
+def test_a_pdf_header_after_a_few_bytes_of_junk_is_still_read(pypdf_installed):
+    assert documents.read_document(files.JUNK_PREFIX_PDF, "odd.pdf").text == "Hello\n"
+
+
+def test_pages_past_the_ceiling_are_not_read_and_the_text_says_so(pypdf_installed, monkeypatch):
+    from extractium.readers import pdf
+
+    monkeypatch.setattr(pdf, "MAX_PDF_PAGES", 1)
+    blocks, _ = pdf.read_pdf(files.SAMPLE_PDF)
+
+    assert [block.text for block in blocks] == [
+        "Page 1",
+        "Youth Mental Health Resources",
+        f"for Middle School {files.BODY}",
+        "Only the first 1 of 2 pages were read.",
+    ]
+
+
+def test_extracted_text_is_cleaned_of_odd_spacing_and_replacement_characters(pypdf_installed):
+    """
+    A font with no usable encoding yields a replacement character per
+    glyph, and some writers put a non-breaking space between every
+    word; neither is anything a person searches for.
+    """
+    from extractium.readers import pdf
+
+    text = "\ufffd\xa0Book\xa0of\xa0Poems\xa0\ufffd\n \xa0\n Peer2Peer\xa0Project\n\nSecond.\n"
+    assert list(pdf._paragraphs(text, first_line_alone=True)) == [
+        "Book of Poems", "Peer2Peer Project", "Second.",
+    ]
+
+
+def test_a_pdf_is_refused_with_an_install_hint_when_the_reader_is_missing(monkeypatch):
+    real = documents.importlib.util.find_spec
+    monkeypatch.setattr(
+        documents.importlib.util, "find_spec",
+        lambda name, *args: None if name == "pypdf" else real(name, *args),
+    )
+    with pytest.raises(documents.DocumentError, match=r'pip install "extractium\[pdf\]"'):
+        documents.read_document(files.SAMPLE_PDF, "plan.pdf")
+
+
+# ---------------------------------------------------------------------------
+# The reader's child process
+# ---------------------------------------------------------------------------
+
+def test_a_reader_that_runs_too_long_is_ended_and_the_next_call_gets_a_fresh_child():
+    with pytest.raises(isolated.IsolationError, match="gave up after 0.5 seconds"):
+        isolated.run("tests.document_fixtures", "sleep_reader", (b"",), timeout=0.5)
+
+    assert isolated.run("builtins", "len", ("abc",)) == 3
+
+
+def test_a_child_that_dies_is_reported_and_replaced():
+    with pytest.raises(isolated.IsolationError, match="stopped unexpectedly"):
+        isolated.run("tests.document_fixtures", "crash_reader", (b"",), timeout=30)
+
+    assert isolated.run("builtins", "len", ("abcd",)) == 4
+
+
+def test_an_error_in_the_child_arrives_as_its_type_and_message_and_nothing_else():
+    with pytest.raises(isolated.RemoteError) as raised:
+        isolated.run("builtins", "int", ("not a number",))
+
+    assert raised.value.type_name == "ValueError"
+    assert "not a number" in raised.value.message
+    assert "Traceback" not in str(raised.value)
+
+
+def test_a_pdf_readers_refusal_reaches_the_caller_under_its_own_message(pypdf_installed):
+    """A DocumentError raised in the child is a DocumentError here, word for word."""
+    with pytest.raises(documents.DocumentError) as raised:
+        documents.read_document(files.ENCRYPTED_PDF, "locked.pdf")
+
+    assert str(raised.value) == "the PDF is encrypted; encrypted files are not read"
+
+
+def test_shutting_the_child_down_is_safe_to_repeat():
+    isolated.shutdown()
+    isolated.shutdown()
+
+    assert isolated.run("builtins", "len", ("ab",)) == 2

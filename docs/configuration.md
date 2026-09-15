@@ -190,7 +190,7 @@ Two sources may share a label on purpose. Two sibling collections of one reposit
 | `extra_crawl_exclude_patterns` | list of patterns | empty | Pages the crawl must not fetch, added to the list above rather than replacing it. The usual way to keep one site's own navigation out. |
 | `extra_index_exclude_patterns` | list of patterns | empty | Pages to leave out of the index, added to the list above rather than replacing it. |
 | `site_handlers` | list of names | every installed handler | Which site handlers take part. `[]` means the generic handler only. The generic handler always takes part, and always last. |
-| `read_documents` | true or false | `false` | Whether a link to a Word, OpenDocument, or RTF file in scope is fetched and its text indexed. See "Reading Word, OpenDocument, and RTF files" below. |
+| `read_documents` | true or false | `false` | Whether a link to a Word, OpenDocument, RTF, or PDF file in scope is fetched and its text indexed. See "Reading document files" below. |
 
 A page whose text runs past 200,000 characters, such as a site that publishes everything on one page, is indexed as an outline (its title, opening paragraph, headings, and most frequent terms) rather than chunked whole, and the log says so. The same ceiling applies to repository files; [GitHub repository indexing](github-repository-indexing.md) lists it with the others under "The ceilings".
 
@@ -239,22 +239,40 @@ Put the address it names in your settings file. A redirect that stays in scope, 
 
 Every other page is checked the same way. A page inside the site that sends the crawler to another host, or to an address the exclude patterns cover, is skipped with the landing address named, because what arrived is not this site's content and would otherwise be indexed under this site's address. Add the other place to `include_patterns`, or as a source of its own, if it should be indexed.
 
-### Reading Word, OpenDocument, and RTF files
+### Reading document files
 
-Three sources can read document files: `web`, `local`, and `github_api`. Each has a `read_documents` setting, off by default. Turn it on and the source reads `.docx`, `.odt`, and `.rtf` files into text, with the headings kept so the index cuts a long document into sections the way it cuts a web page. The reader is built into the tool and needs no extra software.
+Three sources can read document files: `web`, `local`, and `github_api`. Each has a `read_documents` setting, off by default. Turn it on and the source reads `.docx`, `.odt`, `.rtf`, and `.pdf` files into text, with the headings kept so the index cuts a long document into sections the way it cuts a web page.
 
-What is read from a file:
+The Word, OpenDocument, and RTF readers are built into the tool and need no extra software. The PDF reader uses the `pypdf` library, which is the `pdf` extra. The build scripts and the scheduled workflow install it from the lock file; a developer install names it:
+
+```bash
+pip install "extractium[pdf]"
+```
+
+Without it, every PDF is skipped with a line that says so, and everything else is read.
+
+What is read from a Word, OpenDocument, or RTF file:
 
 - Headings, paragraphs, lists, and tables. A table becomes rows of cells.
 - The file's own properties: its title, subject, keywords, and description, which some authors fill in under File, Properties. The subject, keywords, and description are indexed as the first paragraph of the document, so a search finds a file by what its author said it was about. When a file is longer than the 200,000-character ceiling and is indexed as an outline, those properties are what the outline keeps.
 - The title, in this order: the first heading in the text, then the title in the properties, then the first line when it is short, then the file name.
 
+What is read from a PDF:
+
+- The text of each page, in order. A page becomes one paragraph, or several where the file's own layout leaves blank lines.
+- Headings that say where you are. A PDF with bookmarks gets a heading from each bookmark, placed before the page it points to with the page number appended, so a manual is cut at its chapters and a citation names the page. A PDF without bookmarks gets a `Page N` heading before every page, unless it has only one.
+- The title, subject, and keywords from the file's document properties. The subject and keywords open the indexed text, as for the other formats. The title is the properties title, then the first line of the first page when it is short, then the file name; a heading the reader made from a page number is never a title.
+
 What is not read:
 
 - The old binary `.doc` format. It has no safe reader, so the file is named as unreadable rather than guessed at. Save it as `.docx` to have it indexed.
-- PDF files. They stay on the exclusion list.
+- An encrypted PDF. It is skipped and named, and no password is ever tried.
+- A PDF whose pages hold no text, which is what a scanned document looks like to a reader. It is skipped with `likely scanned images` in the line. There is no text recognition.
+- Pages past the five-hundredth of one PDF. The text ends with a line saying how many pages were not read.
 - OpenDocument spreadsheets and presentations (`.ods`, `.odp`).
 - Pictures, comments, footnotes, headers, footers, and tracked deletions inside a file.
+
+A PDF is read in a separate process with a time limit of 30 seconds per file. A file that runs past it is skipped with `the reader gave up after 30 seconds`, and the next file starts a fresh process. The limit is there because a malformed PDF can keep a parser busy for a very long time, and a process can be stopped where a thread cannot.
 
 On a `web` source, a link to a document file is fetched only when it is in scope, like any other link. Most document files sit on another host, such as a content-delivery network, so a `leaf_patterns` entry is usually needed to reach them:
 
@@ -270,7 +288,7 @@ sources:
 
 A file is never followed for links, so a document on another host never starts a crawl of that host. The same file linked under two addresses, such as with and without a download flag, is fetched twice but indexed once. A file larger than 20,000,000 bytes is skipped and named. A file that answers with a web page, such as a sign-in page, is skipped with the landing address named.
 
-On a `local` source, turning the setting on adds `**/*.docx`, `**/*.odt`, and `**/*.rtf` to the default globs. A document file your own globs select while the setting is off is skipped with a line saying so, never read as text.
+On a `local` source, turning the setting on adds `**/*.docx`, `**/*.odt`, `**/*.rtf`, and `**/*.pdf` to the default globs. A document file your own globs select while the setting is off is skipped with a line saying so, never read as text.
 
 On a `github_api` source, document files in a repository are downloaded one request each, and the text read from each is cached under the file's blob name, so a rebuild reads nothing again. The `max_file_bytes` ceiling applies to them as to every file.
 
@@ -281,14 +299,14 @@ Every document's text goes through the same check for protected health informati
 | Option | Type | Default | What it does |
 |---|---|---|---|
 | `path` | text | none (required) | The folder to read. |
-| `include_globs` | list of glob patterns | `**/*.md`, `**/*.txt`, `**/*.html`, plus `**/*.docx`, `**/*.odt`, and `**/*.rtf` when `read_documents` is on | Which files under the folder are read. |
-| `read_documents` | true or false | `false` | Whether Word, OpenDocument, and RTF files are read into text. See "Reading Word, OpenDocument, and RTF files" above. |
+| `include_globs` | list of glob patterns | `**/*.md`, `**/*.txt`, `**/*.html`, plus `**/*.docx`, `**/*.odt`, `**/*.rtf`, and `**/*.pdf` when `read_documents` is on | Which files under the folder are read. |
+| `read_documents` | true or false | `false` | Whether Word, OpenDocument, RTF, and PDF files are read into text. See "Reading document files" above. |
 
 Content from a local source stays out of every output unless that output sets `include_local: true`. See "Outputs" below.
 
 The `path` is the folder to read. Files are read as UTF-8. A file the patterns select but whose real location is outside the folder, reached through a shortcut or a symbolic link, is skipped and the reason is printed. A folder that does not exist stops the build, so a mistyped path does not look like an empty folder.
 
-Markdown, plain text, and HTML are read by default. Word, OpenDocument, and RTF files are read when `read_documents` is on. PDF and spreadsheet files are not read.
+Markdown, plain text, and HTML are read by default. Word, OpenDocument, RTF, and PDF files are read when `read_documents` is on. Spreadsheet and presentation files are not read.
 
 ### `github_api`: read repositories through the GitHub API
 
@@ -303,7 +321,7 @@ Markdown, plain text, and HTML are read by default. Word, OpenDocument, and RTF 
 | `include_archived` | true or false | `true` | Reads archived repositories. On by default, because archived documentation is still documentation. |
 | `include_code` | true or false | `true` | Reads the structure of the repository's code as well as its documentation. See "Reading the code" below. |
 | `ctags_fallback` | true or false | `true` | Lets Universal Ctags read the languages no grammar covers, when it is installed. Set it to `false` to keep a build from launching any other program at all. |
-| `read_documents` | true or false | `false` | Whether Word, OpenDocument, and RTF files in a repository are read into text, one request each. See "Reading Word, OpenDocument, and RTF files" above. |
+| `read_documents` | true or false | `false` | Whether Word, OpenDocument, RTF, and PDF files in a repository are read into text, one request each. See "Reading document files" above. |
 | `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. Raise it for a repository whose documentation is a few large files; a text file over 200,000 characters is then indexed as an outline rather than whole, as [GitHub repository indexing](github-repository-indexing.md) explains under "The ceilings". |
 
 Give exactly one of `org`, `user`, or `url`. Two is an error, not a request for both.
@@ -328,7 +346,7 @@ sources:
     seed_url: https://github.com/DepressionCenter/extractium
 ```
 
-What gets read: README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on, plus its Word, OpenDocument, and RTF files when `read_documents` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. That includes `bin/` and `dist/`, which hold what a build produced, and `data/`, which holds the files a project reads and writes rather than anything written to be read. Skipping `data/` also keeps a folder of participant records out of an index by default. `.env.example` is kept, because it documents what a project needs.
+What gets read: README files, Markdown, plain text, and the other documentation a repository carries, plus short project files such as `pyproject.toml`, `DESCRIPTION`, `package.json`, and `Dockerfile`, plus its source files when `include_code` is on, plus its Word, OpenDocument, RTF, and PDF files when `read_documents` is on. Generated folders, binaries, lock files, and anything holding a credential are never downloaded. That includes `bin/` and `dist/`, which hold what a build produced, and `data/`, which holds the files a project reads and writes rather than anything written to be read. Skipping `data/` also keeps a folder of participant records out of an index by default. `.env.example` is kept, because it documents what a project needs.
 
 Reading the code: with `include_code` on, each source file gets a record naming what it defines, what it brings in, and which files reach into it, and each definition in it gets a record of its own: the signature, the documentation somebody wrote for it, what it calls, and a link to its exact lines on GitHub. No source body is ever indexed. To read the implementation you follow the link.
 
@@ -670,7 +688,7 @@ The four pattern lists on a web source hold regular expressions. Each pattern is
 For each link the crawler finds:
 
 1. Off-site links are dropped, unless they match an entry in `include_patterns`. This is how you add a second site.
-2. Files that are not readable text are dropped: images, archives, office documents, fonts, media, and source code files. With `read_documents` on, Word, OpenDocument, and RTF files pass this check and are read.
+2. Files that are not readable text are dropped: images, archives, office documents, fonts, media, and source code files. With `read_documents` on, Word, OpenDocument, RTF, and PDF files pass this check and are read.
 3. `include_patterns` decides what is in scope. If the list is empty, the crawler works the scope out from the seed URL instead (see below). If the list has entries, a URL must match at least one.
 4. `crawl_exclude_patterns` removes what is left. An exclusion always wins over an inclusion.
 5. A link dropped by the first check gets one more chance: if it matches an entry in `leaf_patterns`, and the page linking to it is inside the scope worked out from the seed, it is fetched as a leaf. The second and fourth checks apply to it too. See "Single pages on another host" below.
@@ -703,7 +721,7 @@ sources:
       - '^https://files\.example\.org/'
 ```
 
-Everything else applies to a leaf as to any page. A file that is not readable text is left alone, so a leaf pattern for a file host reaches its Word files with `read_documents` on and never its PDF, image, or video files. A `crawl_exclude_patterns` entry wins over a leaf pattern. The other host's `robots.txt` is read and obeyed. A leaf counts toward `max_pages`. A leaf that redirects somewhere no leaf pattern covers is skipped with the landing address named. The log marks each leaf with `(leaf; its links are not followed)` under its line, and lists the patterns as `Leaf pats:` at the start of the crawl.
+Everything else applies to a leaf as to any page. A file that is not readable text is left alone, so a leaf pattern for a file host reaches its Word and PDF files with `read_documents` on and never its image or video files. A `crawl_exclude_patterns` entry wins over a leaf pattern. The other host's `robots.txt` is read and obeyed. A leaf counts toward `max_pages`. A leaf that redirects somewhere no leaf pattern covers is skipped with the landing address named. The log marks each leaf with `(leaf; its links are not followed)` under its line, and lists the patterns as `Leaf pats:` at the start of the crawl.
 
 A link that is inside the crawl's own scope is followed as usual even when a leaf pattern also matches it. Leaf patterns only ever add pages; they never take a page out of the crawl.
 
@@ -711,7 +729,7 @@ A link that is inside the crawl's own scope is followed as usual even when a lea
 
 You get the two exclusion lists for free. Each list is the sum of two parts:
 
-1. Files that hold no readable text: images, archives, office documents, fonts, media, and source code. Always included, except that `read_documents` takes Word, OpenDocument, and RTF files off the list for that source.
+1. Files that hold no readable text: images, archives, office documents, fonts, media, and source code. Always included, except that `read_documents` takes Word, OpenDocument, RTF, and PDF files off the list for that source.
 2. What each enabled site handler adds. The generic handler, which is always on, skips search forms, sign-in pages, print views, per-person pages, the folders that hold programs rather than pages (`cgi-bin`, `cdn-cgi`, `scripts`, and `api`, wherever they sit in a path), and the faceted and searched views a Drupal site makes of a listing (`?f[0]=topic:12`, `search_api_fulltext=`), each of which is a subset of the plain listing. The `tdx` handler adds the TeamDynamix portal's login, print, file-download, and person views, and every narrowed view of its question listing (by category, by tag, or by answered and unanswered), because the flat question listing already pages through every question. It puts the knowledge-base category and tag listings on the index list. The `github` handler adds the housekeeping pages of code-hosting sites, such as issues, pull requests, branches, forks, and settings, and puts folder listings (`/tree/`) on the index list. The `google_docs` handler keeps Google Forms, Google Drive, and Google's sign-in host out of every crawl.
 
 Category, tag, and folder listings are worth following but not worth indexing, which is why they sit in the index list only. Switching a handler off with `site_handlers` also drops the patterns it would have added.

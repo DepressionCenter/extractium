@@ -131,12 +131,12 @@ def sqlite_file_name(slug):
 DEFAULT_CONTAINER_FILE = container_file_name(DEFAULT_SLUG)
 DEFAULT_SQLITE_FILE = sqlite_file_name(DEFAULT_SLUG)
 
-# Files a local source reads when no include_globs are given. PDF files
-# are not read.
+# Files a local source reads when no include_globs are given. Document
+# files join them only when read_documents is on.
 DEFAULT_LOCAL_INCLUDE_GLOBS = ("**/*.md", "**/*.txt", "**/*.html")
 
 # Added to the default globs when a local source turns read_documents on.
-DOCUMENT_INCLUDE_GLOBS = ("**/*.docx", "**/*.odt", "**/*.rtf")
+DOCUMENT_INCLUDE_GLOBS = ("**/*.docx", "**/*.odt", "**/*.rtf", "**/*.pdf")
 
 # Whether a web, local, or github_api source reads Word, OpenDocument,
 # and RTF files into text. Off, because each file is a request of its

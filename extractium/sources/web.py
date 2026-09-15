@@ -302,7 +302,7 @@ class WebSource:
             extra_index_exclude_patterns (added on top of whichever list
             applies), site_handlers (unused here; the caller resolves
             names to the handlers argument), and read_documents, which
-            lets the crawl fetch a Word, OpenDocument, or RTF file it
+            lets the crawl fetch a Word, OpenDocument, RTF, or PDF file it
             finds a link to and index the text a reader takes from it.
 
             Two further keys are set by a caller inside the program, never
@@ -426,7 +426,7 @@ class WebSource:
         Every seed and every discovered link is folded to its handler's
         canonical form first, so a file linked under several addresses
         is visited once. With `read_documents` on, a link to a Word,
-        OpenDocument, or RTF file in scope is fetched as bytes, read into
+        OpenDocument, RTF, or PDF file in scope is fetched as bytes, read into
         text, and indexed as a document with no links of its own; the
         same file linked at two addresses is indexed once.
 

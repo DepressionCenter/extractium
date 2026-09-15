@@ -74,11 +74,11 @@ sources:
     #  - '^https://docs\.google\.com/'       # Google Docs, Sheets, and Slides shared with the link
     #  - '^https://files\.example\.org/'     # handouts on a file host
 
-    # Whether a link to a Word, OpenDocument, or RTF file is fetched and its
-    # text indexed, with the file's own headings, keywords, and description.
-    # Off by default. Such files usually sit on another host, so pair this
-    # with a leaf pattern for the host that serves them. The old binary
-    # .doc format and PDF files are not read.
+    # Whether a link to a Word, OpenDocument, RTF, or PDF file is fetched
+    # and its text indexed, with the file's own headings, keywords, and
+    # description. Off by default. Such files usually sit on another host,
+    # so pair this with a leaf pattern for the host that serves them. The
+    # old binary .doc format is not read, and a scanned PDF holds no text.
     #read_documents: true
 
     # Pages the crawl must not fetch at all, added to the built-in list.
@@ -116,7 +116,7 @@ sources:
   # A folder of Markdown, text, and HTML files on this machine. Content from
   # a local source stays out of every output unless that output sets
   # include_local: true (see the outputs list). read_documents: true also
-  # reads the folder's Word, OpenDocument, and RTF files, and adds their
+  # reads the folder's Word, OpenDocument, RTF, and PDF files, and adds their
   # globs to the defaults below.
   #- type: local
   #  label: Internal Notes
@@ -149,7 +149,7 @@ sources:
   #  include_archived: true         # archived documentation is still documentation
   #  include_code: true             # read the structure of the code, not only the docs
   #  ctags_fallback: true           # let Universal Ctags read languages no grammar covers
-  #  read_documents: false          # read Word, OpenDocument, and RTF files, one request each
+  #  read_documents: false          # read Word, OpenDocument, RTF, and PDF files, one request each
   #  max_file_bytes: 2000000        # larger files are skipped, and each one is named
   #
   # Code analysis needs the optional parser set: pip install "extractium[code]".

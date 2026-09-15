@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -80,7 +80,7 @@ The diagram shows the content sources on the left, the Extractium™ build in th
   ```
 
 + Open `dist/llms.txt` to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`. See `examples/config.efdc.yaml` for a complete example that uses every source type.
-+ To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
++ To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube,pdf]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
 
@@ -128,7 +128,7 @@ If you need assistance identifying a contact person, email the EFDC's Mobile Tec
 + BAAI/bge-small-en-v1.5: The sentence-embedding model used by every build and every client. MIT license. https://huggingface.co/BAAI/bge-small-en-v1.5
 + llms.txt: The convention the `llms.txt` and `llms-full.txt` outputs follow. https://llmstxt.org/
 + Open Knowledge Format: The Markdown-with-front-matter format the `okf` output writes and the `okf` source reads. https://github.com/GoogleCloudPlatform/open-knowledge-format
-+ Python libraries used: requests, curl_cffi, Beautiful Soup 4, Sentence Transformers, NumPy, Python-Markdown, PyYAML, and optionally Tree-sitter with its language grammars, Universal Ctags, youtube-transcript-api, pytest, and uv.
++ Python libraries used: requests, curl_cffi, Beautiful Soup 4, Sentence Transformers, NumPy, Python-Markdown, PyYAML, and optionally Tree-sitter with its language grammars, Universal Ctags, youtube-transcript-api, pypdf, pytest, and uv.
 + JavaScript libraries used by the examples: @huggingface/transformers and the ONNX Runtime it brings.
 
 Every dependency license was checked for compatibility with the GNU General Public License v3.0 or later. The list, with each license, is in [docs/compliance.md](docs/compliance.md).

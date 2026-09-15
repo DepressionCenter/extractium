@@ -192,7 +192,7 @@ class LocalSource:
             options (Mapping): the validated options of the source's entry:
                 `path`, the folder to read; `include_globs`, the patterns
                 deciding which files under it are read; and
-                `read_documents`, whether a Word, OpenDocument, or RTF
+                `read_documents`, whether a Word, OpenDocument, RTF, or PDF
                 file the patterns select is read into text or skipped
                 with a line saying so.
         """
@@ -282,7 +282,7 @@ class LocalSource:
 
     def _document(self, path, url, progress):
         """
-        One Word, OpenDocument, or RTF file as a document, or None with
+        One Word, OpenDocument, RTF, or PDF file as a document, or None with
         the reason reported: the setting is off, the file is over the
         ceiling, the reader refused it, or it holds no text.
         """

@@ -926,6 +926,23 @@ def test_the_text_read_from_a_word_file_is_cached_under_its_blob_name(fixture, f
     assert not any(DOCUMENT_SHA in c["url"] for c in again.calls)
 
 
+def test_a_pdf_file_is_read_into_text_when_read_documents_is_on(fixture, fake_github_session_factory):
+    pytest.importorskip("pypdf")
+    sha = "e" * 40
+    routes = api_routes(with_document_file(fixture, path="docs/report.pdf", sha=sha))
+    routes[f"{API_ROOT}/repos/example-org/example-tools/git/blobs/{sha}"] = FakeApiResponse(
+        content=document_files.SAMPLE_PDF,
+    )
+    session = fake_github_session_factory(routes)
+
+    by_url = {d.url: d for d in read(make_source(read_documents=True), session)}
+
+    document = by_url["https://github.com/example-org/example-tools/blob/main/docs/report.pdf"]
+    assert document.content_type == "text"
+    assert document.content.find("h2").get_text() == "Page 1"
+    assert "Keywords: depression, anxiety, classroom" in document.content.get_text()
+
+
 def test_a_word_file_the_reader_refuses_is_named_with_the_reason(fixture, fake_github_session_factory):
     session = fake_github_session_factory(document_routes(fixture, data=b"not a document"))
     lines = []
@@ -934,7 +951,7 @@ def test_a_word_file_the_reader_refuses_is_named_with_the_reason(fixture, fake_g
 
     assert DOCUMENT_URL not in urls
     assert any(
-        "docs/plan.docx: skipped (not a Word, OpenDocument, or RTF file)" in line for line in lines
+        "docs/plan.docx: skipped (not a Word, OpenDocument, RTF, or PDF file)" in line for line in lines
     )
 
 
