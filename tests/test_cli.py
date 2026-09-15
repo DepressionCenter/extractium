@@ -11,7 +11,7 @@ tests/test_cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-15"
 
 import json
 import struct
@@ -798,6 +798,139 @@ class _LinkReadingSource:
         type(self).offered = tuple(links)
         yield Document(url=links[0], title="Linked", content="Spoken words.",
                        source_type="youtube", content_type="video_transcript")
+
+
+### Sources Running At The Same Time ###
+
+import dataclasses  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+
+
+class _SlowSource:
+    """A source that yields its pages with a pause, so finishing order differs from file order."""
+
+    name = "fakeslow"
+
+    def __init__(self, options):
+        self.pages = options["pages"]
+        self.pause = options["pause"]
+        self.fail_at = options.get("fail_at")
+
+    def fetch(self, session, cache, progress):
+        for position, url in enumerate(self.pages):
+            if self.fail_at == position:
+                raise RuntimeError(f"broke at {url}")
+            time.sleep(self.pause)
+            progress(f"[{position + 1:4d}] {url}")
+            yield Document(url=url, title=url.rsplit("/", 1)[-1], content="Body text.",
+                           source_type="web", content_type="page")
+
+
+def _slow_settings(*entries):
+    from extractium.config import config_from_mapping
+    return config_from_mapping({"sources": list(entries)})
+
+
+def _slow_registry():
+    from extractium.core.registry import Registry
+    registry = Registry()
+    registry.register_source(_SlowSource)
+    return registry
+
+
+def test_sources_running_at_once_still_return_documents_in_file_order():
+    """
+    The first source in the file keeps a page two sources both reach, so
+    the documents must come back in file order however the threads finish.
+    """
+    settings = _slow_settings(
+        {"type": "fakeslow", "label": "Slow", "pages": ["https://a.example/1", "https://a.example/2"], "pause": 0.05},
+        {"type": "fakeslow", "label": "Quick", "pages": ["https://b.example/1"], "pause": 0},
+    )
+    lines = []
+
+    documents, _, _ = cli.run_sources(settings, _slow_registry(), session=None, cache={}, progress=lines.append)
+
+    assert [(d.url, d.source_label) for d in documents] == [
+        ("https://a.example/1", "Slow"), ("https://a.example/2", "Slow"), ("https://b.example/1", "Quick"),
+    ]
+    assert lines[0] in ("Slow | Source: fakeslow", "Quick | Source: fakeslow")
+    assert sorted(line for line in lines if "b.example" in line) == ["Quick | [   1] https://b.example/1"]
+
+
+def test_one_source_at_a_time_keeps_the_log_unprefixed():
+    settings = _slow_settings(
+        {"type": "fakeslow", "label": "Slow", "pages": ["https://a.example/1"], "pause": 0},
+        {"type": "fakeslow", "label": "Quick", "pages": ["https://b.example/1"], "pause": 0},
+    )
+    settings = dataclasses.replace(settings, parallel_sources=1)
+    lines = []
+
+    cli.run_sources(settings, _slow_registry(), session=None, cache={}, progress=lines.append)
+
+    assert lines == ["Source: fakeslow", "[   1] https://a.example/1",
+                     "Source: fakeslow", "[   1] https://b.example/1"]
+
+
+def test_a_failing_source_stops_the_others_and_raises_its_own_error():
+    settings = _slow_settings(
+        {"type": "fakeslow", "label": "Long", "pages": [f"https://a.example/{n}" for n in range(200)], "pause": 0.01},
+        {"type": "fakeslow", "label": "Broken", "pages": ["https://b.example/1", "https://b.example/2"],
+         "pause": 0, "fail_at": 1},
+    )
+    lines = []
+    started = time.monotonic()
+
+    with pytest.raises(RuntimeError, match="broke at https://b.example/2"):
+        cli.run_sources(settings, _slow_registry(), session=None, cache={}, progress=lines.append)
+
+    # The long source was told to stop at its next line rather than
+    # running its two hundred pages to the end.
+    assert time.monotonic() - started < 1.5
+    assert len([line for line in lines if "a.example" in line]) < 200
+
+
+def test_a_keyboard_interrupt_in_one_source_ends_the_build_within_a_page():
+    class _Interrupting(_SlowSource):
+        name = "fakeinterrupt"
+
+        def fetch(self, session, cache, progress):
+            yield from super().fetch(session, cache, progress)
+            raise KeyboardInterrupt
+
+    from extractium.core.registry import Registry
+    registry = Registry()
+    registry.register_source(_SlowSource)
+    registry.register_source(_Interrupting)
+    settings = _slow_settings(
+        {"type": "fakeslow", "label": "Long", "pages": [f"https://a.example/{n}" for n in range(200)], "pause": 0.01},
+        {"type": "fakeinterrupt", "label": "Stopped", "pages": ["https://b.example/1"], "pause": 0},
+    )
+    started = time.monotonic()
+
+    with pytest.raises(KeyboardInterrupt):
+        cli.run_sources(settings, registry, session=None, cache={}, progress=lambda line: None)
+
+    assert time.monotonic() - started < 1.5
+
+
+def test_lines_written_from_several_threads_never_interleave(tmp_path):
+    path = tmp_path / "log.txt"
+    with open(path, "w", encoding="utf-8", newline="\n") as stream:
+        def worker(number):
+            for step in range(200):
+                cli.write_line(f"source {number} line {step}", stream)
+
+        threads = [threading.Thread(target=worker, args=(n,)) for n in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 800
+    assert all(line.startswith("source ") and " line " in line for line in lines)
 
 
 def test_links_the_handlers_held_back_reach_every_source_that_reads_them():

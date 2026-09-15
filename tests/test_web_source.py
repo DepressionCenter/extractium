@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-10"
+__date__ = "2026-09-15"
 
 import importlib
 import pathlib
@@ -429,14 +429,122 @@ def test_default_settings_use_the_truthful_user_agent_and_honor_robots():
     assert settings.max_pages == 10000 and settings.delay_seconds == 0.5
 
 
-def test_delay_is_applied_between_pages(isolated_core_cache, fake_session_factory, monkeypatch):
+def test_the_crawl_itself_never_sleeps_because_the_session_paces_per_host(
+    isolated_core_cache, fake_session_factory, monkeypatch
+):
+    """
+    The pause between requests is kept per host by the session a build
+    makes (extractium.core.transport), so two sources reading one host
+    together stay within the delay. A crawl handed a bare session is
+    therefore not paced, and must not sleep on its own either.
+    """
+    import time
     seed, private, session = _two_page_site(fake_session_factory, ROBOTS_ABSENT)
-    sleeps = []
-    monkeypatch.setattr(web.time, "sleep", sleeps.append)
+    monkeypatch.setattr(time, "sleep", lambda seconds: pytest.fail(f"slept {seconds}"))
 
-    crawl(make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0.25)), session)
+    documents = crawl(make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0.25)), session)
 
-    assert sleeps == [0.25, 0.25]
+    assert len(documents) == 2
+
+
+# ---------------------------------------------------------------------------
+# Several fetches in flight
+# ---------------------------------------------------------------------------
+
+def _chain_site(fake_session_factory, count=6):
+    """A seed whose page links to every other page, each linking onward, so order matters."""
+    urls = [f"https://example.org/page-{n}" for n in range(count)]
+
+    def html(n):
+        links = "".join(f'<a href="/page-{m}">{m}</a>' for m in range(count) if m != n)
+        return (
+            f"<html><head><title>Page {n}</title></head><body><nav>{links}</nav>"
+            f"<main><p>Page {n} body text long enough to clear the sixty character minimum threshold.</p>"
+            f'<a href="/page-{(n + 1) % count}">next</a></main></body></html>'
+        )
+
+    responses = {url: html_response(html(n)) for n, url in enumerate(urls)}
+    responses["https://example.org/robots.txt"] = ROBOTS_ABSENT
+    return urls[0], fake_session_factory(responses)
+
+
+def test_pages_in_flight_change_nothing_but_the_wall_clock(isolated_core_cache, fake_session_factory):
+    """
+    With several fetches in flight the crawl still visits, follows, and
+    yields pages in the order a one-at-a-time crawl would, and its log
+    reads the same, so the setting is safe to leave on.
+    """
+    seed, sequential = _chain_site(fake_session_factory)
+    one_at_a_time = []
+    expected = crawl(make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0)),
+                     sequential, progress=one_at_a_time.append)
+
+    seed, session = _chain_site(fake_session_factory)
+    in_flight = []
+    documents = crawl(
+        make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0, parallel_pages=3)),
+        session, progress=in_flight.append,
+    )
+
+    assert [d.url for d in documents] == [d.url for d in expected]
+    assert [d.title for d in documents] == [d.title for d in expected]
+    assert in_flight == one_at_a_time
+    requested = [c["url"] for c in session.calls if not c["url"].endswith("robots.txt")]
+    assert len(requested) == len(set(requested)) == 6
+
+
+def test_the_page_ceiling_holds_with_pages_in_flight(isolated_core_cache, fake_session_factory):
+    seed, session = _chain_site(fake_session_factory)
+
+    documents = crawl(
+        make_source(seed, settings=web.CrawlSettings(max_pages=2, delay_seconds=0, parallel_pages=4)),
+        session,
+    )
+
+    assert len(documents) == 2
+    assert len([c for c in session.calls if not c["url"].endswith("robots.txt")]) == 2
+
+
+def test_a_page_s_own_progress_lines_stay_under_its_own_line(isolated_core_cache, fake_session_factory):
+    """
+    A fetch in flight reports through a list of its own, replayed when the
+    page is processed, so a cached page's line never lands under another
+    page's heading in the log.
+    """
+    seed, session = _chain_site(fake_session_factory)
+    cache = {}
+    crawl(make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0)), session, cache=cache)
+
+    lines = []
+    seed, session = _chain_site(fake_session_factory)
+    for url in list(cache):
+        session.responses[url] = FakeResponse(status_code=304)
+    crawl(make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0, parallel_pages=3)),
+          session, progress=lines.append, cache=cache)
+
+    for position, line in enumerate(lines):
+        if "(cached, not modified)" in line:
+            assert lines[position - 1].startswith("[")
+
+
+def test_a_robots_refusal_is_reported_in_order_with_pages_in_flight(isolated_core_cache, fake_session_factory):
+    seed, private, session = _two_page_site(
+        fake_session_factory, robots_response("User-agent: *\nDisallow: /private/\n")
+    )
+    lines = []
+
+    documents = crawl(
+        make_source(seed, settings=web.CrawlSettings(max_pages=10, delay_seconds=0, parallel_pages=3)),
+        session, progress=lines.append,
+    )
+
+    assert [d.url for d in documents] == ["https://example.org"]
+    skip = next(i for i, line in enumerate(lines) if "disallowed by robots.txt" in line)
+    assert lines[skip - 1] == f"[   2] {private}"
+
+
+def test_crawl_settings_default_to_one_fetch_at_a_time():
+    assert web.CrawlSettings().parallel_pages == 1
 
 
 # ---------------------------------------------------------------------------

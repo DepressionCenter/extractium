@@ -31,10 +31,10 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-15"
 
-import time
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 
 from extractium.core import fetch as fetching
@@ -52,8 +52,14 @@ FALLBACK_HANDLER_NAME = GenericHandler.name
 # the same value the configuration file defaults to.
 DEFAULT_MAX_PAGES = 10000
 
-# Pause between requests when the caller gives none, in seconds.
+# Least time between two requests to one host when the caller gives none,
+# in seconds. The pause itself is taken by the session, per host; the
+# crawl only records the setting.
 DEFAULT_DELAY_SECONDS = 0.5
+
+# How many page fetches a crawl keeps in flight when the caller gives
+# none: one, which is a fetch at a time.
+DEFAULT_PARALLEL_PAGES = 1
 
 
 ### Crawl Settings ###
@@ -66,13 +72,19 @@ class CrawlSettings:
 
     Attributes:
         max_pages (int): the most pages one crawl may visit; 1 or more.
-        delay_seconds (float): pause after each page, in seconds; 0 for none.
+        delay_seconds (float): least time between two requests to the
+            same host, in seconds; 0 for none. The session the build
+            makes enforces it (see extractium.core.transport); a crawl
+            handed a bare session is not paced.
         user_agent (str): how the crawler introduces itself.
         respect_robots_txt (bool): whether robots.txt rules are honored.
         github_owners (tuple[str, ...]): the GitHub accounts this build
             may read. Empty means the build reads only the accounts its
             own sources named. The GitHub site handler enforces this; no
             other handler looks at it.
+        parallel_pages (int): how many page fetches a crawl keeps in
+            flight; 1 or more. Pages are still visited, and documents
+            still yielded, in the order a one-at-a-time crawl would.
     """
 
     max_pages: int = DEFAULT_MAX_PAGES
@@ -80,6 +92,7 @@ class CrawlSettings:
     user_agent: str = fetching.DEFAULT_USER_AGENT
     respect_robots_txt: bool = True
     github_owners: tuple = ()
+    parallel_pages: int = DEFAULT_PARALLEL_PAGES
 
     @property
     def blocked_retry_user_agent(self):
@@ -382,6 +395,13 @@ class WebSource:
         not yielded. Every page counts toward max_pages whether or not it
         yields a document.
 
+        Up to `parallel_pages` fetches are kept in flight, but pages are
+        taken from the queue, have their links read, and are yielded in
+        the order a one-at-a-time crawl would use, and each page's own
+        progress lines are printed together under its own line. The pause
+        between requests is the session's job, kept per host, so a crawl
+        that reads two hosts is not slowed by the pause on either.
+
         Args:
             session: HTTP session to request through (requests.Session or
                 a test double with the same get() signature).
@@ -428,83 +448,114 @@ class WebSource:
         queue = deque(seed_norms)
         landed = {}
 
-        while queue and len(visited) < settings.max_pages:
-            url = queue.popleft()
-            if url in visited:
-                continue
-            visited.add(url)
-            progress(f"[{len(visited):4d}] {url}")
-
+        def start_fetch(url, lines):
+            """Begins one page's fetch, with its progress lines collected for later."""
             handler = self.handler_for(url)
             request_url = handler.fetch_url(url)
-            if not robots.allows(request_url):
-                progress(f"  SKIP {url} -- disallowed by robots.txt")
-                continue
-
-            # Where a request actually lands is checked against the scope
-            # like any discovered link: a page may redirect off the site,
-            # and what arrives then is not this site's content.
-            is_seed = url in seed_norms
             expect_html = handler.expects_html(url)
-            fetched = fetching.fetch(
+            if not robots.allows(request_url):
+                lines.append(f"  SKIP {url} -- disallowed by robots.txt")
+                return handler, request_url, expect_html, None
+            fetch = lambda: fetching.fetch(
                 session, request_url, cache,
-                expect_html=expect_html, user_agent=settings.user_agent, progress=progress,
+                expect_html=expect_html, user_agent=settings.user_agent, progress=lines.append,
                 fallback_user_agent=settings.blocked_retry_user_agent,
                 note_final_url=lambda final, key=url: landed.__setitem__(key, final),
                 note_gone=lambda key=url: self.gone.add(key),
             )
-            if fetched is None:
-                continue
+            if pool is None:
+                result = Future()
+                result.set_result(fetch())
+            else:
+                result = pool.submit(fetch)
+            return handler, request_url, expect_html, result
 
-            if is_seed and self._seed_redirected_out_of_scope(
-                url, landed.get(url), auto_prefix, origin, include_res, crawl_exclude_res, progress
-            ):
-                continue
-            if not is_seed and self._redirected_out_of_scope(
-                url, request_url, landed.get(url), auto_prefix, origin, include_res,
-                crawl_exclude_res, progress,
-            ):
-                continue
+        def next_page():
+            """The next queued page with its fetch started, or None when none is left."""
+            while queue and len(visited) < settings.max_pages:
+                url = queue.popleft()
+                if url in visited:
+                    continue
+                visited.add(url)
+                lines = []
+                handler, request_url, expect_html, result = start_fetch(url, lines)
+                return len(visited), url, handler, request_url, expect_html, lines, result
+            return None
 
-            soup = fetched if expect_html else markdown_text_to_soup(fetched, url)
+        depth = max(1, int(settings.parallel_pages))
+        pool = ThreadPoolExecutor(max_workers=depth) if depth > 1 else None
+        in_flight = deque()
+        try:
+            while True:
+                # Keep the pipeline full, then take the oldest page in flight.
+                while len(in_flight) < depth:
+                    page = next_page()
+                    if page is None:
+                        break
+                    in_flight.append(page)
+                if not in_flight:
+                    break
+                ordinal, url, handler, request_url, expect_html, lines, result = in_flight.popleft()
+                progress(f"[{ordinal:4d}] {url}")
+                fetched = None if result is None else result.result()
+                for line in lines:
+                    progress(line)
+                if fetched is None:
+                    continue
 
-            # Enqueue new in-scope links, deduped before download.
-            for link in extract_links(soup, url):
-                if link not in visited and link not in queued:
-                    observe_link(self.handlers, link)
-                    in_scope = fetching.in_scope(
-                        link, auto_prefix, origin, include_res, crawl_exclude_res
-                    )
-                    if in_scope and handlers_allow(self.handlers, link):
-                        queued.add(link)
-                        queue.append(link)
+                # Where a request actually lands is checked against the
+                # scope like any discovered link: a page may redirect off
+                # the site, and what arrives then is not this site's content.
+                is_seed = url in seed_norms
+                if is_seed and self._seed_redirected_out_of_scope(
+                    url, landed.get(url), auto_prefix, origin, include_res, crawl_exclude_res, progress
+                ):
+                    continue
+                if not is_seed and self._redirected_out_of_scope(
+                    url, request_url, landed.get(url), auto_prefix, origin, include_res,
+                    crawl_exclude_res, progress,
+                ):
+                    continue
 
-            # Index exclusion only prevents indexing, not crawling.
-            if any(r.search(url) for r in index_exclude_res):
-                self._pause()
-                continue
+                soup = fetched if expect_html else markdown_text_to_soup(fetched, url)
 
-            # A page another source already turned into a document is
-            # still followed for its links, and never indexed twice.
-            if url in self.already_indexed:
-                progress("       (already read; not indexed again)")
-                self._pause()
-                continue
+                # Enqueue new in-scope links, deduped before download.
+                for link in extract_links(soup, url):
+                    if link not in visited and link not in queued:
+                        observe_link(self.handlers, link)
+                        in_scope = fetching.in_scope(
+                            link, auto_prefix, origin, include_res, crawl_exclude_res
+                        )
+                        if in_scope and handlers_allow(self.handlers, link):
+                            queued.add(link)
+                            queue.append(link)
 
-            extraction = handler.extract(soup, url)
-            if extraction is None:
-                continue
+                # Index exclusion only prevents indexing, not crawling.
+                if any(r.search(url) for r in index_exclude_res):
+                    continue
 
-            progress(f"       {handler.name}: {extraction.title[:70]}")
-            yield Document(
-                url=url,
-                title=extraction.title,
-                content=self._content_to_index(extraction, progress),
-                source_type=handler.source_type,
-                content_type=handler.content_type(url),
-                categories=extraction.categories,
-            )
-            self._pause()
+                # A page another source already turned into a document is
+                # still followed for its links, and never indexed twice.
+                if url in self.already_indexed:
+                    progress("       (already read; not indexed again)")
+                    continue
+
+                extraction = handler.extract(soup, url)
+                if extraction is None:
+                    continue
+
+                progress(f"       {handler.name}: {extraction.title[:70]}")
+                yield Document(
+                    url=url,
+                    title=extraction.title,
+                    content=self._content_to_index(extraction, progress),
+                    source_type=handler.source_type,
+                    content_type=handler.content_type(url),
+                    categories=extraction.categories,
+                )
+        finally:
+            if pool is not None:
+                pool.shutdown(wait=True, cancel_futures=True)
 
         progress(f"Crawled {len(visited)} page(s).")
 
@@ -647,8 +698,3 @@ class WebSource:
                 source.configure(self.registry, self.settings)
             return source
         return None
-
-    def _pause(self):
-        """Waits delay_seconds between requests, so the crawl stays polite to the site."""
-        if self.settings.delay_seconds > 0:
-            time.sleep(self.settings.delay_seconds)

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, what each exit code means, and how to try a small run
@@ -163,6 +163,15 @@ While the build runs, it prints progress to the error stream and the summary to 
 ```
 python -m extractium.cli build --config config.yaml > build-summary.txt
 ```
+
+Sources run several at a time by default, so their progress lines arrive mixed together. Each line then starts with the label of the source it belongs to:
+
+```
+U-M Health Research Resource Library | [  12] https://portal.example/TDClient/000/ExampleOrg/KB/ArticleDet?ID=12
+Depression Center Website | [   3] https://example.org/about
+```
+
+Set `parallel_sources: 1` in the settings file to run the sources one after another with the plain log. The [configuration reference](configuration.md) explains both settings under "Reading sources at the same time".
 
 If any output contains content read from a local folder, the summary says so on its own line. That only happens when you set `include_local: true` on that output.
 

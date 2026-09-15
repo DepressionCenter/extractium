@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-10"
+__date__ = "2026-09-15"
 
 import dataclasses
 import pathlib
@@ -171,6 +171,29 @@ def test_max_pages_of_one_is_accepted():
 def test_max_pages_of_zero_is_rejected():
     with pytest.raises(config.ConfigError, match="max_pages must be 1 or greater"):
         config.config_from_mapping(minimal(max_pages=0))
+
+
+def test_parallel_settings_default_on():
+    cfg = config.config_from_mapping(minimal())
+    assert cfg.parallel_sources == config.DEFAULT_PARALLEL_SOURCES == 4
+    assert cfg.parallel_pages == config.DEFAULT_PARALLEL_PAGES == 4
+
+
+def test_parallel_settings_of_one_are_accepted():
+    cfg = config.config_from_mapping(minimal(parallel_sources=1, parallel_pages=1))
+    assert (cfg.parallel_sources, cfg.parallel_pages) == (1, 1)
+
+
+@pytest.mark.parametrize("key", ["parallel_sources", "parallel_pages"])
+def test_parallel_settings_below_one_are_rejected(key):
+    with pytest.raises(config.ConfigError, match=f"{key} must be 1 or greater"):
+        config.config_from_mapping(minimal(**{key: 0}))
+
+
+@pytest.mark.parametrize("key", ["parallel_sources", "parallel_pages"])
+def test_parallel_settings_must_be_whole_numbers(key):
+    with pytest.raises(config.ConfigError, match=f"{key} must be a whole number, not bool"):
+        config.config_from_mapping(minimal(**{key: True}))
 
 
 def test_negative_delay_is_rejected():

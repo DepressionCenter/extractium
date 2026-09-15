@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/crawl-a-site.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Summary: How to set up your first real build: choosing a source type
 for each kind of content, the trial run and how to read llms.txt,
 tuning the include and exclude patterns, the two optional environment
@@ -103,7 +103,7 @@ Set them in the shell before the build, or as repository secrets passed to the b
 
 ## Step 5: Read what the build reports
 
-A build explains itself as it runs. The lines below are the ones that carry a decision you may want to change.
+A build explains itself as it runs. When several sources run at once, which is the default, each line starts with the label of its source, such as `Website | SKIP ...`; set `parallel_sources: 1` to run them one at a time with the plain log. The lines below are the ones that carry a decision you may want to change.
 
 | Line | What it means | What to do |
 |---|---|---|

@@ -13,7 +13,7 @@ extractium/core/cache.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,12 +32,13 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-10"
+__date__ = "2026-09-15"
 
 import hashlib
 import json
 import os
 import re
+import threading
 
 ### Cache Layout ###
 
@@ -109,6 +110,37 @@ _LISTING_ID_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
 # more than the last partial batch.
 CACHE_SAVE_INTERVAL = 25
 
+# Sources run in threads and share one metadata dict, so a save takes a
+# snapshot under this lock: serializing a dict another thread is adding
+# to raises, and two saves at once would race on the file.
+_META_LOCK = threading.Lock()
+
+
+### Atomic Writes ###
+
+def _write_atomically(path, write, mode="w"):
+    """
+    Writes a file through a temporary name and renames it into place, so
+    an interrupted run never leaves a truncated file behind.
+
+    The temporary name is unique to the process and the thread. Sources
+    run in threads, and two of them saving the same file at once would
+    otherwise collide on one temporary name and fail the rename.
+
+    Args:
+        path (str): the file to write.
+        write (Callable): receives the open file and writes it.
+        mode (str): "w" for text (UTF-8) or "wb" for bytes.
+
+    Raises:
+        OSError: if the directory or file cannot be written.
+    """
+    tmp_path = f"{path}.{os.getpid()}-{threading.get_ident()}.tmp"
+    encoding = None if "b" in mode else "utf-8"
+    with open(tmp_path, mode, encoding=encoding) as f:
+        write(f)
+    os.replace(tmp_path, path)
+
 
 def use_cache_dir(path):
     """
@@ -166,17 +198,17 @@ def save_cache_meta(cache_meta):
     """
     Atomically writes cache_meta to CACHE_META_PATH via a temp file +
     os.replace, so an interrupted run (Ctrl+C mid-write) never leaves a
-    truncated/corrupt file.
+    truncated/corrupt file. Safe to call from several threads that share
+    the dict: the save works from a snapshot taken under a lock.
 
     Args:
         cache_meta (dict): URL -> metadata dict, as returned by
             load_cache_meta and mutated by fetch().
     """
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    tmp_path = CACHE_META_PATH + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(cache_meta, f)
-    os.replace(tmp_path, CACHE_META_PATH)
+    with _META_LOCK:
+        snapshot = dict(cache_meta)
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        _write_atomically(CACHE_META_PATH, lambda f: json.dump(snapshot, f))
 
 
 ### Page File Paths ###
@@ -196,6 +228,21 @@ def cache_page_path(url):
     """
     h = hashlib.sha1(url.encode("utf-8")).hexdigest()
     return os.path.join(CACHE_PAGES_DIR, h + ".html")
+
+
+def save_page_text(url, text):
+    """
+    Stores one fetched page body under its URL's cache path.
+
+    Args:
+        url (str): the page URL.
+        text (str): the body as decoded text.
+
+    Raises:
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_PAGES_DIR, exist_ok=True)
+    _write_atomically(cache_page_path(url), lambda f: f.write(text))
 
 
 ### GitHub Cache Paths ###
@@ -253,11 +300,7 @@ def save_github_blob(blob_sha, text):
         text (str): the decoded file body.
     """
     os.makedirs(CACHE_GITHUB_BLOBS_DIR, exist_ok=True)
-    path = github_blob_path(blob_sha)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(tmp_path, path)
+    _write_atomically(github_blob_path(blob_sha), lambda f: f.write(text))
 
 
 ### Repository Deposit Cache ###
@@ -331,11 +374,10 @@ def save_deposit_text(deposit_id, last_modified, text):
         OSError: if the cache directory or file cannot be written.
     """
     os.makedirs(CACHE_REPOSITORY_DIR, exist_ok=True)
-    path = deposit_text_path(deposit_id)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump({"last_modified": last_modified, "text": text}, f)
-    os.replace(tmp_path, path)
+    _write_atomically(
+        deposit_text_path(deposit_id),
+        lambda f: json.dump({"last_modified": last_modified, "text": text}, f),
+    )
 
 
 ### Code Analysis Cache ###
@@ -406,11 +448,10 @@ def save_analysis(blob_sha, key, records):
         OSError: if the cache directory or file cannot be written.
     """
     os.makedirs(CACHE_GITHUB_ANALYSIS_DIR, exist_ok=True)
-    path = analysis_path(blob_sha)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump({"key": dict(key), "records": dict(records)}, f)
-    os.replace(tmp_path, path)
+    _write_atomically(
+        analysis_path(blob_sha),
+        lambda f: json.dump({"key": dict(key), "records": dict(records)}, f),
+    )
 
 
 ### YouTube Cache ###
@@ -491,8 +532,6 @@ def save_video(video_id, title, published_at, language, segments):
         OSError: if the cache directory or file cannot be written.
     """
     os.makedirs(CACHE_YOUTUBE_VIDEOS_DIR, exist_ok=True)
-    path = video_path(video_id)
-    tmp_path = path + ".tmp"
     record = {
         "title": title,
         "published_at": published_at,
@@ -502,9 +541,7 @@ def save_video(video_id, title, published_at, language, segments):
             for segment in segments
         ],
     }
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(record, f)
-    os.replace(tmp_path, path)
+    _write_atomically(video_path(video_id), lambda f: json.dump(record, f))
 
 
 def listing_path(listing_id):
@@ -575,11 +612,7 @@ def save_listing(listing_id, video_ids):
         OSError: if the cache directory or file cannot be written.
     """
     os.makedirs(CACHE_YOUTUBE_LISTINGS_DIR, exist_ok=True)
-    path = listing_path(listing_id)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump({"video_ids": list(video_ids)}, f)
-    os.replace(tmp_path, path)
+    _write_atomically(listing_path(listing_id), lambda f: json.dump({"video_ids": list(video_ids)}, f))
 
 
 def channel_id_path(selector):
@@ -651,8 +684,7 @@ def save_channel_id(selector, channel_id):
         OSError: if the cache directory or file cannot be written.
     """
     os.makedirs(CACHE_YOUTUBE_LISTINGS_DIR, exist_ok=True)
-    path = channel_id_path(selector)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump({"selector": selector, "channel_id": channel_id}, f)
-    os.replace(tmp_path, path)
+    _write_atomically(
+        channel_id_path(selector),
+        lambda f: json.dump({"selector": selector, "channel_id": channel_id}, f),
+    )

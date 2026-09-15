@@ -12,7 +12,7 @@ extractium/core/fetch.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,10 +31,9 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-15"
 
 import hashlib
-import os
 import re
 import time
 import urllib.robotparser
@@ -383,9 +382,7 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html):
         return None
     if not expect_html and "text/plain" not in content_type:
         return None
-    os.makedirs(cache.CACHE_PAGES_DIR, exist_ok=True)
-    with open(cache.cache_page_path(url), "w", encoding="utf-8") as f:
-        f.write(r.text)
+    cache.save_page_text(url, r.text)
     cache_meta[url] = {
         "etag": r.headers.get("ETag"),
         "last_modified": r.headers.get("Last-Modified"),

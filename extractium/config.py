@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-10"
+__date__ = "2026-09-15"
 
 import pathlib
 import re
@@ -77,6 +77,14 @@ DEFAULT_DELAY_SECONDS = 0.5
 # robots.txt is honored unless the operator switches it off for a site
 # they own.
 DEFAULT_RESPECT_ROBOTS_TXT = True
+
+# How many sources run at the same time, and how many page fetches one
+# crawl keeps in flight. Both are on by default because the pause between
+# requests is kept per host whatever these say, so a site sees the same
+# request rate either way; only the wall-clock time changes. 1 runs
+# everything one after another, which also keeps the log unprefixed.
+DEFAULT_PARALLEL_SOURCES = 4
+DEFAULT_PARALLEL_PAGES = 4
 
 # Which content the PHI lint scans: local sources only, everything, or
 # nothing. Local content is the default because it is the content that
@@ -234,6 +242,8 @@ KNOWN_KEYS = frozenset({
     "cache_dir",
     "max_pages",
     "delay_seconds",
+    "parallel_sources",
+    "parallel_pages",
     "user_agent",
     "respect_robots_txt",
     "transport",
@@ -357,7 +367,11 @@ class Config:
         out_dir (str): folder every adapter writes under.
         cache_dir (str): folder for the fetch cache.
         max_pages (int): hard ceiling on pages visited in one crawl; 1 or more.
-        delay_seconds (float): pause between requests, in seconds; 0 or more.
+        delay_seconds (float): least time between two requests to the same
+            host, in seconds; 0 or more.
+        parallel_sources (int): how many sources run at the same time; 1 or more.
+        parallel_pages (int): how many page fetches one crawl keeps in
+            flight; 1 or more.
         user_agent (str): the User-Agent header the crawler sends.
         respect_robots_txt (bool): whether robots.txt disallow rules are honored.
         transport (str): one of TRANSPORT_MODES; how connections are opened.
@@ -380,6 +394,8 @@ class Config:
     cache_dir: str = DEFAULT_CACHE_DIR
     max_pages: int = DEFAULT_MAX_PAGES
     delay_seconds: float = DEFAULT_DELAY_SECONDS
+    parallel_sources: int = DEFAULT_PARALLEL_SOURCES
+    parallel_pages: int = DEFAULT_PARALLEL_PAGES
     user_agent: str = DEFAULT_USER_AGENT
     respect_robots_txt: bool = DEFAULT_RESPECT_ROBOTS_TXT
     transport: str = DEFAULT_TRANSPORT
@@ -1111,6 +1127,10 @@ def config_from_mapping(data, source="configuration"):
         delay_seconds=_read_non_negative_number(
             data, "delay_seconds", DEFAULT_DELAY_SECONDS, source
         ),
+        parallel_sources=_read_positive_int(
+            data, "parallel_sources", DEFAULT_PARALLEL_SOURCES, source
+        ),
+        parallel_pages=_read_positive_int(data, "parallel_pages", DEFAULT_PARALLEL_PAGES, source),
         user_agent=user_agent,
         respect_robots_txt=_read_bool(data, "respect_robots_txt", DEFAULT_RESPECT_ROBOTS_TXT, source),
         transport=_read_choice(data, "transport", DEFAULT_TRANSPORT, TRANSPORT_MODES, source),

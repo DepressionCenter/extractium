@@ -80,7 +80,9 @@ Every source also needs a `label`. See "Naming your sources" below.
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
 | `max_pages` | whole number | `10000` | The most pages one web crawl may visit. Each `web` source counts its own pages against it, so two `web` sources may visit twice as many between them, and the other source kinds do not use it. Must be 1 or more. |
-| `delay_seconds` | number | `0.5` | Seconds to wait between requests. Use `0` for no wait. |
+| `delay_seconds` | number | `0.5` | The least time, in seconds, between two requests to the same site. It holds across every source and every worker in the build. Use `0` for no wait. |
+| `parallel_sources` | whole number | `4` | How many sources run at the same time. `1` runs them one after another. See "Reading sources at the same time" below. |
+| `parallel_pages` | whole number | `4` | How many page fetches one web crawl keeps in flight. `1` fetches one page at a time. Pages are still visited and indexed in the same order either way. |
 | `user_agent` | text | `Extractium/<version> (+https://github.com/DepressionCenter/extractium)` | How the crawler introduces itself to each site. Sent with every request, including the one for `robots.txt`. |
 | `respect_robots_txt` | true or false | `true` | Whether each site's `robots.txt` rules are honored. Turning it off also lets a page that refuses the crawler be retried once as a browser. See "How robots.txt is read" and "What happens when a site refuses the crawler" below. |
 | `transport` | `auto`, `browser`, or `plain` | `auto` | How the crawler opens its connections. `auto` makes an ordinary request and, only when the answer is a bot-protection challenge, retries once over a browser-shaped handshake, keeping that choice for the host. `browser` uses the handshake from the first request. `plain` never does. The crawler's own `user_agent` is sent either way. See "How a site behind bot protection is read" below. |
@@ -91,6 +93,22 @@ Every source also needs a `label`. See "Naming your sources" below.
 Quote the value when you turn the check off (`phi_lint: 'off'`). YAML reads a bare `off` as the word false, and the build refuses it with a message naming the setting.
 
 See "The check for protected health information" below for what the check does.
+
+### Reading sources at the same time
+
+A build with several sources runs up to `parallel_sources` of them at once, and each web crawl keeps up to `parallel_pages` fetches in flight. Both are on by default because they change how long a build takes and nothing else:
+
+- A site is never asked faster than `delay_seconds` allows. The pause is kept per site, across every source and every worker, so two sources that read the same site together still send one request per pause between them.
+- The result is the same. Sources hand their pages over in the order they are listed, whichever finished first, so a page two sources both reach still goes to the one listed first. A crawl visits, follows, and indexes pages in the order a one-at-a-time crawl would.
+- The log is readable. When more than one source runs at once, every progress line starts with the label of the source it belongs to, such as `Depression Center Website | [  12] https://...`. A crawl's own lines for one page stay together under that page's line.
+- Stopping still works. Ctrl+C, or a failure in one source, ends the other sources at their next page rather than at the end of their crawl.
+
+Set both to `1` for a build that runs everything one after another with an unprefixed log, which is useful when you are reading the log closely.
+
+```yaml
+parallel_sources: 1
+parallel_pages: 1
+```
 
 ### Which GitHub accounts a build reads
 
