@@ -96,6 +96,11 @@ code = [
     # Checked against the same gate on 2026-09-15: MIT, prebuilt wheels
     # for Windows, macOS, and Linux, no runtime download.
     "tree-sitter-batch>=0.11.1,<0.12.0",
+    # Checked against the same gate on 2026-09-15: MIT, prebuilt wheels
+    # for Windows, macOS, and Linux, no runtime download. The Go grammar
+    # declares Python 3.10 as its floor, which is this project's floor.
+    "tree-sitter-go>=0.25.0,<0.26.0",
+    "tree-sitter-rust>=0.24.2,<0.25.0",
 ]
 # Reading a YouTube channel's captions. Optional because most builds index
 # no video at all, and because a build that reads only transcripts an

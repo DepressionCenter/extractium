@@ -249,6 +249,56 @@ def test_kotlin_swift_powershell_and_matlab_each_yield_their_definitions(parsers
     assert named(matlab, "summarize_recording").doc.startswith("Returns the mean")
 
 
+def test_go_yields_its_package_types_methods_constants_imports_and_calls(parsers_installed):
+    """
+    Go writes a method beside its receiver rather than inside a type,
+    so the method is recorded under its own name with the receiver kept
+    in its signature. A struct is the language's class; an interface
+    is a type.
+    """
+    facts = analyze("sample.go")
+
+    assert facts.tier == languages.TIER_TREE_SITTER
+    assert facts.doc.startswith("Package search is a small client")
+    assert named(facts, "search").kind == "module"
+    assert named(facts, "Compendium").kind == "class"
+    assert named(facts, "Ranker").kind == "type"
+    assert named(facts, "Limit").kind == "constant"
+    assert named(facts, "Limit").signature == "Limit = 10"
+    search = named(facts, "Search")
+    assert search.kind == "method"
+    assert search.signature == "func (c *Compendium) Search(term string) []string"
+    assert search.doc == "Search returns the titles that hold the term."
+    assert "Contains" in search.calls
+    assert "Println" in named(facts, "Describe").calls
+    assert {record.target for record in facts.imports} == {"fmt", "strings"}
+
+
+def test_rust_yields_its_structs_traits_impl_methods_modules_and_uses(parsers_installed):
+    """
+    An impl block is recorded as a class named for the type it
+    implements, so a method inside it belongs to that type, and a doc
+    comment written with three slashes is the method's documentation.
+    """
+    facts = analyze("sample.rs")
+
+    assert facts.tier == languages.TIER_TREE_SITTER
+    assert facts.doc.startswith("A small client for a built index")
+    assert named(facts, "Result").kind == "class"
+    assert named(facts, "Result").signature == "pub struct Result"
+    assert named(facts, "Ranking").kind == "type"
+    assert named(facts, "Ranking.rank").kind == "function"
+    assert named(facts, "LIMIT").kind == "constant"
+    assert named(facts, "util").kind == "module"
+    assert named(facts, "util.tally").doc == "Counts how often each title appears."
+    search = named(facts, "Compendium.search")
+    assert search.kind == "method"
+    assert search.doc == "Returns the titles that hold the term."
+    assert "contains" in search.calls
+    assert "println" in named(facts, "describe").calls
+    assert {record.target for record in facts.imports} == {"std::collections::HashMap"}
+
+
 def test_a_batch_file_yields_its_labels_and_the_commands_it_runs(parsers_installed):
     """
     A batch file has no functions. A label is where "call" and "goto"

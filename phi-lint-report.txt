@@ -2,7 +2,7 @@ Possible protected health information
 =====================================
 
 This check looked at content read from a local folder.
-Documents read: 0. Left out by the setting: 27.
+Documents read: 0. Left out by the setting: 2.
 
 It looks for the shapes identifiers usually take. It cannot read meaning,
 so it will miss things and it will flag things that are fine. Treat every

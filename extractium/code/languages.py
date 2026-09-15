@@ -280,6 +280,24 @@ LANGUAGES = (
         captures=("definition.class", "definition.function", "name", "doc", "call"),
         ctags_language="MatLab",
     ),
+    LanguageSpec(
+        name="go", display="Go",
+        extensions=(".go",),
+        module="tree_sitter_go", distribution="tree-sitter-go",
+        grammar_license="MIT",
+        comment_nodes=("comment",),
+        captures=ALL_CAPTURES,
+        ctags_language="Go",
+    ),
+    LanguageSpec(
+        name="rust", display="Rust",
+        extensions=(".rs",),
+        module="tree_sitter_rust", distribution="tree-sitter-rust",
+        grammar_license="MIT",
+        comment_nodes=("line_comment", "block_comment"),
+        captures=ALL_CAPTURES,
+        ctags_language="Rust",
+    ),
     # R is the gap in this table, and not a small one: a great deal of
     # the analysis code in health research is written in R. No R grammar
     # is published to the Python package index, so R files are read by
@@ -304,10 +322,8 @@ LANGUAGES = (
         extensions=(".cpp", ".cc", ".cxx", ".hpp", ".hh"), ctags_language="C++",
     ),
     LanguageSpec(name="java", display="Java", extensions=(".java",), ctags_language="Java"),
-    LanguageSpec(name="go", display="Go", extensions=(".go",), ctags_language="Go"),
     LanguageSpec(name="ruby", display="Ruby", extensions=(".rb",), ctags_language="Ruby"),
     LanguageSpec(name="php", display="PHP", extensions=(".php",), ctags_language="PHP"),
-    LanguageSpec(name="rust", display="Rust", extensions=(".rs",), ctags_language="Rust"),
     LanguageSpec(name="perl", display="Perl", extensions=(".pl", ".pm"), ctags_language="Perl"),
     LanguageSpec(name="julia", display="Julia", extensions=(".jl",), ctags_language="Julia"),
     LanguageSpec(name="sas", display="SAS", extensions=(".sas",), ctags_language="SAS"),
