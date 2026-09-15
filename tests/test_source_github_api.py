@@ -147,7 +147,9 @@ def make_source(progress=quiet, **options):
         **options,
     }
     source = GitHubApiSource(validated)
-    source.configure(build_registry(), CrawlSettings(delay_seconds=0, max_pages=5))
+    # A ceiling above anything the fixture holds: a file counts as one
+    # page, and these tests read every file.
+    source.configure(build_registry(), CrawlSettings(delay_seconds=0, max_pages=500))
     return source
 
 
@@ -971,3 +973,23 @@ def test_a_word_file_is_classified_as_a_document_and_the_binary_format_is_not():
     assert github_files.classify("docs/plan.rtf") == "document"
     assert github_files.classify("docs/plan.doc") is None
     assert github_files.content_type_for("docs/plan.docx") == "text"
+
+def test_max_pages_stops_the_source_after_that_many_files(fixture, fake_github_session_factory):
+    """
+    A file is one page. The ceiling is applied before the download, the
+    repository's own line says how much of it was read, and a repository
+    past the ceiling is named as not read rather than marked as covered.
+    """
+    session = fake_github_session_factory(api_routes(fixture))
+    source = make_source()
+    source.configure(build_registry(), CrawlSettings(delay_seconds=0, max_pages=2))
+    lines = []
+
+    documents = read(source, session, progress=lines.append)
+
+    files = [d for d in documents if d.content_type not in ("repo_map", "code_symbol")]
+    assert len(files) == 2
+    assert any(line.startswith("  example-org/example-tools: indexed 2 file(s) of") for line in lines)
+    assert "  example-org/example-notes: not read; max_pages was reached" in lines
+    assert "  max_pages: the ceiling of 2 file(s) was reached; anything past it was not read" in lines
+    assert "example-org/example-notes" not in source.coverage

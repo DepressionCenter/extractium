@@ -241,7 +241,8 @@ respect_robots_txt: false
 # it, as examples/data-repo/ does.
 cache_dir: .kb_cache
 
-# A ceiling for the whole build. Raise it once the page list in dist/llms.txt
+# A ceiling for each source: web pages, videos, deposits, or files, whichever
+# the source reads. Raise it once the page list in dist/llms.txt
 # looks right. For a first run, cap it far lower from the command line instead
 # of editing this file:
 #   python -m extractium.cli build --config config.yaml --max-pages 25

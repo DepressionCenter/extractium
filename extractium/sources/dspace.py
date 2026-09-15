@@ -13,7 +13,7 @@ extractium/sources/dspace.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -38,6 +38,7 @@ import re
 from urllib.parse import urlparse
 
 from extractium.core import cache as caching
+from extractium.core.ceiling import PageCeiling
 from extractium.core.fetch import DEFAULT_USER_AGENT
 from extractium.core.models import Document
 from extractium.sources.dspace_client import (
@@ -144,8 +145,9 @@ class DSpaceSource:
         """
         Adopts the build's global crawl settings.
 
-        Only two of them apply here: how the build introduces itself, and
-        how long it waits between requests. A repository interface is read
+        Three of them apply here: how the build introduces itself, how
+        long it waits between requests, and `max_pages`, under which a
+        deposit counts as one page. A repository interface is read
         rather than crawled, so nothing else in those settings is used.
 
         Args:
@@ -191,21 +193,33 @@ class DSpaceSource:
             delay_seconds=self._delay_seconds(),
         )
         progress(f"DSpace:       {self.api_url}")
+        # One ceiling across the source's collections, as one crawl has
+        # one ceiling across its seeds. Stopping the listing early means
+        # the pages of deposits past it are never requested.
+        ceiling = PageCeiling.for_settings(self.settings, "deposit")
         for selector in self.collections:
+            if ceiling.reached:
+                break
             collection = self._collection(client, selector, progress)
             deposits = with_text = 0
             for deposit in self._deposits(client, collection):
+                if not ceiling.allow():
+                    break
                 document, has_text = self._document_for(client, deposit, collection, progress)
-                if document is None:
-                    continue
-                deposits += 1
-                with_text += 1 if has_text else 0
-                yield document
+                if document is not None:
+                    deposits += 1
+                    with_text += 1 if has_text else 0
+                    yield document
+                # Checked before the next deposit is asked for, so the
+                # listing page it would sit on is never requested.
+                if ceiling.reached:
+                    break
             progress(
                 f"  {collection['name']}: {deposits} deposit(s), "
                 f"{with_text} with text read from their files"
             )
             self.coverage += ((collection["name"], deposits, with_text),)
+        ceiling.report(progress)
 
     def _collection(self, client, selector, progress):
         """

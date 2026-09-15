@@ -303,3 +303,17 @@ def test_a_document_over_the_ceiling_is_skipped_before_it_is_read(folder, monkey
 
     assert "local:notes.docx" not in urls
     assert any("byte ceiling for a document): local:notes.docx" in line for line in lines)
+
+def test_max_pages_stops_the_source_after_that_many_files(folder):
+    from extractium.sources.web import CrawlSettings
+
+    source = make_source(folder)
+    source.configure(None, CrawlSettings(max_pages=2))
+    lines = []
+
+    documents = list(source.fetch(None, None, lines.append))
+
+    assert len(documents) == 2
+    assert "  max_pages: the ceiling of 2 file(s) was reached; anything past it was not read" in lines
+    # Built without settings, as a library caller may, the source has no ceiling.
+    assert len(read(folder)) > 2

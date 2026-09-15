@@ -375,7 +375,9 @@ class Config:
         slug (str): the short name the output files are named after.
         out_dir (str): folder every adapter writes under.
         cache_dir (str): folder for the fetch cache.
-        max_pages (int): hard ceiling on pages visited in one crawl; 1 or more.
+        max_pages (int): hard ceiling on what one source reads, in its
+            own unit: pages for a crawl, videos, deposits, files, or
+            concept files for the other kinds; 1 or more.
         delay_seconds (float): least time between two requests to the same
             host, in seconds; 0 or more.
         parallel_sources (int): how many sources run at the same time; 1 or more.

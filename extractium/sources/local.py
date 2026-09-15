@@ -38,6 +38,7 @@ import re
 from bs4 import BeautifulSoup
 
 from extractium.core import prose
+from extractium.core.ceiling import PageCeiling
 from extractium.core.models import LOCAL_URL_PREFIX, Document
 from extractium.readers import documents as readers
 from extractium.sources.generic import GENERIC_CONTENT_SELECTORS, page_title, select_content
@@ -199,6 +200,7 @@ class LocalSource:
         self.path = options["path"]
         self.include_globs = tuple(options["include_globs"])
         self.read_documents = bool(options.get("read_documents", False))
+        self.settings = None
 
     def matching_files(self, root, progress):
         """
@@ -220,9 +222,21 @@ class LocalSource:
         """
         return files_inside(root, self.include_globs, progress)
 
+    def configure(self, registry, settings):
+        """
+        Adopts the build's global crawl settings. Only `max_pages` applies
+        here, a file counting as one page; a folder is read, not requested.
+
+        Args:
+            registry (extractium.core.registry.Registry): unused.
+            settings (extractium.sources.web.CrawlSettings): the build's settings.
+        """
+        self.settings = settings
+
     def fetch(self, session, cache, progress):
         """
-        Yields one Document per readable file under the configured folder.
+        Yields one Document per readable file under the configured folder,
+        up to the build's page ceiling.
 
         Args:
             session: unused; a local file is not requested over the network.
@@ -246,7 +260,10 @@ class LocalSource:
         root = root.resolve()
         progress(f"Reading local files under {len(self.include_globs)} pattern(s).")
 
+        ceiling = PageCeiling.for_settings(self.settings, "file")
         for path in self.matching_files(root, progress):
+            if not ceiling.allow():
+                break
             url = relative_url(root, path)
             if readers.is_document_path(path):
                 # A document file is never read as text: its bytes go to a
@@ -279,6 +296,7 @@ class LocalSource:
                 content_type=content_type_for(path),
                 local=True,
             )
+        ceiling.report(progress)
 
     def _document(self, path, url, progress):
         """

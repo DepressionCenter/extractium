@@ -96,7 +96,7 @@ It needs Python's scripts folder on your `PATH`, which it often is not after a u
 |---|---|
 | `--config FILE` | Path to the settings file. Required. |
 | `--out-dir DIR` | Write the outputs here instead of the folder the settings file names. |
-| `--max-pages N` | Visit at most N pages. Overrides the setting in the file. |
+| `--max-pages N` | Read at most N pages per source: web pages, videos, deposits, or files, whichever the source reads. Overrides the setting in the file. |
 | `--float32-vecs` | Store the vectors at full precision instead of the compressed default. The file grows about four times. Use it only if you are comparing search quality. |
 | `--version` | Print the version and stop. |
 

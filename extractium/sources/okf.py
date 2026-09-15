@@ -10,7 +10,7 @@ extractium/sources/okf.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -36,6 +36,7 @@ import re
 import urllib.parse
 
 from extractium.adapters.okf import CONCEPT_TYPES, INDEX_FILE, LOG_FILE, split_front_matter
+from extractium.core.ceiling import PageCeiling
 from extractium.core.chunk import markdown_text_to_soup
 from extractium.core.models import LOCAL_URL_PREFIX, Document
 from extractium.sources.local import files_inside
@@ -162,12 +163,25 @@ class OkfSource:
 
     def __init__(self, options):
         self.path = pathlib.Path(options["path"])
+        self.settings = None
         self.read = 0
         self.skipped = 0
 
+    def configure(self, registry, settings):
+        """
+        Adopts the build's global crawl settings. Only `max_pages` applies
+        here, a concept file counting as one page.
+
+        Args:
+            registry (extractium.core.registry.Registry): unused.
+            settings (extractium.sources.web.CrawlSettings): the build's settings.
+        """
+        self.settings = settings
+
     def fetch(self, session, cache, progress):
         """
-        Yields one Document per readable concept file in the bundle.
+        Yields one Document per readable concept file in the bundle, up to
+        the build's page ceiling.
 
         Args:
             session: unused; a bundle is read from disk.
@@ -182,10 +196,13 @@ class OkfSource:
         if not root.is_dir():
             progress(f"  skipped (not a folder): {self.path}")
             return
+        ceiling = PageCeiling.for_settings(self.settings, "concept file")
         for file in files_inside(root, CONCEPT_GLOBS, progress):
             relative = file.relative_to(root).as_posix()
             if relative in RESERVED_FILES:
                 continue
+            if not ceiling.allow():
+                break
             try:
                 text = file.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError) as e:
@@ -200,6 +217,7 @@ class OkfSource:
             self.read += 1
             progress(f"  read: {relative}")
             yield document
+        ceiling.report(progress)
 
     def summary_lines(self):
         """One line saying how many concepts were read and skipped."""

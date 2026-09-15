@@ -634,3 +634,22 @@ def test_the_client_names_the_reader_site_when_it_answers_instead(fixture):
 
     with pytest.raises(DSpaceNotAnInterface, match="dspaceServer"):
         client.collection(COLLECTION_ID)
+
+def test_max_pages_stops_the_source_after_that_many_deposits(fixture):
+    """A deposit is one page, and a listing page past the ceiling is never requested."""
+    from extractium.sources.web import CrawlSettings
+
+    records = fixture["deposits_page_one"]
+    session = FakeDSpaceSession(routes(fixture, pages=[records[:2], records[2:]]))
+    source = DSpaceSource(options(fixture))
+    source.configure(None, CrawlSettings(max_pages=2))
+    lines = []
+
+    documents = list(source.fetch(session, {}, lines.append))
+
+    assert [d.title for d in documents] == [
+        "Wearable Sleep Tracking in Practice", "Poster: Example Study Findings",
+    ]
+    assert "  max_pages: the ceiling of 2 deposit(s) was reached; anything past it was not read" in lines
+    searches = [c for c in session.calls if c["url"].endswith("/discover/search/objects")]
+    assert len(searches) == 1
