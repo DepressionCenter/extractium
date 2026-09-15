@@ -206,6 +206,12 @@ out_dir: dist
 # and the right setting here.
 transport: auto
 
+# Every site in this file is the center's own, so the robots.txt rules are
+# not applied. Turning this off also lets a page that answers 401, 403, or
+# 429 to the crawler's own name be asked for once more as a browser, and
+# both attempts are printed. Leave it at true for any site you do not own.
+respect_robots_txt: false
+
 # Fetched pages, GitHub blobs, and YouTube transcripts between builds. The
 # transcripts are the part a scheduled build cannot fetch for itself; a data
 # repository that runs on a schedule names a visible folder here and commits
