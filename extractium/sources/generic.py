@@ -12,7 +12,7 @@ extractium/sources/generic.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -67,8 +67,12 @@ STRIP_TAGS = (
 )
 
 # Non-content pages found on most websites: search forms, sign-in pages,
-# print views, tag listings, and per-person pages. Applied to every crawl
-# because this handler is always enabled.
+# print views, tag listings, per-person pages, and the folders that hold
+# programs rather than pages: a web server's cgi-bin, the cdn-cgi folder a
+# content-delivery network answers for (its email-protection link is on
+# every page it serves and answers 404 to a crawler), a site's scripts,
+# and its api. Applied to every crawl because this handler is always
+# enabled.
 # A site serves these both bare, as ".../Search", and with something after
 # them, as "/Search/" or "/Search?q=x". `[/?$]` is a character class of
 # three literal characters, so it matches a dollar sign in a URL and never
@@ -86,6 +90,10 @@ GENERIC_NON_CONTENT_SEGMENTS = (
     "comments?",
     "author",
     "profile",
+    "cgi-bin",
+    "cdn-cgi",
+    "scripts",
+    "api",
 )
 
 # A Drupal site writes a faceted view of a listing as "?f[0]=topic:12"

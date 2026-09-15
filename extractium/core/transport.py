@@ -14,7 +14,7 @@ extractium/core/transport.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -189,11 +189,24 @@ class AutoSession:
             that the browser transport cannot be tried for is returned as
             it is, so the caller reports the refusal as usual.
         """
+        return self._request("get", url, **kwargs)
+
+    def post(self, url, **kwargs):
+        """
+        Sends one request with a body, the way get fetches, over whichever
+        transport the host has earned. A listing that pages through a
+        site's own interface asks this way, and the host's transport is
+        decided by exactly the same rule.
+        """
+        return self._request("post", url, **kwargs)
+
+    def _request(self, method, url, **kwargs):
+        """One request by either method, with the per-host transport rule applied."""
         host = host_of(url)
         if self.transport_by_host.get(host) == TRANSPORT_BROWSER:
-            return self._browser().get(url, **kwargs)
+            return getattr(self._browser(), method)(url, **kwargs)
 
-        response = self.plain.get(url, **kwargs)
+        response = getattr(self.plain, method)(url, **kwargs)
         if not is_challenge(response):
             # robots.txt is a static file the protection never challenges,
             # so its answer says nothing about how the host's pages will be
@@ -213,7 +226,7 @@ class AutoSession:
 
         if self.delay_seconds > 0:
             self.sleep(self.delay_seconds)
-        retried = browser.get(url, **kwargs)
+        retried = getattr(browser, method)(url, **kwargs)
         # The host keeps the browser transport even when the retry was
         # refused too: the plain transport is known not to work there.
         if self.transport_by_host.get(host) != TRANSPORT_BROWSER:
