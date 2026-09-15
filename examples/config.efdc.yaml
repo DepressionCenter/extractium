@@ -110,11 +110,18 @@ sources:
   #    One crawl, so one list of pages already visited: anything reachable
   #    from both addresses is fetched once and indexed once. One page
   #    budget, and one set of patterns, too.
+  #
+  #    Some pages, the events pages among them, link to Google Docs, Sheets,
+  #    or Slides shared with the link. The leaf pattern reads each such file
+  #    the site links to, without following any link found in it. A file
+  #    that is not shared is reported and skipped.
   - label: Depression Center Website
     type: web
     seed_urls:
       - https://depressioncenter.org/
       - https://depressioncenter.org/outreach-education/depression-center-toolkit
+    leaf_patterns:
+      - '^https://docs\.google\.com/'
 
   # 5. Peer-to-Peer Depression Awareness Program Resource Center. Its own
   #    host, so it cannot overlap with source 4.
