@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-15"
 
 import pathlib
 import re
@@ -250,6 +250,29 @@ def test_the_windows_script_downloads_through_powershell_before_python():
 
     assert "Invoke-WebRequest" in text
     assert "Expand-Archive" in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_avoids_a_free_threaded_python(script):
+    """
+    Every parser grammar ships abi3 wheels only, which a free-threaded
+    Python cannot use, so pip falls back to a source archive that does not
+    build. A machine whose default Python is the free-threaded build must
+    still get a working environment, and one made earlier with that build
+    must be named as the cause rather than failing inside pip.
+    """
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    assert "Py_GIL_DISABLED" in text
+    assert "sys.version_info >= (3, 10)" in text
+    assert "free-threaded" in text
+    assert "Delete that folder and run this script again" in text
+    if script == "run.bat":
+        assert text.count("Py_GIL_DISABLED") == 2   # the choice, and the existing environment
+        assert '"py -3.10"' in text and '"python"' in text
+    else:
+        assert text.count("is_standard_python") == 3   # defined, the choice, the existing environment
+        assert "python3.10" in text
 
 
 @pytest.mark.parametrize("script", ["run.sh", "run.bat"])

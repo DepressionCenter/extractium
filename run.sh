@@ -3,7 +3,7 @@
 # run.sh
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-14
+# Last Modified: 2026-09-15
 # Summary: One-command build for macOS and Linux. Downloads Extractium when
 # this script is on its own, creates a virtual environment beside the
 # checkout, installs the pinned dependencies, installs Extractium into it,
@@ -44,8 +44,11 @@ CONFIG="${CONFIG:-config.yaml}"
 VENV_DIR="${VENV_DIR:-$HERE/.venv}"
 
 # The interpreter used to create the environment. Extractium needs 3.10
-# or newer.
-PYTHON="${PYTHON:-python3}"
+# or newer, and a standard build: the free-threaded build (python3.13t,
+# python3.14t) cannot use the compiled wheels the parsers ship, so pip
+# would try to compile them and fail. When PYTHON is not set, the script
+# tries each name below and keeps the first standard build it finds.
+PYTHON="${PYTHON:-}"
 
 # Where Extractium is downloaded from, and which release, when this script
 # was saved on its own rather than run from inside a checkout. "latest"
@@ -62,6 +65,25 @@ EXTRACTIUM_DIR="${EXTRACTIUM_DIR:-$HERE/extractium-src}"
 
 ### Check the interpreter ###
 
+# True when a command is a Python 3.10 or newer that is not free-threaded.
+is_standard_python() {
+    command -v "$1" >/dev/null 2>&1 && "$1" -c 'import sys, sysconfig
+sys.exit(0 if sys.version_info >= (3, 10) and not sysconfig.get_config_var("Py_GIL_DISABLED") else 1)' >/dev/null 2>&1
+}
+
+if [ -z "$PYTHON" ]; then
+    for candidate in python3 python3.14 python3.13 python3.12 python3.11 python3.10 python; do
+        if is_standard_python "$candidate"; then
+            PYTHON="$candidate"
+            break
+        fi
+    done
+fi
+if [ -z "$PYTHON" ]; then
+    echo "No standard Python 3.10 or newer was found. The free-threaded build cannot use the" >&2
+    echo "parsers' wheels. Install a standard build, or set PYTHON to the path of one." >&2
+    exit 1
+fi
 if ! command -v "$PYTHON" >/dev/null 2>&1; then
     echo "Cannot find $PYTHON. Install Python 3.10 or newer, or set PYTHON to its path." >&2
     exit 1
@@ -167,6 +189,14 @@ if [ -x "$VENV_DIR/bin/python" ]; then
     VENV_PYTHON="$VENV_DIR/bin/python"
 else
     VENV_PYTHON="$VENV_DIR/Scripts/python.exe"
+fi
+
+# An environment made earlier with a free-threaded Python would fail
+# inside pip with a message about building a parser. Say so plainly.
+if ! is_standard_python "$VENV_PYTHON"; then
+    echo "The environment in $VENV_DIR was made with a free-threaded Python, which cannot use" >&2
+    echo "the parsers' wheels. Delete that folder and run this script again." >&2
+    exit 1
 fi
 
 ### Install pinned dependencies ###

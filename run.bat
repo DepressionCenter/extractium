@@ -3,7 +3,7 @@ REM This file is part of Extractium(TM)
 REM run.bat
 REM Author(s): Gabriel Mongefranco.
 REM Created: 2026-09-08
-REM Last Modified: 2026-09-14
+REM Last Modified: 2026-09-15
 REM Summary: One-command build for Windows. Downloads Extractium when this
 REM script is on its own, creates a virtual environment beside the checkout,
 REM installs the pinned dependencies, installs Extractium into it, writes a
@@ -42,9 +42,19 @@ REM Where the virtual environment goes. Set VENV_DIR to keep several
 REM environments side by side.
 if not defined VENV_DIR set "VENV_DIR=%HERE%\.venv"
 
-REM The launcher used to create the environment. Extractium needs Python
-REM 3.10 or newer.
-if not defined PYTHON set "PYTHON=py -3"
+REM The interpreter used to create the environment. Extractium needs Python
+REM 3.10 or newer, and a standard build: the free-threaded build (the one
+REM the launcher lists as 3.13t or 3.14t) cannot use the compiled wheels the
+REM parsers ship, so pip would try to compile them and fail. When PYTHON is
+REM not set, the script asks the launcher for one release after another and
+REM keeps the first standard build it finds.
+if not defined PYTHON call :choose_python
+if not defined PYTHON (
+    echo No standard Python 3.10 or newer was found. The free-threaded build cannot use the
+    echo parsers' wheels. Install a standard build from python.org, or set PYTHON to the path
+    echo of one, for example: set PYTHON="C:\Program Files\Python314\python.exe"
+    exit /b 1
+)
 
 REM Where Extractium is downloaded from, and which release, when this
 REM script was saved on its own rather than run from inside a checkout.
@@ -120,6 +130,19 @@ move /y "%UNPACKED%" "%EXTRACTIUM_DIR%" >nul
 rmdir /s /q "%STAGING%"
 goto :handover
 
+:choose_python
+REM Tries the launcher's default, then each release from newest to oldest,
+REM then a python on the path, and keeps the first that is 3.10 or newer
+REM and not free-threaded. A candidate that is missing simply fails the
+REM check.
+for %%C in ("py -3" "py -3.14" "py -3.13" "py -3.12" "py -3.11" "py -3.10" "python") do (
+    if not defined PYTHON (
+        %%~C -c "import sys, sysconfig; sys.exit(0 if sys.version_info >= (3, 10) and not sysconfig.get_config_var('Py_GIL_DISABLED') else 1)" >nul 2>&1
+        if not errorlevel 1 set "PYTHON=%%~C"
+    )
+)
+goto :eof
+
 :tag_from_landed
 REM The tag is what follows /releases/tag/ in the address the redirect
 REM named. Anything else means there is no release yet.
@@ -150,6 +173,16 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
     )
 )
 set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
+
+REM An environment made earlier with a free-threaded Python would fail
+REM inside pip with a message about building a parser. Say so plainly
+REM instead.
+"%VENV_PYTHON%" -c "import sys, sysconfig; sys.exit(1 if sysconfig.get_config_var('Py_GIL_DISABLED') else 0)" >nul 2>&1
+if errorlevel 1 (
+    echo The environment in %VENV_DIR% was made with a free-threaded Python, which cannot use
+    echo the parsers' wheels. Delete that folder and run this script again.
+    exit /b 1
+)
 
 REM ### Install pinned dependencies ###
 
