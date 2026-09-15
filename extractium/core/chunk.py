@@ -11,7 +11,7 @@ extractium/core/chunk.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-09
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-15"
 
 import hashlib
 import html
@@ -137,9 +137,25 @@ def markdown_text_to_soup(raw_text, url):
         BeautifulSoup: a minimal <body>-wrapped document.
     """
     if url.lower().endswith((".md", ".markdown")):
-        body_html = markdown.markdown(raw_text, extensions=["fenced_code", "tables"])
-    else:
-        body_html = "<pre>" + html.escape(raw_text) + "</pre>"
+        return markdown_to_soup(raw_text)
+    body_html = "<pre>" + html.escape(raw_text) + "</pre>"
+    return BeautifulSoup(f"<body>{body_html}</body>", "html.parser")
+
+
+def markdown_to_soup(text):
+    """
+    Renders Markdown text as a minimal HTML document, so its headings
+    become the <h1>-<h6> tags the chunker cuts at. Used for a Markdown
+    file and for the text a document reader produced from a Word,
+    OpenDocument, or RTF file.
+
+    Args:
+        text (str): Markdown text.
+
+    Returns:
+        BeautifulSoup: a minimal <body>-wrapped document.
+    """
+    body_html = markdown.markdown(text, extensions=["fenced_code", "tables"])
     return BeautifulSoup(f"<body>{body_html}</body>", "html.parser")
 
 

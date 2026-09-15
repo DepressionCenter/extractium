@@ -33,7 +33,9 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-04"
 
+import hashlib
 import os
+import re
 
 from extractium import __version__
 from extractium.core import cache, fetch
@@ -182,3 +184,125 @@ def test_robots_policy_disabled_allows_without_a_request(fake_session_factory):
     policy = fetch.RobotsPolicy(session, "ExampleBot/1.0", enabled=False)
     assert policy.allows(f"{ORIGIN}/anything") is True
     assert session.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Content types, and document files
+# ---------------------------------------------------------------------------
+
+def test_any_text_type_but_html_is_accepted_when_text_is_expected(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/sheet"
+    session = fake_session_factory({
+        url: FakeResponse(200, {"Content-Type": "text/csv; charset=utf-8"}, "a,b\n1,2\n"),
+    })
+    assert fetch.fetch(session, url, {}, expect_html=False) == "a,b\n1,2\n"
+
+
+def test_an_answer_of_the_wrong_kind_is_reported_with_where_it_landed(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/export"
+    session = fake_session_factory({
+        url: FakeResponse(200, {"Content-Type": "text/html"}, "<html/>", url=f"{ORIGIN}/login"),
+    })
+    lines = []
+    assert fetch.fetch(session, url, {}, expect_html=False, progress=lines.append) is None
+    assert lines == [
+        f"  SKIP {url} -- answered text/html where text was expected; the request landed on {ORIGIN}/login"
+    ]
+
+
+def test_a_page_that_answers_plain_text_is_reported(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/page"
+    session = fake_session_factory({url: FakeResponse(200, {"Content-Type": "text/plain"}, "words")})
+    lines = []
+    assert fetch.fetch(session, url, {}, expect_html=True, progress=lines.append) is None
+    assert lines == [f"  SKIP {url} -- answered text/plain where HTML was expected"]
+
+
+def test_a_byte_order_mark_is_dropped_from_a_text_answer(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/export"
+    session = fake_session_factory({
+        url: FakeResponse(200, {"Content-Type": "text/plain"}, chr(0xFEFF) + "Title line"),
+    })
+    assert fetch.fetch(session, url, {}, expect_html=False) == "Title line"
+
+
+def test_fetch_bytes_stores_the_file_and_its_validators(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/files/plan.docx"
+    data = b"PK\x03\x04 pretend"
+    session = fake_session_factory({
+        url: FakeResponse(200, {"Content-Type": "application/octet-stream", "ETag": '"abc"'}, content=data),
+    })
+    meta = {}
+
+    assert fetch.fetch_bytes(session, url, meta, max_bytes=1_000) == data
+
+    assert meta[url]["etag"] == '"abc"'
+    assert meta[url]["sha256"] == hashlib.sha256(data).hexdigest()
+    with open(cache.cache_document_path(url), "rb") as f:
+        assert f.read() == data
+    assert session.calls[0]["headers"]["Accept"].startswith("application/vnd.openxmlformats-officedocument")
+    assert session.calls[0]["headers"]["User-Agent"] == fetch.DEFAULT_USER_AGENT
+
+
+def test_fetch_bytes_serves_an_unchanged_file_from_the_cache(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/files/plan.docx"
+    data = b"PK\x03\x04 pretend"
+    session = fake_session_factory({url: [
+        FakeResponse(200, {"Content-Type": "application/octet-stream", "ETag": '"abc"'}, content=data),
+        FakeResponse(304),
+    ]})
+    meta = {}
+    lines = []
+
+    fetch.fetch_bytes(session, url, meta, max_bytes=1_000)
+    assert fetch.fetch_bytes(session, url, meta, max_bytes=1_000, progress=lines.append) == data
+
+    assert session.calls[1]["headers"]["If-None-Match"] == '"abc"'
+    assert lines == ["       (cached, not modified)"]
+
+
+def test_fetch_bytes_refuses_a_web_page_and_names_where_it_landed(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/files/plan.docx"
+    session = fake_session_factory({
+        url: FakeResponse(200, {"Content-Type": "text/html; charset=utf-8"}, "<html/>", url=f"{ORIGIN}/login"),
+    })
+    lines = []
+    assert fetch.fetch_bytes(session, url, {}, max_bytes=1_000, progress=lines.append) is None
+    assert lines == [
+        f"  SKIP {url} -- answered text/html; charset=utf-8 where a document file was expected; "
+        f"the request landed on {ORIGIN}/login"
+    ]
+    assert not os.path.exists(cache.cache_document_path(url))
+
+
+def test_fetch_bytes_refuses_a_file_over_the_ceiling(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/files/plan.docx"
+    session = fake_session_factory({
+        url: FakeResponse(200, {"Content-Type": "application/octet-stream"}, content=b"x" * 11),
+    })
+    lines = []
+    assert fetch.fetch_bytes(session, url, {}, max_bytes=10, progress=lines.append) is None
+    assert lines == [f"  SKIP {url} -- 11 bytes is over the 10 byte ceiling for a document"]
+    assert not os.path.exists(cache.cache_document_path(url))
+
+
+def test_fetch_bytes_reports_a_failed_request_and_never_raises(isolated_core_cache, fake_session_factory):
+    url = f"{ORIGIN}/files/plan.docx"
+    session = fake_session_factory({url: FakeResponse(500)})
+    lines = []
+    assert fetch.fetch_bytes(session, url, {}, max_bytes=10, progress=lines.append) is None
+    assert lines and lines[0].startswith(f"  SKIP {url} -- ")
+
+
+def test_readable_files_pass_the_asset_check_and_leave_the_default_excludes():
+    docx = "https://example.org/files/plan.docx"
+    scope = dict(auto_prefix="https://example.org", origin="https://example.org", include_res=[], crawl_exclude_res=[])
+    readable = re.compile(r"\.docx$", re.I)
+
+    assert fetch.in_scope(docx, **scope) is False
+    assert fetch.in_scope(docx, readable_re=readable, **scope) is True
+    assert fetch.in_scope("https://example.org/a.pdf", readable_re=readable, **scope) is False
+    assert r"\.docx$" in fetch.asset_exclude_patterns()
+    assert r"\.docx$" not in fetch.asset_exclude_patterns(readable=("docx",))
+    assert r"\.pdf$" in fetch.asset_exclude_patterns(readable=("docx",))
+    assert fetch.ASSET_EXCLUDE_PATTERNS == fetch.asset_exclude_patterns()

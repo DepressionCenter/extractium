@@ -245,6 +245,55 @@ def save_page_text(url, text):
     _write_atomically(cache_page_path(url), lambda f: f.write(text))
 
 
+def cache_document_path(url):
+    """
+    The on-disk cache file for one URL's fetched document bytes: a Word,
+    OpenDocument, or RTF file the crawl read. Named like a page's cache
+    file, from the URL's sha1 digest, with a suffix that says the file
+    holds bytes rather than text.
+
+    Args:
+        url (str): the document's URL.
+
+    Returns:
+        str: path under CACHE_PAGES_DIR, e.g. ".kb_cache/pages/<sha1>.bin".
+    """
+    h = hashlib.sha1(url.encode("utf-8")).hexdigest()
+    return os.path.join(CACHE_PAGES_DIR, h + ".bin")
+
+
+def save_document_bytes(url, data):
+    """
+    Stores one fetched document's bytes under its URL's cache path.
+
+    Args:
+        url (str): the document's URL.
+        data (bytes): the file as it was served.
+
+    Raises:
+        OSError: if the cache directory or file cannot be written.
+    """
+    os.makedirs(CACHE_PAGES_DIR, exist_ok=True)
+    _write_atomically(cache_document_path(url), lambda f: f.write(data), mode="wb")
+
+
+def load_document_bytes(url):
+    """
+    The bytes stored for one document's URL.
+
+    Args:
+        url (str): the document's URL.
+
+    Returns:
+        bytes: the file as it was served.
+
+    Raises:
+        OSError: if no file is cached for the URL, or it cannot be read.
+    """
+    with open(cache_document_path(url), "rb") as f:
+        return f.read()
+
+
 ### GitHub Cache Paths ###
 
 def github_blob_path(blob_sha):

@@ -64,6 +64,14 @@ sources:
     #  - '/TDClient/000/ExampleOrg/'         # this portal's knowledge base
     #  - 'example\.org/research-services/'   # one folder of a second site
     #  - 'github\.com/example-org/[A-Za-z0-9_.-]+(?:/|$)'  # one code host account
+    #  - '^https://docs\.google\.com/'       # Google Docs, Sheets, and Slides shared with the link
+
+    # Whether a link to a Word, OpenDocument, or RTF file is fetched and its
+    # text indexed, with the file's own headings, keywords, and description.
+    # Off by default. Such files usually sit on another host, so pair this
+    # with an include pattern for the host that serves them. The old binary
+    # .doc format and PDF files are not read.
+    #read_documents: true
 
     # Pages the crawl must not fetch at all, added to the built-in list.
     # Checked after include_patterns, so an entry here always wins. The
@@ -99,11 +107,14 @@ sources:
 
   # A folder of Markdown, text, and HTML files on this machine. Content from
   # a local source stays out of every output unless that output sets
-  # include_local: true (see the outputs list).
+  # include_local: true (see the outputs list). read_documents: true also
+  # reads the folder's Word, OpenDocument, and RTF files, and adds their
+  # globs to the defaults below.
   #- type: local
   #  label: Internal Notes
   #  path: ./internal-docs
   #  include_globs: ["**/*.md", "**/*.txt", "**/*.html"]
+  #  read_documents: false
 
   # A knowledge bundle another build wrote, in the Open Knowledge Format,
   # from this tool or any other. Each concept keeps the address it was
@@ -130,6 +141,7 @@ sources:
   #  include_archived: true         # archived documentation is still documentation
   #  include_code: true             # read the structure of the code, not only the docs
   #  ctags_fallback: true           # let Universal Ctags read languages no grammar covers
+  #  read_documents: false          # read Word, OpenDocument, and RTF files, one request each
   #  max_file_bytes: 2000000        # larger files are skipped, and each one is named
   #
   # Code analysis needs the optional parser set: pip install "extractium[code]".

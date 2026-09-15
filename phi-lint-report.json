@@ -1,0 +1,14 @@
+{
+  "tool": "extractium phi_lint",
+  "mode": "local",
+  "limitation": "0 pattern matches (this does not confirm absence of PHI)",
+  "documentsScanned": 0,
+  "documentsSkipped": 27,
+  "matchCount": 0,
+  "countsByPattern": {},
+  "countsByTier": {
+    "structural": 0,
+    "anchored": 0
+  },
+  "findings": []
+}

@@ -43,6 +43,7 @@ import pytest
 from extractium.core import chunk, fetch, registry
 from extractium.core.models import Document, Source
 from extractium.sources import generic, github, tdx, web
+from tests import document_fixtures as document_files
 from tests.conftest import FakeResponse
 
 PYPROJECT_PATH = pathlib.Path(__file__).parent.parent / "pyproject.toml"
@@ -1042,7 +1043,7 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
         "web", "local", "github_api", "dspace", "youtube", "okf",
     }
     assert set(entry_points["extractium.site_handlers"]) == {
-        "generic", "tdx", "github", "youtube",
+        "generic", "tdx", "github", "youtube", "google_docs",
     }
 
     reg = registry.Registry()
@@ -1056,7 +1057,7 @@ def test_pyproject_declares_the_built_ins_and_each_target_loads():
             assert plugin.name == name
             register(plugin, registry.Tier.BUILTIN)
     assert reg.source_names() == ("dspace", "github_api", "local", "okf", "web", "youtube")
-    assert reg.site_handler_names() == ("generic", "github", "tdx", "youtube")
+    assert reg.site_handler_names() == ("generic", "github", "google_docs", "tdx", "youtube")
 
 
 def test_a_portal_seed_stays_inside_its_portal_folder_through_the_tdx_handler(fake_session_factory):
@@ -1086,3 +1087,219 @@ def test_a_portal_seed_stays_inside_its_portal_folder_through_the_tdx_handler(fa
 
     without = crawl(make_source(seed, handlers=()), fake_session_factory(responses))
     assert sorted(d.url for d in without) == sorted([seed, inside, other])
+
+
+# ---------------------------------------------------------------------------
+# Documents linked from pages, and folded addresses
+# ---------------------------------------------------------------------------
+
+DOCUMENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+DOC_ORIGIN = "https://example.org"
+DOC_SEED = f"{DOC_ORIGIN}/resources"
+CDN_DOCX = "https://cdn.example.org/files/p/prod/0a1b2c.docx/youth-resources"
+CDN_DOCX_NAMED = "https://cdn.example.org/files/p/prod/0a1b2c.docx/youth-resources.docx?dl"
+SITE_DOCX = f"{DOC_ORIGIN}/files/plan.docx"
+SITE_DOC = f"{DOC_ORIGIN}/files/old.doc"
+CDN_INCLUDE = (r"^https://example\.org/", r"^https://cdn\.example\.org/files/.*\.docx")
+
+
+def document_response(data, **extra):
+    return FakeResponse(200, {"Content-Type": DOCUMENT_TYPE}, content=data, **extra)
+
+
+def page_with_links(*links):
+    anchors = "".join(f'<a href="{link}">file</a>' for link in links)
+    return html_response(
+        f"<html><head><title>Files</title></head><body><main><p>Resources</p>{anchors}</main></body></html>"
+    )
+
+
+def document_crawl(session, read_documents=True, **options):
+    lines = []
+    source = make_source(DOC_SEED, read_documents=read_documents, **options)
+    documents = crawl(source, session, progress=lines.append)
+    return documents, lines
+
+
+def test_a_linked_word_file_is_read_when_read_documents_is_on(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(SITE_DOCX, SITE_DOC),
+        SITE_DOCX: document_response(document_files.SAMPLE_DOCX),
+    })
+
+    documents, lines = document_crawl(session)
+
+    by_url = {d.url: d for d in documents}
+    document = by_url[SITE_DOCX]
+    assert document.title == "Youth Mental Health Resources"
+    assert document.content_type == "text"
+    assert document.source_type == "web"
+    assert document.content.find("h2").get_text() == "Middle School"
+    assert "Keywords: depression, anxiety, classroom" in document.content.get_text()
+    assert "       document: Youth Mental Health Resources" in lines
+    # The binary .doc format has no reader, so the link is never fetched.
+    assert SITE_DOC not in [c["url"] for c in session.calls]
+    assert SITE_DOC not in by_url
+
+
+def test_document_links_are_left_alone_by_default(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(SITE_DOCX),
+        SITE_DOCX: document_response(document_files.SAMPLE_DOCX),
+    })
+
+    documents, _ = document_crawl(session, read_documents=False)
+
+    assert [d.url for d in documents] == [DOC_SEED]
+    assert SITE_DOCX not in [c["url"] for c in session.calls]
+
+
+def test_a_file_on_a_delivery_host_is_read_through_an_include_pattern_and_once_for_its_two_addresses(
+    isolated_core_cache, fake_session_factory,
+):
+    """
+    A delivery network serves one file as /<stored name>.docx/<title> and
+    again with the title carrying the extension and a download flag. Both
+    are fetched, because the address alone cannot tell them apart, and the
+    bytes decide that they are one file.
+    """
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        "https://cdn.example.org/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(CDN_DOCX, CDN_DOCX_NAMED),
+        CDN_DOCX: document_response(document_files.SAMPLE_DOCX),
+        CDN_DOCX_NAMED: document_response(document_files.SAMPLE_DOCX),
+    })
+
+    documents, lines = document_crawl(session, include_patterns=CDN_INCLUDE)
+
+    assert [d.url for d in documents if "cdn." in d.url] == [CDN_DOCX]
+    assert f"       (the same file as {CDN_DOCX}; not indexed again)" in lines
+    requested = [c["url"] for c in session.calls]
+    assert CDN_DOCX in requested and CDN_DOCX_NAMED in requested
+    accept = next(c["headers"]["Accept"] for c in session.calls if c["url"] == CDN_DOCX)
+    assert accept.startswith("application/vnd.openxmlformats-officedocument")
+
+
+def test_a_document_address_that_answers_a_web_page_is_reported_and_skipped(
+    isolated_core_cache, fake_session_factory,
+):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(SITE_DOCX),
+        SITE_DOCX: FakeResponse(
+            200, {"Content-Type": "text/html"}, "<html>sign in</html>", url=f"{DOC_ORIGIN}/login",
+        ),
+    })
+
+    documents, lines = document_crawl(session)
+
+    assert SITE_DOCX not in [d.url for d in documents]
+    skip = [line for line in lines if line.startswith(f"  SKIP {SITE_DOCX}")]
+    assert skip and "text/html" in skip[0] and f"landed on {DOC_ORIGIN}/login" in skip[0]
+
+
+def test_a_file_the_reader_refuses_is_reported_with_the_reason(isolated_core_cache, fake_session_factory):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(SITE_DOCX),
+        SITE_DOCX: document_response(b"not a document at all"),
+    })
+
+    documents, lines = document_crawl(session)
+
+    assert SITE_DOCX not in [d.url for d in documents]
+    assert f"  SKIP {SITE_DOCX} -- not a Word, OpenDocument, or RTF file" in lines
+
+
+def test_a_long_document_is_indexed_as_an_outline_that_keeps_its_properties(
+    isolated_core_cache, fake_session_factory, monkeypatch,
+):
+    monkeypatch.setattr(web.prose, "MAX_PROSE_CHARS", 200)
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(SITE_DOCX),
+        SITE_DOCX: document_response(document_files.SAMPLE_DOCX),
+    })
+
+    documents, lines = document_crawl(session)
+
+    document = next(d for d in documents if d.url == SITE_DOCX)
+    assert isinstance(document.content, str)
+    assert "Keywords: depression, anxiety, classroom" in document.content
+    assert "Headings: Youth Mental Health Resources; Middle School; High School" in document.content
+    assert any("indexed as an outline" in line for line in lines)
+
+
+def test_a_document_on_the_index_exclude_list_is_fetched_but_not_indexed(
+    isolated_core_cache, fake_session_factory,
+):
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(SITE_DOCX),
+        SITE_DOCX: document_response(document_files.SAMPLE_DOCX),
+    })
+
+    documents, _ = document_crawl(session, index_exclude_patterns=(r"/files/plan",))
+
+    assert SITE_DOCX in [c["url"] for c in session.calls]
+    assert SITE_DOCX not in [d.url for d in documents]
+
+
+def test_reading_documents_drops_their_extensions_from_both_default_exclude_lists():
+    off = make_source(DOC_SEED)
+    on = make_source(DOC_SEED, read_documents=True)
+
+    assert r"\.docx$" in off.crawl_exclude_patterns and r"\.docx$" in off.index_exclude_patterns
+    assert r"\.docx$" not in on.crawl_exclude_patterns and r"\.docx$" not in on.index_exclude_patterns
+    assert r"\.rtf$" not in on.crawl_exclude_patterns
+    assert r"\.pdf$" in on.crawl_exclude_patterns and r"\.doc$" in on.crawl_exclude_patterns
+
+
+class _FoldingHandler:
+    """A handler that folds a page's tracking parameter away, so one page has one address."""
+
+    name = "folding"
+    source_type = "web"
+    default_crawl_exclude_patterns = ()
+    default_index_exclude_patterns = ()
+
+    def matches(self, url):
+        return "/article/" in url
+
+    def canonical_url(self, url):
+        return url.split("?")[0]
+
+    def fetch_url(self, url):
+        return url
+
+    def expects_html(self, url):
+        return True
+
+    def extract(self, soup, url):
+        return generic.GenericHandler().extract(soup, url)
+
+    def content_type(self, url):
+        return "page"
+
+
+def test_a_handler_folds_the_addresses_of_one_page_so_it_is_fetched_once(
+    isolated_core_cache, fake_session_factory,
+):
+    article = f"{DOC_ORIGIN}/article/one"
+    session = fake_session_factory({
+        f"{DOC_ORIGIN}/robots.txt": ROBOTS_ABSENT,
+        DOC_SEED: page_with_links(f"{article}?ref=menu", f"{article}?ref=footer", article),
+        article: html_response(
+            "<html><head><title>One</title></head><body><main><p>Article text long enough.</p></main></body></html>"
+        ),
+    })
+    source = make_source(DOC_SEED, handlers=(_FoldingHandler(),) + BUILT_IN_HANDLERS)
+
+    documents = crawl(source, session)
+
+    assert [d.url for d in documents] == [DOC_SEED, article]
+    assert [c["url"] for c in session.calls].count(article) == 1
+    assert not any("?ref=" in c["url"] for c in session.calls)

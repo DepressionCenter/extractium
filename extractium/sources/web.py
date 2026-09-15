@@ -33,6 +33,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
+import hashlib
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ from extractium.core import fetch as fetching
 from extractium.core.chunk import extract_links, markdown_text_to_soup
 from extractium.core.models import Document
 from extractium.core import prose
+from extractium.readers import documents as readers
 from extractium.sources.generic import GenericHandler
 
 ### Constants ###
@@ -253,7 +255,7 @@ def order_site_handlers(handlers):
     return tuple(specific + fallback[:1])
 
 
-def default_exclude_patterns(handlers, kind):
+def default_exclude_patterns(handlers, kind, readable=()):
     """
     The exclude list a crawl uses when the operator wrote none: the
     host-independent asset patterns plus what each enabled handler adds.
@@ -261,13 +263,15 @@ def default_exclude_patterns(handlers, kind):
     Args:
         handlers (Iterable): the enabled handler instances.
         kind (str): "crawl" or "index".
+        readable (Iterable[str]): file extensions a reader turns into
+            text for this crawl, left off the asset patterns.
 
     Returns:
         tuple[str, ...]: regular expression strings, each once, asset
         patterns first.
     """
     attribute = f"default_{kind}_exclude_patterns"
-    patterns = list(fetching.ASSET_EXCLUDE_PATTERNS)
+    patterns = list(fetching.asset_exclude_patterns(readable))
     for handler in handlers:
         for pattern in getattr(handler, attribute):
             if pattern not in patterns:
@@ -294,8 +298,10 @@ class WebSource:
             either exclude list means "asset patterns plus the enabled
             handlers' defaults"), extra_crawl_exclude_patterns and
             extra_index_exclude_patterns (added on top of whichever list
-            applies), and site_handlers (unused here; the caller resolves
-            names to the handlers argument).
+            applies), site_handlers (unused here; the caller resolves
+            names to the handlers argument), and read_documents, which
+            lets the crawl fetch a Word, OpenDocument, or RTF file it
+            finds a link to and index the text a reader takes from it.
 
             Two further keys are set by a caller inside the program, never
             by a configuration file: `already_indexed`, a set of URLs
@@ -320,6 +326,7 @@ class WebSource:
         # the set: the handler offer, and progress lines that name the crawl.
         self.seed_url = self.seed_urls[0]
         self.include_patterns = tuple(options.get("include_patterns") or ())
+        self.read_documents = bool(options.get("read_documents", False))
         self.already_indexed = set(options.get("already_indexed") or ())
         # Pages the server confirmed gone during this crawl, so an
         # incremental rebuild drops them rather than carrying them forward.
@@ -371,7 +378,10 @@ class WebSource:
         patterns. An extra pattern already on the list is not repeated.
         """
         base = options.get(f"{kind}_exclude_patterns")
-        patterns = list(default_exclude_patterns(self.handlers, kind) if base is None else base)
+        readable = readers.DOCUMENT_EXTENSIONS if self.read_documents else ()
+        patterns = list(
+            default_exclude_patterns(self.handlers, kind, readable) if base is None else base
+        )
         for pattern in options.get(f"extra_{kind}_exclude_patterns") or ():
             if pattern not in patterns:
                 patterns.append(pattern)
@@ -401,6 +411,13 @@ class WebSource:
         progress lines are printed together under its own line. The pause
         between requests is the session's job, kept per host, so a crawl
         that reads two hosts is not slowed by the pause on either.
+
+        Every seed and every discovered link is folded to its handler's
+        canonical form first, so a file linked under several addresses
+        is visited once. With `read_documents` on, a link to a Word,
+        OpenDocument, or RTF file in scope is fetched as bytes, read into
+        text, and indexed as a document with no links of its own; the
+        same file linked at two addresses is indexed once.
 
         Args:
             session: HTTP session to request through (requests.Session or
@@ -435,6 +452,9 @@ class WebSource:
         robots = fetching.RobotsPolicy(
             session, settings.user_agent, enabled=settings.respect_robots_txt, progress=progress
         )
+        # Addresses of files a reader turns into text, which pass the
+        # asset filter; None when this crawl reads no documents.
+        readable_re = readers.DOCUMENT_URL_RE if self.read_documents else None
 
         for seed in self.seed_urls:
             progress(f"Seed:         {seed}")
@@ -442,33 +462,51 @@ class WebSource:
         progress(f"Include pats: {list(self.include_patterns) or '(auto -- prefix only)'}")
         progress(f"Site handlers: {[h.name for h in self.handlers]}")
 
-        seed_norms = [fetching.normalise(seed) for seed in self.seed_urls]
+        seed_norms = [self._canonical(fetching.normalise(seed)) for seed in self.seed_urls]
         visited = set()
         queued = set(seed_norms)   # dedup before download
         queue = deque(seed_norms)
         landed = {}
+        # The digest of every document file indexed so far, keyed to the
+        # address it was indexed under, so one file linked at several
+        # addresses is indexed once.
+        seen_documents = {}
 
         def start_fetch(url, lines):
-            """Begins one page's fetch, with its progress lines collected for later."""
+            """
+            Begins one page's fetch, with its progress lines collected for
+            later. The kind says what the fetch returns: "html" a parsed
+            page, "text" a plain-text body, "document" a file's bytes.
+            """
             handler = self.handler_for(url)
             request_url = handler.fetch_url(url)
-            expect_html = handler.expects_html(url)
+            if readable_re is not None and readable_re.search(url):
+                kind = "document"
+            else:
+                kind = "html" if handler.expects_html(url) else "text"
             if not robots.allows(request_url):
                 lines.append(f"  SKIP {url} -- disallowed by robots.txt")
-                return handler, request_url, expect_html, None
-            fetch = lambda: fetching.fetch(
-                session, request_url, cache,
-                expect_html=expect_html, user_agent=settings.user_agent, progress=lines.append,
+                return handler, request_url, kind, None
+            common = dict(
+                user_agent=settings.user_agent, progress=lines.append,
                 fallback_user_agent=settings.blocked_retry_user_agent,
                 note_final_url=lambda final, key=url: landed.__setitem__(key, final),
                 note_gone=lambda key=url: self.gone.add(key),
             )
+            if kind == "document":
+                fetch = lambda: fetching.fetch_bytes(
+                    session, request_url, cache, readers.MAX_DOCUMENT_BYTES, **common
+                )
+            else:
+                fetch = lambda: fetching.fetch(
+                    session, request_url, cache, expect_html=(kind == "html"), **common
+                )
             if pool is None:
                 result = Future()
                 result.set_result(fetch())
             else:
                 result = pool.submit(fetch)
-            return handler, request_url, expect_html, result
+            return handler, request_url, kind, result
 
         def next_page():
             """The next queued page with its fetch started, or None when none is left."""
@@ -478,8 +516,8 @@ class WebSource:
                     continue
                 visited.add(url)
                 lines = []
-                handler, request_url, expect_html, result = start_fetch(url, lines)
-                return len(visited), url, handler, request_url, expect_html, lines, result
+                handler, request_url, kind, result = start_fetch(url, lines)
+                return len(visited), url, handler, request_url, kind, lines, result
             return None
 
         depth = max(1, int(settings.parallel_pages))
@@ -495,7 +533,7 @@ class WebSource:
                     in_flight.append(page)
                 if not in_flight:
                     break
-                ordinal, url, handler, request_url, expect_html, lines, result = in_flight.popleft()
+                ordinal, url, handler, request_url, kind, lines, result = in_flight.popleft()
                 progress(f"[{ordinal:4d}] {url}")
                 fetched = None if result is None else result.result()
                 for line in lines:
@@ -512,19 +550,30 @@ class WebSource:
                 ):
                     continue
                 if not is_seed and self._redirected_out_of_scope(
-                    url, request_url, landed.get(url), auto_prefix, origin, include_res,
+                    url, handler, request_url, landed.get(url), auto_prefix, origin, include_res,
                     crawl_exclude_res, progress,
                 ):
                     continue
 
-                soup = fetched if expect_html else markdown_text_to_soup(fetched, url)
+                if kind == "document":
+                    # A file holds no links the crawl follows; it is read
+                    # into text and indexed, or skipped with the reason.
+                    document = self._document_for(
+                        url, handler, fetched, index_exclude_res, seen_documents, progress
+                    )
+                    if document is not None:
+                        yield document
+                    continue
+
+                soup = fetched if kind == "html" else markdown_text_to_soup(fetched, url)
 
                 # Enqueue new in-scope links, deduped before download.
                 for link in extract_links(soup, url):
+                    link = self._canonical(link)
                     if link not in visited and link not in queued:
                         observe_link(self.handlers, link)
                         in_scope = fetching.in_scope(
-                            link, auto_prefix, origin, include_res, crawl_exclude_res
+                            link, auto_prefix, origin, include_res, crawl_exclude_res, readable_re
                         )
                         if in_scope and handlers_allow(self.handlers, link):
                             queued.add(link)
@@ -559,6 +608,78 @@ class WebSource:
 
         progress(f"Crawled {len(visited)} page(s).")
 
+    def _canonical(self, url):
+        """
+        The one address a page is visited under: what its handler's
+        `canonical_url` hook returns, normalised, or the address as
+        written for a handler without the hook.
+        """
+        handler = self.handler_for(url)
+        if hasattr(handler, "canonical_url"):
+            return fetching.normalise(handler.canonical_url(url))
+        return url
+
+    def _document_for(self, url, handler, data, index_exclude_res, seen_documents, progress):
+        """
+        The document for one fetched file, or None with the reason
+        reported: the address is on the index exclude list or was read by
+        another source, the same bytes were already indexed under another
+        address, the reader refused the file, or it holds no text.
+
+        Args:
+            url (str): the file's address in the crawl.
+            handler: the site handler that claims the address; its
+                source_type is recorded on the document.
+            data (bytes): the file as fetched.
+            index_exclude_res (list[re.Pattern]): the index exclude list.
+            seen_documents (dict): digest to the address a file was
+                indexed under, updated here.
+            progress (Callable[[str], None]): receives the reason line.
+        """
+        if any(r.search(url) for r in index_exclude_res):
+            return None
+        if url in self.already_indexed:
+            progress("       (already read; not indexed again)")
+            return None
+        digest = hashlib.sha256(data).hexdigest()
+        earlier = seen_documents.get(digest)
+        if earlier is not None:
+            progress(f"       (the same file as {earlier}; not indexed again)")
+            return None
+        try:
+            read = readers.read_document(data, url)
+        except readers.DocumentError as e:
+            progress(f"  SKIP {url} -- {e}")
+            return None
+        text = read.indexed_text
+        if not text.strip():
+            progress("       (the document holds no text)")
+            return None
+        seen_documents[digest] = url
+        title = readers.document_title(read, readers.name_from_url(url))
+        progress(f"       document: {title[:70]}")
+        return Document(
+            url=url,
+            title=title,
+            content=self._document_content(title, text, progress),
+            source_type=handler.source_type,
+            content_type="text",
+        )
+
+    def _document_content(self, title, text, progress):
+        """
+        The rendered text a reader produced, so the chunker cuts it at
+        its headings, or its compact record when it runs past the ceiling
+        the index takes whole.
+        """
+        if len(text) <= prose.MAX_PROSE_CHARS:
+            return readers.content_node(text)
+        progress(
+            f"       indexed as an outline ({len(text)} characters is over the "
+            f"{prose.MAX_PROSE_CHARS} the index takes whole)"
+        )
+        return prose.compact_record(title, text)
+
     def _content_to_index(self, extraction, progress):
         """
         The content node itself, or its compact record when the page's
@@ -589,7 +710,7 @@ class WebSource:
         """
         return tuple(sorted(self.gone))
 
-    def _redirected_out_of_scope(self, url, request_url, final_url, auto_prefix, origin,
+    def _redirected_out_of_scope(self, url, handler, request_url, final_url, auto_prefix, origin,
                                  include_res, crawl_exclude_res, progress):
         """
         Whether a page landed somewhere the crawl may not go, and says so
@@ -601,10 +722,13 @@ class WebSource:
         never allowed to ask for, and indexing it under this page's
         address would attribute it to this site. The address a request
         lands on is not one the site handlers were asked about either,
-        so a handler's own scope rule is applied to it here.
+        so a handler's own scope rule is applied to it here, and a
+        handler that expects its requests to land elsewhere, such as on
+        an export host, says so through its `landing_allowed` hook.
 
         Args:
             url (str): the page's address in the crawl.
+            handler: the site handler that claims the page.
             request_url (str): the address actually requested, which a
                 handler may have rewritten, such as a blob page fetched
                 from the raw host; landing there is no redirect.
@@ -619,7 +743,10 @@ class WebSource:
         """
         if not final_url or fetching.normalise(final_url) in (url, fetching.normalise(request_url)):
             return False
-        if fetching.in_scope(final_url, auto_prefix, origin, include_res, crawl_exclude_res)                 and handlers_allow(self.handlers, final_url):
+        if hasattr(handler, "landing_allowed") and handler.landing_allowed(url, final_url):
+            return False
+        if fetching.in_scope(final_url, auto_prefix, origin, include_res, crawl_exclude_res) \
+                and handlers_allow(self.handlers, final_url):
             return False
         progress(
             f"  SKIP {url} -- it redirects to {final_url}, which is outside what this "

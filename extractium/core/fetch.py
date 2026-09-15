@@ -106,7 +106,7 @@ BINARY_EXTENSIONS = [
     "pdf", "zip", "gz", "exe", "rar", "7z", "tar", "bin", "dmg", "iso", "apk",
     "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "tiff", "tif", "ico", "avif", "heic",
     "mp4", "mp3", "wav", "ogg", "m4a", "flac", "webm", "mov", "avi", "wmv", "mkv",
-    "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf",
     "woff", "woff2", "ttf", "eot", "otf",
 ]
 SOURCE_EXTENSIONS = [
@@ -123,7 +123,35 @@ ASSET_RE = re.compile(
 # bytes are not indexable text. Site handlers add their own host-specific
 # patterns while enabled. Order within an exclude list carries no meaning:
 # a URL is excluded when any one pattern matches it.
-ASSET_EXCLUDE_PATTERNS = tuple(rf"\.{ext}$" for ext in BINARY_EXTENSIONS + SOURCE_EXTENSIONS)
+def asset_exclude_patterns(readable=()):
+    """
+    The default exclude patterns for files that are not readable text,
+    one per extension.
+
+    Args:
+        readable (Iterable[str]): extensions to leave off the list,
+            because a reader turns those files into text for this crawl.
+
+    Returns:
+        tuple[str, ...]: regular expression strings.
+    """
+    left_out = {ext.lower() for ext in readable}
+    return tuple(
+        rf"\.{ext}$" for ext in BINARY_EXTENSIONS + SOURCE_EXTENSIONS if ext not in left_out
+    )
+
+
+ASSET_EXCLUDE_PATTERNS = asset_exclude_patterns()
+
+# Sent with a request for a document file, in place of the page Accept
+# header, naming the formats a reader turns into text.
+DOCUMENT_ACCEPT_HEADERS = {
+    "Accept": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document, "
+        "application/vnd.oasis.opendocument.text, application/rtf, "
+        "application/octet-stream;q=0.9, */*;q=0.5"
+    ),
+}
 
 
 ### URL Scope And Normalization ###
@@ -187,7 +215,7 @@ def _as_prefixes(value):
     return (value,) if isinstance(value, str) else tuple(value)
 
 
-def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
+def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res, readable_re=None):
     """
     Decides whether a discovered link should be crawled.
 
@@ -205,6 +233,9 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
         crawl_exclude_res (list[re.Pattern]): patterns to exclude, checked
             after the include check so an exclude always wins over a
             matching include.
+        readable_re (re.Pattern | None): addresses of files a reader turns
+            into text for this crawl, which pass the asset check. None
+            means no file of any kind passes it.
 
     Returns:
         bool: True if url should be queued for crawling.
@@ -218,8 +249,8 @@ def in_scope(url, auto_prefix, origin, include_res, crawl_exclude_res):
         if not include_res or not any(r.search(url) for r in include_res):
             return False
 
-    # Skip binary assets
-    if ASSET_RE.search(url):
+    # Skip binary assets, unless a reader turns this kind into text.
+    if ASSET_RE.search(url) and not (readable_re is not None and readable_re.search(url)):
         return False
 
     # Include check
@@ -359,7 +390,94 @@ def _flush_cache_meta_periodically(session, cache_meta):
         cache.save_cache_meta(cache_meta)
 
 
-def _store_fetched_page(r, url, session, cache_meta, expect_html):
+def _conditional_headers(entry):
+    """
+    The If-None-Match and If-Modified-Since headers a cache entry
+    provides, sent verbatim (a W/ weak-validator prefix included), or an
+    empty dict when the URL has never been fetched.
+    """
+    headers = {}
+    if entry:
+        if entry.get("etag"):
+            headers["If-None-Match"] = entry["etag"]
+        if entry.get("last_modified"):
+            headers["If-Modified-Since"] = entry["last_modified"]
+    return headers
+
+
+def _request(session, url, extra_headers, user_agent, fallback_user_agent, progress):
+    """
+    Makes one request, and one more as a browser when the site refused
+    the truthful identity and the caller allowed the retry. Both attempts
+    are reported, so a log always shows that the second identity was used.
+    """
+    r = session.get(
+        url,
+        headers=request_headers(user_agent, extra_headers),
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    if (r.status_code in BLOCKED_STATUS_CODES
+            and fallback_user_agent
+            and fallback_user_agent != user_agent):
+        _report(progress, f"       {r.status_code} for {user_agent!r}; retrying once as a browser")
+        r = session.get(
+            url,
+            headers=request_headers(fallback_user_agent, extra_headers),
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    return r
+
+
+def _note_answer(r, url, note_final_url, note_gone):
+    """Tells the caller where the request landed and whether the page is gone."""
+    if note_gone is not None and r.status_code in GONE_STATUS_CODES:
+        note_gone()
+    if note_final_url is not None:
+        # Where the request landed, which is not where it was sent when
+        # the server redirected. A test double may not report it; then
+        # nothing was redirected as far as this build can tell.
+        note_final_url(getattr(r, "url", None) or url)
+
+
+def _content_type_fits(content_type, expect_html):
+    """
+    Whether an answer's content type is what the caller can read: HTML
+    when a page was expected; any text that is not HTML otherwise, which
+    covers a raw Markdown file served as plain text and a spreadsheet
+    export served as CSV alike.
+    """
+    lowered = content_type.strip().lower()
+    if expect_html:
+        return "text/html" in lowered
+    return lowered.startswith("text/") and "text/html" not in lowered
+
+
+def _mismatch_line(r, url, content_type, expected):
+    """
+    The progress line for an answer of the wrong kind, naming where the
+    request landed when that differs from where it was sent. A document
+    that answers with a sign-in page shows up here as HTML landing on the
+    sign-in host.
+    """
+    line = f"  SKIP {url} -- answered {content_type or 'no content type'} where {expected} was expected"
+    final_url = getattr(r, "url", None)
+    if final_url and normalise(final_url) != normalise(url):
+        line += f"; the request landed on {final_url}"
+    return line
+
+
+def _record_fetch(url, session, cache_meta, r, digest):
+    """Records fresh validators for a 200 answer and flushes the metadata on schedule."""
+    cache_meta[url] = {
+        "etag": r.headers.get("ETag"),
+        "last_modified": r.headers.get("Last-Modified"),
+        "fetched_at": time.time(),
+        "sha256": digest,
+    }
+    _flush_cache_meta_periodically(session, cache_meta)
+
+
+def _store_fetched_page(r, url, session, cache_meta, expect_html, progress=None):
     """
     Validates content-type, writes the cache file, and records fresh cache
     metadata (etag/last_modified/fetched_at/sha256) for a 200 response.
@@ -371,26 +489,56 @@ def _store_fetched_page(r, url, session, cache_meta, expect_html):
         session: the HTTP session, forwarded to _flush_cache_meta_periodically.
         cache_meta (dict): mutated in place with this URL's fresh metadata.
         expect_html (bool): True to require text/html and return parsed
-            BeautifulSoup; False to require text/plain and return raw text.
+            BeautifulSoup; False to require a text type other than HTML
+            and return raw text.
+        progress (Callable[[str], None] | None): receives one line when
+            the answer is of the wrong kind; None reports nothing.
 
     Returns:
         BeautifulSoup | str | None: parsed document, raw text, or None if
         content-type doesn't match expect_html (nothing usable at this URL).
     """
     content_type = r.headers.get("content-type", "")
-    if expect_html and "text/html" not in content_type:
+    if not _content_type_fits(content_type, expect_html):
+        _report(progress, _mismatch_line(r, url, content_type, "HTML" if expect_html else "text"))
         return None
-    if not expect_html and "text/plain" not in content_type:
+    # A byte-order mark at the start of a text export is noise to the
+    # parser and to the index alike.
+    text = r.text[1:] if r.text.startswith("\ufeff") else r.text
+    cache.save_page_text(url, text)
+    _record_fetch(url, session, cache_meta, r, hashlib.sha256(text.encode("utf-8")).hexdigest())
+    return BeautifulSoup(text, "html.parser") if expect_html else text
+
+
+def _store_fetched_document(r, url, session, cache_meta, max_bytes, progress=None):
+    """
+    Checks that a document answer is not a web page and not over the
+    ceiling, writes the bytes to the cache, and records fresh metadata.
+
+    Args:
+        r (requests.Response): the successful (200) response.
+        url (str): the fetched URL.
+        session: the HTTP session, forwarded to _flush_cache_meta_periodically.
+        cache_meta (dict): mutated in place with this URL's fresh metadata.
+        max_bytes (int): the most bytes accepted.
+        progress (Callable[[str], None] | None): receives one line when
+            the answer is refused; None reports nothing.
+
+    Returns:
+        bytes | None: the file, or None when the answer was a web page
+        (a sign-in page in place of a file, most often) or too large.
+    """
+    content_type = r.headers.get("content-type", "")
+    if "text/html" in content_type.lower():
+        _report(progress, _mismatch_line(r, url, content_type, "a document file"))
         return None
-    cache.save_page_text(url, r.text)
-    cache_meta[url] = {
-        "etag": r.headers.get("ETag"),
-        "last_modified": r.headers.get("Last-Modified"),
-        "fetched_at": time.time(),
-        "sha256": hashlib.sha256(r.text.encode("utf-8")).hexdigest(),
-    }
-    _flush_cache_meta_periodically(session, cache_meta)
-    return BeautifulSoup(r.text, "html.parser") if expect_html else r.text
+    data = r.content
+    if len(data) > max_bytes:
+        _report(progress, f"  SKIP {url} -- {len(data)} bytes is over the {max_bytes} byte ceiling for a document")
+        return None
+    cache.save_document_bytes(url, data)
+    _record_fetch(url, session, cache_meta, r, hashlib.sha256(data).hexdigest())
+    return data
 
 
 def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AGENT,
@@ -413,8 +561,9 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
         cache_meta (dict): the in-memory cache metadata, read for
             conditional headers and mutated with fresh validators.
         expect_html (bool): True (default) requires a text/html response
-            and returns a parsed BeautifulSoup document. False requires
-            text/plain (e.g. a raw.githubusercontent.com file) and returns
+            and returns a parsed BeautifulSoup document. False requires a
+            text type other than HTML (a raw.githubusercontent.com file
+            as text/plain, a spreadsheet export as text/csv) and returns
             the decoded text as-is, with no HTML parsing.
         user_agent (str): the User-Agent header value to send.
         progress (Callable[[str], None] | None): receives one line for a
@@ -442,38 +591,11 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
         this URL."
     """
     entry = cache_meta.get(url)
-    conditional_headers = {}
-    if entry:
-        if entry.get("etag"):
-            conditional_headers["If-None-Match"] = entry["etag"]
-        if entry.get("last_modified"):
-            conditional_headers["If-Modified-Since"] = entry["last_modified"]
+    conditional_headers = _conditional_headers(entry)
 
     try:
-        r = session.get(
-            url,
-            headers=request_headers(user_agent, conditional_headers),
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        )
-
-        if (r.status_code in BLOCKED_STATUS_CODES
-                and fallback_user_agent
-                and fallback_user_agent != user_agent):
-            _report(progress, f"       {r.status_code} for {user_agent!r}; retrying once as a browser")
-            r = session.get(
-                url,
-                headers=request_headers(fallback_user_agent, conditional_headers),
-                timeout=REQUEST_TIMEOUT_SECONDS,
-            )
-
-        if note_gone is not None and r.status_code in GONE_STATUS_CODES:
-            note_gone()
-
-        if note_final_url is not None:
-            # Where the request landed, which is not where it was sent when
-            # the server redirected. A test double may not report it; then
-            # nothing was redirected as far as this build can tell.
-            note_final_url(getattr(r, "url", None) or url)
+        r = _request(session, url, conditional_headers, user_agent, fallback_user_agent, progress)
+        _note_answer(r, url, note_final_url, note_gone)
 
         if conditional_headers and r.status_code == 304:
             try:
@@ -483,14 +605,70 @@ def fetch(session, url, cache_meta, expect_html=True, user_agent=DEFAULT_USER_AG
                 # Cache file missing/unreadable -- retry once as a plain GET.
                 r = session.get(url, headers=request_headers(user_agent), timeout=REQUEST_TIMEOUT_SECONDS)
                 r.raise_for_status()
-                return _store_fetched_page(r, url, session, cache_meta, expect_html)
+                return _store_fetched_page(r, url, session, cache_meta, expect_html, progress)
             entry["fetched_at"] = time.time()
             _flush_cache_meta_periodically(session, cache_meta)
             _report(progress, "       (cached, not modified)")
             return BeautifulSoup(cached_text, "html.parser") if expect_html else cached_text
 
         r.raise_for_status()
-        return _store_fetched_page(r, url, session, cache_meta, expect_html)
+        return _store_fetched_page(r, url, session, cache_meta, expect_html, progress)
+    except Exception as e:
+        _report(progress, f"  SKIP {url} -- {e}")
+        return None
+
+
+def fetch_bytes(session, url, cache_meta, max_bytes, user_agent=DEFAULT_USER_AGENT,
+                progress=None, fallback_user_agent=None, note_final_url=None, note_gone=None):
+    """
+    Fetches one document file through the local page cache, as bytes.
+
+    The same conditional GET, cache, retry, and reporting rules as fetch,
+    for a file a reader turns into text rather than a page to parse. The
+    request names the document formats it accepts, an answer that turns
+    out to be a web page is refused with the landing address named, and
+    an answer larger than the ceiling is refused before anything is
+    stored.
+
+    Args:
+        session (requests.Session): the HTTP session to fetch through.
+        url (str): the URL to fetch.
+        cache_meta (dict): the in-memory cache metadata, read for
+            conditional headers and mutated with fresh validators.
+        max_bytes (int): the most bytes accepted for the file.
+        user_agent, progress, fallback_user_agent, note_final_url,
+            note_gone: as for fetch.
+
+    Returns:
+        bytes | None: the file, or None if the request failed, the answer
+        was a web page, or the file was over the ceiling. Failures are
+        reported through progress and never raise.
+    """
+    entry = cache_meta.get(url)
+    conditional_headers = _conditional_headers(entry)
+    headers = {**DOCUMENT_ACCEPT_HEADERS, **conditional_headers}
+
+    try:
+        r = _request(session, url, headers, user_agent, fallback_user_agent, progress)
+        _note_answer(r, url, note_final_url, note_gone)
+
+        if conditional_headers and r.status_code == 304:
+            try:
+                data = cache.load_document_bytes(url)
+            except OSError:
+                r = session.get(
+                    url, headers=request_headers(user_agent, DOCUMENT_ACCEPT_HEADERS),
+                    timeout=REQUEST_TIMEOUT_SECONDS,
+                )
+                r.raise_for_status()
+                return _store_fetched_document(r, url, session, cache_meta, max_bytes, progress)
+            entry["fetched_at"] = time.time()
+            _flush_cache_meta_periodically(session, cache_meta)
+            _report(progress, "       (cached, not modified)")
+            return data
+
+        r.raise_for_status()
+        return _store_fetched_document(r, url, session, cache_meta, max_bytes, progress)
     except Exception as e:
         _report(progress, f"  SKIP {url} -- {e}")
         return None

@@ -12,7 +12,7 @@ extractium/sources/github_files.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,12 +31,13 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-15"
 
 import posixpath
 import re
 
 from extractium.code import languages as code_languages
+from extractium.readers import documents
 
 ### What Counts As Documentation ###
 
@@ -100,7 +101,10 @@ SKIP_DIRECTORIES = frozenset({
 SKIP_PATH_PREFIXES = ("renv/library/", "renv/staging/", ".rproj.user/")
 
 # Extensions whose bytes are not indexable text: binaries, media,
-# archives, compiled objects, stored data, and fonts.
+# archives, compiled objects, stored data, and fonts. Word, OpenDocument,
+# and RTF files are absent because a reader turns them into text when
+# the source's read_documents setting is on; the binary .doc format has
+# no reader and stays here.
 SKIP_EXTENSIONS = frozenset({
     "exe", "dll", "so", "dylib", "o", "obj", "a", "lib", "class", "jar", "war",
     "pyc", "pyo", "pyd", "wasm", "bin", "dat", "db", "sqlite", "sqlite3",
@@ -109,7 +113,7 @@ SKIP_EXTENSIONS = frozenset({
     "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "ico", "webp", "avif", "heic", "psd", "ai",
     "mp3", "mp4", "wav", "ogg", "m4a", "flac", "webm", "mov", "avi", "wmv", "mkv",
     "woff", "woff2", "ttf", "eot", "otf",
-    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+    "pdf", "doc", "xls", "xlsx", "ppt", "pptx", "ods", "odp",
     "map",
 })
 
@@ -219,10 +223,12 @@ def classify(path):
         path (str): a repository-relative path, with forward slashes.
 
     Returns:
-        str | None: "documentation", "manifest", "code", or None when the
-        file is not read at all. A code file is not chunked as prose:
-        what is indexed for one is the structure the parsers find in it,
-        which is why it carries a label of its own.
+        str | None: "documentation", "manifest", "document", "code", or
+        None when the file is not read at all. A code file is not
+        chunked as prose: what is indexed for one is the structure the
+        parsers find in it, which is why it carries a label of its own.
+        A document is a Word, OpenDocument, or RTF file, read only when
+        the source's read_documents setting is on.
     """
     if not path or path.endswith("/") or is_skipped_path(path):
         return None
@@ -233,9 +239,16 @@ def classify(path):
         return "manifest"
     if is_documentation(path):
         return "documentation"
+    if is_document(path):
+        return "document"
     if code_languages.is_code_path(path):
         return "code"
     return None
+
+
+def is_document(path):
+    """True when the file at path is a Word, OpenDocument, or RTF file a reader turns into text."""
+    return _extension(_name(path)) in documents.DOCUMENT_EXTENSIONS
 
 
 def content_type_for(path):

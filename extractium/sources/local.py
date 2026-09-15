@@ -11,7 +11,7 @@ extractium/sources/local.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-12
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,14 +30,16 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-15"
 
 import pathlib
 import re
 
 from bs4 import BeautifulSoup
 
+from extractium.core import prose
 from extractium.core.models import LOCAL_URL_PREFIX, Document
+from extractium.readers import documents as readers
 from extractium.sources.generic import GENERIC_CONTENT_SELECTORS, page_title, select_content
 
 ### Constants ###
@@ -188,11 +190,15 @@ class LocalSource:
         """
         Args:
             options (Mapping): the validated options of the source's entry:
-                `path`, the folder to read, and `include_globs`, the
-                patterns deciding which files under it are read.
+                `path`, the folder to read; `include_globs`, the patterns
+                deciding which files under it are read; and
+                `read_documents`, whether a Word, OpenDocument, or RTF
+                file the patterns select is read into text or skipped
+                with a line saying so.
         """
         self.path = options["path"]
         self.include_globs = tuple(options["include_globs"])
+        self.read_documents = bool(options.get("read_documents", False))
 
     def matching_files(self, root, progress):
         """
@@ -242,6 +248,13 @@ class LocalSource:
 
         for path in self.matching_files(root, progress):
             url = relative_url(root, path)
+            if readers.is_document_path(path):
+                # A document file is never read as text: its bytes go to a
+                # reader, or the file is skipped with the reason named.
+                document = self._document(path, url, progress)
+                if document is not None:
+                    yield document
+                continue
             try:
                 # Replacement rather than failure: one file saved in another
                 # encoding should not lose a whole build, and the text that
@@ -266,3 +279,50 @@ class LocalSource:
                 content_type=content_type_for(path),
                 local=True,
             )
+
+    def _document(self, path, url, progress):
+        """
+        One Word, OpenDocument, or RTF file as a document, or None with
+        the reason reported: the setting is off, the file is over the
+        ceiling, the reader refused it, or it holds no text.
+        """
+        if not self.read_documents:
+            progress(f"  skipped (read_documents is off): {url}")
+            return None
+        try:
+            size = path.stat().st_size
+            if size > readers.MAX_DOCUMENT_BYTES:
+                progress(
+                    f"  skipped ({size} bytes is over the {readers.MAX_DOCUMENT_BYTES} "
+                    f"byte ceiling for a document): {url}"
+                )
+                return None
+            read = readers.read_document(path.read_bytes(), path.name)
+        except OSError as e:
+            progress(f"  skipped (could not be read: {e.strerror or e}): {url}")
+            return None
+        except readers.DocumentError as e:
+            progress(f"  skipped ({e}): {url}")
+            return None
+        text = read.indexed_text
+        if not text.strip():
+            progress(f"  skipped (empty): {url}")
+            return None
+        title = readers.document_title(read, path.stem)
+        if len(text) <= prose.MAX_PROSE_CHARS:
+            content = readers.content_node(text)
+        else:
+            progress(
+                f"  indexed as an outline ({len(text)} characters is over the "
+                f"{prose.MAX_PROSE_CHARS} the index takes whole): {url}"
+            )
+            content = prose.compact_record(title, text)
+        progress(f"  read: {url}")
+        return Document(
+            url=url,
+            title=title,
+            content=content,
+            source_type="local",
+            content_type="text",
+            local=True,
+        )

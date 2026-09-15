@@ -118,9 +118,23 @@ sources:
 
   # 5. Peer-to-Peer Depression Awareness Program Resource Center. Its own
   #    host, so it cannot overlap with source 4.
+  #
+  #    The site is one page whose resources are elsewhere: Google Docs and
+  #    Slides shared with the link, and Word files on the site's content
+  #    delivery network. The include patterns let the crawl reach both,
+  #    and read_documents turns the Word files into text. The first pattern
+  #    restates the site itself, because an include list replaces the
+  #    automatic scope rather than adding to it. A Google file that is not
+  #    shared is reported and skipped; the PDF and video files on the
+  #    delivery network are left out.
   - label: Peer-to-Peer Depression Awareness Program Resource Center
     type: web
     seed_url: https://p2p.depressioncenter.org/
+    read_documents: true
+    include_patterns:
+      - '^https://p2p\.depressioncenter\.org/'
+      - '^https://docs\.google\.com/'
+      - '^https://cdn\.sanity\.io/files/.*\.docx'
 
   # 6. The center's YouTube channel, indexed from its captions: each stretch
   #    of a transcript is a section cited at the moment it was said.
