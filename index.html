@@ -151,30 +151,6 @@ pre {
 .skip:focus {
   top:1rem
 }
-.utility {
-  background:var(--navy);
-  color:white;
-  --focus:var(--maize);
-  font-size:.875rem
-}
-.utility .wrap {
-  display:flex;
-  justify-content:space-between;
-  gap:.5rem 2rem;
-  align-items:center
-}
-.utility a {
-  color:inherit;
-  display:inline-flex;
-  align-items:center;
-  min-height:44px
-}
-.resource-links {
-  display:flex;
-  gap:1.5rem;
-  flex-wrap:wrap;
-  list-style:none
-}
 .header-row {
   display:flex;
   align-items:center;
@@ -249,9 +225,6 @@ pre {
   letter-spacing:.035em;
   display:block;
   margin-bottom:1.2rem
-}
-.hero .eyebrow {
-  color:var(--maize)
 }
 h1 {
   font-size:clamp(2.7rem,5.4vw,4.8rem);
@@ -791,16 +764,7 @@ footer {
 }
 
 @media(max-width:1000px) {
-  .utility .wrap {
-  justify-content:center
-}
-.hub-link {
-  display:none!important
-}
-.resource-links {
-  justify-content:center
-}
-.primary-nav {
+  .primary-nav {
   gap:.3rem 1rem
 }
 .outputs {
@@ -840,9 +804,6 @@ footer {
 }
 .primary-nav a {
   font-size:.9375rem
-}
-.resource-links {
-  gap:.1rem 1rem
 }
 .hero {
   padding-top:2.5rem
@@ -980,7 +941,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
 }
 
 @media print {
-  .utility,.primary-nav,.actions,.copy,.os-picker,.closing,.skip {
+  .primary-nav,.actions,.copy,.os-picker,.closing,.skip {
   display:none!important
 }
 .hero,.terminal {
@@ -988,7 +949,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
   color:black;
   box-shadow:none
 }
-.hero h1 span,.hero p,.hero .eyebrow,.proof,.terminal p,.prompts,.terminal a,.command pre,.terminal-foot {
+.hero h1 span,.hero p,.proof,.terminal p,.prompts,.terminal a,.command pre,.terminal-foot {
   color:black
 }
 .hero-art {
@@ -1035,35 +996,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
 
 <header>
 
-<div class="utility">
-<nav class="wrap" aria-label="Center resources"><a class="hub-link" href="https://code.depressioncenter.org/">Eisenberg Family Depression Center · Open Source Hub</a>
-<ul class="resource-links">
-<li><a href="https://depressioncenter.org/">Depression Center</a></li>
-
-<li><a href="https://michmed.org/efdc-kb">Resource Library</a></li>
-
-<li><a href="https://www.youtube.com/@DepressionCenter">Video Library</a></li>
-
-<li><a href="https://code.depressioncenter.org/llms.html">Site Index</a></li>
-</ul>
-</nav>
-</div>
-
-
 <div class="wrap header-row"><a class="brand" href="#main" aria-label="Extractium home"><svg class="brand-mark" viewBox="0 0 256 256" fill="none" aria-hidden="true" focusable="false"><circle cx="128" cy="69" r="23" fill="#006b66"/><path d="M28 133C66 123 101 145 128 173C155 145 190 123 228 133M28 178C68 168 101 189 128 212C155 189 188 168 228 178" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-word">Extractium<sup>™</sup></span></a>
 <nav aria-label="Project">
 <ul class="primary-nav">
+<li><a href="https://code.depressioncenter.org/">Home</a></li>
+
 <li><a href="#how-it-works">How it works</a></li>
 
 <li><a href="#quick-start">Quick start</a></li>
 
-<li><a href="https://github.com/DepressionCenter/extractium/tree/main/docs"><svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+<li><a href="https://github.com/DepressionCenter/extractium/blob/main/docs/README.md"><svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
   <path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783"/>
 </svg>Docs</a></li>
 
 <li><a class="nav-code" href="https://github.com/DepressionCenter/extractium"><svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
   <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>
-</svg>GitHub</a></li>
+</svg>Code</a></li>
 </ul>
 </nav>
 </div>
@@ -1075,7 +1023,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
 
 <section class="hero" aria-labelledby="hero-title">
 <div class="wrap">
-<div class="hero-copy"><span class="eyebrow">Extractium™ · Open source knowledge tools</span>
+<div class="hero-copy">
 <h1 id="hero-title">From scattered content to <span>shared knowledge.</span></h1>
 
 <p>Gather your websites, documentation, code, and video captions into one knowledge base. Use it for search, in scripts, or with any AI assistant.</p>
@@ -1324,7 +1272,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
 <h2 id="reuse-title">A knowledge base<br>you can take with you.</h2>
 
 <p>Use the same content in a website search box, your own analysis, or an AI assistant. You choose how to use the output and where to host it.</p>
-<a class="inline-link" href="https://github.com/DepressionCenter/extractium/tree/main/docs">Browse the documentation <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+<a class="inline-link" href="https://github.com/DepressionCenter/extractium/blob/main/docs/README.md">Browse the documentation <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
   <path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8"/>
 </svg></a></div>
 
@@ -1395,7 +1343,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
 
 <li><a href="https://github.com/DepressionCenter/extractium">GitHub</a></li>
 
-<li><a href="https://github.com/DepressionCenter/extractium/tree/main/docs">Documentation</a></li>
+<li><a href="https://github.com/DepressionCenter/extractium/blob/main/docs/README.md">Documentation</a></li>
 </ul>
 </div>
 
