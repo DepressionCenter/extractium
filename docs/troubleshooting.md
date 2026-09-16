@@ -592,7 +592,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### A video in one of the channel's playlists was left out
 
-**Cause.** Another channel published it. A playlist holds whatever its owner chose, which often includes other people's videos, and indexing those would put another organization's words in your knowledge base under your name. The build counts what it left out.
+**Cause.** Another channel published it. A playlist holds whatever its owner chose, which often includes other people's videos, and indexing those would put another organization's words in your compendium under your name. The build counts what it left out.
 
 **Fix.** Nothing, if that is what you wanted. To index them anyway, set `only_channel_videos: false`. To name another organization's channel as one you do index, add it as its own `youtube` source.
 
@@ -614,7 +614,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** Check the key in the Google Cloud console. Quota resets daily; a build that only needs stored transcripts is unaffected by it.
 
-### A video is in the channel but not in the knowledge base
+### A video is in the channel but not in the compendium
 
 **Cause.** Most often it has no captions, or none in the languages asked for. The build counts these and says how many were skipped.
 

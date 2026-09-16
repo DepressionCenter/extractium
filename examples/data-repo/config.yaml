@@ -2,10 +2,10 @@
 # examples/data-repo/config.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-11
+# Last Modified: 2026-09-16
 # Summary: Settings file for a data repository: one web source, an
 # optional YouTube source, the two default outputs, and a name for the
-# published knowledge base. Change the seed URL to your own site and the
+# published compendium. Change the seed URL to your own site and the
 # name to your own organization.
 # Notes: See README file for documentation and full license information.
 #
@@ -21,7 +21,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
-# Display name of the published knowledge base.
+# Display name of the published compendium, the collection this build writes.
 name: "Example Org Knowledge Base"
 slug: compendium              # names the output files: compendium.json, compendium.sqlite
 

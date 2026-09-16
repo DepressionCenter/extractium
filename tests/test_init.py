@@ -10,7 +10,7 @@ tests/test_init.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-14
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,7 +29,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-14"
+__date__ = "2026-09-16"
 
 import argparse
 import pathlib
@@ -110,7 +110,7 @@ def test_every_missing_flag_becomes_a_question_and_empty_answers_take_the_defaul
     said = []
     values = init.gather(args(), answers("", "", "https://example.edu/"), said.append)
 
-    assert values == {"name": init.DEFAULT_NAME, "slug": "knowledge-base", "seed_url": "https://example.edu/"}
+    assert values == {"name": init.DEFAULT_NAME, "slug": "compendium", "seed_url": "https://example.edu/"}
 
 
 def test_a_refused_answer_is_explained_and_asked_again():

@@ -13,7 +13,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-16"
 
 from datetime import datetime, timezone
 
@@ -243,7 +243,7 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
     Args:
         documents (Iterable[extractium.core.models.Document]): what the
             sources produced, in order.
-        name (str | None): display name of the knowledge base. None uses
+        name (str | None): display name of the compendium. None uses
             the first document's title.
         embedder (Callable[[list[dict]], numpy.ndarray] | None): embeds the
             child chunks. None uses extractium.core.embed.embed_chunks,

@@ -4,7 +4,7 @@ docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
 Last Modified: 2026-09-16
-Summary: How to keep a knowledge base current: the one-command local
+Summary: How to keep a compendium current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
 Notes: See README file for documentation and full license information.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-A knowledge base goes stale as the pages behind it change, so you should rebuild it on a schedule. This page shows you both ways to do that: from your own computer with one command, and from GitHub on a weekly timer. You do not need to write code for either. Pick the one that suits where your content lives.
+A compendium, the collection a build writes, goes stale as the pages behind it change, so you should rebuild it on a schedule. This page shows you both ways to do that: from your own computer with one command, and from GitHub on a weekly timer. You do not need to write code for either. Pick the one that suits where your content lives.
 
 
 ## Which one do you need?
@@ -148,7 +148,7 @@ Deleting the cache is always safe. It costs time, never correctness.
 
 ## Conclusion
 
-You can now rebuild your knowledge base on demand from your own computer, or leave it to a weekly run on GitHub. Next, set up publishing with [how to publish to GitHub Pages](publish-to-github-pages.md), or read [how to search a compendium](search-a-compendium.md) to use the file you just built.
+You can now rebuild your compendium on demand from your own computer, or leave it to a weekly run on GitHub. Next, set up publishing with [how to publish to GitHub Pages](publish-to-github-pages.md), or read [how to search a compendium](search-a-compendium.md) to use the file you just built.
 
 
 ## Additional Resources

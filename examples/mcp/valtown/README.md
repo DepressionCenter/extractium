@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/valtown/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: README for the Val Town example: what it does, the three ways
 to push it, the settings it reads, what search it runs with and without an
 embedding service, and its limits.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds a hosted search server that runs on [Val Town](https://www.val.town/), a platform that runs small TypeScript programs at a public address. Once pushed, it answers Model Context Protocol (MCP) requests at `https://<your-val>.val.run/mcp`, so an assistant anywhere can search your published knowledge base without you running a computer of your own. It exposes the same one tool, `search_kb`, as the [local servers](../local-node/README.md), with the same arguments and the same answers.
+This folder holds a hosted search server that runs on [Val Town](https://www.val.town/), a platform that runs small TypeScript programs at a public address. Once pushed, it answers Model Context Protocol (MCP) requests at `https://<your-val>.val.run/mcp`, so an assistant anywhere can search your published compendium without you running a computer of your own. It exposes the same one tool, `search_kb`, as the [local servers](../local-node/README.md), with the same arguments and the same answers.
 
 The val fetches the published container once, keeps a copy in its blob store so a cold start does not download it again, and holds it in memory while the val stays warm. Out of the box it answers with keyword search. Point it at an embedding service and it runs the full hybrid search the clients run.
 

@@ -26,7 +26,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This page shows you how to build your knowledge base from the command line. You write one settings file, run one command, and get a folder of files you can publish anywhere that serves static files. You do not need to write code. For what every setting in the file means, read the [configuration reference](configuration.md).
+This page shows you how to build your compendium, the searchable collection of everything you publish, from the command line. You write one settings file, run one command, and get a folder of files you can publish anywhere that serves static files. You do not need to write code. For what every setting in the file means, read the [configuration reference](configuration.md).
 
 
 ## Before you start
@@ -51,8 +51,8 @@ This asks three questions and writes `config.yaml` in the current folder:
 ```
 Creating config.yaml. Press Enter to accept a default shown in brackets.
 
-Name of your knowledge base [Knowledge Base]: EFDC Knowledge Base
-Short name for the output files (lowercase letters, digits, hyphens) [efdc-knowledge-base]:
+Name of your compendium [Compendium]: EFDC Compendium
+Short name for the output files (lowercase letters, digits, hyphens) [efdc-compendium]:
 Website to start crawling from, such as https://example.edu/docs/: https://example.edu/kb/
 
 Wrote config.yaml. Every setting is explained in its comments; add more sources or outputs there.

@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/cloudflare/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: README for the Cloudflare Worker example: what it does, how to
 load a build into D1 and deploy, the settings it reads, what search it
 runs with and without Workers AI, and its limits.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds a hosted search server that runs as a [Cloudflare Worker](https://developers.cloudflare.com/workers/) and reads the knowledge base from [D1](https://developers.cloudflare.com/d1/), Cloudflare's hosted SQLite. Once deployed, it answers Model Context Protocol (MCP) requests at `https://<your-worker>.workers.dev/mcp`. It exposes the same one tool, `search_kb`, as the [local servers](../local-node/README.md), with the same arguments and the same answers.
+This folder holds a hosted search server that runs as a [Cloudflare Worker](https://developers.cloudflare.com/workers/) and reads the compendium from [D1](https://developers.cloudflare.com/d1/), Cloudflare's hosted SQLite. Once deployed, it answers Model Context Protocol (MCP) requests at `https://<your-worker>.workers.dev/mcp`. It exposes the same one tool, `search_kb`, as the [local servers](../local-node/README.md), with the same arguments and the same answers.
 
 A Worker on the free plan has ten milliseconds of CPU per request, which is not enough to parse a multi-megabyte index. So this example never reads the container at all. A build's SQLite output is loaded into D1 once, keyword ranking runs inside the database, and the Worker only shapes the answer. With the Workers AI binding turned on, the keyword candidates are also ranked by vector similarity and fused as the clients do.
 
@@ -62,7 +62,7 @@ npx wrangler d1 execute extractium-kb --remote --file compendium.d1.sql
 
 `d1 create` prints a `database_id`. Replace the zeros in `wrangler.jsonc` with it. The export begins by dropping the tables, so loading a newer build replaces the older one rather than adding to it. Repeat the two `export` and `execute` steps after every build you want the server to answer from.
 
-The export is text. On a real knowledge base it runs to tens of megabytes, because it carries every vector as hexadecimal. That is expected.
+The export is text. On a real compendium it runs to tens of megabytes, because it carries every vector as hexadecimal. That is expected.
 
 
 ## Try it on your computer first

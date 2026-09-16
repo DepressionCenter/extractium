@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: README for the data-repository template: what the folder is, how
 to turn it into your own repository, how the weekly build runs, what gets
 published, and why the YouTube cache is committed rather than ignored.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder is a template. Copy it into a new repository of your own, change two lines, and you have a knowledge base that rebuilds itself every week and publishes to GitHub Pages. Your content and settings live here. The tool that builds them lives in the [Extractium™ repository](https://github.com/DepressionCenter/extractium). Keeping the two apart means you can update either one without disturbing the other.
+This folder is a template. Copy it into a new repository of your own, change two lines, and you have a compendium, a searchable collection of what you publish, that rebuilds itself every week and publishes to GitHub Pages. Your content and settings live here. The tool that builds them lives in the [Extractium™ repository](https://github.com/DepressionCenter/extractium). Keeping the two apart means you can update either one without disturbing the other.
 
 
 ## What is in the template

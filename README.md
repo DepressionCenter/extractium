@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -27,7 +27,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 # Extractium™
 
 ## Description
-Extractium™ turns your organization's scattered public documentation into one searchable knowledge base. Point it at your website, knowledge base portal, GitHub repositories, YouTube channel, library repository, or a folder of files, and it gathers the content, prepares it for both keyword and meaning-based search, and writes it out in several formats. You can then use that knowledge base in a website search box, in your own scripts, or with the AI assistant of your choice, without depending on any one AI provider.
+Extractium™ gathers what your organization already publishes into one compendium: a searchable collection of all of it, written as static files. Point it at your website, knowledge base portal, GitHub repositories, YouTube channel, library repository, or a folder of files. It gathers the content, prepares it for both keyword and meaning-based search, and writes it out in several formats. AI assistants can read the result, small language models can search it inside a web app or a script, and none of it depends on any one AI provider or on a server you have to run.
 
 ![Extractium: from scatter content to shared knowledge for the AI era.](images/extractium-from-scattered-content-to-shared-knowledge.png "Extractium: from scatter content to shared knowledge for the AI era.")
 
@@ -47,7 +47,7 @@ Extractium™ grew out of the indexing engine in [Field Station AI™](https://g
 ## Quick Start Guide
 + Install Python 3.10 or newer.
 + Save the build script for your operating system into an empty folder: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone this repository instead and run the script from the clone.
-+ Run the script. It downloads the latest release of Extractium™ (with git if you have it, otherwise as a plain download), installs everything it needs into a virtual environment, asks you for the name of your knowledge base, a short name for its files, and the website to crawl, then builds a first index limited to 25 pages:
++ Run the script. It downloads the latest release of Extractium™ (with git if you have it, otherwise as a plain download), installs everything it needs into a virtual environment, asks you for the name of your compendium, a short name for its files, and the website to crawl, then builds a first index limited to 25 pages:
 
   ```bash
   ./run.sh       # macOS and Linux

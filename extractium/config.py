@@ -162,7 +162,7 @@ DEFAULT_YOUTUBE_INCLUDE_PLAYLISTS = True
 # Whether a video found through a playlist is indexed only when one of
 # the configured channels published it. On, because a playlist routinely
 # holds other people's videos, and indexing those would put another
-# organization's words in this knowledge base under this one's name.
+# organization's words in this compendium under this one's name.
 DEFAULT_YOUTUBE_ONLY_CHANNEL_VIDEOS = True
 
 # Whether a video whose caption request YouTube refuses is transcribed
@@ -397,7 +397,7 @@ class Config:
     shared with another step or with the module-level defaults.
 
     Attributes:
-        name (str | None): display name of the knowledge base; None means
+        name (str | None): display name of the compendium; None means
             "use the title of the first crawled page".
         slug (str): the short name the output files are named after.
         out_dir (str): folder every adapter writes under.
