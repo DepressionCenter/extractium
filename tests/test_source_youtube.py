@@ -245,9 +245,44 @@ def options(**overrides):
         "playlist_ids": (),
         "video_ids": (),
         "languages": ("en",),
+        # Off unless a test says otherwise, so a refused video never
+        # reaches for the real downloader on a machine that has it.
+        "audio_fallback": False,
     }
     settings.update(overrides)
     return settings
+
+
+class FakeTranscriber:
+    """
+    Stand-in for AudioTranscriber. `results` maps a video id to
+    (metadata, language, lines); `errors` maps one to an exception to
+    raise instead. Every call is recorded.
+    """
+
+    def __init__(self, results=None, errors=None):
+        self.results = results or {}
+        self.errors = errors or {}
+        self.calls = []
+
+    def transcribe(self, video_id, language="en", progress=None):
+        self.calls.append({"video_id": video_id, "language": language})
+        if video_id in self.errors:
+            raise self.errors[video_id]
+        if video_id not in self.results:
+            raise KeyError(video_id)
+        return self.results[video_id]
+
+
+def whisper_lines(count=6):
+    """Timed lines the way the audio path returns them."""
+    return [{"text": f"spoken sentence {n} about measuring mood with a phone", "start": 4.0 * n} for n in range(count)]
+
+
+def audio_result(title="From Audio", tags=("mood", "phone")):
+    metadata = {"title": title, "description": "What the talk covers.", "tags": tuple(tags),
+                "published_at": "2026-01-02T00:00:00Z", "channel_id": CHANNEL}
+    return metadata, "en", whisper_lines()
 
 
 def source(reader=None, **overrides):
@@ -1769,6 +1804,93 @@ def test_a_video_whose_publisher_cannot_be_read_is_still_indexed():
 
     assert len({d.title.split(" -- ")[0] for d in documents}) >= 1
     assert built.skipped_other_channels == 0
+
+
+### The Audio Fallback ###
+
+def test_a_refused_video_is_transcribed_from_its_audio_and_stored(api_key_set, caption_library):
+    """
+    YouTube refuses the caption request; the audio is not gated the same
+    way, so the video is transcribed from it and stored like any other,
+    with what the downloader learned filling in what the API did not say.
+    """
+    from extractium.sources import youtube_audio
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "A Talk"})})
+    built = source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=True)
+    built.transcriber = FakeTranscriber({VIDEO_A: audio_result()})
+
+    lines = []
+    documents = list(built.fetch(session, {}, lines.append))
+    stored = cache_module.load_video(VIDEO_A)
+
+    assert documents and {d.title.split(" -- ")[0] for d in documents} == {"A Talk"}
+    assert built.blocked is False
+    assert built.transcribed == 1 and built.fetched == 0
+    assert built.coverage == (("A Talk", len(documents), "transcribed"),)
+    assert stored["language"] == "en" and stored["description"] == "What the talk covers."
+    assert stored["tags"] == ["mood", "phone"]
+    assert any("transcribing the audio instead" in line for line in lines)
+    assert any(f"1 transcribed from audio with Whisper {youtube_audio.WHISPER_MODEL}" in line
+               for line in built.summary_lines())
+
+
+def test_after_one_refusal_the_caption_library_is_not_asked_again(api_key_set, caption_library):
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A),
+                                VIDEO_B: caption_library.RequestBlocked(VIDEO_B)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "First", VIDEO_B: "Second"})})
+    built = source(reader=reader, video_ids=(VIDEO_A, VIDEO_B), audio_fallback=True)
+    built.transcriber = FakeTranscriber({VIDEO_A: audio_result("First"), VIDEO_B: audio_result("Second")})
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"First", "Second"}
+    assert [call["video_id"] for call in reader.calls] == [VIDEO_A]
+    assert [call["video_id"] for call in built.transcriber.calls] == [VIDEO_A, VIDEO_B]
+    assert built.transcribed == 2
+
+
+def test_a_refusal_the_audio_cannot_answer_either_is_reported_as_a_block(api_key_set, caption_library):
+    from extractium.sources.youtube_audio import AudioTranscriptionFailed
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "A Talk"})})
+    built = source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=True)
+    built.transcriber = FakeTranscriber(errors={VIDEO_A: AudioTranscriptionFailed("the audio of VIDEOAAAAAA could not be downloaded (HTTP Error 403).")})
+
+    lines = []
+    documents = list(built.fetch(session, {}, lines.append))
+
+    assert documents == []
+    assert built.blocked is True and built.transcribed == 0
+    assert any("could not be transcribed either" in line and "HTTP Error 403" in line for line in lines)
+
+
+def test_the_block_message_says_how_to_get_the_audio_path(api_key_set, caption_library, monkeypatch):
+    from extractium.sources import youtube as youtube_source
+    monkeypatch.setattr(youtube_source, "audio_transcription_available", lambda: False)
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "A Talk"})})
+
+    lines = []
+    list(source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=True).fetch(session, {}, lines.append))
+    assert any('extractium[whisper]' in line for line in lines)
+
+    lines = []
+    list(source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=False).fetch(session, {}, lines.append))
+    assert any("audio_fallback switched off" in line for line in lines)
+
+
+def test_audio_with_no_speech_is_a_video_without_captions(api_key_set, caption_library):
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "Silent"})})
+    built = source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=True)
+    built.transcriber = FakeTranscriber({VIDEO_A: (audio_result()[0], "en", [])})
+
+    documents = list(built.fetch(session, {}, quiet))
+
+    assert documents == []
+    assert built.blocked is False
+    assert built.without_captions == (VIDEO_A,)
 
 
 ### A Block Partway Through ###

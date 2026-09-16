@@ -398,6 +398,7 @@ Indexes what is said in a video, not the video itself. Each stretch of a transcr
 | `include_playlists` | true or false | `true` | Whether the channel's own playlists are read as well as its uploads. |
 | `only_channel_videos` | true or false | `true` | Whether a video found through a playlist is indexed only when the channel published it. |
 | `delay_seconds` | number | the build's own | Seconds between requests to YouTube. Never less than 1; see below. |
+| `audio_fallback` | true or false | `true` | Whether a video whose caption request YouTube refuses is transcribed from its audio instead. Needs the `whisper` extra; without it the setting does nothing. See "When YouTube refuses the machine" below. |
 
 At least one of `channel_id`, `playlist_ids`, or `video_ids` is required.
 
@@ -474,7 +475,8 @@ Extractium works around this by storing everything it reads under `cache_dir`:
 
 | Path | What it holds |
 |---|---|
-| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, description, tags, caption language, and timed caption lines. A file written by hand needs only the caption lines. |
+| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, description, tags, caption language, and timed caption lines, whether they came from the caption track or from the audio. A file written by hand needs only the caption lines. |
+| `<cache_dir>/youtube/audio/` | Audio being transcribed, one temporary folder per video, removed when the transcript is stored. Empty between builds. |
 | `<cache_dir>/youtube/listings/<playlist id>.json` | The videos a playlist held when it was last listed. |
 
 Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your knowledge base is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
@@ -515,6 +517,24 @@ sources:
 A few hundred videos therefore takes a few minutes on the first run. It costs nothing afterwards: stored transcripts are read from disk with no pause at all.
 
 If YouTube does refuse the machine partway through, the build keeps every video it had already read, stops asking for more, and says the result is incomplete. Build again later, or on another machine, and it picks up where it left off from the stored transcripts.
+
+#### When YouTube refuses the machine
+
+YouTube refuses caption requests from cloud-provider addresses, from shared addresses such as a mobile carrier's, and from any address that has asked too often. It does not gate the audio the same way. With the `whisper` extra installed, a refused video is transcribed from its audio instead: the audio track is downloaded with yt-dlp, transcribed on the CPU with faster-whisper, and stored beside the other transcripts, with the video's title, description, and tags as the downloader reports them. Once one request has been refused in a build, every later video goes straight to the audio, so a refused build costs one refused request and not one per video.
+
+```bash
+pip install "extractium[whisper]"
+```
+
+A few things to know before turning it on:
+
+- One model, everywhere. Every build uses Whisper's `base.en`, its smallest English model, on the CPU with 8-bit weights, so two machines transcribing the same video store the same words. The model is about 75 MB and downloads once, into the same cache the embedding model uses. It reads a talk well enough to search; it does not know speaker names, and neither do YouTube's own automatic captions.
+- Speed. On a plain laptop CPU it transcribes about ten to fifteen minutes of speech per minute, so a one-hour talk takes four to six minutes. A channel of two hundred talks is an afternoon, once, because a stored transcript is never fetched again.
+- Disk. The audio of a video is downloaded under `<cache_dir>/youtube/audio/` while it is transcribed and removed as soon as the transcript is stored. Nothing over 500 MB is downloaded.
+- Weight. The extra pulls in about 200 MB of packages, which is why it is not in the lock file and not part of the scheduled build. Install it on the machine that fetches transcripts, commit the cache, and let the scheduled build read the store.
+- Set `audio_fallback: false` on a source to keep a refused build from reaching for the audio even where the packages are installed.
+
+The audio path speaks to YouTube the way the caption library does, through the interface YouTube's own player uses, and it runs nothing it finds on the page: no JavaScript runtime is configured for the downloader, and no post-processing is asked of it.
 
 #### What you need installed
 

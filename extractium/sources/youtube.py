@@ -41,6 +41,11 @@ from extractium.core import cache as cache_module
 from extractium.core.ceiling import PageCeiling
 from extractium.core.fetch import DEFAULT_USER_AGENT
 from extractium.core.models import Document
+from extractium.sources.youtube_audio import (
+    WHISPER_MODEL,
+    AudioTranscriber,
+    audio_transcription_available,
+)
 from extractium.sources.youtube_client import (
     CHANNEL_ID_RE,
     TranscriptLibraryMissing,
@@ -219,8 +224,11 @@ class YouTubeSource:
     cloud-provider address ranges with a block, and from shared or busy
     addresses such as a mobile carrier's, so a scheduled build on a
     hosted runner cannot fetch a transcript at all and a laptop on a
-    hotspot often cannot either. A block never fails the build: what
-    was read is kept and the summary says what is missing. Everything read is
+    hotspot often cannot either. When the optional audio packages are
+    installed, a refused video is transcribed from its audio instead,
+    which YouTube serves from servers it does not gate the same way. A
+    block never fails the build: what was read is kept and the summary
+    says what is missing. Everything read is
     therefore stored under the cache directory, and that store is meant
     to be committed to the data repository: an operator builds once on
     their own machine, commits what came back, and every later build
@@ -228,12 +236,14 @@ class YouTubeSource:
 
     Args:
         options (Mapping): the validated options of a `youtube` entry:
-            channel_id, playlist_ids, video_ids, and languages.
+            channel_id, playlist_ids, video_ids, languages, and
+            audio_fallback.
 
     Attributes:
         coverage (tuple): one record per video indexed, in the order
             read: its title, how many stretches it contributed, and
-            whether its transcript came from the store or the network.
+            where its transcript came from: "stored", "fetched" from the
+            caption track, or "transcribed" from the audio.
     """
 
     name = "youtube"
@@ -246,6 +256,17 @@ class YouTubeSource:
         self.include_playlists = bool(options.get("include_playlists", True))
         self.configured_delay = options.get("delay_seconds")
         self.only_channel_videos = bool(options.get("only_channel_videos", True))
+        # Whether a refused caption request falls back to transcribing
+        # the audio. Effective only when the audio packages are installed.
+        self.audio_fallback = bool(options.get("audio_fallback", True))
+        # Set once YouTube has refused a caption request in this build.
+        # Every later request would be refused too, so with the audio
+        # path available the library is not asked again.
+        self.captions_blocked = False
+        # A caller with its own transcriber may set this; one is built on
+        # first use. It is the seam the tests drive the fallback through.
+        self.transcriber = None
+        self.transcribed = 0
         # Channel ids a video may have been published by, filled in as
         # the configured channels are resolved. Empty means no channel
         # was named, so there is nothing to compare a video against and
@@ -441,7 +462,7 @@ class YouTubeSource:
                 # refused too, so none is made.
                 break
             try:
-                record, from_store = self._video(client, video_id, titles, progress)
+                record, origin = self._video(client, video_id, titles, progress)
             except _Blocked as e:
                 # YouTube has started refusing this machine. Every later
                 # request would be refused too, so no more are made. What
@@ -470,7 +491,7 @@ class YouTubeSource:
                 )
             produced += 1
             self._read_ids.add(video_id)
-            self.coverage += ((record["title"], len(stretches), from_store),)
+            self.coverage += ((record["title"], len(stretches), origin),)
         self.without_captions += tuple(missing)
         if missing:
             progress(f"  {len(missing)} video(s) had no captions to read")
@@ -865,15 +886,15 @@ class YouTubeSource:
             progress (Callable[[str], None]): receives one line per event.
 
         Returns:
-            tuple[dict | None, bool]: a record holding `title`,
-            `segments`, `description`, and `tags`, and whether it came
-            from the store. The record is None when the video has no
-            captions this build can read, which is a normal thing to
-            meet rather than a failure.
+            tuple[dict | None, str]: a record holding `title`,
+            `segments`, `description`, and `tags`, and where it came
+            from: "stored", "fetched", or "transcribed". The record is
+            None when the video has no captions this build can read,
+            which is a normal thing to meet rather than a failure.
 
         Raises:
-            _Blocked: if the transcript must be fetched and YouTube
-                refuses this machine.
+            _Blocked: if the transcript must be fetched, YouTube refuses
+                this machine, and the audio cannot be transcribed either.
             YouTubeSourceError: if the library needed to fetch it is
                 absent.
         """
@@ -888,13 +909,16 @@ class YouTubeSource:
                 "tags": tuple(
                     tag for tag in stored_tags if isinstance(tag, str)
                 ) if isinstance(stored_tags, list) else (),
-            }, True
+            }, "stored"
 
         known = titles.get(video_id) or {}
         title = known.get("title") or video_id
         published_at = known.get("published_at") or ""
         description = known.get("description") or ""
         tags = tuple(known.get("tags") or ())
+        if self.captions_blocked and self._audio_ready():
+            # Refused earlier in this build; go straight to the audio.
+            return self._from_audio(video_id, title, published_at, description, tags, progress)
         self._pace()
         try:
             language, lines = fetch_transcript(
@@ -905,21 +929,92 @@ class YouTubeSource:
             )
         except TranscriptUnavailable as e:
             progress(f"  {title}: {e}")
-            return None, False
+            return None, "fetched"
         except YouTubeNotFound as e:
             progress(f"  {video_id}: {e}")
-            return None, False
+            return None, "fetched"
         except YouTubeBlocked as e:
-            raise _Blocked(str(e)) from e
+            self.captions_blocked = True
+            if not self._audio_ready():
+                raise _Blocked(f"{e} {self._audio_hint()}") from e
+            progress(f"  {title}: YouTube refused the caption request; transcribing the audio instead")
+            return self._from_audio(video_id, title, published_at, description, tags, progress, refusal=e)
         except TranscriptLibraryMissing as e:
             raise YouTubeSourceError(
                 f"{e} Nothing is stored for {video_id}, so this build cannot read it."
             ) from e
         except YouTubeError as e:
             progress(f"  {title}: {e}")
-            return None, False
+            return None, "fetched"
 
         self.fetched += 1
+        self._store(video_id, title, published_at, language, lines, description, tags, progress)
+        return {
+            "title": title,
+            "segments": list(lines),
+            "description": description,
+            "tags": tags,
+        }, "fetched"
+
+    def _audio_ready(self):
+        """Whether a refused video may be transcribed from its audio in this build."""
+        return self.audio_fallback and (self.transcriber is not None or audio_transcription_available())
+
+    def _audio_hint(self):
+        """What the block message adds about the audio path, given this build's settings."""
+        if not self.audio_fallback:
+            return "This source has audio_fallback switched off."
+        return "Install the audio packages to transcribe refused videos instead: pip install \"extractium[whisper]\"."
+
+    def _from_audio(self, video_id, title, published_at, description, tags, progress, refusal=None):
+        """
+        One video's transcript from its audio, stored like a fetched one.
+
+        Whatever the caption path had learned about the video is kept;
+        what yt-dlp reports fills in the rest, which is how a build with
+        no API key still stores a title, a description, and tags.
+
+        Args:
+            video_id (str): the video's identifier.
+            title, published_at, description, tags: what is known so far.
+            progress (Callable[[str], None]): receives one line per event.
+            refusal (Exception | None): the caption refusal this answers.
+
+        Returns:
+            tuple[dict, str]: the record and "transcribed".
+
+        Raises:
+            _Blocked: if the audio cannot be downloaded or transcribed,
+                naming both refusals.
+        """
+        if self.transcriber is None:
+            self.transcriber = AudioTranscriber()
+        try:
+            metadata, language, lines = self.transcriber.transcribe(
+                video_id, language=self.languages[0] if self.languages else "en", progress=progress,
+            )
+        except YouTubeError as e:
+            reason = f"{refusal} " if refusal is not None else ""
+            raise _Blocked(f"{reason}The audio could not be transcribed either: {e}") from e
+        title = title if title != video_id else (metadata.get("title") or video_id)
+        published_at = published_at or metadata.get("published_at") or ""
+        description = description or metadata.get("description") or ""
+        tags = tags or tuple(metadata.get("tags") or ())
+        if not lines:
+            progress(f"  {title}: the audio holds no speech Whisper could transcribe")
+            return None, "transcribed"
+        self.transcribed += 1
+        progress(f"  {title}: transcribed {len(lines)} line(s) from the audio")
+        self._store(video_id, title, published_at, language, lines, description, tags, progress)
+        return {
+            "title": title,
+            "segments": list(lines),
+            "description": description,
+            "tags": tags,
+        }, "transcribed"
+
+    def _store(self, video_id, title, published_at, language, lines, description, tags, progress):
+        """Writes one transcript to the store; a store that cannot be written costs the next build, not this one."""
         try:
             cache_module.save_video(
                 video_id, title, published_at, language, lines,
@@ -927,12 +1022,6 @@ class YouTubeSource:
             )
         except (OSError, ValueError) as e:
             progress(f"  {title}: the transcript could not be stored ({e})")
-        return {
-            "title": title,
-            "segments": list(lines),
-            "description": description,
-            "tags": tags,
-        }, False
 
     def _document(self, video_id, title, stretch, description="", tags=()):
         """
@@ -1009,10 +1098,11 @@ class YouTubeSource:
         One line per video read, and a closing count of where the
         transcripts came from.
 
-        Whether a transcript was stored or fetched is the number an
-        operator actually needs: a scheduled build that fetched anything
-        is a build that reached YouTube, which will stop working the
-        first time it runs somewhere YouTube blocks.
+        Whether a transcript was stored, fetched, or transcribed is the
+        number an operator actually needs: a scheduled build that fetched
+        or transcribed anything is a build that reached YouTube, which
+        will stop working the first time it runs somewhere YouTube blocks
+        or where the audio packages are absent.
 
         Returns:
             list[str]: the coverage report, empty when nothing was read.
@@ -1021,14 +1111,16 @@ class YouTubeSource:
             return []
         width = max((len(title) for title, _, _ in self.coverage), default=0)
         lines = [
-            f"{title:<{width}}  {count} section(s)  "
-            f"{'stored' if from_store else 'fetched'}"
-            for title, count, from_store in self.coverage
+            f"{title:<{width}}  {count} section(s)  {origin}"
+            for title, count, origin in self.coverage
         ]
-        lines.append(
+        summary = (
             f"{len(self.coverage)} video(s): {self.stored} from the cache, "
             f"{self.fetched} fetched from YouTube"
         )
+        if self.transcribed:
+            summary += f", {self.transcribed} transcribed from audio with Whisper {WHISPER_MODEL}"
+        lines.append(summary)
         if self.without_captions:
             lines.append(f"{len(self.without_captions)} video(s) had no captions to read")
         if self.skipped_other_channels:
@@ -1046,8 +1138,9 @@ class YouTubeSource:
             lines.append(
                 f"INCOMPLETE: YouTube refused this machine after {self.blocked_after} "
                 "video(s). It refuses cloud, shared, and rate-limited addresses. "
-                "Raise delay_seconds, or build where YouTube answers, then commit "
-                "the cache and build again to pick up the rest."
+                "Raise delay_seconds, install the audio packages (extractium[whisper]), "
+                "or build where YouTube answers, then commit the cache and build again "
+                "to pick up the rest."
             )
         capped = getattr(self.page_reader, "capped_listings", ())
         if capped:

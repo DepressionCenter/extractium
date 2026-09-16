@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -165,6 +165,11 @@ DEFAULT_YOUTUBE_INCLUDE_PLAYLISTS = True
 # organization's words in this knowledge base under this one's name.
 DEFAULT_YOUTUBE_ONLY_CHANNEL_VIDEOS = True
 
+# Whether a video whose caption request YouTube refuses is transcribed
+# from its audio instead, when the optional audio packages are
+# installed. On, because a build that installed them did so for this.
+DEFAULT_YOUTUBE_AUDIO_FALLBACK = True
+
 # Which repositories a GitHub source reads when the entry says nothing.
 # Forks are left out because indexing a project and several near-identical
 # copies of it fills the index with duplicates. Archived repositories are
@@ -299,7 +304,7 @@ SOURCE_OPTION_KEYS = {
     }),
     "youtube": frozenset({
         "channel_id", "playlist_ids", "video_ids", "languages",
-        "include_playlists", "only_channel_videos", "delay_seconds",
+        "include_playlists", "only_channel_videos", "delay_seconds", "audio_fallback",
     }),
     "dspace": frozenset({
         "api_url", "site_url", "collections", "include_full_text", "max_file_bytes",
@@ -942,6 +947,9 @@ def _read_youtube_source(entry, source):
         ),
         "only_channel_videos": _read_bool(
             entry, "only_channel_videos", DEFAULT_YOUTUBE_ONLY_CHANNEL_VIDEOS, source
+        ),
+        "audio_fallback": _read_bool(
+            entry, "audio_fallback", DEFAULT_YOUTUBE_AUDIO_FALLBACK, source
         ),
         # None means "use the build's delay". The source applies its own
         # floor either way, because YouTube tolerates far less than a

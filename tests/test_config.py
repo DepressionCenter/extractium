@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -616,6 +616,18 @@ def test_youtube_source_defaults_and_options():
     assert source.options["playlist_ids"] == ()
     assert source.options["video_ids"] == ()
     assert source.options["languages"] == ("en",)
+    assert source.options["audio_fallback"] is True
+
+
+def test_youtube_audio_fallback_can_be_switched_off_and_must_be_a_boolean():
+    source = config.config_from_mapping({"sources": [
+        {"type": "youtube", "label": "Example Channel", "video_ids": ["VIDEOAAAAAA"], "audio_fallback": False},
+    ]}).sources[0]
+    assert source.options["audio_fallback"] is False
+    with pytest.raises(config.ConfigError, match="audio_fallback"):
+        config.config_from_mapping({"sources": [
+            {"type": "youtube", "label": "Example Channel", "video_ids": ["VIDEOAAAAAA"], "audio_fallback": "yes"},
+        ]})
 
 
 def test_youtube_source_needs_at_least_one_id():

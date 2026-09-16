@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -546,7 +546,13 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Cause.** You are building somewhere YouTube blocks. That means almost any cloud runner, including GitHub Actions, and often a laptop on a phone hotspot or another shared network, because YouTube refuses caption requests from cloud-provider addresses and from addresses that many people share. A Data API key does not help: it lists channels and playlists, and captions never go through it. The build finishes anyway. It keeps every other source and every transcript already stored, and the YouTube section of the summary says `INCOMPLETE`.
 
-**Fix.** Build from a machine on a home or office network, then commit the cache folder so later builds read the transcripts instead of asking for them. [The cache README](../examples/data-repo/kb-cache/README.md) says what to commit. If a home network is refused too, wait an hour and try again, since a refusal can also be a rate limit on the address you are using.
+**Fix.** Install the audio packages on the machine that builds, `pip install "extractium[whisper]"`, and build again: a refused video is then transcribed from its audio, which YouTube does not gate the same way, and the transcript is stored like any other. The [configuration reference](configuration.md) says what that costs. Or build from a machine on a home or office network. Either way, commit the cache folder afterwards so later builds read the transcripts instead of asking for them; [the cache README](../examples/data-repo/kb-cache/README.md) says what to commit.
+
+### The summary says a video's audio could not be transcribed either
+
+**Cause.** YouTube refused the caption request, the audio packages are installed, and the audio download or the transcription failed too. The message names which. A download fails when the network cannot reach YouTube's audio servers, when the video has no audio-only rendition under the 500 MB ceiling, or when yt-dlp is too old for the pages YouTube now serves. A transcription fails when the file could not be decoded.
+
+**Fix.** Update yt-dlp first, because YouTube changes its pages often and the downloader tracks them: `pip install --upgrade yt-dlp`. If the download still fails, open the video in a browser from the same network; if it plays there, the block is on the address and only another network helps. A transcript stored by hand, one JSON file per video as the cache README describes, is always read in preference to either path.
 
 ### `fetching captions needs youtube-transcript-api`
 
