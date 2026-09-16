@@ -18,7 +18,7 @@ extractium/sources/github.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-10
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -37,13 +37,14 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-16"
 
 import collections
 import re
 from urllib.parse import urlparse
 
 from extractium.core.models import Extraction
+from extractium.sources import github_files
 from extractium.sources.generic import (
     GENERIC_CONTENT_SELECTORS,
     UNTITLED,
@@ -209,6 +210,19 @@ def is_git_blob_text_url(url):
     still classic server-rendered HTML and don't need this path.
     """
     return is_git_host_url(url) and bool(GIT_TEXT_FILE_RE.search(urlparse(url).path))
+
+
+def is_unread_blob_url(url):
+    """
+    True for a blob URL naming a file the API source would never read: a
+    licence text, a file under a test or vendored folder, a lock file.
+    The documentation crawl applies the same path rules, so the two ways
+    of reading a repository leave the same files out.
+    """
+    if not is_git_blob_text_url(url):
+        return False
+    blob = _BLOB_PATH_RE.match(urlparse(url).path)
+    return bool(blob) and github_files.classify(blob.group(4)) is None
 
 
 def to_git_raw_url(blob_url):
@@ -426,13 +440,16 @@ class GitHubHandler:
 
         Returns:
             bool: True unless the URL belongs to a GitHub account the
-            operator did not name. A URL on any other host is not this
-            handler's business and is always allowed.
+            operator did not name, or names a repository file the path
+            rules in github_files leave out. A URL on any other host is
+            not this handler's business and is always allowed.
 
         Side effects:
             Counts each refused account, so the build can report once what
             it held back rather than once per link.
         """
+        if is_unread_blob_url(url):
+            return False
         if self.allowed_accounts is None:
             return True
         owner = owner_for_url(url)
@@ -528,6 +545,8 @@ class GitHubHandler:
 
         categories = repository_categories(url)
         if is_git_blob_text_url(url):
+            if is_unread_blob_url(url):
+                return None
             body = soup.find("body")
             if body is None or not body.get_text(strip=True):
                 return None

@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-16"
 
 import io
 import json
@@ -144,11 +144,13 @@ def make_source(progress=quiet, **options):
         "include_repos": (), "exclude_repos": (),
         "include_forks": False, "include_archived": True,
         "include_code": True, "max_file_bytes": 2_000_000,
+        "max_repositories": 100, "max_files_per_repository": 1_000,
         **options,
     }
     source = GitHubApiSource(validated)
-    # A ceiling above anything the fixture holds: a file counts as one
-    # page, and these tests read every file.
+    # The page ceiling reaches only the documentation crawl the source
+    # falls back to; a value above anything the fixture holds keeps that
+    # crawl reading every file.
     source.configure(build_registry(), CrawlSettings(delay_seconds=0, max_pages=500))
     return source
 
@@ -993,22 +995,159 @@ def test_a_word_file_is_classified_as_a_document_and_the_binary_format_is_not():
     assert github_files.classify("docs/plan.doc") is None
     assert github_files.content_type_for("docs/plan.docx") == "text"
 
-def test_max_pages_stops_the_source_after_that_many_files(fixture, fake_github_session_factory):
+def test_max_pages_no_longer_limits_the_api_path(fixture, fake_github_session_factory):
     """
-    A file is one page. The ceiling is applied before the download, the
-    repository's own line says how much of it was read, and a repository
-    past the ceiling is named as not read rather than marked as covered.
+    One account is one source however many repositories it holds, so a
+    ceiling counted per source would let one large repository starve
+    every repository after it. The build's page ceiling reaches only the
+    documentation crawl; the API path has ceilings of its own.
     """
     session = fake_github_session_factory(api_routes(fixture))
     source = make_source()
-    source.configure(build_registry(), CrawlSettings(delay_seconds=0, max_pages=2))
+    source.configure(build_registry(), CrawlSettings(delay_seconds=0, max_pages=1))
     lines = []
 
     documents = read(source, session, progress=lines.append)
 
-    files = [d for d in documents if d.content_type not in ("repo_map", "code_symbol")]
-    assert len(files) == 2
-    assert any(line.startswith("  example-org/example-tools: indexed 2 file(s) of") for line in lines)
-    assert "  example-org/example-notes: not read; max_pages was reached" in lines
-    assert "  max_pages: the ceiling of 2 file(s) was reached; anything past it was not read" in lines
-    assert "example-org/example-notes" not in source.coverage
+    readmes = [d for d in documents if d.content_type == "readme"]
+    assert {d.url.rsplit("/", 3)[0].rsplit("/", 1)[-1] for d in readmes} == {"example-tools", "example-notes"}
+    assert not any("max_pages" in line for line in lines)
+    assert source.coverage == {"example-org/example-tools": TIER_PUBLIC, "example-org/example-notes": TIER_PUBLIC}
+
+
+def test_max_repositories_reads_the_first_repositories_listed_and_names_the_rest(
+    fixture, fake_github_session_factory,
+):
+    """The listing is alphabetical, and a repository past the ceiling is named, not lost."""
+    session = fake_github_session_factory(api_routes(fixture))
+    source = make_source(max_repositories=1)
+    lines = []
+
+    documents = read(source, session, progress=lines.append)
+
+    assert list(source.coverage) == ["example-org/example-tools"]
+    assert source.unread == ["example-notes"]
+    assert not any("example-notes/blob" in d.url for d in documents)
+    assert (
+        "  example-notes: not read; max_repositories is 1 "
+        "(name it in include_repos to choose which repositories are read)"
+    ) in lines
+    assert (
+        "1 repository(ies) not read: max_repositories is 1; "
+        "name them in include_repos to choose which are read"
+    ) in source.summary_lines()
+
+
+def test_include_repos_chooses_which_repositories_count_against_max_repositories(
+    fixture, fake_github_session_factory,
+):
+    session = fake_github_session_factory(api_routes(fixture))
+    source = make_source(max_repositories=1, include_repos=("example-notes",))
+
+    read(source, session)
+
+    assert list(source.coverage) == ["example-org/example-notes"]
+    assert source.unread == []
+
+
+def test_a_single_repository_address_is_never_cut_by_max_repositories(
+    fixture, fake_github_session_factory,
+):
+    session = fake_github_session_factory(api_routes(fixture))
+    source = make_source(org=None, url="https://github.com/example-org/example-tools", max_repositories=1)
+
+    documents = read(source, session)
+
+    assert list(source.coverage) == ["example-org/example-tools"]
+    assert any(d.content_type == "readme" for d in documents)
+
+
+def test_max_files_per_repository_keeps_the_readme_first_and_cuts_code_last(
+    fixture, fake_github_session_factory,
+):
+    """
+    example-tools holds six indexable files: a README, a documentation
+    page, a manifest, two code files, and .env.example. Read two, and
+    the README and the documentation page are the two.
+    """
+    session = fake_github_session_factory(api_routes(fixture))
+    source = make_source(max_files_per_repository=2)
+    lines = []
+
+    documents = read(source, session, progress=lines.append)
+
+    tools = [d for d in documents if "/example-tools/blob/" in d.url]
+    assert sorted(d.url.rsplit("/blob/main/", 1)[1] for d in tools) == ["README.md", "docs/setup.md"]
+    assert (
+        "  example-org/example-tools: reading 2 of 6 indexable file(s); "
+        "max_files_per_repository leaves out 4 (2 manifest, 2 code)"
+    ) in lines
+    assert any(
+        line.startswith("  example-org/example-tools: indexed 2 file(s) of")
+        and line.endswith("; 4 left out by max_files_per_repository")
+        for line in lines
+    )
+    assert source.cut == {"example-org/example-tools": (2, 6)}
+    # example-notes holds one file and is not cut.
+    assert any("/example-notes/blob/main/README.md" in d.url for d in documents)
+
+
+def test_a_cut_repositorys_summary_record_says_how_many_files_it_holds(
+    fixture, fake_github_session_factory,
+):
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(max_files_per_repository=2), session)
+
+    maps = {d.url: d.content for d in documents if d.content_type == "repo_map"}
+    tools = maps["https://github.com/example-org/example-tools"]
+    assert (
+        "Files indexed: 2 of 6 indexable files; the rest were left out by "
+        "max_files_per_repository." in tools
+    )
+    assert "Files indexed: 1." in maps["https://github.com/example-org/example-notes"]
+
+
+def test_the_coverage_report_counts_repositories_cut_by_the_file_ceiling(
+    fixture, fake_github_session_factory,
+):
+    session = fake_github_session_factory(api_routes(fixture))
+    source = make_source(max_files_per_repository=2)
+
+    read(source, session)
+
+    assert source.summary_lines()[-1] == (
+        "1 repository(ies) cut at 2 files by max_files_per_repository: example-org/example-tools"
+    )
+
+
+def test_a_page_too_large_to_be_hand_written_is_skipped_by_name_and_size_and_named(
+    fixture, fake_github_session_factory,
+):
+    """A rendered report is a script and a table, and no request is spent on it."""
+    text = "<html><body>" + ("<tr><td>row</td></tr>" * 30_000) + "</body></html>"
+    session = fake_github_session_factory(api_routes(with_extra_file(fixture, "docs/index.html", text)))
+    lines = []
+
+    documents = read(make_source(), session, progress=lines.append)
+
+    assert not any(d.url.endswith("/docs/index.html") for d in documents)
+    assert any(
+        line.startswith(f"  example-org/example-tools/docs/index.html: skipped ({len(text)} bytes; ")
+        and line.endswith("a page or script this long is generated, not written)")
+        for line in lines
+    )
+    assert not any("/blobs/" in url and "index.html" in url for url in session.urls)
+
+
+def test_the_sources_fallback_ceilings_match_the_settings_defaults():
+    """
+    A web source seeded at a GitHub address becomes this source with no
+    settings entry, so the source carries the defaults too. They must
+    not drift apart.
+    """
+    from extractium import config
+    from extractium.sources import github_api
+
+    assert github_api.DEFAULT_MAX_REPOSITORIES == config.DEFAULT_GITHUB_MAX_REPOSITORIES
+    assert github_api.DEFAULT_MAX_FILES_PER_REPOSITORY == config.DEFAULT_GITHUB_MAX_FILES_PER_REPOSITORY

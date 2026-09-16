@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, what each exit code means, and how to try a small run
@@ -106,7 +106,7 @@ Two settings are read from the environment and never from the settings file. Bot
 
 | Variable | Used by | Without it |
 |---|---|---|
-| `GITHUB_TOKEN` | The `github_api` source, and a GitHub address used as the seed of a `web` source | The same content is read through the public API, at a lower request limit. |
+| `GITHUB_TOKEN` | The `github_api` source, and a GitHub address used as the seed of a `web` source | The same content is read through the public API, at a lower request limit. Either way, an account contributes at most `max_repositories` repositories of `max_files_per_repository` files each; the [configuration reference](configuration.md) explains both. |
 | `YOUTUBE_API_KEY` | The `youtube` source | Listings come from YouTube's own pages and stop at the newest hundred videos of each one. |
 
 Neither value reaches a log line, an error message, a cache file, or an output. See [how to crawl a site](how-to/crawl-a-site.md) for when each one is worth setting.

@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-16"
 
 import dataclasses
 import pathlib
@@ -483,6 +483,27 @@ def test_github_api_source_fills_in_its_defaults():
     assert source.options["include_code"] is True         # a code index is most of the point
     assert source.options["ctags_fallback"] is True       # and it changes nothing without Ctags
     assert source.options["max_file_bytes"] == config.DEFAULT_GITHUB_MAX_FILE_BYTES
+    assert source.options["max_repositories"] == config.DEFAULT_GITHUB_MAX_REPOSITORIES == 100
+    assert source.options["max_files_per_repository"] == config.DEFAULT_GITHUB_MAX_FILES_PER_REPOSITORY == 1_000
+
+
+def test_github_api_ceilings_are_read_when_given():
+    source = config.config_from_mapping({"sources": [{
+        "type": "github_api", "label": "Example Repositories", "org": "example-org",
+        "max_repositories": 5, "max_files_per_repository": 50,
+    }]}).sources[0]
+
+    assert source.options["max_repositories"] == 5
+    assert source.options["max_files_per_repository"] == 50
+
+
+@pytest.mark.parametrize("key", ["max_repositories", "max_files_per_repository"])
+@pytest.mark.parametrize("value", [True, "10", 0])
+def test_github_api_ceilings_must_be_whole_numbers_above_zero(key, value):
+    with pytest.raises(config.ConfigError, match=key):
+        config.config_from_mapping({"sources": [{
+            "type": "github_api", "label": "Example Repositories", "org": "example-org", key: value,
+        }]})
 
 
 def test_github_api_source_can_be_told_to_leave_the_code_alone():

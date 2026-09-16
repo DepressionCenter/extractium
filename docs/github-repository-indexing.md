@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: How Extractium reads GitHub repositories: the three-tier
 ingestion ladder, the account guardrail, authentication, repository
 selection, file filtering, caching, and the lightweight static code
@@ -94,7 +94,21 @@ DepressionCenter/ShareR          tier 2 (public API)            documentation, c
 DepressionCenter/FieldStationAI  tier 3 (documentation crawl)   documentation only; no code analysis
 ```
 
-The same fact is recorded inside the repository-map document the code analysis writes, so a person searching the finished index can see the coverage without going back to the build log. A gap the reader cannot see is a gap that will be mistaken for an answer.
+When an account holds more repositories than `max_repositories`, or a repository holds more indexable files than `max_files_per_repository`, the summary says so after the coverage lines:
+
+```text
+3 repository(ies) not read: max_repositories is 100; name them in include_repos to choose which are read
+1 repository(ies) cut at 1000 files by max_files_per_repository: DepressionCenter/large-monorepo
+```
+
+The log names each one as it happens:
+
+```text
+  some-archive: not read; max_repositories is 100 (name it in include_repos to choose which repositories are read)
+  DepressionCenter/large-monorepo: reading 1000 of 4212 indexable file(s); max_files_per_repository leaves out 3212 (3212 code)
+```
+
+The same facts are recorded inside the repository-map document the code analysis writes, so a person searching the finished index can see the coverage without going back to the build log. A cut repository's summary reads `Files indexed: 1000 of 4212 indexable files; the rest were left out by max_files_per_repository.` A gap the reader cannot see is a gap that will be mistaken for an answer.
 
 ### Recognizing a GitHub address
 
@@ -201,44 +215,60 @@ Documentation is indexed in full. Its text goes through the normal chunker, exac
 
 Files read as documentation:
 
-`README*`, `*.md`, `*.markdown`, `*.txt`, `*.rst`, `*.adoc`, `*.asciidoc`, `LICENSE*`, `NOTICE*`, `CHANGELOG*`, `HISTORY*`, `CONTRIBUTING*`, `SECURITY*`, `CODE_OF_CONDUCT*`, `AUTHORS*`, `CITATION*`
+`README*`, `*.md`, `*.markdown`, `*.txt`, `*.rst`, `*.adoc`, `*.asciidoc`, `CHANGELOG*`, `CHANGES*`, `HISTORY*`, `CONTRIBUTING*`, `SECURITY*`, `AUTHORS*`, `CONTRIBUTORS*`, `GOVERNANCE*`, `SUPPORT*`, `MAINTAINERS*`
+
+These are the files people search: what changed, how to contribute, where to report a vulnerability, who wrote it. `LICENSE`, `NOTICE`, `CITATION`, and `CODE_OF_CONDUCT` files are not among them; they carry the same words in every project, and the housekeeping rule below skips them.
 
 A `README.md` inside `docs/`, inside a package, or inside an examples folder counts the same as the one at the repository root.
 
 Project and build files are indexed as text, with a short fixed heading naming their role. They often explain a project faster than its source does:
 
-`pyproject.toml`, `requirements*.txt`, `setup.cfg`, `package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `build.gradle`, `build.gradle.kts`, `DESCRIPTION` and `NAMESPACE` (R packages), `renv.lock`, `Gemfile`, `composer.json`, `environment.yml`, `environment.yaml`, `Dockerfile`, `docker-compose.yml`, `Makefile`, project and solution files, and GitHub Actions workflow files.
+`pyproject.toml`, `requirements*.txt`, `setup.cfg`, `package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `build.gradle`, `build.gradle.kts`, `DESCRIPTION` and `NAMESPACE` (R packages), `renv.lock`, `Gemfile`, `composer.json`, `environment.yml`, `environment.yaml`, `Dockerfile`, `docker-compose.yml`, `Makefile`, `CMakeLists.txt`, `codemeta.json`, project and solution files, and the GitHub Actions workflow files under `.github/workflows/` at the repository root.
 
-Manifests are classified before documentation, because `requirements.txt` carries a documentation extension and would otherwise be read as prose.
+Manifests are classified before documentation and before the settings rule, because `requirements.txt` carries a documentation extension and would otherwise be read as prose, and `pyproject.toml` carries a settings extension and would otherwise not be read at all.
 
 Word, OpenDocument, RTF, PDF, and slide files (`.docx`, `.odt`, `.rtf`, `.pdf`, `.pptx`, `.odp`) are read into text, with their headings and their own keywords and description, a deck one section per slide, when the source sets `read_documents: true`. Each is downloaded on its own, one request per file, and the text read from it is cached under the file's blob name so a rebuild reads nothing again. The setting is off by default. The [configuration reference](configuration.md) explains the readers under "Reading document files".
 
-Dependency lock files are excluded by default. They are long, they are mostly package names and version numbers, and the matching manifest already records what the project declared. `renv.lock` is the exception, because an R project's `DESCRIPTION` often does not pin anything and the lock file is where the real environment is written down.
+Dependency lock files are excluded. A lock file is recognised by `lock` as a word in its name, so `package-lock.json`, `yarn.lock`, `uv.lock`, `poetry.lock`, `Cargo.lock`, `flake.lock`, and `requirements-lock.txt` are all caught, plus `go.sum`, `gradle.lockfile`, and `bun.lockb`, which carry no such word. They are long, they are mostly package names and version numbers, and the matching manifest already records what the project declared. `renv.lock` is the exception, because an R project's `DESCRIPTION` often does not pin anything and the lock file is where the real environment is written down. The word has to stand alone, so `deadlock.md` is prose and `lock.py` is code.
+
+Three dotfiles are read: `.gitmodules`, `.env.example` with its `.env.sample` and `.env.template` siblings, and the workflow files at the repository root. Every other folder or file whose name starts with a dot is skipped, as the next section says.
 
 ### What gets skipped
 
-Whole directories that hold generated code, third-party code, or data files:
+Every rule reads a path only, so a repository is filtered from its inventory before a single file body is requested. The rules, in the order they are checked:
 
-```text
-.git/  node_modules/  vendor/  dist/  build/  bin/  target/  obj/
-coverage/  .venv/  venv/  __pycache__/  .cache/  renv/library/  data/
-```
+- **Folders that are never read**, matched as whole path segments so that `binder/` is not `bin/` and `database-notes.md` is not `data/`:
+  - Build output and installed environments: `node_modules/`, `vendor/`, `dist/`, `build/`, `target/`, `coverage/`, `htmlcov/`, `venv/`, `env/`, `__pycache__/`, `bower_components/`, `packrat/`, `site-packages/`, `obj/`, `bin/`, `data/`, and `renv/library/`. A `bin/` folder holds what a build produced, which is a copy of source already in the repository. A `data/` folder holds the files a project reads and writes rather than anything written to be read, and skipping it also keeps a folder of participant records out of an index by default. The cost is the occasional README inside one of them, which is a good trade in this field.
+  - Vendored code: `third_party/`, `thirdparty/`, `third-party/`, `3rdparty/`, `external/`, `externals/`, `extern/`, `deps/`, `contrib/`, `submodules/`, `vendored/`, `vendors/`.
+  - Generated code: `generated/`, `__generated__/`, `gen/`, `autogen/`, `autogenerated/`, `codegen/`.
+  - Test suites and what they hold: `tests/`, `test/`, `testing/`, `spec/`, `specs/`, `__tests__/`, `fixtures/`, `fixture/`, `testdata/`, `test_data/`, `golden/`, `snapshots/`, `__snapshots__/`, `mocks/`, `__mocks__/`. A fixture folder holds copies of other people's pages, and a golden folder holds a program's output. Only folders are skipped: a `test_app.py` beside its code is still read.
+- **Dotfiles and dot-folders.** Any path segment that starts with a dot: `.git/`, `.venv/`, `.idea/`, `.vscode/`, `.github/` apart from the root workflow files, `.claude/`, `.gitignore`, `.editorconfig`, `.pre-commit-config.yaml`, and the rest. They are settings for programs, not writing for people. The exceptions are named in the section above.
+- **Anything holding a credential**: `.env` and its variants, `.netrc`, `.npmrc`, `.pypirc`, SSH private keys, and files with a key, certificate, or keystore extension. A private key committed by mistake is still a private key; it is never downloaded, never cached, and never indexed.
+- **Lock files**, as the section above describes.
+- **Generated files recognised by name**: protocol buffer output (`*.pb.go`, `*_pb2.py`), designer and generated C# (`*.g.cs`, `*.Designer.cs`), anything marked `*.generated.*`, minified files (`*.min.js`, `*.min.css`), bundled scripts (`*.bundle.js`, `*.chunk.js`, `*.umd.js`, `*.esm.js`), and source maps.
+- **Single-file libraries projects copy in whole**: the sqlite amalgamation (`sqlite3.c`, `sqlite3.h`, `sqlite3ext.h`), `cJSON`, the `stb_*.h` headers, `miniz`, and jQuery, Bootstrap, Lodash, Moment, D3, and three.js by their own file names. A `shell.c` beside `sqlite3.c` is not assumed to be sqlite's, and `d3chart.js` is somebody's chart.
+- **Housekeeping files**: `LICENSE`, `LICENCE`, `COPYING`, `NOTICE`, `CITATION`, and `CODE_OF_CONDUCT` with any extension or none, and the instruction files written for coding agents rather than for people: `CLAUDE.md`, `AGENTS.md`, `CONVENTIONS.md`, `CODEX.md`, `GEMINI.md`, `SKILLS.md`, and `copilot-instructions.md`. Every project carries the same words in these. A code file that merely sounds like one, such as `agent.py` or `notice.py`, is still code.
+- **C and C++ headers** (`.h`, `.hpp`, `.hh`, `.hxx`, `.inl`, `.tpp`, `.ipp`). A header declares what its source file defines, and the source file is the one the parsers read. A vendored library's public headers are also where a repository's forty thousand files come from.
+- **Binary and media files**: executables, compiled objects, archives, images including SVG, audio, video, fonts, stored data, spreadsheets, presentations, and the binary `.doc` format, which has no reader.
+- **Settings, styling, and query files** that are not project manifests: `.toml`, `.yml`, `.yaml`, `.json`, `.ini`, `.cfg`, `.conf`, `.properties`, `.xml`, `.css`, `.scss`, `.sass`, `.less`, and `.scm`. None is prose, and none is code the parsers know. `pyproject.toml`, `package.json`, `environment.yml`, and `pom.xml` are manifests and are read.
+- **A page or script too long to have been written by hand.** An `.html`, `.htm`, `.js`, `.mjs`, `.cjs`, or `.jsx` file over 500,000 bytes, by the size the inventory reports, is a rendered report, a data dictionary, or a bundled application, and is skipped with a line saying so. A long Markdown manual is a manual, and is not held to this.
 
-`bin/` and `data/` are worth naming. A `bin/` folder holds what a build produced, which is a copy of source that is already in the repository. A `data/` folder holds the files a project reads and writes rather than anything written to be read, and skipping it also keeps a folder of participant records out of an index by default. Both are matched as whole path segments, so a folder called `binder/` or a file called `database-notes.md` is unaffected. The cost is the occasional README inside one of them, which is a good trade in this field.
+Submodules are not followed. The tree lists one as a commit entry with nothing under it. The `.gitmodules` file itself is indexed as a manifest.
 
-And these files, wherever they are: binaries, images, audio, video, archives, compiled objects, source maps, minified JavaScript and CSS, Git LFS pointer content, private keys and certificates, `.env` files, spreadsheets, presentations, and the binary `.doc` format, which has no reader.
-
-`.env.example` is kept. It lists the variables a project needs, with fake values, which is documentation.
-
-Submodules are not followed. The `.gitmodules` file itself may be indexed as configuration.
+An incremental rebuild carries forward every page the last build published that this build did not reach, so a licence file or a header indexed by an earlier version of the tool stays in the index until a full rebuild.
 
 ### The ceilings
 
-`max_file_bytes` sets a maximum size per file, with a conservative default of 2,000,000 bytes. Nothing above it is downloaded or parsed. It is the only ceiling a settings file changes. The others are fixed, and each exists because some repository has been seen to go past it with files that mean nothing to a reader:
+Three ceilings are set in the settings file. `max_file_bytes` sets a maximum size per file, with a conservative default of 2,000,000 bytes; nothing above it is downloaded or parsed. `max_repositories`, default 100, is the most repositories of an account that are read, in the order GitHub lists them, which is alphabetical; the repositories past it are named in the log and the summary, and `include_repos` chooses which ones count. `max_files_per_repository`, default 1,000, is the most indexable files one repository contributes; files are read in a fixed order, so the root README is never the file left out. The build's `max_pages` setting does not count files read through the API. It applies to the documentation crawl the source falls back to, which is an ordinary crawl and counts pages like any other.
+
+The other ceilings are fixed, and each exists because some repository has been seen to go past it with files that mean nothing to a reader:
 
 | Ceiling | Value | What happens past it |
 |---|---|---|
+| Repositories per account, `max_repositories` | 100 | The repository is not read and not marked as read. The log names it and says how to choose which repositories count. A single repository named by `url` is never subject to it. |
+| Files per repository, `max_files_per_repository` | 1,000 indexable files | Files are ranked, the root README first, then the other READMEs shallowest first, the rest of the documentation, the manifests, document files, and code last, and the first thousand are read. The log says how many of each kind were left out, and the repository's summary record says how many files it holds. |
 | File size, `max_file_bytes` | 2,000,000 bytes | The file is not downloaded. Checked against the inventory and again against the downloaded body, in case the listing understated it. |
+| Page or script written by hand | 500,000 bytes | An HTML or JavaScript file over it is skipped as generated, by the size the inventory reports, so no request is spent on it. |
 | Text indexed whole | 200,000 characters | A documentation file or a page's text longer than this, here and in a web crawl alike, is indexed as a compact record: its title, its opening paragraph, its headings, and the forty terms it uses most, with a line saying the file was indexed that way. About 35,000 words, so a manual passes whole and a rendered data table does not. |
 | Parse length | 1,500,000 characters | A code file longer than this is recorded by name, language, and length and not parsed. A page, notebook, or R Markdown file over it still has its text indexed; only the code inside goes unparsed. |
 | Code files per repository | 3,000 | Files past the ceiling are named in the log and not parsed. A repository with more is a monorepo or a vendored tree, and a directory of thousands of tiny generated files is exactly what this stops. |
@@ -308,6 +338,8 @@ sources:
     include_code: true             # read the structure of the code as well as the docs
     read_documents: false          # read Word, OpenDocument, RTF, PDF, and slide files into text
     max_file_bytes: 2000000
+    max_repositories: 100          # alphabetical; the rest are named in the log
+    max_files_per_repository: 1000 # the root README is always read first, code last
 ```
 
 Rules:
@@ -510,7 +542,7 @@ A bundle was evaluated and rejected. `tree-sitter-language-pack` ships 371 langu
 
 Individual variables and every identifier occurrence are deliberately left out. They would add far more noise than retrieval value.
 
-Tests are indexed, not skipped. A test is often the clearest statement of what something is supposed to do, what inputs it accepts, and how it fails.
+A test file beside the code it tests is indexed, because a test is often the clearest statement of what something is supposed to do. A test folder is not: `tests/`, `spec/`, `__tests__/`, and their fixture, golden, and snapshot folders hold copies of other people's pages and a program's recorded output, which nobody searches a code index for.
 
 A few limits keep the records useful: a definition nested more than three levels deep is skipped as a helper inside a helper, a name like `__author__` is skipped as header boilerplate, and a file over about 1.5 million characters is not parsed at all, though a page or notebook that long still has its text indexed. The table under "The ceilings" above lists every limit. The progress log names every file left out and why.
 
@@ -619,7 +651,7 @@ Both parts are tested from committed fixtures. No automated test contacts GitHub
 | The ladder | Token accepted; token refused; no token; API unreachable; partial failure after some repositories; explicit source demoted; scope preserved; nothing fetched twice; the report naming each tier |
 | Account allowlist | A named owner is read; an unnamed owner linked from a README, a fork notice, and a contributor profile is not; a `github_owners` entry is followed but never enumerated whole; the same rule on `raw.githubusercontent.com` and `OWNER.github.io`; a disallowed owner is neither promoted to the API nor crawled; the skipped-owner report counts links and names accounts |
 | API behavior | One page and several pages of results; organization and user owners; empty account; archived, fork, and disabled repositories; missing default branch; recursive and truncated trees; subtree walking; blob and archive fetches; rate-limit headers; 401, 403, 404, and 429; a repository disappearing mid-run |
-| File filtering | Markdown, plain text, extensionless README and LICENSE, manifests, source, tests, vendored code, generated code, minified files, lock files, binaries, oversized files, `.env`, `.env.example`, submodules, LFS pointers |
+| File filtering | `tests/test_github_files.py`: Markdown, plain text, extensionless README, manifests, source, test folders and test files beside code, vendored and generated folders, generated and bundled files by name, single-file libraries and their look-alikes, headers, housekeeping and agent-instruction files and the code files that merely sound like them, every dotfile and the three exceptions, lock files by the word and the exceptions, settings and styling extensions, binaries, a page too long to be hand-written, the reading order. `tests/test_source_github_api.py`: oversized files, `.env`, `.env.example`, the two ceilings and their log and summary lines. |
 | Parsing | Per language: definitions, signatures, documentation, imports, exports, calls, inheritance, constants, annotations, module-level code, and a file with recoverable syntax errors |
 | Embedded code | An `.Rmd` with R and Python chunks, an `.ipynb` with outputs present, an HTML file with inline script, an `.lsp` page with several Lua blocks |
 | Relationships | Same-file calls, relative imports, aliases, local includes, unique and ambiguous names, dynamic calls, reverse edges, all three confidence levels |

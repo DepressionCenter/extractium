@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-16"
 
 import pathlib
 import re
@@ -190,6 +190,21 @@ DEFAULT_GITHUB_CTAGS_FALLBACK = True
 # named in the progress log, so nothing disappears in silence.
 DEFAULT_GITHUB_MAX_FILE_BYTES = 2_000_000
 
+# How many of an account's repositories a GitHub source reads, in the
+# order GitHub lists them, which is alphabetical. The repositories past
+# it are named in the log and the summary, and include_repos chooses
+# which ones count. A hundred is more than one organization publishes.
+DEFAULT_GITHUB_MAX_REPOSITORIES = 100
+
+# How many indexable files one repository contributes. Files are read in
+# a fixed order, the root README first and code last, so what a larger
+# repository loses is code, never its documentation. A thousand covers
+# every documentation page and manifest of any project; past it the tree
+# is vendored, generated, or a monorepo. The same two defaults are
+# repeated in extractium/sources/github_api.py for a web source promoted
+# to this one without a settings entry.
+DEFAULT_GITHUB_MAX_FILES_PER_REPOSITORY = 1_000
+
 # The three ways one GitHub source entry may name what to read. Exactly
 # one is allowed: two selectors is a contradiction, not a request for
 # both.
@@ -295,7 +310,7 @@ SOURCE_OPTION_KEYS = {
     "github_api": frozenset({
         "org", "user", "url", "include_repos", "exclude_repos",
         "include_forks", "include_archived", "include_code", "ctags_fallback",
-        "max_file_bytes", "read_documents",
+        "max_file_bytes", "read_documents", "max_repositories", "max_files_per_repository",
     }),
     "youtube": frozenset({
         "channel_id", "playlist_ids", "video_ids", "languages",
@@ -873,6 +888,12 @@ def _read_github_api_source(entry, source):
         "read_documents": _read_bool(entry, "read_documents", DEFAULT_READ_DOCUMENTS, source),
         "max_file_bytes": _read_positive_int(
             entry, "max_file_bytes", DEFAULT_GITHUB_MAX_FILE_BYTES, source
+        ),
+        "max_repositories": _read_positive_int(
+            entry, "max_repositories", DEFAULT_GITHUB_MAX_REPOSITORIES, source
+        ),
+        "max_files_per_repository": _read_positive_int(
+            entry, "max_files_per_repository", DEFAULT_GITHUB_MAX_FILES_PER_REPOSITORY, source
         ),
     }
 

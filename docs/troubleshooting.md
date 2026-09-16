@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -291,9 +291,15 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### A repository you expected is missing from the index
 
-**Cause.** One of the defaults left it out. Forks are skipped, so are empty repositories, repositories GitHub has disabled, and private ones.
+**Cause.** One of the defaults left it out. Forks are skipped, so are empty repositories, repositories GitHub has disabled, and private ones. An account with more than a hundred repositories is read in alphabetical order up to `max_repositories`, and the rest are not read.
 
-**Fix.** Read the progress log: every repository left out is named there with its reason. Set `include_forks: true` if forks are what you wanted. Private repositories are never indexed, whatever your token can read.
+**Fix.** Read the progress log: every repository left out is named there with its reason. Set `include_forks: true` if forks are what you wanted. If the line says `not read; max_repositories is 100`, name the repositories you want in `include_repos`, or raise `max_repositories`. Private repositories are never indexed, whatever your token can read.
+
+### The summary says a repository was cut at 1000 files by `max_files_per_repository`
+
+**Cause.** The repository holds more indexable files than the ceiling, usually because it carries a large body of code. The build read its README first, then its other documentation and project files, and as much of the code as fit.
+
+**Fix.** Nothing, if the documentation is what you wanted; the log line says what kinds of file were left out, and it is almost always code. Raise `max_files_per_repository` on that source to read more. If the files left out sit in a folder the rules should have skipped, such as a vendored tree under a name the list does not know, add that folder's contents to the count you expect and open an issue naming the folder.
 
 ### The summary says `Not read; add to github_owners to include: ...`
 
