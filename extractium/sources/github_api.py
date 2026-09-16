@@ -957,8 +957,8 @@ def _with_repository_metadata(document, repository):
     the repository summary, its description as the summary.
 
     Topics are the tags a repository's owner chose, so every record read
-    from the repository carries them and the keyword step leaves those
-    pages' tags alone. The description is short by GitHub's own limit,
+    from the repository carries them first in its tags. The description
+    is short by GitHub's own limit,
     so it needs no cutting here; the Document bounds it anyway.
 
     Args:

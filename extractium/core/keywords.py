@@ -4,8 +4,8 @@ without a language model: YAKE proposes candidate phrases from the
 section's own text, the vector the build already computed for the section
 ranks those candidates by how close each sits to the section's meaning,
 and the keywords most of a page's sections share become the page's tags,
-after the categories the source recorded, unless the source gave the
-page tags of its own, which stand as they are. What was found is kept under
+after the categories the source recorded and the tags the source itself
+gave the page, which stand first and unchanged. What was found is kept under
 the cache folder keyed by section, so a later build recomputes only the
 sections whose text changed. See docs/extractium-spec.md section 10.
 
@@ -238,24 +238,29 @@ def distinct_phrases(ranked, limit):
 def page_tags(sections, limit=TAGS_PER_PAGE, provided=()):
     """
     The tags for one page: the categories its source recorded, outermost
-    first, then the tags the source itself gave the page, or, when it
-    gave none, the keywords at least half of its sections share, the
-    most widely shared first.
+    first, then the tags the source itself gave the page, then the
+    keywords at least half of its sections share, the most widely shared
+    first, until the page holds `limit` tags beyond its categories.
 
-    A source's own tags are what the page's author chose, so they are
-    used as they are and no keyword is added beside them: a page
-    tagged by its author is not re-tagged by a statistic. Only a page
-    whose source gave no tags beyond its categories is tagged from its
-    text. A one-section page shares every keyword with itself, so its
-    tags are its categories and its keywords. A page whose sections have
-    nothing in common is tagged with its categories alone. Tags are
-    compared without regard to case, and a tag that repeats a category
-    is not added again.
+    A source's own tags are what the page's author chose, so they come
+    first and unchanged. The keywords are added after them because an
+    author tags a page once and rarely again, while the text is read as
+    it stands today; a page tagged years ago gains a few current terms
+    without losing what its author said. A keyword whose words all lie
+    inside an author's tag, or that contains one, adds nothing a reader
+    can use and is passed over, so "sleep" is not added beside "sleep
+    research". A category is a place in a hierarchy rather than a
+    description, so it rules out only its exact repeat. A one-section page shares every keyword
+    with itself, so it is tagged with all of its keywords that fit. A
+    page whose sections have nothing in common gains none. Tags are
+    compared without regard to case, and a tag that repeats an earlier
+    one is not added again.
 
     Args:
         sections (Sequence[dict]): the page's sections, each with
             "categories" and "keywords" keys.
-        limit (int): the most keyword tags to add after the categories.
+        limit (int): the most tags a page holds beyond its categories,
+            the source's and the computed ones together.
         provided (Sequence[str]): the tags the source gave the page.
 
     Returns:
@@ -265,12 +270,16 @@ def page_tags(sections, limit=TAGS_PER_PAGE, provided=()):
     for category in sections[0].get("categories") or ():
         if isinstance(category, str) and category.strip():
             tags.setdefault(category.strip().casefold(), category.strip())
-    given = {}
+    category_count = len(tags)
     for tag in provided or ():
-        if isinstance(tag, str) and tag.strip() and tag.strip().casefold() not in tags:
-            given.setdefault(tag.strip().casefold(), tag.strip())
-    if given:
-        tags.update(given)
+        if isinstance(tag, str) and tag.strip():
+            tags.setdefault(tag.strip().casefold(), tag.strip())
+    # A category is a place in a hierarchy, not a description, so a
+    # keyword inside one ("sleep hygiene" under "Sleep") still adds
+    # something; only the source's own tags rule out their relatives.
+    taken_words = [frozenset(key.split()) for key in list(tags)[category_count:]]
+    room = limit - (len(tags) - category_count)
+    if room <= 0:
         return tuple(tags.values())
     counts = {}
     spelling = {}
@@ -283,8 +292,16 @@ def page_tags(sections, limit=TAGS_PER_PAGE, provided=()):
     order = list(spelling)
     shared = [key for key in order if counts[key] >= needed and key not in tags]
     shared.sort(key=lambda key: (-counts[key], order.index(key)))
-    for key in shared[:limit]:
+    added = 0
+    for key in shared:
+        words = frozenset(key.split())
+        if any(words <= other or words >= other for other in taken_words):
+            continue
         tags[key] = spelling[key]
+        taken_words.append(words)
+        added += 1
+        if added >= room:
+            break
     return tuple(tags.values())
 
 
@@ -387,8 +404,8 @@ class KeywordPass:
         remembered = stored.get("sections", {}) if stored.get("version") == PASS_VERSION else {}
         # The tags a section carries before this pass are its source's
         # own, or the ones a page carried forward unchanged from the
-        # last build. Either way they stand, and the text is consulted
-        # only for a page that has none beyond its categories.
+        # last build. Either way they stand first, and the keywords the
+        # text yields fill whatever room the page has left.
         provided = {
             position: tuple(section.get("tags") or ())
             for position, section in enumerate(sections)

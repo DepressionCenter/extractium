@@ -125,7 +125,8 @@ MOMENT_SOURCE_TYPE = "youtube"
 # that knows a page's own description and tags (a video's description,
 # a repository's topics, a portal article's tag list) sets the summary
 # and the tags itself; the keyword step (extractium.core.keywords)
-# fills the keywords, and the tags of every page whose source gave none.
+# fills the keywords, and adds to every page's tags the keywords its
+# sections share, after whatever the source gave.
 ENRICHMENT_FIELDS = ("summary", "tags", "keywords", "enriched_at", "enrich_ver")
 
 # Longest summary a source may hand over, in characters. A video's
@@ -339,9 +340,9 @@ class Document:
             clean_summary.
         tags (tuple[str, ...]): the page's own tags, as its source
             states them: a video's tags, a repository's topics, an
-            article's tag list, a page's meta keywords. Empty when the
-            source has none, in which case the keyword step tags the
-            page from its text. Cleaned through clean_tags.
+            article's tag list, a page's meta keywords. They come first
+            in the page's tags; the keyword step adds what the text
+            yields after them. Cleaned through clean_tags.
 
     Raises:
         ValueError: if a field is blank, outside its vocabulary, longer
@@ -432,8 +433,8 @@ class Parent:
         weight (float): per-document multiplier; greater than zero.
         summary (str | None): the page's own description as its source
             gave it, or one an enrichment pass wrote; None when neither.
-        tags (tuple[str, ...] | None): the page's own tags as its source
-            gave them, else the ones the keyword step found; None when
+        tags (tuple[str, ...] | None): the page's tags: the ones its
+            source gave, then the ones the keyword step found; None when
             neither.
         keywords (tuple[str, ...] | None): the phrases an enrichment
             pass found this section to be about, most telling first.

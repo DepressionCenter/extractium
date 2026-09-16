@@ -361,7 +361,7 @@ def chunk_document(document):
         for field in ENRICHMENT_FIELDS:
             parent[field] = None
         # What the source itself knows about the page. The keyword step
-        # fills the tags only of a page whose source gave none.
+        # keeps these tags first and adds what the text yields after.
         parent["summary"] = document.summary or None
         parent["tags"] = tuple(document.tags) or None
     return parents, _children_for(parents)

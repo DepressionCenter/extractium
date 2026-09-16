@@ -108,12 +108,12 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `local` | true or false | `true` when the parent came from a local-filesystem source. |
 | `weight` | number | Per-document multiplier applied after rank fusion. `1.0` unless a source or plugin sets otherwise. |
 | `summary` | text | The page's own description as its source gave it (a video's description, a repository's description, an article's summary, a page's meta description), or one an enrichment pass wrote. Present only when something has. |
-| `tags` | list of text | The page's own tags as its source gave them (a video's tags, a repository's topics, an article's tag list, a page's meta keywords), else the ones the keyword step found. Present only when something has. |
+| `tags` | list of text | The page's tags: its categories, then its own tags as its source gave them (a video's tags, a repository's topics, an article's tag list, a page's meta keywords), then the ones the keyword step found in its text. Present only when something has. |
 | `keywords` | list of text | The phrases an enrichment pass found the section to be about, most telling first. Present only when one has. |
 | `enriched_at` | text | When the enrichment pass ran, UTC, ISO 8601. Present only when one has. |
 | `enrich_ver` | text | Which version of the enrichment pass wrote the fields above. Present only when one has. |
 
-The last five fields appear on a parent only when something set them; a reader treats an absent one as null. A source that knows a page's own description and tags sets `summary` and `tags` as it reads the page. The keyword step, on by default, sets `keywords`, `enriched_at`, and `enrich_ver` on every parent, and `tags` on every page whose source gave none. A build with keywords switched off, or without the `keywords` extra installed, writes only what the sources gave. Adding the fields did not change the version: a reader that does not know them loses nothing by ignoring them.
+The last five fields appear on a parent only when something set them; a reader treats an absent one as null. A source that knows a page's own description and tags sets `summary` and `tags` as it reads the page. The keyword step, on by default, sets `keywords`, `enriched_at`, and `enrich_ver` on every parent, and adds to every page's `tags` the keywords its sections share, after whatever the source gave. A build with keywords switched off, or without the `keywords` extra installed, writes only what the sources gave. Adding the fields did not change the version: a reader that does not know them loses nothing by ignoring them.
 
 Field names `t`, `x`, and `u` are short on purpose: with thousands of parents, key names are a measurable share of the file.
 
