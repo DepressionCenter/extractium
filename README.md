@@ -27,13 +27,24 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 # Extractium™
 
 ## Description
-Extractium™ gathers what your organization already publishes into one compendium: a searchable collection of all of it, written as static files. Point it at your website, knowledge base portal, GitHub repositories, YouTube channel, library repository, or a folder of files. It gathers the content, prepares it for both keyword and meaning-based search, and writes it out in several formats. AI assistants can read the result, small language models can search it inside a web app or a script, and none of it depends on any one AI provider or on a server you have to run.
+Extractium™ gathers what your organization already publishes into one compendium: a searchable collection of your content, written as static files. Point it at your website, knowledge base portal, GitHub repositories, YouTube channel, library repository, or a folder of files. It gathers the content, prepares it for both keyword and meaning-based search, and writes it out in several formats. AI assistants can read the result, small language models can search it inside a web app or a script, and none of it depends on any one AI provider or on a server you have to run.
+
+ 
 
 ![Extractium: from scatter content to shared knowledge for the AI era.](images/extractium-from-scattered-content-to-shared-knowledge.png "Extractium: from scatter content to shared knowledge for the AI era.")
 
+
+---
+
+ 
+
 Unlike a vector database, Extractium™ needs no server, no database, and no API to run. Every output is a static file that you can host anywhere, including GitHub Pages, and the same build feeds all of them at once. Sources and outputs are plug-ins, so you can add your own if the built-in ones do not cover your needs.
 
+
 ![Extractium: inputs and outputs diagram](images/extractium-diagram.png "Extractium: inputs and outputs diagram")
+
+ 
+
 
 | Output | Files | Best for |
 |---|---|---|
