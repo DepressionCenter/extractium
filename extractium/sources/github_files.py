@@ -113,7 +113,7 @@ SKIP_EXTENSIONS = frozenset({
     "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "ico", "webp", "avif", "heic", "psd", "ai",
     "mp3", "mp4", "wav", "ogg", "m4a", "flac", "webm", "mov", "avi", "wmv", "mkv",
     "woff", "woff2", "ttf", "eot", "otf",
-    "doc", "xls", "xlsx", "ppt", "pptx", "ods", "odp",
+    "doc", "xls", "xlsx", "ppt", "ods",
     "map",
 })
 

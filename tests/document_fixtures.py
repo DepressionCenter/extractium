@@ -450,3 +450,207 @@ def sleep_reader(data):
 def crash_reader(data):
     """A reader that dies without answering, for the crash test."""
     os._exit(3)
+
+
+### Slides ###
+
+P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+ODF_DRAW_NS = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+ODF_PRESENTATION_NS = "urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
+SLIDE_RELATIONSHIP = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"
+NOTES_RELATIONSHIP = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
+
+
+def slide_shape(paragraphs, placeholder=None, bullets=False):
+    """One text shape: a list of paragraph strings, optionally a placeholder type."""
+    ph = f'<p:nvPr><p:ph type="{placeholder}"/></p:nvPr>' if placeholder else "<p:nvPr/>"
+    bullet = '<a:pPr><a:buChar char="-"/></a:pPr>' if bullets else ""
+    body = "".join(
+        f"<a:p>{bullet}<a:r><a:rPr/><a:t>{escape(text)}</a:t></a:r></a:p>" for text in paragraphs
+    )
+    return (
+        f'<p:sp><p:nvSpPr><p:cNvPr id="1" name="Shape"/><p:cNvSpPr/>{ph}</p:nvSpPr>'
+        f"<p:spPr/><p:txBody><a:bodyPr/>{body}</p:txBody></p:sp>"
+    )
+
+
+def slide_table(rows):
+    """One table frame from rows of cell text."""
+    body = "".join(
+        "<a:tr>" + "".join(
+            f"<a:tc><a:txBody><a:p><a:r><a:t>{escape(cell)}</a:t></a:r></a:p></a:txBody></a:tc>"
+            for cell in row
+        ) + "</a:tr>"
+        for row in rows
+    )
+    return (
+        '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="3" name="Table"/></p:nvGraphicFramePr>'
+        f"<a:graphic><a:graphicData><a:tbl>{body}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"
+    )
+
+
+def slide_xml(shapes, root_tag="p:sld"):
+    """A slide or notes part holding the given shapes."""
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<{root_tag} xmlns:p="{P_NS}" xmlns:a="{A_NS}" xmlns:r="{R_NS}">'
+        f"<p:cSld><p:spTree>{''.join(shapes)}</p:spTree></p:cSld></{root_tag}>"
+    )
+
+
+def relationships_xml(entries):
+    """A relationships part from (id, type, target) triples."""
+    body = "".join(f'<Relationship Id="{i}" Type="{t}" Target="{target}"/>' for i, t, target in entries)
+    return f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="{REL_NS}">{body}</Relationships>'
+
+
+def make_pptx(slides, notes=None, properties=None, extra_parts=None, order=None):
+    """
+    A .pptx with one slide part per entry of `slides` (each a list of
+    shape XML strings), notes parts for the slide numbers in `notes`
+    (number to list of shape XML), a core-properties part when
+    properties are given, and any extra parts verbatim. `order` lists
+    slide numbers in the order the deck shows them; the default is the
+    order given.
+    """
+    notes = notes or {}
+    numbers = list(order or range(1, len(slides) + 1))
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        ids = "".join(f'<p:sldId id="{255 + n}" r:id="rId{n}"/>' for n in numbers)
+        archive.writestr(
+            "ppt/presentation.xml",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            f'<p:presentation xmlns:p="{P_NS}" xmlns:r="{R_NS}"><p:sldIdLst>{ids}</p:sldIdLst>'
+            "</p:presentation>",
+        )
+        archive.writestr(
+            "ppt/_rels/presentation.xml.rels",
+            relationships_xml([(f"rId{n}", SLIDE_RELATIONSHIP, f"slides/slide{n}.xml") for n in numbers]),
+        )
+        for n, shapes in enumerate(slides, start=1):
+            archive.writestr(f"ppt/slides/slide{n}.xml", slide_xml(shapes))
+            if n in notes:
+                archive.writestr(
+                    f"ppt/slides/_rels/slide{n}.xml.rels",
+                    relationships_xml([("rId2", NOTES_RELATIONSHIP, f"../notesSlides/notesSlide{n}.xml")]),
+                )
+                archive.writestr(f"ppt/notesSlides/notesSlide{n}.xml", slide_xml(notes[n], "p:notes"))
+        if properties is not None:
+            tags = {"title": "dc:title", "subject": "dc:subject", "keywords": "cp:keywords",
+                    "description": "dc:description"}
+            elements = "".join(f"<{tags[k]}>{escape(v)}</{tags[k]}>" for k, v in properties.items())
+            archive.writestr(
+                "docProps/core.xml",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<cp:coreProperties xmlns:cp="{CP_NS}" xmlns:dc="{DC_NS}">{elements}</cp:coreProperties>',
+            )
+        for name, content in (extra_parts or {}).items():
+            archive.writestr(name, content)
+    return buffer.getvalue()
+
+
+SAMPLE_SLIDES = [
+    [slide_shape(["Classroom Kit"], placeholder="ctrTitle"),
+     slide_shape(["A training deck for peer leaders."], placeholder="subTitle"),
+     slide_shape(["1"], placeholder="sldNum")],
+    [slide_shape(["Warning signs"], placeholder="title"),
+     slide_shape(["Withdrawal from friends", "Changes in sleep"], placeholder="body", bullets=True),
+     slide_table([["Sign", "Ask"], ["Sleep", "How are you sleeping?"]])],
+    [slide_shape(["Untitled text on a slide with no title shape."])],
+]
+SAMPLE_NOTES = {2: [slide_shape(["Pause here and ask the class for examples."], placeholder="body"),
+                    slide_shape(["2"], placeholder="sldNum")]}
+
+SAMPLE_PPTX = make_pptx(SAMPLE_SLIDES, notes=SAMPLE_NOTES, properties=SAMPLE_PROPERTIES)
+
+SAMPLE_PPTX_MARKDOWN = (
+    "## Slide 1: Classroom Kit\n\n"
+    "A training deck for peer leaders.\n\n"
+    "## Slide 2: Warning signs\n\n"
+    "- Withdrawal from friends\n\n"
+    "- Changes in sleep\n\n"
+    "| Sign | Ask |\n|---|---|\n| Sleep | How are you sleeping? |\n\n"
+    "Notes: Pause here and ask the class for examples.\n\n"
+    "## Slide 3\n\n"
+    "Untitled text on a slide with no title shape.\n"
+)
+
+
+def make_odp(pages_xml, properties=None, mimetype="application/vnd.oasis.opendocument.presentation"):
+    """An .odp holding the given draw:page XML, and a meta part when properties are given."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("mimetype", mimetype)
+        if properties is not None:
+            elements = "".join(
+                f"<dc:{key}>{escape(properties[key])}</dc:{key}>"
+                for key in ("title", "subject", "description") if key in properties
+            )
+            elements += "".join(
+                f"<meta:keyword>{escape(word.strip())}</meta:keyword>"
+                for word in properties.get("keywords", "").split(",") if word.strip()
+            )
+            archive.writestr(
+                "meta.xml",
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                f'<office:document-meta xmlns:office="{ODF_OFFICE_NS}" xmlns:dc="{DC_NS}" '
+                f'xmlns:meta="{ODF_META_NS}"><office:meta>{elements}</office:meta></office:document-meta>',
+            )
+        archive.writestr(
+            "content.xml",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f'<office:document-content xmlns:office="{ODF_OFFICE_NS}" xmlns:text="{ODF_TEXT_NS}" '
+            f'xmlns:table="{ODF_TABLE_NS}" xmlns:draw="{ODF_DRAW_NS}" '
+            f'xmlns:presentation="{ODF_PRESENTATION_NS}">'
+            f"<office:body><office:presentation>{pages_xml}</office:presentation></office:body>"
+            "</office:document-content>",
+        )
+    return buffer.getvalue()
+
+
+def odp_frame(paragraphs, cls=None):
+    """One OpenDocument frame holding a text box of paragraphs."""
+    attribute = f' presentation:class="{cls}"' if cls else ""
+    body = "".join(f"<text:p>{escape(text)}</text:p>" for text in paragraphs)
+    return f"<draw:frame{attribute}><draw:text-box>{body}</draw:text-box></draw:frame>"
+
+
+ODP_TABLE = (
+    "<draw:frame><table:table><table:table-row><table:table-cell><text:p>Sign</text:p></table:table-cell>"
+    "<table:table-cell><text:p>Ask</text:p></table:table-cell></table:table-row>"
+    "<table:table-row><table:table-cell><text:p>Sleep</text:p></table:table-cell>"
+    "<table:table-cell><text:p>How are you sleeping?</text:p></table:table-cell></table:table-row>"
+    "</table:table></draw:frame>"
+)
+ODP_OUTLINE = (
+    '<draw:frame presentation:class="outline"><draw:text-box><text:list>'
+    "<text:list-item><text:p>Withdrawal from friends</text:p></text:list-item>"
+    "<text:list-item><text:p>Changes in sleep</text:p></text:list-item>"
+    "</text:list></draw:text-box></draw:frame>"
+)
+
+SAMPLE_ODP_PAGES = (
+    '<draw:page draw:name="page1">'
+    + odp_frame(["Classroom Kit"], "title")
+    + odp_frame(["A training deck for peer leaders."], "subtitle")
+    + odp_frame(["1"], "page-number")
+    + "</draw:page>"
+    + '<draw:page draw:name="page2">'
+    + odp_frame(["Warning signs"], "title")
+    + ODP_OUTLINE
+    + ODP_TABLE
+    + "<presentation:notes>" + odp_frame(["Pause here and ask the class for examples."], "notes")
+    + odp_frame(["2"], "page-number") + "</presentation:notes>"
+    + "</draw:page>"
+    + '<draw:page draw:name="page3">'
+    + odp_frame(["Untitled text on a slide with no title shape."])
+    + "</draw:page>"
+)
+
+SAMPLE_ODP = make_odp(SAMPLE_ODP_PAGES, properties=SAMPLE_PROPERTIES)
+
+SAMPLE_ODP_MARKDOWN = SAMPLE_PPTX_MARKDOWN

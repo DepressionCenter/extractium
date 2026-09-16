@@ -211,7 +211,7 @@ Project and build files are indexed as text, with a short fixed heading naming t
 
 Manifests are classified before documentation, because `requirements.txt` carries a documentation extension and would otherwise be read as prose.
 
-Word, OpenDocument, RTF, and PDF files (`.docx`, `.odt`, `.rtf`, `.pdf`) are read into text, with their headings and their own keywords and description, when the source sets `read_documents: true`. Each is downloaded on its own, one request per file, and the text read from it is cached under the file's blob name so a rebuild reads nothing again. The setting is off by default. The [configuration reference](configuration.md) explains the readers under "Reading document files".
+Word, OpenDocument, RTF, PDF, and slide files (`.docx`, `.odt`, `.rtf`, `.pdf`, `.pptx`, `.odp`) are read into text, with their headings and their own keywords and description, a deck one section per slide, when the source sets `read_documents: true`. Each is downloaded on its own, one request per file, and the text read from it is cached under the file's blob name so a rebuild reads nothing again. The setting is off by default. The [configuration reference](configuration.md) explains the readers under "Reading document files".
 
 Dependency lock files are excluded by default. They are long, they are mostly package names and version numbers, and the matching manifest already records what the project declared. `renv.lock` is the exception, because an R project's `DESCRIPTION` often does not pin anything and the lock file is where the real environment is written down.
 
@@ -306,7 +306,7 @@ sources:
     include_forks: false
     include_archived: true
     include_code: true             # read the structure of the code as well as the docs
-    read_documents: false          # read Word, OpenDocument, RTF, and PDF files into text
+    read_documents: false          # read Word, OpenDocument, RTF, PDF, and slide files into text
     max_file_bytes: 2000000
 ```
 

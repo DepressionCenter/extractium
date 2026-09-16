@@ -1,6 +1,8 @@
 """
 Summary: Reads Word (.docx) and OpenDocument text (.odt) files with the
-standard library alone. Both formats are zip archives of XML: the
+standard library alone, and hands PowerPoint and OpenDocument
+presentations to the slides reader through the same guarded archive
+reading. Both formats are zip archives of XML: the
 reader opens the archive in memory, takes the one part that holds the
 body, walks it for paragraphs, headings, lists, and tables, and reads
 the title, subject, keywords, and description from the part that holds
@@ -61,6 +63,12 @@ ODF_BODY_PART = "content.xml"
 ODF_PROPERTIES_PART = "meta.xml"
 ODF_MIMETYPE_PART = "mimetype"
 ODF_TEXT_MIMETYPE = "application/vnd.oasis.opendocument.text"
+ODF_PRESENTATION_MIMETYPE = "application/vnd.oasis.opendocument.presentation"
+
+# What read_zip_document says it read, so the caller knows whether the
+# headings are the author's own or were made from slide numbers.
+KIND_TEXT = "text"
+KIND_SLIDES = "slides"
 
 # XML namespaces, written the way ElementTree spells a qualified name.
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -95,22 +103,26 @@ WORD_TITLE_STYLE = "title"
 
 def read_zip_document(data):
     """
-    The blocks of a Word or OpenDocument text file.
+    The blocks of a Word, PowerPoint, or OpenDocument text or
+    presentation file.
 
     Args:
         data (bytes): the whole file, already known to start with the
             zip signature.
 
     Returns:
-        tuple[list[Block], dict[str, str]]: headings, paragraphs, and
-        tables in document order, and the title, subject, keywords, and
+        tuple[list[Block], dict[str, str], str]: headings, paragraphs, and
+        tables in document order; the title, subject, keywords, and
         description the file's properties declare, blanks included for
-        the caller to drop.
+        the caller to drop; and KIND_TEXT or KIND_SLIDES.
 
     Raises:
-        DocumentError: if the archive cannot be read, is neither format,
-            is an OpenDocument file of another kind, or a part is refused.
+        DocumentError: if the archive cannot be read, is none of the
+            formats, is an OpenDocument file of another kind, or a part
+            is refused.
     """
+    from extractium.readers import slides
+
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as e:
@@ -121,19 +133,29 @@ def read_zip_document(data):
             properties = {}
             if WORD_PROPERTIES_PART in names:
                 properties = _word_properties(_xml_part(archive, WORD_PROPERTIES_PART))
-            return _word_blocks(_xml_part(archive, WORD_BODY_PART)), properties
+            return _word_blocks(_xml_part(archive, WORD_BODY_PART)), properties, KIND_TEXT
+        if slides.PPTX_PRESENTATION_PART in names:
+            blocks, properties = slides.read_pptx(archive, _xml_part, _word_properties)
+            return blocks, properties, KIND_SLIDES
         if ODF_BODY_PART in names:
+            mimetype = ODF_TEXT_MIMETYPE
             if ODF_MIMETYPE_PART in names:
                 mimetype = _raw_part(archive, ODF_MIMETYPE_PART).decode("ascii", "replace").strip()
-                if mimetype != ODF_TEXT_MIMETYPE:
-                    raise DocumentError(
-                        f"an OpenDocument file of type {mimetype}; only text documents are read"
-                    )
+            if mimetype not in (ODF_TEXT_MIMETYPE, ODF_PRESENTATION_MIMETYPE):
+                raise DocumentError(
+                    f"an OpenDocument file of type {mimetype}; only text documents and presentations are read"
+                )
             properties = {}
             if ODF_PROPERTIES_PART in names:
                 properties = _odf_properties(_xml_part(archive, ODF_PROPERTIES_PART))
-            return _odf_blocks(_xml_part(archive, ODF_BODY_PART)), properties
-    raise DocumentError("an archive that is neither a Word nor an OpenDocument text file")
+            root = _xml_part(archive, ODF_BODY_PART)
+            if mimetype == ODF_PRESENTATION_MIMETYPE:
+                blocks, first_title = slides.read_odp(root, _odf_walk, _odf_text)
+                if not (properties.get("title") or "").strip():
+                    properties["title"] = first_title
+                return blocks, properties, KIND_SLIDES
+            return _odf_blocks(root), properties, KIND_TEXT
+    raise DocumentError("an archive that is not a Word, PowerPoint, or OpenDocument text or presentation file")
 
 
 def _raw_part(archive, name):
@@ -183,7 +205,7 @@ def _xml_part(archive, name):
 ### Word ###
 
 def _word_properties(root):
-    """The title, subject, keywords, and description of a Word file's core properties part."""
+    """The title, subject, keywords, and description of a Word or PowerPoint file's core properties part."""
     return {
         key: "".join((root.find(tag).itertext()) if root.find(tag) is not None else "")
         for key, tag in WORD_PROPERTY_TAGS.items()

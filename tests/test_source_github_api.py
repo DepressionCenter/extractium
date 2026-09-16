@@ -953,7 +953,7 @@ def test_a_word_file_the_reader_refuses_is_named_with_the_reason(fixture, fake_g
 
     assert DOCUMENT_URL not in urls
     assert any(
-        "docs/plan.docx: skipped (not a Word, OpenDocument, RTF, or PDF file)" in line for line in lines
+        "docs/plan.docx: skipped (not a Word, PowerPoint, OpenDocument, RTF, or PDF file)" in line for line in lines
     )
 
 

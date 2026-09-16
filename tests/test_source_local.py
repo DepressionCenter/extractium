@@ -257,6 +257,17 @@ def test_a_pdf_file_is_read_when_read_documents_is_on(folder):
     assert "Keywords: depression, anxiety, classroom" in document.content.get_text()
 
 
+def test_slide_decks_are_read_when_read_documents_is_on(folder):
+    (folder / "deck.pptx").write_bytes(document_files.SAMPLE_PPTX)
+    (folder / "deck.odp").write_bytes(document_files.SAMPLE_ODP)
+
+    by_url = {d.url: d for d in read_documents(folder)}
+
+    for url in ("local:deck.pptx", "local:deck.odp"):
+        assert by_url[url].title == "Properties Title"
+        assert "Slide 2: Warning signs" in by_url[url].content.get_text()
+
+
 def test_word_opendocument_and_rtf_files_are_read_when_read_documents_is_on(folder):
     (folder / "notes.docx").write_bytes(document_files.SAMPLE_DOCX)
     (folder / "sub" / "protocol.odt").write_bytes(document_files.SAMPLE_ODT)
@@ -282,7 +293,7 @@ def test_the_binary_word_format_is_reported_as_unreadable(folder):
 
     assert urls == []
     assert any(
-        "skipped (the binary .doc format is not read" in line and "local:old.doc" in line
+        "skipped (the binary .doc and .ppt formats are not read" in line and "local:old.doc" in line
         for line in lines
     )
 
@@ -291,7 +302,7 @@ def test_a_file_that_is_not_a_document_is_skipped_with_the_reason(folder):
     lines = []
     urls = [d.url for d in read_documents(folder, progress=lines.append)]
     assert "local:notes.docx" not in urls
-    assert "  skipped (not a Word, OpenDocument, RTF, or PDF file): local:notes.docx" in lines
+    assert "  skipped (not a Word, PowerPoint, OpenDocument, RTF, or PDF file): local:notes.docx" in lines
 
 
 def test_a_document_over_the_ceiling_is_skipped_before_it_is_read(folder, monkeypatch):
