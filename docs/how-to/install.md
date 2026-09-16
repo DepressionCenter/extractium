@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/install.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: How to install Extractium: the supported Python versions, the
 build script and the developer install, the optional extras and what
 each is for, what the lock file pins, what the first build downloads,
@@ -53,7 +53,7 @@ Use this option if you want to build a knowledge base and do not plan to change 
 
 3. Answer its three questions: the name of your knowledge base, a short name for its files (press Enter to accept the one it suggests), and the website to start crawling from.
 
-When the script is on its own, it first downloads the latest release of Extractium™ into a folder called `extractium-src` beside itself. The folder is named that way, and not `extractium`, because Python would otherwise mistake it for the installed package when you run a build from the folder above it. It uses git when git is installed. Otherwise it downloads the release archive, through `curl` or `wget` on macOS and Linux, through PowerShell on Windows, or through Python itself when none of those is present. To pin a release, set `EXTRACTIUM_REF` to its tag before running the script.
+When the script is on its own, it first downloads the latest release of Extractium™ into a folder called `extractium-src` beside itself. The folder is named that way, and not `extractium`, because Python would otherwise mistake it for the installed package when you run a build from the folder above it. It uses git when git is installed. Otherwise it downloads the release archive, through `curl` or `wget` on macOS and Linux, through PowerShell on Windows, or through Python itself when none of those is present. To pin a release, set `EXTRACTIUM_REF` to its tag before running the script; to build with unreleased work, set it to a branch name such as `main`. [How to run a weekly build](run-a-weekly-build.md) lists that variable and the two beside it under "Building with a branch instead of a release".
 
 The script then creates a virtual environment in `.venv`, installs the exact package versions recorded in the lock file, installs Extractium™ into it, writes `config.yaml` from your answers, runs a first build limited to 25 pages, and prints what to do next. Running it again reuses the environment, skips the questions, and builds the whole site. See [how to run a weekly build](run-a-weekly-build.md) for the options the script accepts.
 

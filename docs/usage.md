@@ -111,6 +111,8 @@ Two settings are read from the environment and never from the settings file. Bot
 
 Neither value reaches a log line, an error message, a cache file, or an output. See [how to crawl a site](how-to/crawl-a-site.md) for when each one is worth setting.
 
+The run scripts read three more, which choose which copy of Extractium™ a script saved on its own downloads: `EXTRACTIUM_REF` (a release tag, or a branch such as `main` for unreleased work), `EXTRACTIUM_REPO`, and `EXTRACTIUM_DIR`. The build itself never reads them. [How to run a weekly build](how-to/run-a-weekly-build.md) explains each under "Building with a branch instead of a release".
+
 
 ## Try a small run first
 

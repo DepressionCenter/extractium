@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: How to keep a knowledge base current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
@@ -71,6 +71,23 @@ The script builds from `config.yaml` unless you say otherwise:
 CONFIG=other-settings.yaml ./run.sh          # macOS and Linux
 set CONFIG=other-settings.yaml && run.bat    # Windows
 ```
+
+### Building with a branch instead of a release
+
+When the script is saved on its own, it downloads the newest published release of Extractium™ into `extractium-src` beside itself. Three variables change that. Set them before running the script, the way `CONFIG` is set above.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `EXTRACTIUM_REF` | `latest` | Which version to download. `latest` is looked up as the newest published release. A tag such as `v0.2` pins one release. A branch name such as `main` builds with work that has not been released yet, which is how you try a fix before it ships, or test a plug-in against the current code. |
+| `EXTRACTIUM_REPO` | `https://github.com/DepressionCenter/extractium` | Where to download from. Point it at a fork to build with your own changes. |
+| `EXTRACTIUM_DIR` | `extractium-src` beside the script | Where the download lands. |
+
+```
+EXTRACTIUM_REF=main ./run.sh          # macOS and Linux
+set EXTRACTIUM_REF=main && run.bat    # Windows
+```
+
+The script downloads only when that folder does not already hold Extractium™. To move from a release to a branch, or from one branch to a newer copy of it, delete the folder first, or set `EXTRACTIUM_DIR` to a fresh one. A script run from inside a checkout of the repository downloads nothing and uses the checkout, whatever these variables say.
 
 Anything you pass as an argument goes straight to the build command, and the script then asks no questions, so a limited trial run looks like this:
 
