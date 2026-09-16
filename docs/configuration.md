@@ -242,9 +242,9 @@ Every other page is checked the same way. A page inside the site that sends the 
 
 ### Reading document files
 
-Three sources can read document files: `web`, `local`, and `github_api`. Each has a `read_documents` setting, off by default. Turn it on and the source reads `.docx`, `.odt`, `.rtf`, and `.pdf` files into text, with the headings kept so the index cuts a long document into sections the way it cuts a web page.
+Three sources can read document files: `web`, `local`, and `github_api`. Each has a `read_documents` setting, off by default. Turn it on and the source reads `.docx`, `.odt`, `.rtf`, `.pdf`, `.pptx`, and `.odp` files into text, with the headings kept so the index cuts a long document into sections the way it cuts a web page, and a slide deck one section per slide.
 
-The Word, OpenDocument, and RTF readers are built into the tool and need no extra software. The PDF reader uses the `pypdf` library, which is the `pdf` extra. The build scripts and the scheduled workflow install it from the lock file; a developer install names it:
+The Word, OpenDocument, RTF, and slide readers are built into the tool and need no extra software. The PDF reader uses the `pypdf` library, which is the `pdf` extra. The build scripts and the scheduled workflow install it from the lock file; a developer install names it:
 
 ```bash
 pip install "extractium[pdf]"
@@ -264,13 +264,21 @@ What is read from a PDF:
 - Headings that say where you are. A PDF with bookmarks gets a heading from each bookmark, placed before the page it points to with the page number appended, so a manual is cut at its chapters and a citation names the page. A PDF without bookmarks gets a `Page N` heading before every page, unless it has only one.
 - The title, subject, and keywords from the file's document properties. The subject and keywords open the indexed text, as for the other formats. The title is the properties title, then the first line of the first page when it is short, then the file name; a heading the reader made from a page number is never a title. A properties title that ends in a file extension, as a PDF made from a Word file often has, loses the extension.
 
+What is read from a PowerPoint or OpenDocument presentation:
+
+- Every slide, in the order the deck shows them, under a heading that numbers it and carries the slide's title: `Slide 2: Warning signs`, or `Slide 3` for a slide with no title. The index cuts the deck at those headings, so a search result cites the slide.
+- The text on each slide, top to bottom, with bulleted lines marked as list items, and tables as rows of cells.
+- The speaker notes of each slide, as one paragraph that begins `Notes:`, so a reader can tell what was said from what was shown.
+- The title, subject, keywords, and description from the file's properties, as for the other formats. The title is the properties title, then the first slide's title, then the first line of the first slide when it is short, then the file name; a slide heading is never the deck's title.
+
 What is not read:
 
-- The old binary `.doc` format. It has no safe reader, so the file is named as unreadable rather than guessed at. Save it as `.docx` to have it indexed.
+- The old binary `.doc` and `.ppt` formats. They have no safe reader, so such a file is named as unreadable rather than guessed at. Save it as `.docx` or `.pptx` to have it indexed.
 - An encrypted PDF. It is skipped and named, and no password is ever tried.
 - A PDF whose pages hold no text, which is what a scanned document looks like to a reader. It is skipped with `likely scanned images` in the line. There is no text recognition.
 - Pages past the five-hundredth of one PDF. The text ends with a line saying how many pages were not read.
-- OpenDocument spreadsheets and presentations (`.ods`, `.odp`).
+- Spreadsheets (`.xlsx`, `.ods`).
+- Pictures on slides, the slide number, the date, and the header and footer boxes of a deck.
 - Pictures, comments, footnotes, headers, footers, and tracked deletions inside a file.
 
 A PDF is read in a separate process with a time limit of 30 seconds per file. A file that runs past it is skipped with `the reader gave up after 30 seconds`, and the next file starts a fresh process. The limit is there because a malformed PDF can keep a parser busy for a very long time, and a process can be stopped where a thread cannot.
@@ -291,7 +299,7 @@ A file is never followed for links, so a document on another host never starts a
 
 On a TeamDynamix portal, the list of files attached to an article is not in the article's page; the portal loads it separately. With `read_documents` on, the crawl fetches that list for each article, one request per article that counts as a page, and reads the files it links. Each file is served at an address that names it by identifier alone, such as `Shared/FileOpen?AttachmentID=...&ItemID=...`, so the format is decided from the bytes, and the document is titled by the file name the portal sends when the file itself carries no title. The portal links every file twice, to view and to download; the crawl fetches it once. With the setting off, neither the list nor the files are fetched.
 
-On a `local` source, turning the setting on adds `**/*.docx`, `**/*.odt`, `**/*.rtf`, and `**/*.pdf` to the default globs. A document file your own globs select while the setting is off is skipped with a line saying so, never read as text.
+On a `local` source, turning the setting on adds `**/*.docx`, `**/*.odt`, `**/*.rtf`, `**/*.pdf`, `**/*.pptx`, and `**/*.odp` to the default globs. A document file your own globs select while the setting is off is skipped with a line saying so, never read as text.
 
 On a `github_api` source, document files in a repository are downloaded one request each, and the text read from each is cached under the file's blob name, so a rebuild reads nothing again. The `max_file_bytes` ceiling applies to them as to every file.
 
@@ -309,7 +317,7 @@ Content from a local source stays out of every output unless that output sets `i
 
 The `path` is the folder to read. Files are read as UTF-8. A file the patterns select but whose real location is outside the folder, reached through a shortcut or a symbolic link, is skipped and the reason is printed. A folder that does not exist stops the build, so a mistyped path does not look like an empty folder.
 
-Markdown, plain text, and HTML are read by default. Word, OpenDocument, RTF, and PDF files are read when `read_documents` is on. Spreadsheet and presentation files are not read.
+Markdown, plain text, and HTML are read by default. Word, OpenDocument, RTF, PDF, PowerPoint, and OpenDocument presentation files are read when `read_documents` is on. Spreadsheet files are not read.
 
 ### `github_api`: read repositories through the GitHub API
 

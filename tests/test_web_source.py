@@ -1211,7 +1211,7 @@ def test_a_file_the_reader_refuses_is_reported_with_the_reason(isolated_core_cac
     documents, lines = document_crawl(session)
 
     assert SITE_DOCX not in [d.url for d in documents]
-    assert f"  SKIP {SITE_DOCX} -- not a Word, OpenDocument, RTF, or PDF file" in lines
+    assert f"  SKIP {SITE_DOCX} -- not a Word, PowerPoint, OpenDocument, RTF, or PDF file" in lines
 
 
 def test_a_long_document_is_indexed_as_an_outline_that_keeps_its_properties(

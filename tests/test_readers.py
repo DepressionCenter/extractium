@@ -106,13 +106,18 @@ def test_markup_in_a_document_is_indexed_as_the_words_written():
 # Refusals
 # ---------------------------------------------------------------------------
 
+def test_the_binary_powerpoint_format_is_refused_by_name_too():
+    with pytest.raises(documents.DocumentError, match=r"binary \.doc and \.ppt formats are not read"):
+        documents.read_document(files.OLE_HEADER, "talk.ppt")
+
+
 def test_the_binary_word_format_is_refused_by_name():
-    with pytest.raises(documents.DocumentError, match=r"binary \.doc format is not read"):
+    with pytest.raises(documents.DocumentError, match=r"binary \.doc and \.ppt formats are not read"):
         documents.read_document(files.OLE_HEADER, "old.doc")
 
 
 def test_a_file_of_no_known_format_is_refused():
-    with pytest.raises(documents.DocumentError, match="not a Word, OpenDocument, RTF, or PDF file"):
+    with pytest.raises(documents.DocumentError, match="not a Word, PowerPoint, OpenDocument, RTF, or PDF file"):
         documents.read_document(b"just some bytes", "x.docx")
 
 
@@ -125,13 +130,13 @@ def test_an_archive_that_is_neither_format_is_refused():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("README.txt", "an ordinary zip")
-    with pytest.raises(documents.DocumentError, match="neither a Word nor an OpenDocument"):
+    with pytest.raises(documents.DocumentError, match="not a Word, PowerPoint, or OpenDocument"):
         documents.read_document(buffer.getvalue(), "x.docx")
 
 
 def test_an_opendocument_spreadsheet_is_refused_as_the_wrong_kind():
     data = files.make_odt("<text:p>cells</text:p>", mimetype="application/vnd.oasis.opendocument.spreadsheet")
-    with pytest.raises(documents.DocumentError, match="only text documents are read"):
+    with pytest.raises(documents.DocumentError, match="only text documents and presentations are read"):
         documents.read_document(data, "x.ods")
 
 
@@ -221,7 +226,7 @@ def test_the_title_is_the_first_heading_else_the_properties_title_else_a_short_f
 # File properties
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("data", [files.SAMPLE_DOCX, files.SAMPLE_ODT, files.SAMPLE_RTF])
+@pytest.mark.parametrize("data", [files.SAMPLE_DOCX, files.SAMPLE_ODT, files.SAMPLE_RTF, files.SAMPLE_PPTX, files.SAMPLE_ODP])
 def test_every_format_reads_the_title_subject_keywords_and_description_it_declares(data):
     assert documents.read_document(data).properties == files.SAMPLE_PROPERTIES
 
@@ -296,6 +301,10 @@ def test_which_addresses_count_as_documents(url, expected):
 
 
 def test_which_file_names_count_as_documents():
+    assert documents.is_document_path("talks/deck.pptx") is True
+    assert documents.is_document_path("talks/deck.odp") is True
+    assert documents.is_document_path("talks/old.ppt") is True
+    assert documents.is_document_url("https://example.org/talks/deck.pptx") is True
     assert documents.is_document_path("notes/plan.docx") is True
     assert documents.is_document_path("notes/PLAN.RTF") is True
     assert documents.is_document_path("notes/report.pdf") is True
@@ -469,3 +478,124 @@ def test_shutting_the_child_down_is_safe_to_repeat():
     isolated.shutdown()
 
     assert isolated.run("builtins", "len", ("ab",)) == 2
+
+
+# ---------------------------------------------------------------------------
+# Slides
+# ---------------------------------------------------------------------------
+
+def test_a_powerpoint_deck_reads_one_numbered_heading_per_slide_with_notes_marked():
+    assert documents.read_document(files.SAMPLE_PPTX, "deck.pptx").text == files.SAMPLE_PPTX_MARKDOWN
+
+
+def test_an_opendocument_presentation_reads_the_same_way():
+    assert documents.read_document(files.SAMPLE_ODP, "deck.odp").text == files.SAMPLE_ODP_MARKDOWN
+
+
+def test_a_decks_headings_name_its_slides_so_the_title_comes_from_the_properties_or_the_first_slide():
+    declared = documents.read_document(files.SAMPLE_PPTX)
+    assert declared.headings_are_titles is False
+    assert documents.document_title(declared, "deck") == "Properties Title"
+
+    undeclared = documents.read_document(files.make_pptx(files.SAMPLE_SLIDES))
+    assert undeclared.properties["title"] == "Classroom Kit"
+    assert documents.document_title(undeclared, "deck") == "Classroom Kit"
+
+    untitled = documents.read_document(files.make_pptx([[files.slide_shape(["Only a body."])]]))
+    assert documents.document_title(untitled, "deck") == "Only a body."
+    assert documents.document_title(documents.read_document(files.make_pptx([])), "deck") == "deck"
+
+    odp = documents.read_document(files.make_odp(files.SAMPLE_ODP_PAGES))
+    assert odp.headings_are_titles is False
+    assert documents.document_title(odp, "deck") == "Classroom Kit"
+
+
+def test_slides_are_read_in_the_order_the_deck_shows_them_not_the_order_of_their_files():
+    data = files.make_pptx(
+        [[files.slide_shape(["First file"], placeholder="title")],
+         [files.slide_shape(["Second file"], placeholder="title")]],
+        order=[2, 1],
+    )
+
+    assert documents.read_document(data).text == "## Slide 1: Second file\n\n## Slide 2: First file\n"
+
+
+def test_slide_furniture_and_line_breaks_are_handled():
+    shape = (
+        '<p:sp><p:nvSpPr><p:cNvPr id="1" name="Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/>'
+        '<p:txBody><a:bodyPr/><a:p><a:r><a:t>Line one</a:t></a:r><a:br/><a:fld type="slidenum">'
+        '<a:t>2</a:t></a:fld></a:p></p:txBody></p:sp>'
+    )
+    data = files.make_pptx([[
+        files.slide_shape(["4 of 9"], placeholder="sldNum"),
+        files.slide_shape(["Footer text"], placeholder="ftr"),
+        files.slide_shape(["2026"], placeholder="dt"),
+        shape,
+    ]])
+
+    assert documents.read_document(data).text == "## Slide 1\n\nLine one\n2\n"
+
+
+def test_a_slide_relationship_that_points_outside_the_archive_or_at_another_part_is_ignored():
+    data = files.make_pptx([[files.slide_shape(["Kept"], placeholder="title")]], extra_parts={
+        "ppt/_rels/presentation.xml.rels": files.relationships_xml([
+            ("rId1", files.SLIDE_RELATIONSHIP, "slides/slide1.xml"),
+            ("rId2", files.SLIDE_RELATIONSHIP, "../../etc/passwd"),
+            ("rId3", files.SLIDE_RELATIONSHIP, "slideLayouts/slideLayout1.xml"),
+        ]),
+        "ppt/presentation.xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            f'<p:presentation xmlns:p="{files.P_NS}" xmlns:r="{files.R_NS}"><p:sldIdLst>'
+            '<p:sldId id="256" r:id="rId1"/><p:sldId id="257" r:id="rId2"/><p:sldId id="258" r:id="rId3"/>'
+            "</p:sldIdLst></p:presentation>"
+        ),
+    })
+
+    assert documents.read_document(data).text == "## Slide 1: Kept\n"
+
+
+def test_a_deck_with_no_slides_reads_as_empty():
+    assert documents.read_document(files.make_pptx([])).text == ""
+
+
+def test_a_document_type_declaration_in_a_slide_part_is_refused():
+    data = files.make_pptx([[files.slide_shape(["x"])]], extra_parts={
+        "ppt/slides/slide1.xml": '<!DOCTYPE p [<!ENTITY e "x">]>' + files.slide_xml([files.slide_shape(["&e;"])]),
+    })
+    with pytest.raises(documents.DocumentError, match="document type declaration"):
+        documents.read_document(data)
+
+
+def test_an_opendocument_spreadsheet_is_still_refused_when_presentations_are_read():
+    data = files.make_odp('<draw:page/>', mimetype="application/vnd.oasis.opendocument.spreadsheet")
+    with pytest.raises(documents.DocumentError, match="only text documents and presentations are read"):
+        documents.read_document(data)
+
+
+def test_a_presentations_grouped_shapes_are_read_in_order():
+    grouped = f"<p:grpSp>{files.slide_shape(['Inside a group'])}</p:grpSp>"
+    data = files.make_pptx([[files.slide_shape(["Title"], placeholder="title"), grouped]])
+
+    assert documents.read_document(data).text == "## Slide 1: Title\n\nInside a group\n"
+
+
+def test_the_chunker_cuts_a_deck_one_section_per_slide():
+    from extractium.core.models import Document
+    from extractium.core.chunk import chunk_document
+
+    long = "A paragraph long enough to clear the minimum section size on its own. " * 2
+    deck = files.make_pptx([
+        [files.slide_shape([f"Slide {n} title"], placeholder="title"), files.slide_shape([long])]
+        for n in (1, 2, 3)
+    ])
+    read = documents.read_document(deck)
+    document = Document(
+        url="https://example.org/talks/deck.pptx", title=documents.document_title(read, "deck"),
+        content=documents.content_node(read.indexed_text), source_type="web", content_type="text",
+    )
+    parents, _ = chunk_document(document)
+    headings = [parent["t"] for parent in parents]
+
+    assert [heading.split(" -- ")[-1] for heading in headings] == [
+        "Slide 1: Slide 1 title", "Slide 2: Slide 2 title", "Slide 3: Slide 3 title",
+    ]

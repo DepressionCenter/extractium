@@ -42,7 +42,7 @@ A settings file lists sources. Each one has a type, a label, and a few options. 
 | A DSpace repository, such as a university library's | `dspace` | The interface address, the reader address, and the collections to read. Collections are listed, never discovered. |
 | A YouTube channel, playlist, or video | `youtube` | The channel as you would type it in a browser. Each stretch of a caption track becomes a section cited at the moment it was said. |
 | A Google Docs, Sheets, or Slides file shared with the link | `web` | A `leaf_patterns` entry for `docs.google.com` on the crawl that links to it. The file is read through its export, and one that is not shared is reported and skipped. |
-| Word, OpenDocument, RTF, or PDF files linked from a site, kept in a repository, or in a folder | `web`, `github_api`, or `local` | `read_documents: true` on that source, with a `leaf_patterns` entry for the host that serves the files when it is not the site itself. The text is indexed with its headings, and the file's own keywords and description with it. |
+| Word, OpenDocument, RTF, PDF, or slide files linked from a site, kept in a repository, or in a folder | `web`, `github_api`, or `local` | `read_documents: true` on that source, with a `leaf_patterns` entry for the host that serves the files when it is not the site itself. The text is indexed with its headings, and the file's own keywords and description with it. |
 | A folder on your own computer | `local` | The folder path. Nothing from it reaches an output unless that output sets `include_local: true`. |
 | A knowledge bundle another build wrote | `okf` | The folder of an Open Knowledge Format bundle, from Extractium™ or any other tool. Each concept keeps the address it was read from. |
 
@@ -91,7 +91,7 @@ The usual sequence is:
 
 Wrap every pattern in single quotes so YAML keeps a backslash as you typed it, and escape a dot that should match a dot: `'example\.edu'`. The full rules, including the order the checks run in and what the built-in exclusions cover, are in the [configuration reference](../configuration.md) under "How the URL patterns work".
 
-Word, OpenDocument, RTF, and PDF files are dropped as files that are not text unless the source sets `read_documents: true`. Most sites keep such files on another host, so that setting usually goes with a `leaf_patterns` entry for the host that serves them. The same page of the configuration reference explains both under "Reading document files" and "Single pages on another host".
+Word, OpenDocument, RTF, PDF, PowerPoint, and OpenDocument presentation files are dropped as files that are not text unless the source sets `read_documents: true`. Most sites keep such files on another host, so that setting usually goes with a `leaf_patterns` entry for the host that serves them. The same page of the configuration reference explains both under "Reading document files" and "Single pages on another host".
 
 
 ## Step 4: Decide about the two environment variables

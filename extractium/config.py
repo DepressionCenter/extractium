@@ -142,7 +142,7 @@ DEFAULT_SQLITE_FILE = sqlite_file_name(DEFAULT_SLUG)
 DEFAULT_LOCAL_INCLUDE_GLOBS = ("**/*.md", "**/*.txt", "**/*.html")
 
 # Added to the default globs when a local source turns read_documents on.
-DOCUMENT_INCLUDE_GLOBS = ("**/*.docx", "**/*.odt", "**/*.rtf", "**/*.pdf")
+DOCUMENT_INCLUDE_GLOBS = ("**/*.docx", "**/*.odt", "**/*.rtf", "**/*.pdf", "**/*.pptx", "**/*.odp")
 
 # Whether a web, local, or github_api source reads Word, OpenDocument,
 # and RTF files into text. Off, because each file is a request of its

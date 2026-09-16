@@ -45,11 +45,11 @@ from extractium.core import chunk
 
 ### Constants ###
 
-# The file extensions a reader turns into text. `.doc`, the binary Word
-# format, is deliberately absent: it has no safe standard-library reader,
-# so a file in that format is reported as unreadable rather than guessed
-# at.
-DOCUMENT_EXTENSIONS = ("docx", "odt", "rtf", "pdf")
+# The file extensions a reader turns into text. `.doc` and `.ppt`, the
+# binary Word and PowerPoint formats, are deliberately absent: they have
+# no safe standard-library reader, so a file in either is reported as
+# unreadable rather than guessed at.
+DOCUMENT_EXTENSIONS = ("docx", "odt", "rtf", "pdf", "pptx", "odp")
 
 # The name to install to read PDF files, quoted in the one message that
 # tells an operator what is missing. The other readers use the standard
@@ -60,7 +60,7 @@ PDF_MODULE = "pypdf"
 # Extensions of document formats that are recognised but never read, so
 # a local folder holding one gets a line saying why instead of a page of
 # noise.
-UNREADABLE_EXTENSIONS = ("doc",)
+UNREADABLE_EXTENSIONS = ("doc", "ppt")
 
 # An address that names a document file. The extension may end the
 # path, be followed by a query, or be followed by one more segment: a
@@ -216,7 +216,8 @@ class ReadDocument:
         headings_are_titles (bool): whether the first heading in the
             text can serve as the document's title. True for a file
             whose headings its author wrote; False for a PDF, whose
-            headings the reader made from page numbers and bookmarks.
+            headings the reader made from page numbers and bookmarks,
+            and for a slide deck, whose headings name its slides.
     """
 
     text: str
@@ -320,9 +321,10 @@ def read_document(data, name=""):
     The text and properties of one document file.
 
     The format is decided from the first bytes, never from the name: a
-    zip archive is opened as a Word or OpenDocument file, an RTF header
-    is parsed as RTF, a PDF header is read by the PDF reader in a child
-    process, and the binary Word signature is refused by name.
+    zip archive is opened as a Word, PowerPoint, or OpenDocument file,
+    an RTF header is parsed as RTF, a PDF header is read by the PDF
+    reader in a child process, and the binary Word and PowerPoint
+    signature is refused by name.
 
     Args:
         data (bytes): the whole file.
@@ -349,12 +351,16 @@ def read_document(data, name=""):
             f"{len(data)} bytes is over the {MAX_DOCUMENT_BYTES} byte ceiling for a document"
         )
     if data.startswith(ZIP_MAGIC):
-        blocks, properties = office.read_zip_document(data)
-    elif data.startswith(RTF_MAGIC):
+        blocks, properties, kind = office.read_zip_document(data)
+        return ReadDocument(
+            text=to_markdown(blocks), properties=clean_properties(properties),
+            headings_are_titles=kind != office.KIND_SLIDES,
+        )
+    if data.startswith(RTF_MAGIC):
         blocks, properties = rtf.read_rtf(data)
     elif data.startswith(OLE_MAGIC):
         raise DocumentError(
-            "the binary .doc format is not read; save the file as .docx to have it indexed"
+            "the binary .doc and .ppt formats are not read; save the file as .docx or .pptx to have it indexed"
         )
     elif PDF_MAGIC in data[:PDF_MAGIC_WINDOW]:
         blocks, properties = _read_pdf_isolated(data)
@@ -363,7 +369,7 @@ def read_document(data, name=""):
             headings_are_titles=False,
         )
     else:
-        raise DocumentError("not a Word, OpenDocument, RTF, or PDF file")
+        raise DocumentError("not a Word, PowerPoint, OpenDocument, RTF, or PDF file")
     return ReadDocument(text=to_markdown(blocks), properties=clean_properties(properties))
 
 
@@ -416,9 +422,10 @@ def document_title(read, fallback):
     A heading in the text comes first because it is what a reader of
     the file sees, and a properties title can be left over from the
     template a file was made from. A PDF's headings were made by the
-    reader from bookmarks and page numbers, not written as a title, so
-    for a PDF the properties title comes first and the headings are
-    passed over.
+    reader from bookmarks and page numbers, and a slide deck's name its
+    slides, so for those the properties title comes first and the
+    headings are passed over; a deck that declares no title takes its
+    first slide's.
 
     Args:
         read (ReadDocument): what read_document returned.
