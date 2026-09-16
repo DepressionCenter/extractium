@@ -3,6 +3,8 @@
   "title": "Example Talk: Measuring Mood With A Phone",
   "published_at": "2026-01-02T03:04:05Z",
   "language": "en",
+  "description": "A synthetic example talk on measuring mood with a phone, for a study team new to the method.",
+  "tags": ["mood", "smartphone", "example"],
   "segments": [
     {"text": "Welcome. Today we are going to walk through how a study measures mood using a phone, and what the data looks like when it comes back.", "start": 0.0},
     {"text": "A daily survey is the simplest instrument. It asks the same few questions at the same time each day, so answers can be compared across weeks.", "start": 18.0},

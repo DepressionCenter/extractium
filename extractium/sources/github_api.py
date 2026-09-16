@@ -12,7 +12,7 @@ extractium/sources/github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,6 +33,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-15"
 
+import dataclasses
 import re
 
 from extractium.code import render as code_render
@@ -384,7 +385,7 @@ class GitHubApiSource:
             self.acquired.add(normalise(document.url))
             indexed += 1
             records += 1
-            yield document
+            yield _with_repository_metadata(document, repository)
 
         code_lines = []
         if code:
@@ -395,7 +396,7 @@ class GitHubApiSource:
             for document in analyzed:
                 self.acquired.add(normalise(document.url))
                 records += 1
-                yield document
+                yield _with_repository_metadata(document, repository)
 
         # Files and records are counted separately because they are not
         # the same number: one code file yields a record of its own and
@@ -406,8 +407,11 @@ class GitHubApiSource:
         )
         if full_name not in self.mapped:
             self.mapped.add(full_name)
-            yield self._repository_map(
-                repository, full_name, owner, name, branch, indexed, tier, code_lines,
+            yield _with_repository_metadata(
+                self._repository_map(
+                    repository, full_name, owner, name, branch, indexed, tier, code_lines,
+                ),
+                repository,
             )
 
     def _page_ceiling(self):
@@ -938,6 +942,42 @@ class _Headings:
         count = self._seen.get(heading, 0) + 1
         self._seen[heading] = count
         return heading if count == 1 else f"{heading} ({count})"
+
+
+# The content types that describe a repository as a whole, and so carry
+# its description as their summary. A code file or a document deep in
+# the tree is about itself, not the project.
+REPOSITORY_SUMMARY_CONTENT_TYPES = frozenset({"readme", "repo_map"})
+
+
+def _with_repository_metadata(document, repository):
+    """
+    The document with what its repository says about itself: the
+    repository's topics as the document's tags, and, for the README and
+    the repository summary, its description as the summary.
+
+    Topics are the tags a repository's owner chose, so every record read
+    from the repository carries them first in its tags. The description
+    is short by GitHub's own limit,
+    so it needs no cutting here; the Document bounds it anyway.
+
+    Args:
+        document (Document): a record read from the repository.
+        repository (Mapping): the repository as the API described it,
+            untrusted like any response; only text values are used.
+
+    Returns:
+        Document: the same record, with tags and possibly a summary.
+    """
+    topics = repository.get("topics")
+    tags = tuple(topic for topic in topics if isinstance(topic, str)) if isinstance(topics, list) else ()
+    description = repository.get("description")
+    summary = description if (
+        isinstance(description, str) and document.content_type in REPOSITORY_SUMMARY_CONTENT_TYPES
+    ) else ""
+    if not tags and not summary:
+        return document
+    return dataclasses.replace(document, tags=tags, summary=summary)
 
 
 def _readmes_by_folder(bodies):

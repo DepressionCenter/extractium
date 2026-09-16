@@ -11,7 +11,7 @@ extractium/core/chunk.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -342,7 +342,8 @@ def chunk_document(document):
         tuple[list[dict], list[dict]]: (parents, children). Every parent
         dict holds id, t, x, u, host, source_type, content_type,
         source_label, categories, local, weight, and the enrichment
-        fields, each None until a pass fills it; every child is a copy of its
+        fields, the summary and tags as the document carries them and the
+        rest None until a pass fills them; every child is a copy of its
         parent with its own `x`, its `start` and `end` offsets into the
         parent's text, and a page-local `pid`.
     """
@@ -359,4 +360,8 @@ def chunk_document(document):
         parent["weight"] = document.weight
         for field in ENRICHMENT_FIELDS:
             parent[field] = None
+        # What the source itself knows about the page. The keyword step
+        # keeps these tags first and adds what the text yields after.
+        parent["summary"] = document.summary or None
+        parent["tags"] = tuple(document.tags) or None
     return parents, _children_for(parents)

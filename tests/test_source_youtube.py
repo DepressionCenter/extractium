@@ -15,7 +15,7 @@ tests/test_source_youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -600,6 +600,62 @@ def test_video_titles_are_read_in_one_batch():
     assert details[VIDEO_B]["published_at"] == "2026-01-02T03:04:05Z"
     assert len(session.calls) == 1
     assert session.calls[0]["params"]["id"] == f"{VIDEO_A},{VIDEO_B}"
+
+
+def described_videos_page(videos):
+    """A videos.list response carrying each video's description and tags beside its title."""
+    return FakeResponse(body={"items": [
+        {"id": video_id, "snippet": {
+            "title": title, "publishedAt": "2026-01-02T03:04:05Z", "channelId": CHANNEL,
+            "description": description, "tags": tags,
+        }}
+        for video_id, (title, description, tags) in videos.items()
+    ]})
+
+
+def test_video_details_carry_the_description_and_tags_youtube_reports():
+    session = FakeYouTubeSession({"videos": described_videos_page({
+        VIDEO_A: ("A Talk", "What the talk covers.\nMore.", ["sleep", "research", 7]),
+        VIDEO_B: ("Bare", "", None),
+    })})
+
+    details = yc.YouTubeClient(session, key=FAKE_KEY).video_details([VIDEO_A, VIDEO_B])
+
+    assert details[VIDEO_A]["description"] == "What the talk covers.\nMore."
+    assert details[VIDEO_A]["tags"] == ("sleep", "research")
+    assert details[VIDEO_B]["description"] == ""
+    assert details[VIDEO_B]["tags"] == ()
+
+
+def test_a_videos_description_and_tags_reach_every_stretch_and_the_store(api_key_set, caption_library):
+    """The description is the video's summary and its tags are the page's, on the first build and from the store."""
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({"videos": described_videos_page({
+        VIDEO_A: ("A Talk", "What the talk covers.", ["sleep", "research"]),
+    })})
+
+    first = list(source(reader=reader, video_ids=(VIDEO_A,)).fetch(session, {}, quiet))
+    stored = cache_module.load_video(VIDEO_A)
+    again = list(source(reader=FakeReader(), video_ids=(VIDEO_A,)).fetch(FakeYouTubeSession(), {}, quiet))
+
+    assert first
+    assert {d.summary for d in first} == {"What the talk covers."}
+    assert {d.tags for d in first} == {("sleep", "research")}
+    assert stored["description"] == "What the talk covers." and stored["tags"] == ["sleep", "research"]
+    assert [(d.summary, d.tags) for d in again] == [(d.summary, d.tags) for d in first]
+
+
+def test_a_transcript_stored_by_hand_needs_no_description_or_tags(api_key_set, caption_library):
+    cache_module.save_video(VIDEO_A, "Stored", "", "en",
+                            [{"text": "a stored phrase about measuring mood", "start": 0.0}])
+    record = cache_module.load_video(VIDEO_A)
+    del record["description"], record["tags"]
+    with open(cache_module.video_path(VIDEO_A), "w", encoding="utf-8") as f:
+        json.dump(record, f)
+
+    documents = list(source(reader=FakeReader(), video_ids=(VIDEO_A,)).fetch(FakeYouTubeSession(), {}, quiet))
+
+    assert documents and all(d.summary == "" and d.tags == () for d in documents)
 
 
 def test_video_titles_are_batched_to_the_limit(monkeypatch):
@@ -2034,6 +2090,51 @@ def test_a_linked_video_is_read_only_when_a_named_channel_published_it():
     assert (built.found_offered, built.found_read, built.found_left_out) == (3, 1, 2)
     assert [call["video_id"] for call in reader.calls] == [VIDEO_A]
     assert "3 video(s) linked from crawled pages: 1 read, 2 left out" in "\n".join(built.summary_lines())
+
+
+def test_a_linked_video_the_data_api_will_not_describe_is_named_through_the_public_endpoint(api_key_set):
+    """
+    A key is the preferred way to learn a publisher, not the only way.
+    videos.list names the first video and says nothing about the second,
+    so the second is asked about through the public endpoint, which
+    reports the same channel, and both are read.
+    """
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "videos": FakeResponse(body={"items": [
+            {"id": VIDEO_A, "snippet": {"title": "Listed", "publishedAt": "2026-01-02T03:04:05Z", "channelId": CHANNEL}},
+        ]}),
+        "oembed": FakeResponse(body={"title": "Unlisted", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+    })
+    built = source(reader=reader)
+    built.allowed_channels.add(CHANNEL)
+
+    links = [f"https://www.youtube.com/watch?v={VIDEO_A}", f"https://www.youtube.com/watch?v={VIDEO_B}"]
+    documents = list(built.read_found_links(session, {}, quiet, links))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"Listed", "Unlisted"}
+    assert (built.found_offered, built.found_read, built.found_left_out) == (2, 2, 0)
+    oembed_calls = [c for c in session.calls if c["resource"] == "oembed"]
+    assert [c["params"]["url"] for c in oembed_calls] == [f"https://www.youtube.com/watch?v={VIDEO_B}"]
+    assert all(FAKE_KEY not in c["url"] and FAKE_KEY not in str(c["params"]) for c in oembed_calls)
+
+
+def test_a_key_the_data_api_refuses_falls_back_to_the_public_endpoint_for_publishers(api_key_set):
+    """A key without the right rights, or a wrong one, must not empty the build of linked videos."""
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "videos": FakeResponse(status_code=403, body={"error": {"message": "forbidden"}}),
+        "oembed": FakeResponse(body={"title": "Ours", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+    })
+    built = source(reader=reader)
+    built.allowed_channels.add(CHANNEL)
+
+    lines = []
+    documents = list(built.read_found_links(session, {}, lines.append, [f"https://www.youtube.com/watch?v={VIDEO_A}"]))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"Ours"}
+    assert any("asking the public endpoint instead" in line for line in lines)
+    assert all(FAKE_KEY not in line for line in lines)
 
 
 def test_a_source_naming_no_channel_reads_no_linked_video():

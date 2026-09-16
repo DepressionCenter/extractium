@@ -14,7 +14,7 @@ tests/test_source_dspace.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-10
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -409,6 +409,24 @@ def test_a_subject_listed_twice_is_recorded_once(fixture):
     subjects = next(line for line in documents[0].content.splitlines()
                     if line.startswith("Subjects: "))
     assert subjects == "Subjects: sleep-research, wearables, example-topic"
+
+
+def test_the_abstract_is_the_deposits_summary_and_its_subjects_are_its_tags(fixture):
+    """What the cataloguer wrote and chose beats an excerpt and a statistic."""
+    documents, _ = read(fixture)
+
+    assert documents[0].summary.startswith("A synthetic abstract")
+    assert documents[0].tags == ("sleep-research", "wearables", "example-topic")
+
+
+def test_a_long_abstract_gives_only_its_opening_paragraphs_as_the_summary():
+    """An abstract on a thesis can run to pages; the summary is what it opens with."""
+    from extractium.sources.dspace import deposit_summary
+    deposit = {"metadata": {"dc.description.abstract": [{"value":
+        "First paragraph.\n\nSecond paragraph.\r\n\r\n\nThird paragraph.\n\nFourth."}]}}
+
+    assert deposit_summary(deposit) == "First paragraph.\n\nSecond paragraph."
+    assert deposit_summary({"metadata": {}}) == ""
 
 
 def test_the_deposited_files_are_named_with_their_sizes(fixture):

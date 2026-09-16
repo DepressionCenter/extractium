@@ -13,7 +13,7 @@ extractium/sources/dspace.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -69,6 +69,11 @@ NOTE_FIELD = "dc.description"
 AUTHOR_FIELD = "dc.contributor.author"
 ISSUED_FIELD = "dc.date.issued"
 SUBJECT_FIELDS = ("dc.subject", "dc.subject.other")
+
+# How many paragraphs of an abstract make the deposit's summary. An
+# abstract on a thesis can run to pages; the opening paragraphs say what
+# the work is, and the Document cuts what remains to its own ceiling.
+SUMMARY_PARAGRAPHS = 2
 RIGHTS_FIELD = "dc.rights"
 PUBLISHER_FIELD = "dc.publisher"
 URI_FIELD = "dc.identifier.uri"
@@ -94,6 +99,10 @@ DOI_HOSTS = ("doi.org", "dx.doi.org")
 # enough that the section splitter sees one enormous paragraph.
 _SPACES_RE = re.compile(r"[^\S\n]+")
 _BLANK_LINES_RE = re.compile(r"\n{3,}")
+
+# A blank line, however much whitespace it carries, separates two
+# paragraphs of an abstract.
+_PARAGRAPH_BREAK_RE = re.compile(r"\n[ \t]*\n\s*")
 
 
 ### Errors ###
@@ -309,6 +318,8 @@ class DSpaceSource:
             source_type="repository",
             content_type="article",
             categories=(collection["name"],),
+            summary=deposit_summary(deposit),
+            tags=deposit_subjects(deposit),
         ), bool(text)
 
     def _text_for(self, client, deposit, uuid, progress):
@@ -562,6 +573,44 @@ def collapse_whitespace(text):
     return _BLANK_LINES_RE.sub("\n\n", "\n".join(lines)).strip()
 
 
+def deposit_summary(deposit, paragraphs=SUMMARY_PARAGRAPHS):
+    """
+    The opening of a deposit's abstract, as its summary.
+
+    Args:
+        deposit (Mapping): the deposit record from the interface.
+        paragraphs (int): how many paragraphs of the abstract to keep.
+            Paragraphs are separated by blank lines; an abstract written
+            as one block is one paragraph, and the Document that carries
+            the summary cuts it to its own ceiling.
+
+    Returns:
+        str: the first paragraphs of the abstract, blank when the
+        deposit has none.
+    """
+    abstract = first_value(deposit, ABSTRACT_FIELD)
+    if not abstract:
+        return ""
+    blocks = [block.strip() for block in _PARAGRAPH_BREAK_RE.split(abstract.replace("\r\n", "\n"))]
+    return "\n\n".join([block for block in blocks if block][:paragraphs])
+
+
+def deposit_subjects(deposit):
+    """
+    The subject terms a deposit was catalogued under, each once, in the
+    order recorded. They are the deposit's tags; the keyword step adds
+    what its text yields after them.
+
+    Args:
+        deposit (Mapping): the deposit record from the interface.
+
+    Returns:
+        tuple[str, ...]: the subjects; empty when none were recorded.
+    """
+    subjects = [value for field in SUBJECT_FIELDS for value in metadata_values(deposit, field)]
+    return tuple(dict.fromkeys(subjects))
+
+
 def deposit_body(deposit, collection, files, text):
     """
     One deposit as the text that gets indexed.
@@ -594,13 +643,12 @@ def deposit_body(deposit, collection, files, text):
         lines += [note, ""]
 
     handles, dois, others = sorted_identifiers(deposit)
-    subjects = [value for field in SUBJECT_FIELDS for value in metadata_values(deposit, field)]
     facts = [
         ("Authors", "; ".join(metadata_values(deposit, AUTHOR_FIELD))),
         ("Published", first_value(deposit, ISSUED_FIELD)),
         ("Collection", collection.get("name") or ""),
         ("Publisher", first_value(deposit, PUBLISHER_FIELD)),
-        ("Subjects", ", ".join(dict.fromkeys(subjects))),
+        ("Subjects", ", ".join(deposit_subjects(deposit))),
         ("Rights", first_value(deposit, RIGHTS_FIELD)),
         ("Permanent address", " ".join(handles)),
         ("DOI", " ".join(dois)),

@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/kb-cache/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: Explains why this data repository commits its YouTube cache:
 YouTube refuses caption requests from cloud runners, so transcripts are
 fetched on a person's machine and committed for the scheduled build to
@@ -48,7 +48,7 @@ That is why `config.yaml` sets `cache_dir: kb-cache` instead of leaving the defa
 
 | Path | What it holds |
 |---|---|
-| `youtube/videos/<video id>.json` | One video's title, publication date, caption language, and timed caption lines. |
+| `youtube/videos/<video id>.json` | One video's title, publication date, description, tags, caption language, and timed caption lines. A file you write by hand needs only the caption lines. |
 | `youtube/listings/<playlist id>.json` | The videos a playlist held the last time it could be listed. |
 
 The two files here now are synthetic examples, so you can see the shape before you have any of your own. Delete them when you add real ones.

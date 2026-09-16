@@ -13,7 +13,7 @@ extractium/core/cache.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -595,9 +595,11 @@ def load_video(video_id):
 
     Returns:
         dict | None: a record holding `title`, `published_at`,
-        `language`, and `segments`, or None when nothing is stored or
-        the stored file cannot be read. Anything unreadable degrades to
-        a fresh fetch rather than failing the build.
+        `language`, `segments`, and, when the file was written with
+        them, `description` and `tags`, or None when nothing is stored
+        or the stored file cannot be read. Anything unreadable degrades
+        to a fresh fetch rather than failing the build. A file written
+        by hand needs only `segments`.
 
     Raises:
         ValueError: if video_id is not a YouTube video identifier.
@@ -612,9 +614,9 @@ def load_video(video_id):
     return stored
 
 
-def save_video(video_id, title, published_at, language, segments):
+def save_video(video_id, title, published_at, language, segments, description="", tags=()):
     """
-    Stores one video's title and caption transcript.
+    Stores one video's title, description, tags, and caption transcript.
 
     Args:
         video_id (str): the video's identifier.
@@ -624,6 +626,10 @@ def save_video(video_id, title, published_at, language, segments):
         language (str): the caption track's language code.
         segments (Sequence[Mapping]): the caption lines, each holding
             `text` and `start` in seconds from the beginning.
+        description (str): the video's own description, as written;
+            empty when the build could not read one.
+        tags (Sequence[str]): the tags the publisher gave the video;
+            empty when the build could not read them.
 
     Raises:
         ValueError: if video_id is not a YouTube video identifier.
@@ -634,6 +640,8 @@ def save_video(video_id, title, published_at, language, segments):
         "title": title,
         "published_at": published_at,
         "language": language,
+        "description": str(description or ""),
+        "tags": [str(tag) for tag in tags or ()],
         "segments": [
             {"text": segment["text"], "start": float(segment["start"])}
             for segment in segments

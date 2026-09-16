@@ -11,7 +11,7 @@ tests/test_core_keywords.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-15
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -219,6 +219,50 @@ def test_page_tags_drop_blank_categories_and_a_keyword_repeated_within_one_secti
     sections = [{"categories": (" ", "Real "), "keywords": ("twice", "twice", "once")}]
 
     assert keywords.page_tags(sections) == ("Real", "twice", "once")
+
+
+def test_page_tags_put_the_sources_own_first_and_the_shared_keywords_after():
+    """An author tags a page once; the text is read as it stands today, so both count."""
+    sections = [
+        {"categories": ("Guides",), "keywords": ("sleep hygiene", "bedtime")},
+        {"categories": ("Guides",), "keywords": ("sleep hygiene", "screens")},
+    ]
+
+    assert keywords.page_tags(sections, provided=("wearables", "Guides", "Bedtime")) == (
+        "Guides", "wearables", "Bedtime", "sleep hygiene", "screens",
+    )
+
+
+def test_page_tags_pass_over_a_keyword_inside_or_containing_an_authors_tag():
+    """"sleep" beside "sleep research" says nothing new; neither does "sleep research methods"."""
+    sections = [{"categories": (), "keywords": ("sleep", "sleep research methods", "wearables")}]
+
+    assert keywords.page_tags(sections, provided=("Sleep Research",)) == ("Sleep Research", "wearables")
+
+
+def test_page_tags_share_one_limit_between_the_sources_tags_and_the_computed_ones():
+    sections = [{"categories": ("A",), "keywords": ("k0", "k1", "k2", "k3")}]
+
+    assert keywords.page_tags(sections, limit=3, provided=("t0", "t1")) == ("A", "t0", "t1", "k0")
+    assert keywords.page_tags(sections, limit=2, provided=("t0", "t1", "t2")) == ("A", "t0", "t1", "t2")
+
+
+def test_the_pass_keeps_a_sources_tags_first_and_adds_what_the_text_yields():
+    tagged = section(1, "About sleep.", url="https://example.org/tagged")
+    tagged["tags"] = ("wearables",)
+    untagged = section(2, "About sleep too.", url="https://example.org/untagged")
+    untagged["tags"] = None
+    sections = [tagged, untagged]
+    children, vecs = windows_for(sections, [unit(1, 0), unit(1, 0)])
+    store = MemoryStore()
+
+    KeywordPass(store.load, store.save, candidates=constant_candidates("sleep")).run(
+        sections, children, vecs, PhraseEmbedder({"sleep": unit(1, 0)}), BUILT_AT, lambda line: None
+    )
+
+    assert tagged["tags"] == ("wearables", "sleep")
+    assert tagged["keywords"] == ("sleep",)
+    assert untagged["tags"] == ("sleep",)
 
 
 def test_tag_pages_groups_a_videos_moments_as_one_page():

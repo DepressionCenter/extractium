@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -119,11 +119,29 @@ MOMENT_SOURCE_TYPE = "youtube"
 
 # The fields an enrichment pass fills on a section: a summary, tags,
 # keywords, when the pass ran (UTC, ISO 8601), and which version of it.
-# Every section carries them, None until a pass has written them, so
+# Every section carries them, None until something has written them, so
 # an adapter writes a value when there is one and nothing when there
-# is not, and the container's layout is the same either way. The
-# keyword step (extractium.core.keywords) fills all but the summary.
+# is not, and the container's layout is the same either way. A source
+# that knows a page's own description and tags (a video's description,
+# a repository's topics, a portal article's tag list) sets the summary
+# and the tags itself; the keyword step (extractium.core.keywords)
+# fills the keywords, and adds to every page's tags the keywords its
+# sections share, after whatever the source gave.
 ENRICHMENT_FIELDS = ("summary", "tags", "keywords", "enriched_at", "enrich_ver")
+
+# Longest summary a source may hand over, in characters. A video's
+# description can run to pages of links and boilerplate; what an index
+# entry and a concept file need is the opening, cut at a word.
+MAX_SUMMARY_CHARS = 600
+
+# The most tags a source may hand over for one page, and the longest one
+# may be. Tags arrive from pages and API responses, which are untrusted,
+# so a page that declares hundreds of keywords contributes the first few.
+MAX_TAGS = 20
+MAX_TAG_CHARS = 80
+
+# Collapses any run of whitespace, including newlines, into one space.
+_WHITESPACE_RUN = re.compile(r"\s+")
 
 # A parent id is the first 16 hexadecimal characters of a SHA-1 digest.
 PARENT_ID_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -194,6 +212,65 @@ def _check_local_marker(url, local):
         raise ValueError(f"a {LOCAL_URL_PREFIX} URL must be marked local; got {url!r}.")
 
 
+def clean_summary(text, limit=MAX_SUMMARY_CHARS):
+    """
+    A source's description of a page as one paragraph of bounded length.
+
+    Args:
+        text (str | None): the description as the source reported it.
+        limit (int): the most characters to keep.
+
+    Returns:
+        str: whitespace collapsed, cut at a word boundary with an
+        ellipsis when anything was cut; empty when there was nothing.
+
+    Raises:
+        ValueError: if text is neither text nor None.
+    """
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        raise ValueError(f"summary must be text; got {type(text).__name__}.")
+    flat = _WHITESPACE_RUN.sub(" ", text).strip()
+    if len(flat) <= limit:
+        return flat
+    cut = flat.rfind(" ", 0, limit)
+    return flat[:cut if cut > 0 else limit].rstrip() + "..."
+
+
+def clean_tags(values, limit=MAX_TAGS, max_chars=MAX_TAG_CHARS):
+    """
+    A source's tags for a page, each once, in the order given.
+
+    Args:
+        values (Iterable[str] | None): the tags as the source reported
+            them.
+        limit (int): the most tags to keep.
+        max_chars (int): a tag longer than this is dropped rather than
+            cut, because half a tag names nothing.
+
+    Returns:
+        tuple[str, ...]: stripped, non-empty, compared without regard to
+        case with the first spelling kept.
+
+    Raises:
+        ValueError: if values is not a sequence of text.
+    """
+    if values is None:
+        return ()
+    if isinstance(values, str) or not all(isinstance(value, str) for value in values):
+        raise ValueError(f"tags must be a list of text values; got {values!r}.")
+    kept = {}
+    for value in values:
+        tag = _WHITESPACE_RUN.sub(" ", value).strip()
+        if not tag or len(tag) > max_chars:
+            continue
+        kept.setdefault(tag.casefold(), tag)
+        if len(kept) >= limit:
+            break
+    return tuple(kept.values())
+
+
 def _resolve_source_label(value, source_type):
     """
     The display name to store on a record, filling in a generic one when
@@ -255,6 +332,17 @@ class Document:
             output drops unless it opts in.
         weight (float): per-document multiplier applied after rank
             fusion; greater than zero, 1.0 by default.
+        summary (str): the page's own description, as its source states
+            it: a video's description, a repository's description, a
+            portal article's summary, a page's meta description. Empty
+            when the source has none, in which case an output that
+            needs one uses an excerpt of the text. Cleaned through
+            clean_summary.
+        tags (tuple[str, ...]): the page's own tags, as its source
+            states them: a video's tags, a repository's topics, an
+            article's tag list, a page's meta keywords. They come first
+            in the page's tags; the keyword step adds what the text
+            yields after them. Cleaned through clean_tags.
 
     Raises:
         ValueError: if a field is blank, outside its vocabulary, longer
@@ -271,6 +359,8 @@ class Document:
     categories: tuple = ()
     local: bool = False
     weight: float = 1.0
+    summary: str = ""
+    tags: tuple = ()
 
     def __post_init__(self):
         _require_text(self.url, "url")
@@ -283,6 +373,8 @@ class Document:
             raise ValueError(f"weight must be a number greater than zero; got {self.weight!r}.")
         _check_local_marker(self.url, self.local)
         object.__setattr__(self, "categories", tuple(self.categories))
+        object.__setattr__(self, "summary", clean_summary(self.summary))
+        object.__setattr__(self, "tags", clean_tags(self.tags))
 
 
 ### Site Handler Output ###
@@ -298,14 +390,23 @@ class Extraction:
         node (bs4.Tag | str): the content node to chunk, or plain text.
         categories (tuple[str, ...]): hierarchy from the page, outermost
             first; empty when the page shows none.
+        summary (str): the page's own description where the page states
+            one, such as its meta description; empty otherwise.
+        tags (tuple[str, ...]): the page's own tags where the page shows
+            them; empty otherwise. Both are cleaned as Document cleans
+            them.
     """
 
     title: str
     node: object
     categories: tuple = ()
+    summary: str = ""
+    tags: tuple = ()
 
     def __post_init__(self):
         object.__setattr__(self, "categories", tuple(self.categories))
+        object.__setattr__(self, "summary", clean_summary(self.summary))
+        object.__setattr__(self, "tags", clean_tags(self.tags))
 
 
 ### Build Output ###
@@ -330,8 +431,11 @@ class Parent:
         categories (tuple[str, ...]): hierarchy, outermost first.
         local (bool): True when the parent came from a local source.
         weight (float): per-document multiplier; greater than zero.
-        summary (str | None): a short summary an enrichment pass wrote.
-        tags (tuple[str, ...] | None): tags an enrichment pass wrote.
+        summary (str | None): the page's own description as its source
+            gave it, or one an enrichment pass wrote; None when neither.
+        tags (tuple[str, ...] | None): the page's tags: the ones its
+            source gave, then the ones the keyword step found; None when
+            neither.
         keywords (tuple[str, ...] | None): the phrases an enrichment
             pass found this section to be about, most telling first.
         enriched_at (str | None): when the pass ran, UTC, ISO 8601.

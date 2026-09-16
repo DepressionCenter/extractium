@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/plugin-architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: The three plugin kinds, the registry's resolution order, the
 three protocols with every member and every optional hook, how a source,
 a site handler, and an adapter each fit into a build, and a minimal
@@ -108,7 +108,7 @@ A `Document` carries `url`, `title`, `content` (a parsed HTML node or plain text
 | `landing_allowed(url, final_url)` | No | May say that a request for a page the handler reads is expected to land at another address, so the crawl does not treat that landing as a redirect off the site. Consulted only when a request was redirected somewhere the scope would refuse. The Google Docs handler accepts the delivery host its exports are served from. |
 | `attachment_listing_urls(soup, url)` | No | May name the addresses where the page's host lists the files attached to the page, when that list is not in the page itself. While a `web` source reads documents, each is queued as a page of the crawl and its links are read like any page's; the listing itself is not indexed unless the handler extracts content from it. The TeamDynamix handler reads the address from the script that would load an article's attachments. |
 
-An `Extraction` carries `title`, `node` (the content node to chunk, or plain text), and `categories` (the page's hierarchy, outermost first). A handler reads a page. It never discovers links. Link discovery stays in the web source, so the crawl is one graph however many handlers are enabled.
+An `Extraction` carries `title`, `node` (the content node to chunk, or plain text), `categories` (the page's hierarchy, outermost first), and, where the page states them, `summary` (its own description) and `tags` (its own tags). A handler reads a page. It never discovers links. Link discovery stays in the web source, so the crawl is one graph however many handlers are enabled.
 
 ### Adapter
 

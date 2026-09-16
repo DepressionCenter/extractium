@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: The design of Extractium™: what the tool is for, how its parts
 fit together, what it reads, what it writes, and what it will never do.
 Written for developers and plug-in authors.
@@ -122,7 +122,7 @@ Site handler: takes part in the web crawl for URLs it recognizes. Not a crawler,
 | `matches(url)` | True when this handler reads the page. Handlers are consulted in registration order; `generic` is always last. |
 | `fetch_url(url)` | The URL to actually request (for example, a GitHub blob page rewritten to its raw file). |
 | `expects_html(url)` | Whether the response for that URL is HTML to parse or plain text to wrap. Decided per URL because one host serves both kinds of page. |
-| `extract(soup, url)` | Returns the title, the content node, and the categories list, or nothing when the page holds no indexable content and is only a link-discovery hop. |
+| `extract(soup, url)` | Returns the title, the content node, the categories list, and the page's own summary and tags where it states them, or nothing when the page holds no indexable content and is only a link-discovery hop. |
 | `source_type`, `content_type(url)` | Metadata values recorded on every parent. See section 3.4. |
 | `default_crawl_exclude_patterns`, `default_index_exclude_patterns` | Patterns the handler adds to the crawl when it is enabled. |
 | `document_url_patterns` | Optional. Addresses on the handler's host that serve a document file without naming its extension. While the source reads documents they are fetched as files and read, and the same patterns are set aside from the handler's exclude lists. |
@@ -159,7 +159,7 @@ The crawl is one graph: a knowledge-base article links to a repository README, a
 
 ### 3.1 Documents
 
-A source yields `Document` records: the source URL, a title, the content (a parsed HTML node or plain text), `source_type`, `source_label`, `content_type`, `categories`, and `local`. The core engine never sees a source's fetch details.
+A source yields `Document` records: the source URL, a title, the content (a parsed HTML node or plain text), `source_type`, `source_label`, `content_type`, `categories`, `local`, and, where the source knows them, the page's own `summary` and `tags`. The core engine never sees a source's fetch details.
 
 One page is indexed once, however many sources reach it. Documents are compared by their normalized address across every source in a build; the first source to produce a page keeps it, later sources are told they were too late, and the build reports how many pages that happened to. A section of a site that is already crawled belongs to that crawl as a second `seed_urls` entry rather than to a source of its own.
 
@@ -186,7 +186,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
 | `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
-| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section. The keyword step (section 10) fills all but `summary`, which stays null until a summary pass exists. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list; `llms.txt` ends each page's entry with the page's keywords. |
+| Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section. A source sets `summary` and `tags` from what the page says about itself (a video's description and tags, a repository's description and topics, an article's summary and tag list, a page's meta description and keywords); the keyword step (section 10) fills `keywords` on every section, adds to every page's `tags` the keywords its sections share after whatever the source gave, and leaves `summary` null where the source gave none. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list; `llms.txt` ends each page's entry with the page's keywords. |
 
 ### 3.5 Embeddings
 

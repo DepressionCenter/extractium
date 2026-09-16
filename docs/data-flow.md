@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/data-flow.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: What happens to content between the site it is read from and the
 files a build writes: the stages, the shape of the data at each one, the
 units and time zones every field uses, and the two places where content
@@ -184,7 +184,7 @@ What the parsers found in a code file is stored beside the file body, under the 
 
 Each file read from GitHub is stored under its blob name, which is Git's own name for those exact bytes. The same file is therefore downloaded once however many branches or paths point at it, and however it arrived: a repository is normally read as one archive in memory, and the files taken out of it are stored the same way as files requested one at a time. A rebuild of a repository nobody has changed downloads nothing. Nothing in that folder holds an access token: only the file body is written, never a request header.
 
-Video captions are the one part of the cache that is not a convenience. They are stored under `<cache_dir>/youtube/`, one file per video holding its title and timed caption lines, and one file per playlist holding the videos it held when it was last listed. YouTube refuses caption requests from cloud-provider addresses, so a scheduled build cannot fetch a transcript and can only reuse what you fetched on your own computer. That folder is therefore committed to the data repository, and nothing in it is revalidated: a stored transcript is used because it exists, since checking it is the thing a runner cannot do. Delete a video's file to pick up corrected captions.
+Video captions are the one part of the cache that is not a convenience. They are stored under `<cache_dir>/youtube/`, one file per video holding its title, description, tags, and timed caption lines, and one file per playlist holding the videos it held when it was last listed. YouTube refuses caption requests from cloud-provider addresses, so a scheduled build cannot fetch a transcript and can only reuse what you fetched on your own computer. That folder is therefore committed to the data repository, and nothing in it is revalidated: a stored transcript is used because it exists, since checking it is the thing a runner cannot do. Delete a video's file to pick up corrected captions.
 
 Note that the cache holds page bodies as fetched. If you crawl a site that requires a login, the cache holds whatever that login gave you. Extractium sends no credentials of its own, apart from a `GITHUB_TOKEN` and a `YOUTUBE_API_KEY` you set in the environment, each sent to the one service it belongs to and to nowhere else. Neither reaches a cache file.
 

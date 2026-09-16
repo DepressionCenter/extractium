@@ -12,7 +12,7 @@ extractium/sources/web.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -713,6 +713,8 @@ class WebSource:
                     source_type=handler.source_type,
                     content_type=handler.content_type(url),
                     categories=extraction.categories,
+                    summary=extraction.summary,
+                    tags=extraction.tags,
                 )
         finally:
             if pool is not None:

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -427,7 +427,7 @@ Playlists and videos work the same way. A playlist may be its id or any address 
 
 #### Videos linked from other sites
 
-A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The build reports how many linked videos were offered, read, and left out.
+A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The publisher comes from the Data API when a key is set, and from YouTube's public oEmbed endpoint for any video the API did not describe, or for every video when there is no key or the key is refused. An unlisted video is described by both. The build reports how many linked videos were offered, read, and left out.
 
 #### What gets read from a channel
 
@@ -474,7 +474,7 @@ Extractium works around this by storing everything it reads under `cache_dir`:
 
 | Path | What it holds |
 |---|---|
-| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, caption language, and timed caption lines. |
+| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, description, tags, caption language, and timed caption lines. A file written by hand needs only the caption lines. |
 | `<cache_dir>/youtube/listings/<playlist id>.json` | The videos a playlist held when it was last listed. |
 
 Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your knowledge base is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
@@ -566,7 +566,7 @@ Naming a collection: write each collection whichever way you have it in hand. Al
 
 Collections are listed, never discovered. A repository holds the deposits of everybody at a university, so a build reads the collections it was given and nothing it merely found a link to. This is the same rule as `github_owners`, and it matters more here: a search scope the repository does not recognize is answered with every deposit it holds rather than refused. Each collection is therefore confirmed to exist before anything is searched, which is also how its name is read. A collection the repository does not have stops the build and is named, because a quiet skip would look like an empty collection.
 
-What gets read: one document per deposit, holding its abstract first, then its authors, date, subjects, rights, publisher, and every address it carries, then the text of its files. A deposit's address list is sorted into three kinds and all three are kept: its handle (the permanent citation), its DOI (how the work is cited in the literature), and any other address, which is often the project's own documentation.
+What gets read: one document per deposit, holding its abstract first, then its authors, date, subjects, rights, publisher, and every address it carries, then the text of its files. The opening of the abstract is also the deposit's summary and the subjects are its tags, as the "Summaries, keywords, and tags" section describes. A deposit's address list is sorted into three kinds and all three are kept: its handle (the permanent citation), its DOI (how the work is cited in the literature), and any other address, which is often the project's own documentation.
 
 Where the file text comes from: the repository extracted it when the file was deposited, and this source reads that. No PDF reader, no Word reader, no archive handling, and no new dependency. A deposit whose files hold no readable text, such as a poster deposited as an image, is still indexed from its description, and the record says plainly that its file contents are not in the index.
 
@@ -668,22 +668,34 @@ rebuild: incremental
 ```
 
 
-## Keywords and tags
+## Summaries, keywords, and tags
 
-Every section is named with up to five keywords, and every page with tags, so a reader can see what a section is about without reading it and can filter pages by subject. No language model is involved. The build works from the text and from the vectors it computes anyway:
+Every page carries a summary and tags, and every section up to five keywords, so a reader can see what a page is about without reading it and can filter pages by subject. No language model is involved.
+
+Where a source already knows what a page says about itself, the build uses that and computes nothing in its place:
+
+| Source | Summary | Tags |
+|---|---|---|
+| YouTube | The video's description, as its publisher wrote it. | The tags its publisher gave it. Both come from the Data API, so a build with no key indexes the transcript without them; once read, both are stored beside the transcript and reused. |
+| GitHub | The repository's description, on its README and its repository summary. | The repository's topics, on every record read from it. |
+| TeamDynamix | The article's Summary field, which the portal writes into the page's Open Graph description. | The tags shown under the article's title. |
+| DSpace | The first two paragraphs of the deposit's abstract. | The subject terms it was catalogued under. |
+| Any web page | Its Open Graph description, else its meta description. | Its `article:tag` elements, else its comma-separated meta keywords. |
+
+A summary is cut at 600 characters, at a word. Tags are kept in the order given, each once, at most twenty, and one longer than 80 characters is dropped. A page whose source gives no summary is described by an excerpt of its text. Every page is also tagged from its text by the keyword step below, after whatever its source gave, because an author tags a page once and rarely again while the text is read as it stands today. The step works from the text and from the vectors the build computes anyway:
 
 1. A statistical extractor, YAKE, proposes up to fifteen candidate phrases of one to three words from the section's own text. It scores a phrase by how often its words occur, where they first appear, whether they are capitalized, and how varied the words around them are.
 2. The candidates are embedded with the same model the build uses for search, and ranked by how close each one sits to the section's own vector. The five closest that do not repeat one another are the section's keywords, closest first: a phrase whose words all lie inside a phrase already chosen, or that contains one, is passed over. That is why a phrase that names the subject outranks one that merely occurs often.
-3. A page's tags are the categories its source recorded, outermost first, then the keywords at least half of its sections share, the most widely shared first, up to eight. A one-section page is tagged with its categories and its keywords.
+3. A page's tags are the categories its source recorded, outermost first, then the tags its source gave it, then the keywords at least half of its sections share, the most widely shared first, until the page holds eight tags beyond its categories. A keyword whose words all lie inside one of the source's tags, or that contains one, is passed over, so "sleep" is not added beside "sleep research"; a category rules out only its exact repeat, so "sleep hygiene" is still added under a "Sleep" category. A one-section page is tagged with its categories, its source's tags, and its keywords. A page carried forward unchanged from the last build keeps the tags it had.
 
 Where they appear:
 
 | Output | What it carries |
 |---|---|
-| Container | `keywords` and `tags` on every section, with `enriched_at` (UTC) and `enrich_ver`. |
-| SQLite | The same four columns on `parents`, the lists as JSON arrays. |
-| Open Knowledge Format | The tags in each concept file's tag list, and a `keywords` list in its front matter. |
-| `llms.txt` | Each page's entry ends with `Keywords: ...`: the page's shared keywords or, when its sections share none, the first section's. |
+| Container | `summary`, `keywords`, and `tags` on every section, with `enriched_at` (UTC) and `enrich_ver`. |
+| SQLite | The same five columns on `parents`, the lists as JSON arrays. |
+| Open Knowledge Format | The summary as each concept file's description, the tags in its tag list, and a `keywords` list in its front matter. |
+| `llms.txt` | Each page's entry describes the page with its summary, or with an excerpt of its first section when it has none, and ends with `Keywords: ...`: the page's tags beyond its categories or, when it has none, the first section's keywords. |
 
 What was found is stored under `<cache_dir>/enrichment/keywords.json`, keyed by section, with a digest of the text it came from. A rebuild names afresh only the sections whose text changed, and embeds nothing for the rest.
 
