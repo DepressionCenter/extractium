@@ -402,7 +402,7 @@ Indexes what is said in a video, not the video itself. Each stretch of a transcr
 | `include_playlists` | true or false | `true` | Whether the channel's own playlists are read as well as its uploads. |
 | `only_channel_videos` | true or false | `true` | Whether a video found through a playlist is indexed only when the channel published it. |
 | `delay_seconds` | number | the build's own | Seconds between requests to YouTube. Never less than 1; see below. |
-| `audio_fallback` | true or false | `true` | Whether a video whose caption request YouTube refuses is transcribed from its audio instead. Needs the `whisper` extra; without it the setting does nothing. See "When YouTube refuses the machine" below. |
+| `audio_fallback` | true or false | `true` | Whether a video whose caption request YouTube refuses is transcribed from its audio instead. The build scripts install the audio packages; a developer install names the `whisper` extra, and without it the setting does nothing. See "When YouTube refuses the machine" below. |
 
 At least one of `channel_id`, `playlist_ids`, or `video_ids` is required.
 
@@ -432,7 +432,19 @@ Playlists and videos work the same way. A playlist may be its id or any address 
 
 #### Videos linked from other sites
 
-A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The publisher comes from the Data API when a key is set, and from YouTube's public oEmbed endpoint for any video the API did not describe, or for every video when there is no key or the key is refused. An unlisted video is described by both. The build reports how many linked videos were offered, read, and left out.
+A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The publisher comes from the Data API when a key is set, and from YouTube's public oEmbed endpoint for any video the API did not describe, or for every video when there is no key or the key is refused. An unlisted video is described by both.
+
+The summary says what became of the linked videos, and then lists their publishers, one channel per line, with how many videos it published, how many were read, and whether it is a channel the source names:
+
+```text
+69 video(s) linked from crawled pages: 47 read, 19 left out because another channel published them, 3 left out because YouTube would not say who published them
+  @ExampleCenter           47 linked  47 read  a channel this source names
+  @ExampleHospital         11 linked   0 read  another channel; left out
+  @ExampleUniversity        8 linked   0 read  another channel; left out
+  not reported by YouTube   3 linked   0 read  publisher unknown; left out
+```
+
+A video YouTube will not describe is private, removed, or has embedding switched off. A video a named channel published that was still not read is counted too, with the reason: YouTube refused the machine, or `max_pages` was reached. The publisher list is how you decide whether to name another channel on the source.
 
 #### What gets read from a channel
 
@@ -524,18 +536,20 @@ If YouTube does refuse the machine partway through, the build keeps every video 
 
 #### When YouTube refuses the machine
 
-YouTube refuses caption requests from cloud-provider addresses, from shared addresses such as a mobile carrier's, and from any address that has asked too often. It does not gate the audio the same way. With the `whisper` extra installed, a refused video is transcribed from its audio instead: the audio track is downloaded with yt-dlp, transcribed on the CPU with faster-whisper, and stored beside the other transcripts, with the video's title, description, and tags as the downloader reports them. Once one request has been refused in a build, every later video goes straight to the audio, so a refused build costs one refused request and not one per video.
+YouTube refuses caption requests from cloud-provider addresses, from shared addresses such as a mobile carrier's, and from any address that has asked too often. It does not gate the audio the same way. The build scripts and the scheduled workflow install the audio packages from the lock file, so a refused video is transcribed from its audio instead: the audio track is downloaded with yt-dlp, transcribed on the CPU with faster-whisper, and stored beside the other transcripts, with the video's title, description, and tags as the downloader reports them. Once one request has been refused in a build, every later video goes straight to the audio, so a refused build costs one refused request and not one per video.
+
+A developer install has to name the extra:
 
 ```bash
-pip install "extractium[whisper]"
+pip install -e ".[whisper]"
 ```
 
-A few things to know before turning it on:
+A few things to know:
 
 - One model, everywhere. Every build uses Whisper's `base.en`, its smallest English model, on the CPU with 8-bit weights, so two machines transcribing the same video store the same words. The model is about 75 MB and downloads once, into the same cache the embedding model uses. It reads a talk well enough to search; it does not know speaker names, and neither do YouTube's own automatic captions.
 - Speed. On a plain laptop CPU it transcribes about ten to fifteen minutes of speech per minute, so a one-hour talk takes four to six minutes. A channel of two hundred talks is an afternoon, once, because a stored transcript is never fetched again.
 - Disk. The audio of a video is downloaded under `<cache_dir>/youtube/audio/` while it is transcribed and removed as soon as the transcript is stored. Nothing over 500 MB is downloaded.
-- Weight. The extra pulls in about 200 MB of packages, which is why it is not in the lock file and not part of the scheduled build. Install it on the machine that fetches transcripts, commit the cache, and let the scheduled build read the store.
+- Weight. The extra pulls in about 200 MB of packages. It is in the lock file anyway, because YouTube refuses captions to most machines that build on a schedule, so the audio path is the usual one rather than the exception. Commit the cache after a build, and later builds read the store instead of transcribing again.
 - Set `audio_fallback: false` on a source to keep a refused build from reaching for the audio even where the packages are installed.
 
 The audio path speaks to YouTube the way the caption library does, through the interface YouTube's own player uses, and it runs nothing it finds on the page: no JavaScript runtime is configured for the downloader, and no post-processing is asked of it.

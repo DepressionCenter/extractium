@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/crawl-a-site.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: How to set up your first real build: choosing a source type
 for each kind of content, the trial run and how to read llms.txt,
 tuning the include and exclude patterns, the two optional environment
@@ -119,7 +119,8 @@ A build explains itself as it runs. When several sources run at once, which is t
 | `(leaf; its links are not followed)` | The page above it is on another host and was reached through `leaf_patterns`. It is indexed, and nothing it links to is fetched. | Nothing. |
 | `transport: <host> served over the browser transport` | The site answered a bot-protection challenge, and the build read it over a browser-shaped connection while still naming itself. | Nothing. The summary lists the host again so the choice is on record. See [reading a site behind bot protection](../bot-protection-transport.md). |
 | `already indexed by an earlier source, skipped: <url>` | Two sources reached the same page, and the first one kept it. | Nothing, unless it happens to many pages. Then fold the overlapping source into the first one as a second `seed_urls` entry. |
-| `N linked video(s) were left out: ...` | Pages linked to videos, and no `youtube` source in the build could confirm that a channel it names published them. | Nothing, unless the videos are yours. Then name the channel on the `youtube` source. A source naming no channel reads no linked video. |
+| `N linked video(s) were left out: another channel published them` | Pages linked to videos that a channel no `youtube` source names published. The summary lists those channels with a count each. | Nothing, unless the videos are yours. Then name the channel on the `youtube` source. A source naming no channel reads no linked video. |
+| `N linked video(s) were left out: YouTube would not say who published them` | The videos are private, removed, or have embedding switched off, so YouTube names no publisher for them. | Nothing. A video nobody can watch has nothing to index. |
 | `the <handler> handler reads this address through the <source> source` | A `web` seed on GitHub or YouTube was handed to the source that reads that host properly. | Nothing. Give the `github_api` or `youtube` source its own entry if you want its options. |
 | `coverage : Not read; add to github_owners to include: <account> (N links)` | Pages linked to GitHub accounts this build was not told to read, and the links were not followed. | Add only the accounts you want to `github_owners`. This is the guardrail working, not an error. |
 | A repository's tier, such as `tier 2 (public API)` | Which of the three ways of reading GitHub served that repository. Tier 3 is a documentation-only crawl, used when the API could not be. | Set `GITHUB_TOKEN` to reach tier 1. A tier 3 repository has its coverage noted in its repository map as well. |

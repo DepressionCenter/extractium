@@ -282,6 +282,18 @@ class YouTubeSource:
         self.found_offered = 0
         self.found_read = 0
         self.found_left_out = 0
+        # The two reasons a linked video is left out, counted apart so
+        # the report can say which: another channel published it, or
+        # YouTube would not say who did. found_left_out is their sum.
+        self.found_other_channel = 0
+        self.found_unknown_publisher = 0
+        # Linked videos a named channel published that were not read
+        # anyway: the build was refused or reached max_pages first.
+        self.found_unread = 0
+        # One record per publisher of a linked video, in the order first
+        # met: its label, how many videos it published, how many were
+        # read, and "named", "other", or "unknown".
+        self.found_by_publisher = ()
         self._read_ids = set()
         # Whether YouTube refused this machine during this build, and
         # how many videos were read before it did. A refusal before the
@@ -413,19 +425,53 @@ class YouTubeSource:
         progress(f"YouTube:      {len(video_ids)} video(s) linked from crawled pages")
         client = self._client(session, progress)
         details = self._details(client, video_ids, progress)
-        wanted = [
-            video_id for video_id in video_ids
-            if self._published_by_an_allowed_channel(video_id, details, client, progress, strict=True)
-        ]
-        self.found_left_out = len(video_ids) - len(wanted)
-        if self.found_left_out:
+        # Every linked video is put down to its publisher, so the report
+        # can list the channels the crawled pages link to and say which
+        # of them this source names.
+        publishers = {}
+        labels = {}
+        wanted = []
+        for video_id in video_ids:
+            record = details.get(video_id) or {}
+            channel_id = self._channel_of(record, client, progress)
+            label = self._publisher_label(record, channel_id)
+            labels[video_id] = label
+            if not channel_id:
+                status = "unknown"
+                self.found_unknown_publisher += 1
+            elif channel_id in self.allowed_channels:
+                status = "named"
+                wanted.append(video_id)
+            else:
+                status = "other"
+                self.found_other_channel += 1
+            publishers.setdefault(label, [0, 0, status])[0] += 1
+        self.found_left_out = self.found_other_channel + self.found_unknown_publisher
+        if self.found_other_channel:
             progress(
-                f"  {self.found_left_out} linked video(s) were left out: not published by "
-                "a channel this source names, or the publisher could not be read"
+                f"  {self.found_other_channel} linked video(s) were left out: another "
+                "channel published them"
+            )
+        if self.found_unknown_publisher:
+            progress(
+                f"  {self.found_unknown_publisher} linked video(s) were left out: YouTube "
+                "would not say who published them"
             )
         before = len(self.coverage)
+        read_before = set(self._read_ids)
+        without_captions_before = len(self.without_captions)
         yield from self._read_videos(client, wanted, details, progress)
         self.found_read = len(self.coverage) - before
+        self.found_unread = (
+            len(wanted) - self.found_read
+            - (len(self.without_captions) - without_captions_before)
+        )
+        for video_id in self._read_ids - read_before:
+            publishers[labels[video_id]][1] += 1
+        self.found_by_publisher = tuple(
+            (label, offered, read, status)
+            for label, (offered, read, status) in publishers.items()
+        )
 
     def _client(self, session, progress):
         """The Data API client for one run, keyed from the environment when a key is set."""
@@ -743,12 +789,7 @@ class YouTubeSource:
         """
         if not strict and (not self.only_channel_videos or not self.allowed_channels):
             return True
-        record = titles.get(video_id) or {}
-        channel_id = (record.get("channel_id") or "").strip()
-        if not channel_id:
-            author_url = (record.get("author_url") or "").strip()
-            if author_url:
-                channel_id = self._channel_for_author(author_url, client, progress)
+        channel_id = self._channel_of(titles.get(video_id) or {}, client, progress)
         if not channel_id:
             return not strict
         if channel_id in self.allowed_channels:
@@ -756,6 +797,57 @@ class YouTubeSource:
         if not strict:
             self.skipped_other_channels += 1
         return False
+
+    def _channel_of(self, record, client, progress):
+        """
+        The id of the channel that published one video, from what is
+        known about it.
+
+        Args:
+            record (Mapping): what _titles or _details learned about the
+                video: a `channel_id` when the Data API named it, or an
+                `author_url` when the public endpoint did.
+            client (YouTubeClient): the Data API client.
+            progress (Callable[[str], None]): receives one line per event.
+
+        Returns:
+            str: the channel id, or "" when neither path reported one
+            or the address could not be resolved.
+        """
+        channel_id = (record.get("channel_id") or "").strip()
+        if channel_id:
+            return channel_id
+        author_url = (record.get("author_url") or "").strip()
+        if author_url:
+            return self._channel_for_author(author_url, client, progress)
+        return ""
+
+    @staticmethod
+    def _publisher_label(record, channel_id):
+        """
+        How a linked video's publisher is named in the report.
+
+        The channel's address as YouTube reports it, with the host
+        removed, so a handle reads as `@ExampleChannel` and an id
+        address as `channel/UC...`; the bare id when only the Data API
+        named it; and a fixed phrase when nothing did.
+
+        Args:
+            record (Mapping): what is known about the video.
+            channel_id (str): what _channel_of resolved, or "".
+
+        Returns:
+            str: the label.
+        """
+        author_url = (record.get("author_url") or "").strip()
+        if author_url:
+            for prefix in ("https://www.youtube.com/", "https://youtube.com/", "https://m.youtube.com/"):
+                if author_url.startswith(prefix):
+                    return author_url[len(prefix):].rstrip("/") or author_url
+            return author_url
+        if channel_id:
+            return channel_id
+        return "not reported by YouTube"
 
     def _channel_for_author(self, author_url, client, progress):
         """
@@ -1131,9 +1223,9 @@ class YouTubeSource:
         if self.found_offered:
             lines.append(
                 f"{self.found_offered} video(s) linked from crawled pages: "
-                f"{self.found_read} read, {self.found_left_out} left out because no "
-                "channel this source names is known to have published them"
+                + ", ".join(self._found_outcomes())
             )
+            lines.extend(self._found_publisher_lines())
         if self.blocked:
             lines.append(
                 f"INCOMPLETE: YouTube refused this machine after {self.blocked_after} "
@@ -1149,4 +1241,61 @@ class YouTubeSource:
                 "an API key, or respect_robots_txt to false, for the whole listing"
             )
         return lines
+
+    def _found_outcomes(self):
+        """
+        What became of the linked videos, one phrase per outcome that
+        happened, so a video is never left in no category.
+
+        Returns:
+            list[str]: the phrases, "N read" first.
+        """
+        def plural(count):
+            return "it" if count == 1 else "them"
+
+        outcomes = [f"{self.found_read} read"]
+        if self.found_other_channel:
+            outcomes.append(
+                f"{self.found_other_channel} left out because another channel published "
+                f"{plural(self.found_other_channel)}"
+            )
+        if self.found_unknown_publisher:
+            outcomes.append(
+                f"{self.found_unknown_publisher} left out because YouTube would not say who "
+                f"published {plural(self.found_unknown_publisher)}"
+            )
+        unnamed = self.found_left_out - self.found_other_channel - self.found_unknown_publisher
+        if unnamed:
+            outcomes.append(f"{unnamed} left out because this youtube source names no channel")
+        without_captions = (
+            self.found_offered - self.found_read - self.found_left_out - self.found_unread
+        )
+        if without_captions > 0:
+            outcomes.append(f"{without_captions} had no captions to read")
+        if self.found_unread:
+            reason = "YouTube refused this machine" if self.blocked else "max_pages was reached"
+            outcomes.append(f"{self.found_unread} not read because {reason}")
+        return outcomes
+
+    def _found_publisher_lines(self):
+        """
+        One line per channel the crawled pages linked a video from,
+        saying how many it published, how many were read, and whether
+        it is a channel this source names.
+
+        Returns:
+            list[str]: the lines, indented under the linked-video count.
+        """
+        if not self.found_by_publisher:
+            return []
+        notes = {
+            "named": "a channel this source names",
+            "other": "another channel; left out",
+            "unknown": "publisher unknown; left out",
+        }
+        width = max(len(label) for label, _, _, _ in self.found_by_publisher)
+        return [
+            f"  {label:<{width}}  {offered} linked  {read} read  {notes[status]}"
+            for label, offered, read, status in self.found_by_publisher
+        ]
 

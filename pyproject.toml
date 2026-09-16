@@ -107,12 +107,14 @@ code = [
 # operator already committed never calls this package. MIT-licensed; its
 # only dependency beyond requests is defusedxml, a hardened XML parser.
 youtube = ["youtube-transcript-api>=1.2.4,<2.0.0"]
-# Transcribing a video's audio when YouTube refuses its captions. Optional
-# and not in the lock file: the two packages pull in CTranslate2, PyAV,
-# and an ONNX runtime, about 200 MB, and only a machine YouTube refuses
-# needs them. yt-dlp (Unlicense) downloads the audio; faster-whisper (MIT)
-# runs Whisper's smallest English model on the CPU. Both confirmed to
-# install and run on Python 3.14 on Windows on 2026-09-16.
+# Transcribing a video's audio when YouTube refuses its captions. An extra
+# so that a developer install can leave it out, but pinned in the lock
+# file, so every scripted build has it: YouTube refuses captions to most
+# machines that build on a schedule, so the audio path is the usual one,
+# not the exception. The two packages pull in CTranslate2, PyAV, and an
+# ONNX runtime, about 200 MB. yt-dlp (Unlicense) downloads the audio;
+# faster-whisper (MIT) runs Whisper's smallest English model on the CPU.
+# Both confirmed to install and run on Python 3.14 on Windows on 2026-09-16.
 whisper = ["yt-dlp>=2026.1.0", "faster-whisper>=1.2.0,<2.0.0"]
 # Reading PDF files. Optional because the other document readers need
 # nothing beyond the standard library, and a build that reads no PDF
