@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-16"
 
 import re
 import urllib.parse
@@ -571,7 +571,7 @@ class Compendium:
     feed every output format.
 
     Attributes:
-        name (str): display name of the knowledge base.
+        name (str): display name of the compendium.
         built_at (str): build time, UTC, ISO 8601 with a Z suffix.
         parents (tuple[Parent, ...]): sections, in build order.
         children (Children): search windows; one entry per vector row.

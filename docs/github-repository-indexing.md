@@ -69,7 +69,7 @@ A rejected token has its own rule: if the supplied credentials are refused, the 
 Some failures are yours to fix, and quietly demoting them would turn a typo into a strange, empty result. These stop the source instead:
 
 - A configuration file that names neither an owner nor a repository, or names more than one selector.
-- An owner or repository that GitHub reports does not exist. Crawling `github.com/DperessionCenter` produces a 404 page, not a knowledge base.
+- An owner or repository that GitHub reports does not exist. Crawling `github.com/DperessionCenter` produces a 404 page, not a compendium.
 - An output path or cache path the build cannot write.
 
 The distinction is simple. The ladder handles "we could not reach GitHub", never "you asked for the wrong thing".
@@ -278,7 +278,7 @@ The other ceilings are fixed, and each exists because some repository has been s
 | Definition depth | 3 levels | A definition nested deeper is a helper inside a helper and is not recorded. |
 | Signature, documentation, constant value | 400, 800, and 80 characters | Cut, with an ellipsis. |
 | Archive held in memory | 80,000,000 bytes, or a repository GitHub reports over 60,000 KiB | The repository is read one file at a time instead. |
-| Listing pages | 100 pages of 100 | An account with more repositories than that is outside what one knowledge base holds. |
+| Listing pages | 100 pages of 100 | An account with more repositories than that is outside what one compendium holds. |
 
 A skipped file always produces a progress event naming the repository, the path, and the reason. A selected file is never dropped in silence. An index quietly missing its largest documentation file is worse than one that says it skipped it.
 

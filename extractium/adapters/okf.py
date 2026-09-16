@@ -14,7 +14,7 @@ extractium/adapters/okf.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-16"
 
 import hashlib
 import pathlib
@@ -154,9 +154,9 @@ LICENSE_LINE = (
 # What the folder is, for a reader who opened it with no context.
 INDEX_ORIENTATION = (
     "This folder is an Open Knowledge Format bundle. Every Markdown file beside "
-    "this one is a single concept: one page of the knowledge base, with its "
+    "this one is a single concept: one page of the compendium, with its "
     "address and its description in the block at the top of the file.",
-    "Each section below names one of the sources this knowledge base was built "
+    "Each section below names one of the sources this compendium was built "
     "from. The entries under it link to the concepts that came from that source.",
 )
 
@@ -530,7 +530,7 @@ def render_index(compendium, pages, paths):
         "",
         f"# {compendium.name}",
         "",
-        f"A knowledge base of {count_of(len(pages), 'concept')}, "
+        f"A compendium of {count_of(len(pages), 'concept')}, "
         f"compiled on {compendium.built_at}.",
         "",
     ]

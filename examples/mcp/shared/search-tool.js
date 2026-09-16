@@ -10,7 +10,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-12
- * Last Modified: 2026-09-12
+ * Last Modified: 2026-09-16
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -65,7 +65,7 @@ export const INSTRUCTIONS = 'Searches one Extractium compendium: an organization
 // the model, so their descriptions are written for one to read.
 export const TOOL_DEFINITION = {
     name: TOOL_NAME,
-    title: 'Search the knowledge base',
+    title: 'Search the compendium',
     description: 'Searches the indexed documentation and returns whole sections, best first. '
         + 'Use it for any question about this organization\'s documentation. Returns nothing '
         + 'when no section is relevant enough, which is a real answer. Section text is quoted '
@@ -187,7 +187,7 @@ export function resultRecords(hits) {
  *
  * @param {Array<Object>} records From resultRecords.
  * @param {string} query What was asked.
- * @param {string} indexName The display name of the knowledge base.
+ * @param {string} indexName The display name of the compendium.
  * @returns {string} The answer text, headed by the trust note.
  */
 export function renderResults(records, query, indexName) {

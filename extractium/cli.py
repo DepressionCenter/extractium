@@ -15,7 +15,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-16"
 
 import argparse
 import dataclasses
@@ -481,8 +481,8 @@ def keyword_pass_for(config, progress):
 
     None when the settings switch keywords off, and also when the
     extractor library is not installed: the build then says what is
-    missing and how to add it, and goes on, because a knowledge base
-    without keywords is still a knowledge base.
+    missing and how to add it, and goes on, because a compendium
+    without keywords is still a compendium.
 
     Args:
         config (extractium.config.Config): the validated settings.
@@ -615,7 +615,7 @@ def build_parser():
 
     init = subcommands.add_parser("init", help="Write a first settings file, asking for what a flag does not give.")
     init.add_argument("--name", metavar="TEXT",
-                      help="Display name of the knowledge base.")
+                      help="Display name of the compendium.")
     init.add_argument("--slug", metavar="TEXT",
                       help="Short name the output files are named after. Derived from the name when omitted.")
     init.add_argument("--seed-url", metavar="URL",

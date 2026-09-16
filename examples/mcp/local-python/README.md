@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/local-python/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: README for the local Python MCP server example: what it does,
 how to run it, the settings it reads, and its limits.
 Notes: See README file for documentation and full license information.
@@ -24,7 +24,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds one file, `server.py`. It lets an AI assistant on your computer search a published Extractium™ knowledge base. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your computer. The index is a static file, and the question is turned into a vector by a model that runs locally.
+This folder holds one file, `server.py`. It lets an AI assistant on your computer search a published Extractium™ compendium, the collection a build writes. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your computer. The index is a static file, and the question is turned into a vector by a model that runs locally.
 
 The Model Context Protocol (MCP) is the standard that assistants use to call tools. This server exposes exactly one tool, `search_kb`.
 

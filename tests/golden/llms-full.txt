@@ -1,6 +1,6 @@
 # Example Org
 
-> A knowledge base of 3 sections drawn from 2 pages on example.org, compiled on 2026-01-02T03:04:05Z.
+> A compendium of 3 sections drawn from 2 pages on example.org, compiled on 2026-01-02T03:04:05Z.
 
 This file holds the complete text of every page indexed, one heading per section, with the address it came from under each heading. A page that ran long appears as several sections sharing one heading.
 

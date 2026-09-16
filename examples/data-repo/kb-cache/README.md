@@ -26,9 +26,9 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder holds content the weekly build cannot fetch for itself. Almost every cache a build writes is a convenience you can safely delete. This one is not: it is the only copy of the video captions your knowledge base is built from. Commit it, and never delete it without reading this page first.
+This folder holds content the weekly build cannot fetch for itself. Almost every cache a build writes is a convenience you can safely delete. This one is not: it is the only copy of the video captions your compendium is built from. Commit it, and never delete it without reading this page first.
 
-If your knowledge base indexes no video, this folder does nothing and you can remove it.
+If your compendium indexes no video, this folder does nothing and you can remove it.
 
 
 ## Why it is here and not ignored

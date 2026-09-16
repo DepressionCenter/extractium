@@ -75,7 +75,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 
 | Setting | Type | Default | What it does |
 |---|---|---|---|
-| `name` | text | title of the first page crawled | Display name of the knowledge base, recorded in every output. |
+| `name` | text | title of the first page crawled | Display name of the compendium, the collection this build writes, recorded in every output. |
 | `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json` for the container and `<slug>.sqlite` for the database, so `slug: efdc-compendium` publishes `efdc-compendium.json`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
@@ -441,7 +441,7 @@ Both of these, every time, whether or not you asked for a playlist:
 1. Everything the channel published, read from its uploads playlist. That includes its shorts and its past live streams, which the "Videos" tab on the site leaves out.
 2. The playlists the channel shows, and the videos in them. Turn this off with `include_playlists: false`.
 
-A playlist is a list of whatever its owner chose, so a channel's playlists routinely hold other people's videos: a conference talk, a partner's explainer, something the owner simply liked. By default those are left out, because indexing them would put another organization's words in your knowledge base under your name. The build says how many it left out. Set `only_channel_videos: false` to index them anyway.
+A playlist is a list of whatever its owner chose, so a channel's playlists routinely hold other people's videos: a conference talk, a partner's explainer, something the owner simply liked. By default those are left out, because indexing them would put another organization's words in your compendium under your name. The build says how many it left out. Set `only_channel_videos: false` to index them anyway.
 
 A video you named yourself under `video_ids` is always indexed. Naming it is your decision and this rule does not second-guess it.
 
@@ -483,7 +483,7 @@ Extractium works around this by storing everything it reads under `cache_dir`:
 | `<cache_dir>/youtube/audio/` | Audio being transcribed, one temporary folder per video, removed when the transcript is stored. Empty between builds. |
 | `<cache_dir>/youtube/listings/<playlist id>.json` | The videos a playlist held when it was last listed. |
 
-Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your knowledge base is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
+Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your compendium is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
 
 A stored transcript has no expiry date. A build uses it because it exists, not because it was checked against YouTube, since checking is exactly what a cloud runner cannot do. To pick up corrected captions, delete that video's file and build again on a machine YouTube answers.
 

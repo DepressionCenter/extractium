@@ -12,7 +12,7 @@ examples/mcp/local-python/server.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-11"
+__date__ = "2026-09-16"
 
 import hashlib
 import json
@@ -137,7 +137,7 @@ INSTRUCTIONS = (
 # the model, so their descriptions are written for one to read.
 TOOL_DEFINITION = {
     "name": TOOL_NAME,
-    "title": "Search the knowledge base",
+    "title": "Search the compendium",
     "description": (
         "Searches the indexed documentation and returns whole sections, best first. Use "
         "it for any question about this organization's documentation. Returns nothing "
@@ -439,7 +439,7 @@ def render_results(records, query, index_name):
     Args:
         records (list[dict]): from result_records.
         query (str): what was asked.
-        index_name (str): the display name of the knowledge base.
+        index_name (str): the display name of the compendium.
 
     Returns:
         str: the answer text, headed by the trust note.

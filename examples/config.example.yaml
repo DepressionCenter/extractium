@@ -229,9 +229,9 @@ sources:
 # Uncomment a line to change it.
 # ---------------------------------------------------------------------------
 
-# Display name of the knowledge base. Defaults to the title of the first
-# page crawled.
-#name: "Example Org Knowledge Base"
+# Display name of the compendium, the collection this build writes.
+# Defaults to the title of the first page crawled.
+#name: "Example Org Compendium"
 
 # The short name the output files are named after: <slug>.json for the
 # container and <slug>.sqlite for the database. Lowercase letters, digits,

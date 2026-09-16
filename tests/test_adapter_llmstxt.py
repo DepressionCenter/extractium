@@ -28,7 +28,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-16"
 
 import dataclasses
 
@@ -193,7 +193,7 @@ def test_summary_says_what_the_knowledge_base_is_where_it_came_from_and_when(
     line = llmstxt.summary(compendium, page_count=2)
 
     assert line.startswith("> ")
-    assert "knowledge base of 3 sections" in line
+    assert "compendium of 3 sections" in line
     assert "drawn from 2 pages on example.org" in line
     assert compendium.built_at in line
     # The heading directly above already carries the name.

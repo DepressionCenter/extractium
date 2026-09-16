@@ -30,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-16"
 
 from extractium.adapters.base import (
     count_of,
@@ -69,7 +69,7 @@ INDEX_ORIENTATION = (
     "page, links to it, quotes the opening of its text, and lists the keywords "
     "it is about when the build found any, so you can judge whether a page "
     "answers your question before fetching it. Each heading "
-    "names one of the sources this knowledge base was built from, and the "
+    "names one of the sources this compendium was built from, and the "
     "entries under it are the pages that came from that source.",
     f"{FULL_FILE}, written alongside this file, holds the complete text of every "
     f"page listed here, in the same order. Read that instead if you want "
@@ -209,7 +209,7 @@ def name_sites(hosts, limit=HOSTS_SHOWN):
 
 def summary(compendium, page_count):
     """
-    The blockquote line: what this knowledge base is, where it came from,
+    The blockquote line: what this compendium is, where it came from,
     and when it was built. The llms.txt convention puts the information a
     reader needs in order to understand the rest of the file here, and the
     heading above it already carries the name.
@@ -218,7 +218,7 @@ def summary(compendium, page_count):
     pages = count_of(page_count, "page") if sites else count_of(page_count, "file")
     drawn_from = f" drawn from {pages} on {sites}" if sites else f" drawn from {pages}"
     return (
-        f"> A knowledge base of {count_of(len(compendium.parents), 'section')}"
+        f"> A compendium of {count_of(len(compendium.parents), 'section')}"
         f"{drawn_from}, compiled on {compendium.built_at}."
     )
 

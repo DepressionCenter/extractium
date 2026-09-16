@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -35,7 +35,7 @@ This folder holds the detailed documentation for Extractium™. The pages are gr
 * [Troubleshooting](troubleshooting.md): known failures, with the cause and the fix for each.
 
 
-## Publishing and using a knowledge base
+## Publishing and using a compendium
 
 * [How to Deploy](how-to/deploy.md): where a build can run and where its outputs can live, with what each choice needs and costs.
 * [How to Run a Weekly Build](how-to/run-a-weekly-build.md): the one-command local build and the scheduled build on GitHub.

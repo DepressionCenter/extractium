@@ -26,7 +26,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-The container is the one file every Extractium™ client reads: a search index with the text, the vectors, and the keyword statistics for a whole knowledge base, packed so a browser, a script, or a small server can load it with no database. This page defines the file byte by byte. Use it to build a client in any language, or to check what a published index contains.
+The container is the one file every Extractium™ client reads: a search index with the text, the vectors, and the keyword statistics for a whole compendium, packed so a browser, a script, or a small server can load it with no database. This page defines the file byte by byte. Use it to build a client in any language, or to check what a published index contains.
 
 
 ## Where the format is written and read
@@ -63,7 +63,7 @@ A reader copies the vector bytes into a fresh buffer before viewing them as a ty
 | `v` | whole number | Layout version. This page describes `4`. |
 | `extractium` | text | Version of the tool that wrote the file, for example `0.2`. |
 | `builtAt` | text | Build time in UTC, ISO 8601 with a `Z` suffix, for example `2026-09-04T12:00:00Z`. |
-| `site` | text | Display name of the knowledge base. Defaults to the title of the first page crawled. |
+| `site` | text | Display name of the compendium. Defaults to the title of the first page crawled. |
 | `sourceCount` | whole number | Number of distinct source URLs that contributed at least one parent. Pages visited but not indexed do not count. |
 | `embedding` | object | How the vectors were made. See the next table. |
 | `offsetUnit` | text | Unit of the child `start` and `end` columns. Always `utf16` in version 4. |
@@ -188,7 +188,7 @@ Safety note for JavaScript readers: `df` and `postings` are keyed by words taken
 
 ## Calibration
 
-`calibration` gives a corpus-relative sense of what a "good" similarity score is, so a client can set a relevance threshold without hand-tuning it per knowledge base.
+`calibration` gives a corpus-relative sense of what a "good" similarity score is, so a client can set a relevance threshold without hand-tuning it per compendium.
 
 | Field | Type | Meaning |
 |---|---|---|

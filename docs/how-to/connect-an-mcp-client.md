@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/connect-an-mcp-client.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Summary: How to let an AI assistant on your own computer search a
 published compendium: which of the two local servers to pick, how to
 configure a client, how to check it works without a client, and what the
@@ -26,7 +26,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-The Model Context Protocol (MCP) is the standard that AI assistants use to call tools. This page shows you how to give an assistant on your own computer one tool: search of a published Extractium™ knowledge base. You need a published index address, a terminal, and a few minutes. Nothing you ask leaves your computer.
+The Model Context Protocol (MCP) is the standard that AI assistants use to call tools. This page shows you how to give an assistant on your own computer one tool: search of a published Extractium™ compendium, the collection a build writes. You need a published index address, a terminal, and a few minutes. Nothing you ask leaves your computer.
 
 Two servers ship with Extractium™, one in Python and one in JavaScript. They expose the same tool and return the same answers, so pick whichever runtime you already have.
 
@@ -127,7 +127,7 @@ Use full paths, not relative ones. The client starts the server from a folder yo
 
 ## Step 5: Use it
 
-Ask the assistant a question the knowledge base covers. It calls `search_kb`, gets back whole sections, and should cite the address of each section it used.
+Ask the assistant a question the compendium covers. It calls `search_kb`, gets back whole sections, and should cite the address of each section it used.
 
 The tool takes two arguments:
 

@@ -1,7 +1,7 @@
 """
 Summary: The `extractium init` command. Writes a first settings file from
 the commented example that ships with the project, filled in with the
-three values a first build needs: the knowledge base's name, the short
+three values a first build needs: the compendium's name, the short
 name its output files are named after, and the website to crawl. Each
 value comes from a command-line flag or, when the flag is absent, from a
 question asked in the terminal. The written file is checked through the
@@ -13,7 +13,7 @@ extractium/init.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-14
-Last Modified: 2026-09-14
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-14"
+__date__ = "2026-09-16"
 
 import json
 import pathlib
@@ -51,7 +51,7 @@ from extractium.config import ConfigError, DEFAULT_SLUG, SLUG_RE, config_from_ma
 EXAMPLE_CONFIG = pathlib.Path(__file__).resolve().parent.parent / "examples" / "config.example.yaml"
 
 DEFAULT_OUTPUT = "config.yaml"
-DEFAULT_NAME = "Knowledge Base"
+DEFAULT_NAME = "Compendium"
 
 # The label every first build gives its one web source. A reader sees it
 # as the name of the collection an answer came from, and it can be
@@ -67,7 +67,7 @@ MAX_ATTEMPTS = 3
 # match exactly once; the example file's tests keep the lines in place.
 EXAMPLE_LABEL_LINE = re.compile(r"^(\s*)label: Example Knowledge Base$", re.M)
 EXAMPLE_SEED_LINE = re.compile(r'^(\s*)seed_url: "https://example\.edu/[^"]*"$', re.M)
-EXAMPLE_NAME_LINE = re.compile(r'^#name: "Example Org Knowledge Base"$', re.M)
+EXAMPLE_NAME_LINE = re.compile(r'^#name: "Example Org Compendium"$', re.M)
 EXAMPLE_SLUG_LINE = re.compile(r"^#slug: compendium$", re.M)
 
 # The file written when the example cannot be found, which happens when
@@ -77,7 +77,7 @@ FALLBACK_TEMPLATE = """# Extractium build settings. Every setting is explained i
 # configuration reference: docs/configuration.md in the Extractium
 # repository. Keys and API tokens never go in this file.
 
-# Display name of the knowledge base, recorded in every output.
+# Display name of the compendium, recorded in every output.
 name: {name}
 
 # The short name the output files are named after: <slug>.json and
@@ -223,7 +223,7 @@ def gather(args, ask_line=input, say=print):
     if args.name is not None:
         name = checked_name(args.name)
     else:
-        name = ask("Name of your knowledge base", DEFAULT_NAME, checked_name, ask_line, say)
+        name = ask("Name of your compendium", DEFAULT_NAME, checked_name, ask_line, say)
 
     # The short name is asked for only in a fully interactive setup. When
     # the name came from a flag, a missing slug is derived from it, so a

@@ -41,9 +41,9 @@ Nothing is installed system-wide. Everything goes into a virtual environment ins
 
 ## Option 1: the build script
 
-Use this option if you want to build a knowledge base and do not plan to change the code. You do not need git.
+Use this option if you want to build a compendium, a searchable collection of what you publish, and do not plan to change the code. You do not need git.
 
-1. Make an empty folder for your knowledge base and save the script for your operating system into it: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone the repository instead and run the script from inside the clone.
+1. Make an empty folder for your compendium and save the script for your operating system into it: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone the repository instead and run the script from inside the clone.
 2. Run the script:
 
    ```
@@ -51,7 +51,7 @@ Use this option if you want to build a knowledge base and do not plan to change 
    run.bat                   # Windows
    ```
 
-3. Answer its three questions: the name of your knowledge base, a short name for its files (press Enter to accept the one it suggests), and the website to start crawling from.
+3. Answer its three questions: the name of your compendium, a short name for its files (press Enter to accept the one it suggests), and the website to start crawling from.
 
 When the script is on its own, it first downloads the latest release of Extractium™ into a folder called `extractium-src` beside itself. The folder is named that way, and not `extractium`, because Python would otherwise mistake it for the installed package when you run a build from the folder above it. It uses git when git is installed. Otherwise it downloads the release archive, through `curl` or `wget` on macOS and Linux, through PowerShell on Windows, or through Python itself when none of those is present. To pin a release, set `EXTRACTIUM_REF` to its tag before running the script; to build with unreleased work, set it to a branch name such as `main`. [How to run a weekly build](run-a-weekly-build.md) lists that variable and the two beside it under "Building with a branch instead of a release".
 

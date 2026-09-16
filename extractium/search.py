@@ -15,7 +15,7 @@ extractium/search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-12
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-16"
 
 import gzip
 import json
@@ -519,7 +519,7 @@ class SearchIndex:
 
     @property
     def name(self):
-        """Display name of the knowledge base."""
+        """Display name of the compendium."""
         return self.header.get("site", "")
 
     @property
