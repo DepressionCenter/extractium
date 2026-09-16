@@ -59,6 +59,9 @@ dist/
 build/
 *.egg-info/
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 
 # Ignore packages an example installs for itself
 node_modules/
