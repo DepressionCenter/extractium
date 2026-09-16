@@ -15,7 +15,7 @@ tests/test_core_chunking.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-04
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -269,6 +269,26 @@ def test_chunk_document_stamps_document_metadata_on_parents_and_children(fixture
         assert record["weight"] == 2.0
         assert record["host"] == "teamdynamix.umich.edu"
     assert [c["pid"] for c in children] == [0, 1]
+
+
+def test_chunk_document_carries_the_sources_summary_and_tags_onto_every_parent(fixtures_dir):
+    """What the source knew about the page rides with each of its sections."""
+    url = "https://teamdynamix.umich.edu/TDClient/210/Test/KB/ArticleDet?ID=1"
+    extraction = _extract(fixtures_dir, "tdx_article.html", url)
+    described = Document(
+        url=url, title=extraction.title, content=extraction.node, source_type="kb", content_type="article",
+        summary="What the article is about.", tags=("sleep", "wearables"),
+    )
+    bare = Document(url=url, title=extraction.title, content=extraction.node, source_type="kb", content_type="article")
+
+    parents, _ = chunk.chunk_document(described)
+    plain, _ = chunk.chunk_document(bare)
+
+    assert len(parents) == 2
+    assert all(p["summary"] == "What the article is about." for p in parents)
+    assert all(p["tags"] == ("sleep", "wearables") for p in parents)
+    assert all(p["keywords"] is None and p["enriched_at"] is None for p in parents)
+    assert all(p["summary"] is None and p["tags"] is None for p in plain)
 
 
 def test_chunk_document_matches_build_parent_and_child_chunks_on_shared_fields(fixtures_dir):

@@ -463,7 +463,11 @@ class YouTubeSource:
                 continue
             stretches = segments(record["segments"])
             for stretch in stretches:
-                yield self._document(video_id, record["title"], stretch)
+                yield self._document(
+                    video_id, record["title"], stretch,
+                    description=record.get("description") or "",
+                    tags=record.get("tags") or (),
+                )
             produced += 1
             self._read_ids.add(video_id)
             self.coverage += ((record["title"], len(stretches), from_store),)
@@ -861,10 +865,11 @@ class YouTubeSource:
             progress (Callable[[str], None]): receives one line per event.
 
         Returns:
-            tuple[dict | None, bool]: a record holding `title` and
-            `segments`, and whether it came from the store. The record is
-            None when the video has no captions this build can read,
-            which is a normal thing to meet rather than a failure.
+            tuple[dict | None, bool]: a record holding `title`,
+            `segments`, `description`, and `tags`, and whether it came
+            from the store. The record is None when the video has no
+            captions this build can read, which is a normal thing to
+            meet rather than a failure.
 
         Raises:
             _Blocked: if the transcript must be fetched and YouTube
@@ -875,13 +880,21 @@ class YouTubeSource:
         stored = cache_module.load_video(video_id)
         if stored is not None:
             self.stored += 1
+            stored_tags = stored.get("tags")
             return {
                 "title": stored.get("title") or video_id,
                 "segments": stored["segments"],
+                "description": str(stored.get("description") or ""),
+                "tags": tuple(
+                    tag for tag in stored_tags if isinstance(tag, str)
+                ) if isinstance(stored_tags, list) else (),
             }, True
 
-        title = (titles.get(video_id) or {}).get("title") or video_id
-        published_at = (titles.get(video_id) or {}).get("published_at") or ""
+        known = titles.get(video_id) or {}
+        title = known.get("title") or video_id
+        published_at = known.get("published_at") or ""
+        description = known.get("description") or ""
+        tags = tuple(known.get("tags") or ())
         self._pace()
         try:
             language, lines = fetch_transcript(
@@ -908,12 +921,20 @@ class YouTubeSource:
 
         self.fetched += 1
         try:
-            cache_module.save_video(video_id, title, published_at, language, lines)
+            cache_module.save_video(
+                video_id, title, published_at, language, lines,
+                description=description, tags=tags,
+            )
         except (OSError, ValueError) as e:
             progress(f"  {title}: the transcript could not be stored ({e})")
-        return {"title": title, "segments": list(lines)}, False
+        return {
+            "title": title,
+            "segments": list(lines),
+            "description": description,
+            "tags": tags,
+        }, False
 
-    def _document(self, video_id, title, stretch):
+    def _document(self, video_id, title, stretch, description="", tags=()):
         """
         One stretch of one video as an indexed document.
 
@@ -921,13 +942,17 @@ class YouTubeSource:
         opens the video where the quoted words are said rather than at
         the start. The heading carries the same moment as a clock
         reading, so a reader who sees only the heading knows where to
-        look.
+        look. Every stretch carries the video's description and tags,
+        because an output that lists pages folds the stretches back into
+        the video and reads them from whichever it meets first.
 
         Args:
             video_id (str): the video's identifier.
             title (str): the video's title.
             stretch (Mapping): one record from segments(), holding
                 `start` and `text`.
+            description (str): the video's own description.
+            tags (Sequence[str]): the tags its publisher gave it.
 
         Returns:
             extractium.core.models.Document: the document to index.
@@ -938,6 +963,8 @@ class YouTubeSource:
             content=stretch["text"],
             source_type="youtube",
             content_type="video_transcript",
+            summary=description,
+            tags=tags,
         )
 
     ### Reporting ###

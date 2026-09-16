@@ -14,7 +14,7 @@ tests/test_site_handlers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-10
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -170,6 +170,64 @@ def test_tdx_breadcrumb_trail_becomes_categories_outermost_first():
     # The unlinked last crumb is the page itself, not a category.
     assert extraction.categories == ("Knowledge Base", "Technology for Health Research")
     assert extraction.title == "Remote Study Technology"
+
+
+def test_tdx_article_tags_and_summary_are_read_from_the_tag_strip_and_the_page_description():
+    """The portal shows an author's tags under the title and writes the Summary field to og:description."""
+    html = (
+        "<html><head><title>Article - Wearable Sleep Parameters</title>"
+        '<meta property="og:description" content="Which sleep numbers from a wearable are fit for research." />'
+        "</head><body>"
+        '<div id="divMainContent"><h1>Wearable Sleep Parameters</h1>'
+        '<div id="ctl00_ctl00_cpContent_cpContent_divTags"><span class="sr-only">Tags</span>'
+        '<a href="/TDClient/210/Org/KB/Search?SearchText=%2523sleep-research" title="sleep-research">sleep-research</a>'
+        '<a href="/TDClient/210/Org/KB/Search?SearchText=%2523wearables" title="wearables">wearables</a>'
+        "</div><p>Synthetic article body text for the tag test.</p></div>"
+        "</body></html>"
+    )
+    extraction = tdx.TdxHandler().extract(BeautifulSoup(html, "html.parser"), TDX_URL)
+
+    assert extraction.tags == ("sleep-research", "wearables")
+    assert extraction.summary == "Which sleep numbers from a wearable are fit for research."
+
+
+def test_tdx_article_without_tags_or_a_description_carries_neither():
+    html = (
+        "<html><head><title>Article - Plain</title></head><body>"
+        '<div id="divMainContent"><p>Synthetic article body text.</p></div></body></html>'
+    )
+    extraction = tdx.TdxHandler().extract(BeautifulSoup(html, "html.parser"), TDX_URL)
+
+    assert extraction.tags == ()
+    assert extraction.summary == ""
+
+
+def test_generic_pages_carry_their_meta_description_and_article_tags():
+    html = (
+        "<html><head><title>Page</title>"
+        '<meta name="description" content="Older form." />'
+        '<meta property="og:description" content="What the author chose to show." />'
+        '<meta property="article:tag" content="Mood" /><meta property="article:tag" content="Sleep" />'
+        '<meta name="keywords" content="ignored, when article tags exist" />'
+        "</head><body><main><p>Body.</p></main></body></html>"
+    )
+    extraction = generic.GenericHandler().extract(BeautifulSoup(html, "html.parser"), "https://example.org/p")
+
+    assert extraction.summary == "What the author chose to show."
+    assert extraction.tags == ("Mood", "Sleep")
+
+
+def test_generic_pages_fall_back_to_the_plain_description_and_the_keywords_list():
+    html = (
+        "<html><head><title>Page</title>"
+        '<meta name="description" content="  The plain description.  " />'
+        '<meta name="keywords" content="mood, sleep ,, wearables" />'
+        "</head><body><main><p>Body.</p></main></body></html>"
+    )
+    extraction = generic.GenericHandler().extract(BeautifulSoup(html, "html.parser"), "https://example.org/p")
+
+    assert extraction.summary == "The plain description."
+    assert extraction.tags == ("mood", "sleep", "wearables")
 
 
 def test_tdx_recovers_a_title_the_portal_cut_short(fixtures_dir):

@@ -12,7 +12,7 @@ extractium/sources/youtube_client.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -488,8 +488,11 @@ class YouTubeClient:
             video_ids (Sequence[str]): video identifiers.
 
         Returns:
-            dict[str, dict]: identifier to a record holding `title` and
-            `published_at`. A video YouTube would not describe -- deleted,
+            dict[str, dict]: identifier to a record holding `title`,
+            `published_at`, `channel_id`, `author_url`, `description`
+            (the video's own description, as written), and `tags` (the
+            tags its publisher gave it, which YouTube reports beside the
+            title). A video YouTube would not describe -- deleted,
             private, or never existing -- is absent from the result
             rather than reported as an error, because one unreadable
             video should not end a build over a channel.
@@ -513,6 +516,7 @@ class YouTubeClient:
                 if not VIDEO_ID_RE.match(video_id):
                     continue
                 channel_id = str(snippet.get("channelId") or "").strip()
+                tags = snippet.get("tags")
                 details[video_id] = {
                     "title": str(snippet.get("title") or "").strip(),
                     "published_at": str(snippet.get("publishedAt") or "").strip(),
@@ -520,6 +524,10 @@ class YouTubeClient:
                     # playlist can be told from one the channel uploaded.
                     "channel_id": channel_id if CHANNEL_ID_RE.match(channel_id) else "",
                     "author_url": "",
+                    "description": str(snippet.get("description") or ""),
+                    "tags": tuple(
+                        str(tag) for tag in tags if isinstance(tag, str)
+                    ) if isinstance(tags, list) else (),
                 }
         return details
 
@@ -579,6 +587,10 @@ class YouTubeClient:
                     # The channel's own address, which is how a video's
                     # publisher is known without an API key.
                     "author_url": str(document.get("author_url") or "").strip(),
+                    # The endpoint reports neither, so a keyless build
+                    # indexes a video without its description and tags.
+                    "description": "",
+                    "tags": (),
                 }
         return details
 

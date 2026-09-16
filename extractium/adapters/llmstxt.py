@@ -11,7 +11,7 @@ extractium/adapters/llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -125,7 +125,7 @@ def pages_in_order(parents):
 
     Returns:
         list[dict]: url, title, source_label, the first section's text,
-        and the page's keywords, in first-appearance order.
+        the page's summary, and its keywords, in first-appearance order.
     """
     pages = {}
     for parent in parents:
@@ -137,6 +137,9 @@ def pages_in_order(parents):
             "title": page_title(parent.t),
             "source_label": parent.source_label,
             "text": parent.x,
+            # The page's own description where its source gave one; an
+            # excerpt of the first section stands in otherwise.
+            "summary": parent.summary or "",
             "keywords": keywords_named(parent),
         }
     return list(pages.values())
@@ -240,7 +243,10 @@ def _preamble(compendium, page_count, orientation):
 def render_index(compendium):
     """
     The llms.txt body: a heading, a summary, and one link per page grouped
-    under the name of the source it came from. An entry ends with the
+    under the name of the source it came from. An entry describes the
+    page with the description its source gave it, such as a video's
+    description or an article's summary, and with an excerpt of its
+    first section when the source gave none. An entry ends with the
     page's keywords when the build found any, inside the entry's own
     line, because the convention allows nothing but list items under a
     heading.
@@ -263,7 +269,7 @@ def render_index(compendium):
         lines.append(f"## {title}")
         lines.append("")
         for page in group:
-            entry = f"- {link(page['title'], page['url'])}: {excerpt(page['text'])}"
+            entry = f"- {link(page['title'], page['url'])}: {excerpt(page['summary'] or page['text'])}"
             if page["keywords"]:
                 entry += f" Keywords: {', '.join(page['keywords'])}."
             lines.append(entry)

@@ -474,7 +474,7 @@ Extractium works around this by storing everything it reads under `cache_dir`:
 
 | Path | What it holds |
 |---|---|
-| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, caption language, and timed caption lines. |
+| `<cache_dir>/youtube/videos/<video id>.json` | One video's title, description, tags, caption language, and timed caption lines. A file written by hand needs only the caption lines. |
 | `<cache_dir>/youtube/listings/<playlist id>.json` | The videos a playlist held when it was last listed. |
 
 Build once on your own machine, commit that folder, and every later build reads it instead of asking YouTube. This is the one cache you must not delete: it is the only copy of the captions your knowledge base is built from. Because it has to be committed, name a visible `cache_dir` such as `kb-cache` rather than leaving the default `.kb_cache`, which most projects ignore.
@@ -668,22 +668,33 @@ rebuild: incremental
 ```
 
 
-## Keywords and tags
+## Summaries, keywords, and tags
 
-Every section is named with up to five keywords, and every page with tags, so a reader can see what a section is about without reading it and can filter pages by subject. No language model is involved. The build works from the text and from the vectors it computes anyway:
+Every page carries a summary and tags, and every section up to five keywords, so a reader can see what a page is about without reading it and can filter pages by subject. No language model is involved.
+
+Where a source already knows what a page says about itself, the build uses that and computes nothing in its place:
+
+| Source | Summary | Tags |
+|---|---|---|
+| YouTube | The video's description, as its publisher wrote it. | The tags its publisher gave it. Both come from the Data API, so a build with no key indexes the transcript without them; once read, both are stored beside the transcript and reused. |
+| GitHub | The repository's description, on its README and its repository summary. | The repository's topics, on every record read from it. |
+| TeamDynamix | The article's Summary field, which the portal writes into the page's Open Graph description. | The tags shown under the article's title. |
+| Any web page | Its Open Graph description, else its meta description. | Its `article:tag` elements, else its comma-separated meta keywords. |
+
+A summary is cut at 600 characters, at a word. Tags are kept in the order given, each once, at most twenty, and one longer than 80 characters is dropped. A page whose source gives neither is described and tagged from its text, by the keyword step below, which works from the text and from the vectors the build computes anyway:
 
 1. A statistical extractor, YAKE, proposes up to fifteen candidate phrases of one to three words from the section's own text. It scores a phrase by how often its words occur, where they first appear, whether they are capitalized, and how varied the words around them are.
 2. The candidates are embedded with the same model the build uses for search, and ranked by how close each one sits to the section's own vector. The five closest that do not repeat one another are the section's keywords, closest first: a phrase whose words all lie inside a phrase already chosen, or that contains one, is passed over. That is why a phrase that names the subject outranks one that merely occurs often.
-3. A page's tags are the categories its source recorded, outermost first, then the keywords at least half of its sections share, the most widely shared first, up to eight. A one-section page is tagged with its categories and its keywords.
+3. A page's tags are the categories its source recorded, outermost first, then the tags its source gave it. Only a page whose source gave none is tagged from its text: the keywords at least half of its sections share, the most widely shared first, up to eight. A one-section page is tagged with its categories and its keywords. A page carried forward unchanged from the last build keeps the tags it had.
 
 Where they appear:
 
 | Output | What it carries |
 |---|---|
-| Container | `keywords` and `tags` on every section, with `enriched_at` (UTC) and `enrich_ver`. |
-| SQLite | The same four columns on `parents`, the lists as JSON arrays. |
-| Open Knowledge Format | The tags in each concept file's tag list, and a `keywords` list in its front matter. |
-| `llms.txt` | Each page's entry ends with `Keywords: ...`: the page's shared keywords or, when its sections share none, the first section's. |
+| Container | `summary`, `keywords`, and `tags` on every section, with `enriched_at` (UTC) and `enrich_ver`. |
+| SQLite | The same five columns on `parents`, the lists as JSON arrays. |
+| Open Knowledge Format | The summary as each concept file's description, the tags in its tag list, and a `keywords` list in its front matter. |
+| `llms.txt` | Each page's entry describes the page with its summary, or with an excerpt of its first section when it has none, and ends with `Keywords: ...`: the page's tags beyond its categories or, when it has none, the first section's keywords. |
 
 What was found is stored under `<cache_dir>/enrichment/keywords.json`, keyed by section, with a digest of the text it came from. A rebuild names afresh only the sections whose text changed, and embeds nothing for the rest.
 

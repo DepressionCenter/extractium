@@ -4,7 +4,8 @@ without a language model: YAKE proposes candidate phrases from the
 section's own text, the vector the build already computed for the section
 ranks those candidates by how close each sits to the section's meaning,
 and the keywords most of a page's sections share become the page's tags,
-after the categories the source recorded. What was found is kept under
+after the categories the source recorded, unless the source gave the
+page tags of its own, which stand as they are. What was found is kept under
 the cache folder keyed by section, so a later build recomputes only the
 sections whose text changed. See docs/extractium-spec.md section 10.
 
@@ -13,7 +14,7 @@ extractium/core/keywords.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-15
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -234,22 +235,28 @@ def distinct_phrases(ranked, limit):
 
 ### Page Tags ###
 
-def page_tags(sections, limit=TAGS_PER_PAGE):
+def page_tags(sections, limit=TAGS_PER_PAGE, provided=()):
     """
     The tags for one page: the categories its source recorded, outermost
-    first, then the keywords at least half of its sections share, the
+    first, then the tags the source itself gave the page, or, when it
+    gave none, the keywords at least half of its sections share, the
     most widely shared first.
 
-    A one-section page shares every keyword with itself, so its tags are
-    its categories and its keywords. A page whose sections have nothing
-    in common is tagged with its categories alone. Tags are compared
-    without regard to case, and a keyword that repeats a category is not
-    added again.
+    A source's own tags are what the page's author chose, so they are
+    used as they are and no keyword is added beside them: a page
+    tagged by its author is not re-tagged by a statistic. Only a page
+    whose source gave no tags beyond its categories is tagged from its
+    text. A one-section page shares every keyword with itself, so its
+    tags are its categories and its keywords. A page whose sections have
+    nothing in common is tagged with its categories alone. Tags are
+    compared without regard to case, and a tag that repeats a category
+    is not added again.
 
     Args:
         sections (Sequence[dict]): the page's sections, each with
             "categories" and "keywords" keys.
         limit (int): the most keyword tags to add after the categories.
+        provided (Sequence[str]): the tags the source gave the page.
 
     Returns:
         tuple[str, ...]: the tags, in that order.
@@ -258,6 +265,13 @@ def page_tags(sections, limit=TAGS_PER_PAGE):
     for category in sections[0].get("categories") or ():
         if isinstance(category, str) and category.strip():
             tags.setdefault(category.strip().casefold(), category.strip())
+    given = {}
+    for tag in provided or ():
+        if isinstance(tag, str) and tag.strip() and tag.strip().casefold() not in tags:
+            given.setdefault(tag.strip().casefold(), tag.strip())
+    if given:
+        tags.update(given)
+        return tuple(tags.values())
     counts = {}
     spelling = {}
     for section in sections:
@@ -274,7 +288,7 @@ def page_tags(sections, limit=TAGS_PER_PAGE):
     return tuple(tags.values())
 
 
-def tag_pages(sections):
+def tag_pages(sections, provided=None):
     """
     Writes each page's tags onto every one of its sections.
 
@@ -286,16 +300,27 @@ def tag_pages(sections):
     Args:
         sections (list[dict]): every section, in build order; each gains
             a "tags" key.
+        provided (Mapping[int, Sequence[str]] | None): the tags a
+            source gave, keyed by the position of the section carrying
+            them. None reads them from each section's "tags" key as it
+            stands, which is how a caller that has not touched the key
+            since the chunker set it says the same thing.
 
     Returns:
         int: how many pages were tagged.
     """
+    if provided is None:
+        provided = {
+            position: section.get("tags") or ()
+            for position, section in enumerate(sections)
+        }
     pages = {}
     for position, section in enumerate(sections):
         address = page_address_of(section["u"], section["source_type"])
         pages.setdefault(address, []).append(position)
     for positions in pages.values():
-        tags = page_tags([sections[position] for position in positions])
+        given = next((provided[position] for position in positions if provided.get(position)), ())
+        tags = page_tags([sections[position] for position in positions], provided=given)
         for position in positions:
             sections[position]["tags"] = tags
     return len(pages)
@@ -360,6 +385,14 @@ class KeywordPass:
         """
         stored = self.load() or {}
         remembered = stored.get("sections", {}) if stored.get("version") == PASS_VERSION else {}
+        # The tags a section carries before this pass are its source's
+        # own, or the ones a page carried forward unchanged from the
+        # last build. Either way they stand, and the text is consulted
+        # only for a page that has none beyond its categories.
+        provided = {
+            position: tuple(section.get("tags") or ())
+            for position, section in enumerate(sections)
+        }
         vectors = section_vectors(len(sections), children, vecs)
         kept = {}
         pending = []
@@ -392,7 +425,7 @@ class KeywordPass:
                 section["enrich_ver"] = PASS_VERSION
                 kept[section["id"]] = {"hash": digest, "keywords": list(ranked), "enriched_at": computed_at}
 
-        pages = tag_pages(sections)
+        pages = tag_pages(sections, provided)
         self.save({"version": PASS_VERSION, "sections": kept})
         progress(
             f"Named {len(sections)} section(s) with keywords, {len(pending)} of them afresh, "

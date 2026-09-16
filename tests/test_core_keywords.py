@@ -11,7 +11,7 @@ tests/test_core_keywords.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-15
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -219,6 +219,42 @@ def test_page_tags_drop_blank_categories_and_a_keyword_repeated_within_one_secti
     sections = [{"categories": (" ", "Real "), "keywords": ("twice", "twice", "once")}]
 
     assert keywords.page_tags(sections) == ("Real", "twice", "once")
+
+
+def test_page_tags_are_the_sources_own_when_it_gave_any_and_no_keyword_is_added():
+    """An author's tags are not second-guessed by a statistic."""
+    sections = [
+        {"categories": ("Guides",), "keywords": ("sleep hygiene", "bedtime")},
+        {"categories": ("Guides",), "keywords": ("sleep hygiene", "screens")},
+    ]
+
+    assert keywords.page_tags(sections, provided=("wearables", "Guides", "Sleep Research")) == (
+        "Guides", "wearables", "Sleep Research",
+    )
+
+
+def test_page_tags_fall_back_to_the_text_when_the_sources_tags_only_repeat_its_categories():
+    sections = [{"categories": ("Guides",), "keywords": ("open house",)}]
+
+    assert keywords.page_tags(sections, provided=("guides", " ")) == ("Guides", "open house")
+
+
+def test_the_pass_keeps_the_tags_a_source_gave_a_page_and_tags_the_rest_from_their_text():
+    tagged = section(1, "About sleep.", url="https://example.org/tagged")
+    tagged["tags"] = ("wearables",)
+    untagged = section(2, "About sleep too.", url="https://example.org/untagged")
+    untagged["tags"] = None
+    sections = [tagged, untagged]
+    children, vecs = windows_for(sections, [unit(1, 0), unit(1, 0)])
+    store = MemoryStore()
+
+    KeywordPass(store.load, store.save, candidates=constant_candidates("sleep")).run(
+        sections, children, vecs, PhraseEmbedder({"sleep": unit(1, 0)}), BUILT_AT, lambda line: None
+    )
+
+    assert tagged["tags"] == ("wearables",)
+    assert tagged["keywords"] == ("sleep",)
+    assert untagged["tags"] == ("sleep",)
 
 
 def test_tag_pages_groups_a_videos_moments_as_one_page():

@@ -11,7 +11,7 @@ tests/test_models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-04
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -152,6 +152,49 @@ def test_extraction_defaults_and_tuple_categories():
     extraction = models.Extraction(title="Page", node="node", categories=["A", "B"])
     assert extraction.categories == ("A", "B")
     assert models.Extraction(title="Page", node="node").categories == ()
+
+
+def test_extraction_cleans_its_summary_and_tags_as_a_document_does():
+    extraction = models.Extraction(title="Page", node="node", summary="  Two\n lines ", tags=["a", "A", " b "])
+    assert extraction.summary == "Two lines"
+    assert extraction.tags == ("a", "b")
+    assert models.Extraction(title="Page", node="node").summary == ""
+    assert models.Extraction(title="Page", node="node").tags == ()
+
+
+# ---------------------------------------------------------------------------
+# A source's own summary and tags
+# ---------------------------------------------------------------------------
+
+def test_document_summary_and_tags_default_to_nothing():
+    doc = make_document()
+    assert doc.summary == ""
+    assert doc.tags == ()
+
+
+def test_document_summary_is_one_paragraph_cut_at_a_word():
+    """A video's description runs to pages; an index entry needs its opening."""
+    long = "word " * 200
+    doc = make_document(summary="  First line.\n\nSecond   line. ")
+    assert doc.summary == "First line. Second line."
+    cut = make_document(summary=long).summary
+    assert cut.endswith("...")
+    assert len(cut) <= models.MAX_SUMMARY_CHARS + 3
+    assert not cut[:-3].endswith(" ")
+
+
+def test_document_tags_are_each_kept_once_stripped_and_bounded():
+    """Tags come from pages and API responses, which may declare hundreds."""
+    doc = make_document(tags=[" Sleep ", "sleep", "", "x" * (models.MAX_TAG_CHARS + 1), "Mood"])
+    assert doc.tags == ("Sleep", "Mood")
+    many = make_document(tags=[f"tag {n}" for n in range(models.MAX_TAGS + 10)])
+    assert len(many.tags) == models.MAX_TAGS
+
+
+@pytest.mark.parametrize("field, value", [("summary", 12), ("tags", "one string"), ("tags", ["ok", 3])])
+def test_document_rejects_a_summary_or_tags_that_are_not_text(field, value):
+    with pytest.raises(ValueError, match=field):
+        make_document(**{field: value})
 
 
 # ---------------------------------------------------------------------------

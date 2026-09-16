@@ -15,7 +15,7 @@ tests/test_source_youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -600,6 +600,62 @@ def test_video_titles_are_read_in_one_batch():
     assert details[VIDEO_B]["published_at"] == "2026-01-02T03:04:05Z"
     assert len(session.calls) == 1
     assert session.calls[0]["params"]["id"] == f"{VIDEO_A},{VIDEO_B}"
+
+
+def described_videos_page(videos):
+    """A videos.list response carrying each video's description and tags beside its title."""
+    return FakeResponse(body={"items": [
+        {"id": video_id, "snippet": {
+            "title": title, "publishedAt": "2026-01-02T03:04:05Z", "channelId": CHANNEL,
+            "description": description, "tags": tags,
+        }}
+        for video_id, (title, description, tags) in videos.items()
+    ]})
+
+
+def test_video_details_carry_the_description_and_tags_youtube_reports():
+    session = FakeYouTubeSession({"videos": described_videos_page({
+        VIDEO_A: ("A Talk", "What the talk covers.\nMore.", ["sleep", "research", 7]),
+        VIDEO_B: ("Bare", "", None),
+    })})
+
+    details = yc.YouTubeClient(session, key=FAKE_KEY).video_details([VIDEO_A, VIDEO_B])
+
+    assert details[VIDEO_A]["description"] == "What the talk covers.\nMore."
+    assert details[VIDEO_A]["tags"] == ("sleep", "research")
+    assert details[VIDEO_B]["description"] == ""
+    assert details[VIDEO_B]["tags"] == ()
+
+
+def test_a_videos_description_and_tags_reach_every_stretch_and_the_store(api_key_set, caption_library):
+    """The description is the video's summary and its tags are the page's, on the first build and from the store."""
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({"videos": described_videos_page({
+        VIDEO_A: ("A Talk", "What the talk covers.", ["sleep", "research"]),
+    })})
+
+    first = list(source(reader=reader, video_ids=(VIDEO_A,)).fetch(session, {}, quiet))
+    stored = cache_module.load_video(VIDEO_A)
+    again = list(source(reader=FakeReader(), video_ids=(VIDEO_A,)).fetch(FakeYouTubeSession(), {}, quiet))
+
+    assert first
+    assert {d.summary for d in first} == {"What the talk covers."}
+    assert {d.tags for d in first} == {("sleep", "research")}
+    assert stored["description"] == "What the talk covers." and stored["tags"] == ["sleep", "research"]
+    assert [(d.summary, d.tags) for d in again] == [(d.summary, d.tags) for d in first]
+
+
+def test_a_transcript_stored_by_hand_needs_no_description_or_tags(api_key_set, caption_library):
+    cache_module.save_video(VIDEO_A, "Stored", "", "en",
+                            [{"text": "a stored phrase about measuring mood", "start": 0.0}])
+    record = cache_module.load_video(VIDEO_A)
+    del record["description"], record["tags"]
+    with open(cache_module.video_path(VIDEO_A), "w", encoding="utf-8") as f:
+        json.dump(record, f)
+
+    documents = list(source(reader=FakeReader(), video_ids=(VIDEO_A,)).fetch(FakeYouTubeSession(), {}, quiet))
+
+    assert documents and all(d.summary == "" and d.tags == () for d in documents)
 
 
 def test_video_titles_are_batched_to_the_limit(monkeypatch):

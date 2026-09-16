@@ -12,7 +12,7 @@ extractium/sources/generic.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -121,6 +121,20 @@ GENERIC_INDEX_EXCLUDE_PATTERNS = GENERIC_CRAWL_EXCLUDE_PATTERNS
 # Everything after a vertical bar in a <title> is the site name.
 _TITLE_SUFFIX_RE = re.compile(r"\s*[|]\s*.+$")
 
+# Where a page states its own description, in the order tried. The
+# Open Graph description is what the page's author chose to show when
+# the page is shared; the plain meta description is the older form.
+DESCRIPTION_META = (
+    {"property": "og:description"},
+    {"name": "description"},
+)
+
+# Where a page states its own tags: one meta element per tag in the
+# Open Graph article form, or one comma-separated list in the older
+# keywords form.
+TAG_META = {"property": "article:tag"}
+KEYWORDS_META = {"name": "keywords"}
+
 
 ### Shared Helpers ###
 
@@ -142,6 +156,52 @@ def page_title(soup):
     if h1:
         return h1.get_text(" ", strip=True)
     return None
+
+
+def meta_description(soup):
+    """
+    The description a page states about itself, or an empty string.
+
+    Args:
+        soup (BeautifulSoup): the parsed page, before boilerplate is
+            stripped, because meta elements sit in the head.
+
+    Returns:
+        str: the first non-empty description among DESCRIPTION_META,
+        as written; the Document that carries it bounds its length.
+    """
+    for attrs in DESCRIPTION_META:
+        element = soup.find("meta", attrs=attrs)
+        content = (element.get("content") or "") if element else ""
+        if content.strip():
+            return content.strip()
+    return ""
+
+
+def meta_tags(soup):
+    """
+    The tags a page states about itself, or none.
+
+    Args:
+        soup (BeautifulSoup): the parsed page, before boilerplate is
+            stripped.
+
+    Returns:
+        tuple[str, ...]: every `article:tag` value in page order, or,
+        when there is none, the comma-separated `keywords` list split
+        into its items. Each stripped; empties dropped. The Document
+        that carries them bounds their number and length.
+    """
+    tags = [
+        (element.get("content") or "").strip()
+        for element in soup.find_all("meta", attrs=TAG_META)
+    ]
+    tags = [tag for tag in tags if tag]
+    if tags:
+        return tuple(tags)
+    element = soup.find("meta", attrs=KEYWORDS_META)
+    listed = (element.get("content") or "") if element else ""
+    return tuple(item.strip() for item in listed.split(",") if item.strip())
 
 
 def strip_boilerplate(node):
@@ -208,12 +268,19 @@ class GenericHandler:
         The first GENERIC_CONTENT_SELECTORS match, stripped of boilerplate,
         or None when no selector matches. A matched node is returned even
         when it holds no text, so the chunker (not this handler) decides
-        that the page is too short to keep.
+        that the page is too short to keep. The page's own meta
+        description and tags travel with it, so an output can describe
+        the page as its author did.
         """
         node = select_content(soup, GENERIC_CONTENT_SELECTORS, require_text=False)
         if node is None:
             return None
-        return Extraction(title=page_title(soup) or UNTITLED, node=node)
+        return Extraction(
+            title=page_title(soup) or UNTITLED,
+            node=node,
+            summary=meta_description(soup),
+            tags=meta_tags(soup),
+        )
 
     def content_type(self, url):
         """Every page this handler reads is recorded as a plain page."""

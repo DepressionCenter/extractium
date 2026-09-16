@@ -9,7 +9,7 @@ tests/test_adapter_llmstxt.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -399,6 +399,20 @@ def test_index_entries_carry_no_keyword_line_when_no_step_ran(fixtures_dir, fake
     compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
 
     assert "Keywords:" not in llmstxt.render_index(compendium)
+
+
+def test_index_entries_describe_a_page_with_its_own_summary_when_its_source_gave_one(
+    fixtures_dir, fake_embed_chunks_core
+):
+    """A video's description beats the first hundred characters of its transcript."""
+    compendium = with_enrichment(
+        sample_compendium(fixtures_dir, fake_embed_chunks_core), summary="What the page says it is about.",
+    )
+
+    entries = [line for line in llmstxt.render_index(compendium).splitlines() if line.startswith("- ")]
+
+    assert entries
+    assert all("): What the page says it is about." in line for line in entries)
 
 
 def test_keywords_named_prefers_shared_tags_over_the_sections_own_keywords():

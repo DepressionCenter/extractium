@@ -12,7 +12,7 @@ tests/test_source_github_api.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -249,6 +249,25 @@ def test_categories_follow_the_folders_a_file_sits_in(fixture, fake_github_sessi
     assert by_url["https://github.com/example-org/example-tools/blob/main/docs/setup.md"].categories == (
         "example-org", "example-tools", "docs",
     )
+
+
+def test_a_repositorys_description_is_the_summary_of_its_readme_and_its_map_and_its_topics_tag_every_record(
+    fixture, fake_github_session_factory,
+):
+    """The owner's own description and topics beat anything a statistic would find."""
+    session = fake_github_session_factory(api_routes(fixture))
+
+    documents = read(make_source(), session)
+    by_url = {d.url: d for d in documents}
+    root = "https://github.com/example-org/example-tools"
+
+    assert by_url[f"{root}/blob/main/README.md"].summary == "Shared analysis helpers for the example study."
+    assert by_url[root].summary == "Shared analysis helpers for the example study."
+    assert by_url[f"{root}/blob/main/docs/setup.md"].summary == ""
+    tools = [d for d in documents if d.url == root or d.url.startswith(f"{root}/")]
+    assert tools and all(d.tags == ("analysis", "example") for d in tools)
+    notes = [d for d in documents if d.url.startswith("https://github.com/example-org/example-notes")]
+    assert notes and all(d.tags == () for d in notes)
 
 
 def test_every_repository_gets_a_summary_naming_how_it_was_read(fixture, fake_github_session_factory):

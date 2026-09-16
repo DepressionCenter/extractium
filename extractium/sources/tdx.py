@@ -15,7 +15,7 @@ extractium/sources/tdx.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,7 +40,7 @@ import re
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from extractium.core.models import Extraction
-from extractium.sources.generic import UNTITLED, page_title, select_content
+from extractium.sources.generic import UNTITLED, meta_description, page_title, select_content
 
 ### Constants ###
 
@@ -69,6 +69,11 @@ TDX_TITLE_TRUNCATION_MARKERS = ("...", "…")
 # the portal publishes for link sharing is unambiguous; the article's own
 # <h1> is the visible heading. Both are read before the body is stripped.
 TDX_FULL_TITLE_META = "og:title"
+
+# The links in the tag strip the portal shows under an article's title,
+# one per tag the article's author chose. The element's id carries the
+# portal's control prefix, so only its ending is matched.
+TDX_TAG_LINKS_SELECTOR = 'div[id$="_divTags"] a'
 
 # The breadcrumb trail above an article: "Knowledge Base > Category >
 # Article". Linked crumbs are the hierarchy; the unlinked last crumb is
@@ -222,6 +227,25 @@ def article_title(soup):
     return title
 
 
+def article_tags(soup):
+    """
+    The tags the portal shows under the article's title, in page order.
+
+    Args:
+        soup (BeautifulSoup): the parsed page, before boilerplate is
+            stripped, because the tag strip sits beside the heading.
+
+    Returns:
+        tuple[str, ...]: the tag texts; empty when the article has none.
+    """
+    tags = []
+    for link in soup.select(TDX_TAG_LINKS_SELECTOR):
+        text = link.get_text(" ", strip=True)
+        if text:
+            tags.append(text)
+    return tuple(tags)
+
+
 def breadcrumb_categories(soup):
     """
     The linked crumbs of the page's breadcrumb trail, outermost first.
@@ -346,16 +370,21 @@ class TdxHandler:
         """
         The article or question body with boilerplate stripped, or None
         when neither selector finds a node with text (a listing page).
-        The categories and the title are both read before the body is
-        stripped, because the breadcrumb trail and the article heading
-        can sit inside elements the stripper removes.
+        The categories, the title, the tags, and the summary are all
+        read before the body is stripped, because the breadcrumb trail,
+        the article heading, and the tag strip can sit inside elements
+        the stripper removes, and the summary sits in the head.
         """
         categories = breadcrumb_categories(soup)
         title = article_title(soup)
+        tags = article_tags(soup)
+        # The portal writes the article's own Summary field into the
+        # page's Open Graph description, so that is the article's summary.
+        summary = meta_description(soup)
         node = select_content(soup, TDX_CONTENT_SELECTORS, require_text=True)
         if node is None:
             return None
-        return Extraction(title=title, node=node, categories=categories)
+        return Extraction(title=title, node=node, categories=categories, summary=summary, tags=tags)
 
     def content_type(self, url):
         """Every page this handler reads is a knowledge-base article."""
