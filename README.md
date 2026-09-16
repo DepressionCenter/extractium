@@ -31,37 +31,7 @@ Extractium™ turns your organization's scattered public documentation into one 
 
 Unlike a vector database, Extractium™ needs no server, no database, and no API to run. Every output is a static file that you can host anywhere, including GitHub Pages, and the same build feeds all of them at once. Sources and outputs are plug-ins, so you can add your own if the built-in ones do not cover your needs.
 
-Extractium™ grew out of the indexing engine in [Field Station AI™](https://github.com/DepressionCenter/FieldStationAI).
-
-```mermaid
-flowchart LR
-    subgraph Sources
-        W[Websites and portals]
-        G[GitHub repositories]
-        D[DSpace repositories]
-        Y[YouTube captions]
-        L[Local folders]
-        K[Knowledge bundles]
-        C[Custom source plug-ins]
-    end
-    W & G & D & Y & L & K & C --> E[Extractium build]
-    E --> O1[Search index]
-    E --> O2[llms.txt files]
-    E --> O3[SQLite database]
-    E --> O4[Markdown folder]
-    E --> O5[Custom output plug-ins]
-    O1 --> U1[Search box on a website]
-    O1 --> U2[Scripts in Python or JavaScript]
-    O1 --> U3[AI assistant on your computer]
-    O1 --> U4[Hosted search endpoint on Val Town]
-    O2 --> U5[AI assistant that browses the web]
-    O3 --> U6[SQL queries and reports]
-    O3 --> U7[Hosted search endpoint on Cloudflare]
-    O4 --> U8[Reading and editing as plain files]
-    O4 --> U9[Other tools that read Open Knowledge Format]
-```
-
-The diagram shows the content sources on the left, the Extractium™ build in the middle, and the outputs on the right, with the uses each output is good for. Every source feeds one build, and that one build writes every output. Custom plug-ins can add sources and outputs of their own.
+![Extractium: inputs and outputs diagram](assets/extractium-diagram.png "Extractium: inputs and outputs diagram")
 
 | Output | Files | Best for |
 |---|---|---|
@@ -70,6 +40,7 @@ The diagram shows the content sources on the left, the Extractium™ build in th
 | SQLite database | `compendium.sqlite` | SQL queries and reports, or loading the content into a hosted database. |
 | Markdown folder | `okf/` | Reading and editing the content as ordinary files, sharing it with other tools that use the Open Knowledge Format, or feeding it into another Extractium™ build. |
 
+Extractium™ grew out of the indexing engine in [Field Station AI™](https://github.com/DepressionCenter/FieldStationAI), which remains an [example front-end](https://code.depressioncenter.org/FieldStationAI) implementation for how to access the JSON output in JavaScript.
 
 ## Quick Start Guide
 + Install Python 3.10 or newer.
