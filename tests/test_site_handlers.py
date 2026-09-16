@@ -33,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-16"
 
 import re
 
@@ -116,6 +116,31 @@ def test_github_handler_claims_git_hosts_only():
     assert handler.matches("https://git.example.edu/example-repo") is True
     assert handler.matches(GENERIC_URL) is False
     assert handler.matches(TDX_URL) is False
+
+
+@pytest.mark.parametrize("path, followed", [
+    ("docs/setup.md", True),
+    ("README.md", True),
+    ("LICENSE.md", False),
+    ("tests/fixtures/page.md", False),
+    ("third_party/lib/README.md", False),
+    ("requirements-lock.txt", False),
+    ("AGENTS.md", False),
+])
+def test_github_crawl_leaves_out_the_files_the_api_source_never_reads(fixtures_dir, path, followed):
+    """
+    The documentation crawl is the last way of reading a repository, and
+    it must not index a licence text or a test fixture the API tiers
+    would have skipped, or which files an index holds would depend on
+    which tier read them.
+    """
+    url = f"https://github.com/example-org/example-repo/blob/main/{path}"
+    handler = github.GitHubHandler()
+    soup = _raw_soup_from_fixture(fixtures_dir, "raw_markdown_file.md", url)
+
+    assert handler.allows(url) is followed
+    assert (handler.extract(soup, url) is not None) is followed
+    assert github.is_unread_blob_url(url) is (not followed)
 
 
 def test_generic_handler_claims_every_url():

@@ -1,18 +1,20 @@
 """
-Summary: Which files in a code repository are worth indexing, and what
-each one is. Documentation is indexed in full; a short list of project
-and build files is indexed as text, because they often explain a project
-faster than its prose does; generated, third-party, binary, and
-credential-bearing paths are skipped. Every rule here reads a path only,
-so a repository can be filtered from its inventory before a single file
-body is downloaded. See docs/github-repository-indexing.md.
+Summary: Which files in a code repository are worth indexing, what each
+one is, and in what order they are read when a repository holds more
+than a build takes. Documentation is indexed in full; a short list of
+project and build files is indexed as text, because they often explain a
+project faster than its prose does; generated, third-party, vendored,
+test, housekeeping, binary, and credential-bearing paths are skipped.
+Every rule here reads a path only, so a repository can be filtered from
+its inventory before a single file body is downloaded. See
+docs/github-repository-indexing.md.
 
 This file is part of Extractium™
 extractium/sources/github_files.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-09
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-16"
 
 import posixpath
 import re
@@ -49,10 +51,14 @@ DOCUMENTATION_EXTENSIONS = (".md", ".markdown", ".txt", ".rst", ".adoc", ".ascii
 # README.rst are all the same file to this rule. A README inside docs/,
 # inside a package, or inside an examples folder counts exactly as much
 # as the one at the repository root.
+#
+# These are the files people search: what changed, how to contribute,
+# where to report a vulnerability, who wrote it. Licence, notice,
+# citation, and conduct files are not here; they are boilerplate the
+# same in every project, and the housekeeping rule below skips them.
 DOCUMENTATION_STEMS = (
-    "readme", "license", "licence", "notice", "copying", "changelog", "changes",
-    "history", "contributing", "security", "code_of_conduct", "authors",
-    "contributors", "citation", "governance", "support", "maintainers",
+    "readme", "changelog", "changes", "history", "contributing", "security",
+    "authors", "contributors", "governance", "support", "maintainers",
 )
 
 # Project and build files indexed as text. Each names what a project is
@@ -63,59 +69,115 @@ MANIFEST_NAMES = frozenset({
     "description", "namespace", "renv.lock", "gemfile", "composer.json",
     "environment.yml", "environment.yaml", "dockerfile", "docker-compose.yml",
     "docker-compose.yaml", "makefile", "cmakelists.txt", ".gitmodules",
-    ".env.example", "codemeta.json", "conda.yaml", "conda.yml",
+    ".env.example", ".env.sample", ".env.template", "codemeta.json", "conda.yaml", "conda.yml",
 })
 
-# Manifests recognised by shape rather than by exact name.
+# Manifests recognised by shape rather than by exact name. A requirements
+# file with "lock" in its name is a lock file, not a manifest, so the two
+# rules agree on it.
 MANIFEST_PATTERNS = (
-    re.compile(r"^requirements[^/]*\.txt$", re.I),          # requirements-dev.txt and friends
+    re.compile(r"^requirements(?![^/]*lock)[^/]*\.txt$", re.I),   # requirements-dev.txt and friends
     re.compile(r"^[^/]+\.(csproj|fsproj|vbproj|sln)$", re.I),
     re.compile(r"^[^/]+\.podspec$", re.I),
 )
 
 # Workflow definitions say how a project is built, tested, and released.
+# GitHub Actions runs workflows from the repository root only, so a
+# workflow file nested anywhere else is a template that never runs.
 WORKFLOW_DIRECTORY = ".github/workflows"
 WORKFLOW_EXTENSIONS = (".yml", ".yaml")
 
 
 ### What Is Never Read ###
 
-# Directories holding generated output, third-party code, or a virtual
-# environment. Matched as a whole path segment, so a project directory
-# named "distribution" is not caught by "dist".
-#
-# "bin" holds what a build produced, and "data" holds the files a project
-# reads and writes rather than anything written to be read. Skipping
-# "data" also keeps a folder of participant records out of an index by
-# default, which matters more here than the occasional README lost with
-# it.
-SKIP_DIRECTORIES = frozenset({
-    ".git", ".hg", ".svn", "node_modules", "vendor", "dist", "build", "target",
-    "coverage", "htmlcov", ".venv", "venv", "env", "__pycache__", ".cache",
-    ".tox", ".mypy_cache", ".pytest_cache", ".idea", ".vscode", ".gradle",
-    "bower_components", "packrat", "site-packages", "obj", "bin", "data",
+# Directories are matched as a whole path segment, so a project
+# directory named "distribution" is not caught by "dist", and only the
+# folders above a file count, never the file's own name.
+
+# Build output and installed environments. "bin" holds what a build
+# produced, and "data" holds the files a project reads and writes rather
+# than anything written to be read. Skipping "data" also keeps a folder
+# of participant records out of an index by default, which matters more
+# here than the occasional README lost with it.
+BUILD_AND_ENVIRONMENT_DIRECTORIES = frozenset({
+    "node_modules", "vendor", "dist", "build", "target", "coverage", "htmlcov",
+    "venv", "env", "__pycache__", "bower_components", "packrat", "site-packages",
+    "obj", "bin", "data",
 })
+
+# Somebody else's code copied into the repository. A git submodule never
+# reaches this list: the tree lists it as a commit entry with nothing
+# under it, so there is nothing to skip.
+VENDORED_DIRECTORIES = frozenset({
+    "third_party", "thirdparty", "third-party", "3rdparty", "external", "externals",
+    "extern", "deps", "contrib", "submodules", "vendored", "vendors",
+})
+
+# Code a tool wrote from a schema or a grammar. The source it was written
+# from is in the repository already, and that is the file worth reading.
+GENERATED_DIRECTORIES = frozenset({
+    "generated", "__generated__", "gen", "autogen", "autogenerated", "codegen",
+})
+
+# Test suites, their fixtures, and their recorded outputs. A fixture
+# folder holds copies of other people's pages and files, and a golden or
+# snapshot folder holds a program's output, neither of which anybody
+# searches for. Only folders are skipped: a test_app.py beside its code
+# is still read.
+TEST_DIRECTORIES = frozenset({
+    "tests", "test", "testing", "spec", "specs", "__tests__", "fixtures", "fixture",
+    "testdata", "test_data", "golden", "snapshots", "__snapshots__", "mocks", "__mocks__",
+})
+
+SKIP_DIRECTORIES = (
+    BUILD_AND_ENVIRONMENT_DIRECTORIES | VENDORED_DIRECTORIES
+    | GENERATED_DIRECTORIES | TEST_DIRECTORIES
+)
 
 # renv keeps a project's installed R packages here: thousands of files of
 # somebody else's source. The lock file beside it is what matters.
 SKIP_PATH_PREFIXES = ("renv/library/", "renv/staging/", ".rproj.user/")
 
+# Any path segment that starts with a dot is skipped: tool settings,
+# editor folders, version-control folders, and dotfiles at the root are
+# configuration for programs, not writing for people. The exceptions are
+# the few dotfiles that document a project (.gitmodules, .env.example and
+# its siblings) and the workflow files at the repository root.
+DOTFILE_EXCEPTIONS = frozenset({".gitmodules", ".env.example", ".env.sample", ".env.template"})
+
 # Extensions whose bytes are not indexable text: binaries, media,
 # archives, compiled objects, stored data, and fonts. Word, OpenDocument,
 # RTF, and PDF files are absent because a reader turns them into text
 # when the source's read_documents setting is on; the binary .doc format
-# has no reader and stays here.
+# has no reader and stays here. An SVG is an image whatever its bytes.
 SKIP_EXTENSIONS = frozenset({
     "exe", "dll", "so", "dylib", "o", "obj", "a", "lib", "class", "jar", "war",
     "pyc", "pyo", "pyd", "wasm", "bin", "dat", "db", "sqlite", "sqlite3",
     "rdb", "rda", "rds", "sav", "dta", "mat", "npy", "npz", "parquet", "feather",
     "zip", "gz", "tgz", "bz2", "xz", "7z", "rar", "tar", "dmg", "iso", "apk", "msi", "deb", "rpm",
     "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "ico", "webp", "avif", "heic", "psd", "ai",
+    "svg",
     "mp3", "mp4", "wav", "ogg", "m4a", "flac", "webm", "mov", "avi", "wmv", "mkv",
     "woff", "woff2", "ttf", "eot", "otf",
     "doc", "xls", "xlsx", "ppt", "ods",
     "map",
 })
+
+# Settings files read by programs, styling, and query files. None of them
+# is prose, and none is code the parsers know. A file of one of these
+# kinds that is a project manifest, such as pyproject.toml, package.json,
+# or environment.yml, is recognised as a manifest before this rule is
+# reached.
+UNREAD_EXTENSIONS = frozenset({
+    "toml", "yml", "yaml", "json", "ini", "cfg", "conf", "properties", "xml",
+    "css", "scss", "sass", "less",
+    "scm",
+})
+
+# C and C++ headers. A header declares what its source file defines, and
+# the source file is the one the parsers read; a library's public headers
+# are also where a vendored dependency's forty thousand files come from.
+HEADER_EXTENSIONS = frozenset({"h", "hpp", "hh", "hxx", "inl", "tpp", "ipp"})
 
 # Files that hold, or are likely to hold, a credential. A private key
 # committed by mistake is still a private key: it is never downloaded,
@@ -133,19 +195,72 @@ SECRET_EXTENSIONS = frozenset({
 # to run the project rather than a secret.
 SECRET_EXCEPTIONS = frozenset({".env.example", ".env.sample", ".env.template"})
 
-# Generated JavaScript and CSS: machine-written, one enormous line, and
-# always derived from source that is in the repository anyway.
-MINIFIED_RE = re.compile(r"\.min\.(js|css)$", re.I)
+# Machine-written files recognised by name: protocol buffer output,
+# designer and generated C#, anything marked .generated, and minified or
+# bundled scripts and styles. Each is derived from source that is in the
+# repository anyway, and a bundle is somebody else's code as often as
+# the project's own.
+GENERATED_NAME_RE = re.compile(
+    r"(\.pb\.(h|cc|go)|_pb2(_grpc)?\.py|\.g\.cs|\.designer\.cs|\.generated\.[^.]+"
+    r"|\.min\.[^.]+|\.(bundle|chunk|umd|esm)\.js)$",
+    re.I,
+)
+
+# A page or script longer than this was written by a program, not a
+# person: a rendered report, a data dictionary, a bundled application.
+# Checked against the size the inventory reports, so no request is spent
+# on it. Prose files are not held to it, because a long manual is a
+# manual.
+MAX_HANDWRITTEN_BYTES = 500_000
+GENERATED_BY_SIZE_EXTENSIONS = frozenset({"js", "mjs", "cjs", "jsx", "html", "htm"})
+
+# Single-file libraries that projects copy in whole rather than install:
+# the sqlite amalgamation, cJSON, the stb headers, miniz, and the
+# browser libraries most often committed beside a page. Only the
+# library's own file names are matched; a shell.c beside sqlite3.c is
+# not assumed to be sqlite's, and d3chart.js is somebody's chart.
+THIRD_PARTY_FILE_RE = re.compile(
+    r"^(sqlite3(ext)?\.(c|h)|cjson[^/]*\.(c|h)|stb_[^/]+\.h|miniz\.(c|h)"
+    r"|(jquery|bootstrap|lodash|moment|d3|three)([.-][^/]*)?\.(js|css))$",
+    re.I,
+)
+
+# Files every project carries in the same words: licence and notice
+# texts, citation metadata, conduct codes, and the instruction files
+# written for coding agents rather than for people. Matched on the stem,
+# with or without an extension, and only where the name is not a code
+# file, so agent.py and notice.py stay code.
+HOUSEKEEPING_RE = re.compile(
+    r"^(license|licence|copying)([._-][^/]*)?$"
+    r"|^(notice|citation|code_of_conduct|claude|agents?|conventions|codex|gemini|skills"
+    r"|copilot-instructions)(\.[^/]*)?$",
+    re.I,
+)
 
 # Dependency lock files are long lists of package names and version
 # numbers, and the manifest beside them already records what the project
-# declared. renv.lock is the exception, kept in MANIFEST_NAMES above,
-# because an R project's DESCRIPTION often pins nothing at all.
-LOCK_FILE_NAMES = frozenset({
-    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "pdm.lock",
-    "uv.lock", "cargo.lock", "gemfile.lock", "composer.lock", "pipfile.lock",
-    "packages.lock.json", "go.sum",
-})
+# declared. A lock file is recognised by "lock" as a word in its name
+# (package-lock.json, yarn.lock, uv.lock, poetry.lock, Cargo.lock,
+# requirements-lock.txt) plus the few named without the word. renv.lock
+# is the exception, kept in MANIFEST_NAMES above, because an R project's
+# DESCRIPTION often pins nothing at all. Only names that are not code
+# files are checked, so lock.py stays code, and "lock" must stand alone,
+# so deadlock.md and lockfile.md are prose.
+LOCK_TOKEN_RE = re.compile(r"(^|[._-])lock($|[._-])", re.I)
+LOCK_FILE_NAMES = frozenset({"go.sum", "gradle.lockfile", "bun.lockb"})
+KEPT_LOCK_FILES = frozenset({"renv.lock"})
+
+
+### Reading Order ###
+
+# When a repository holds more indexable files than a build reads, the
+# files are read in this order of kind, then shallowest first, then by
+# name, so the root README always comes first and code is the first
+# thing left out. A README is the one file every reader opens; the
+# rest of the documentation and the manifests say what the project is;
+# code is the largest kind and the one a reader can least use on its
+# own.
+READ_ORDER = ("root readme", "readme", "documentation", "manifest", "document", "code")
 
 
 ### Classification ###
@@ -167,6 +282,26 @@ def _extension(name):
     return extension if stem else ""
 
 
+def is_workflow(path):
+    """True for a GitHub Actions workflow file at the repository root."""
+    lowered = path.lower()
+    return lowered.startswith(WORKFLOW_DIRECTORY + "/") and lowered.endswith(WORKFLOW_EXTENSIONS)
+
+
+def is_lock_file(name):
+    """True when a lowercased file name is a dependency lock file that is not read."""
+    if name in KEPT_LOCK_FILES:
+        return False
+    if name in LOCK_FILE_NAMES:
+        return True
+    return bool(LOCK_TOKEN_RE.search(name)) and not code_languages.is_code_path(name)
+
+
+def is_housekeeping(name):
+    """True when a lowercased file name is a licence, notice, citation, conduct, or agent-instruction file."""
+    return bool(HOUSEKEEPING_RE.match(name)) and not code_languages.is_code_path(name)
+
+
 def is_skipped_path(path):
     """
     True when nothing at this path is ever worth downloading.
@@ -175,9 +310,11 @@ def is_skipped_path(path):
         path (str): a repository-relative path, with forward slashes.
 
     Returns:
-        bool: True for generated or third-party directories, binary and
-        media files, minified output, lock files, and anything that holds
-        a credential.
+        bool: True for build, vendored, generated, and test directories,
+        every dot-prefixed folder or file but the few that document a
+        project, anything that holds a credential, lock files, generated
+        and third-party files recognised by name, housekeeping files,
+        C and C++ headers, and binary or media files.
     """
     lowered = path.lower()
     segments = lowered.split("/")
@@ -187,13 +324,35 @@ def is_skipped_path(path):
         return True
 
     name = segments[-1]
-    if name in SECRET_EXCEPTIONS:
+    if name in DOTFILE_EXCEPTIONS or is_workflow(lowered):
         return False
     if SECRET_NAME_RE.search(lowered) or _extension(name) in SECRET_EXTENSIONS:
         return True
-    if name in LOCK_FILE_NAMES or MINIFIED_RE.search(name):
+    if any(segment.startswith(".") for segment in segments):
         return True
-    return _extension(name) in SKIP_EXTENSIONS
+    if is_lock_file(name):
+        return True
+    if GENERATED_NAME_RE.search(name) or THIRD_PARTY_FILE_RE.match(name):
+        return True
+    if is_housekeeping(name):
+        return True
+    extension = _extension(name)
+    return extension in HEADER_EXTENSIONS or extension in SKIP_EXTENSIONS
+
+
+def is_generated_by_size(path, size):
+    """
+    True when a page or script is too long to have been written by hand.
+
+    Args:
+        path (str): a repository-relative path.
+        size (int | None): the size the inventory reports, in bytes, or
+            None when it reports none. An unknown size is not held
+            against the file.
+    """
+    if size is None:
+        return False
+    return _extension(_name(path)) in GENERATED_BY_SIZE_EXTENSIONS and size > MAX_HANDWRITTEN_BYTES
 
 
 def is_documentation(path):
@@ -206,13 +365,12 @@ def is_documentation(path):
 
 def is_manifest(path):
     """True when the file at path is a project or build file indexed as text."""
-    lowered = path.lower()
     name = _name(path)
     if name in MANIFEST_NAMES:
         return True
     if any(pattern.match(name) for pattern in MANIFEST_PATTERNS):
         return True
-    return lowered.startswith(WORKFLOW_DIRECTORY + "/") and name.endswith(WORKFLOW_EXTENSIONS)
+    return is_workflow(path)
 
 
 def classify(path):
@@ -233,16 +391,22 @@ def classify(path):
     if not path or path.endswith("/") or is_skipped_path(path):
         return None
     # Manifests are checked first because some carry a documentation
-    # extension: requirements.txt is a dependency list, not prose, and
-    # calling it documentation would lose the label that says so.
+    # extension or a settings extension: requirements.txt is a dependency
+    # list, not prose, and pyproject.toml is a manifest, not a settings
+    # file nobody reads.
     if is_manifest(path):
         return "manifest"
+    if _extension(_name(path)) in UNREAD_EXTENSIONS:
+        return None
     if is_documentation(path):
         return "documentation"
     if is_document(path):
         return "document"
     if code_languages.is_code_path(path):
         return "code"
+    # Anything else is a file no rule recognises: not prose, not a
+    # manifest, not a document a reader turns into text, and not a
+    # language the parsers know. It is left alone rather than guessed at.
     return None
 
 
@@ -262,6 +426,28 @@ def content_type_for(path):
     if is_manifest(path):
         return "manifest"
     return "readme" if _stem(_name(path)) == "readme" else "text"
+
+
+def read_priority(path, kind):
+    """
+    Where a file falls in the reading order, for sorting.
+
+    Args:
+        path (str): a repository-relative path.
+        kind (str): what classify() said the file is, passed in so a
+            repository of forty thousand paths is not classified twice.
+
+    Returns:
+        tuple[int, int, str]: the rank of the file's kind in READ_ORDER,
+        how many folders deep it sits, and its lowercased path, so that
+        sorting by this tuple reads the root README first, then every
+        other README shallowest first, and code last.
+    """
+    lowered = path.lower()
+    if kind == "documentation" and _stem(_name(path)) == "readme":
+        kind = "readme" if "/" in lowered else "root readme"
+    rank = READ_ORDER.index(kind) if kind in READ_ORDER else len(READ_ORDER)
+    return (rank, lowered.count("/"), lowered)
 
 
 ### Presentation ###
@@ -293,6 +479,8 @@ MANIFEST_ROLES = {
     "makefile": "Build and task definitions",
     ".gitmodules": "Repositories included as submodules",
     ".env.example": "Environment variables the project needs, with placeholder values",
+    ".env.sample": "Environment variables the project needs, with placeholder values",
+    ".env.template": "Environment variables the project needs, with placeholder values",
 }
 
 
@@ -303,7 +491,7 @@ def manifest_role(path):
         return MANIFEST_ROLES[name]
     if name.startswith("requirements") and name.endswith(".txt"):
         return MANIFEST_ROLES["requirements.txt"]
-    if path.lower().startswith(WORKFLOW_DIRECTORY + "/"):
+    if is_workflow(path):
         return "Automated workflow run by GitHub Actions"
     return ""
 

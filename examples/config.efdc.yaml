@@ -2,7 +2,7 @@
 # examples/config.efdc.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-09
-# Last Modified: 2026-09-15
+# Last Modified: 2026-09-16
 # Summary: A build configuration for the Eisenberg Family Depression Center at
 # the University of Michigan. It gathers the center's public documentation --
 # the U-M Health Research Resource Library, the Open Source Hub, the GitHub
@@ -102,6 +102,8 @@ sources:
     include_forks: false        # a fork and its original are near-identical
     include_archived: true      # archived documentation is still documentation
     include_code: true          # index what the code defines, not the code
+    max_repositories: 100       # alphabetical; the rest are named in the log
+    max_files_per_repository: 1000  # the root README is always read first, code last
 
   # 4. The main website, including the Depression Center Toolkit.
   #
@@ -246,6 +248,8 @@ cache_dir: .kb_cache
 # looks right. For a first run, cap it far lower from the command line instead
 # of editing this file:
 #   python -m extractium.cli build --config config.yaml --max-pages 25
+# The GitHub source has its own two ceilings, set on its entry above, and
+# meets this one only when it falls back to crawling documentation pages.
 max_pages: 5000
 
 # The least time between two requests to one site. These are the center's

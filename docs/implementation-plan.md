@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
@@ -215,6 +215,8 @@ The detailed design for this phase and the next is [GitHub repository indexing](
 **Done when** an organization indexes through the API with a token, indexes identically without one, still produces its documentation with a coverage note when the API cannot be used at all, and reads no account the operator did not name.
 
 *Finished 2026-09-09 on branch `phase-7-github-api-source`. The source is three modules rather than one: the REST transport, the path rules, and the source itself, because one file holding all three would have been about nine hundred lines. Two things came out differently from the design. Walking a truncated tree is keyed on each folder's path, not on its tree object: two folders with identical contents share one object name, and keying on that silently loses every file in the second one, which a test now pins. And the file classifier checks manifests before documentation, so `requirements.txt` keeps the label that says what it is instead of being read as prose. Review changed one default: a repository is read as one archive whenever it fits in memory, rather than only when many files are wanted. Requests are what a build runs out of, not bytes. Files taken out of an archive are stored under their blob names, so the archive route and the single-file route share one cache and an unchanged repository downloads nothing. The site-handler protocol gained the three optional hooks the design asked for; the TeamDynamix scope rule could now move out of core and has not, since that is not this phase's work.*
+
+*Revised 2026-09-16 on branch `github-skip-rules-and-ceilings`. The build's `max_pages` no longer counts files read through the API, because one account is one source and a single repository of forty thousand headers starved every repository after it; the source gained `max_repositories` and `max_files_per_repository` instead, with the root README always read first, and `max_pages` reaches only the documentation crawl. The path rules grew to skip vendored, generated, and test folders, every dotfile but three, housekeeping and agent-instruction files, headers, lock files by the word, settings files, single-file libraries, and pages too long to be hand-written; read as a repository, this tool's own tree went from 247 indexed files to 146.*
 
 ### Phase 8: Browser-compatible transport for challenged sites
 

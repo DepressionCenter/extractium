@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-16"
 
 import dataclasses
 import re
@@ -39,7 +39,6 @@ import re
 from extractium.code import render as code_render
 from extractium.code.indexer import CodeIndexer
 from extractium.core import cache as caching
-from extractium.core.ceiling import PageCeiling
 from extractium.core.fetch import DEFAULT_USER_AGENT, normalise
 from extractium.core.models import Document
 from extractium.core import prose
@@ -92,6 +91,22 @@ OWNER_URL_RE = re.compile(r"^https?://(?:www\.)?github\.com/([^/?#]+)(?:/([^/?#]
 # individually instead.
 MAX_ARCHIVE_REPOSITORY_KIB = 60_000
 
+# How many of an account's repositories are read, and how many indexable
+# files each contributes, when the source's entry says nothing. These
+# repeat the settings defaults because a web source seeded at a GitHub
+# address becomes this source with no settings entry at all, and the
+# settings loader never sees it. A test holds the two pairs equal.
+#
+# A hundred repositories is more than one organization publishes and
+# fewer than a build can read in an afternoon anonymously. A thousand
+# files is every README, manifest, and documentation page of any
+# project, and a good part of its code; the rest of a larger repository
+# is a vendored tree, a generated one, or a monorepo. Files are read in
+# github_files.READ_ORDER, so the root README is never the file left
+# out.
+DEFAULT_MAX_REPOSITORIES = 100
+DEFAULT_MAX_FILES_PER_REPOSITORY = 1_000
+
 
 class GitHubSourceError(Exception):
     """
@@ -117,11 +132,18 @@ class GitHubApiSource:
         options (Mapping): the validated options of a `github_api` entry:
             exactly one of org, user, or url; include_repos,
             exclude_repos, include_forks, include_archived, include_code,
-            ctags_fallback, read_documents, and max_file_bytes.
+            ctags_fallback, read_documents, max_file_bytes,
+            max_repositories, and max_files_per_repository.
 
     Attributes:
         coverage (dict[str, int]): repository full name to the tier that
             read it, in the order they were read.
+        unread (list[str]): the names of the repositories past
+            max_repositories, in the order GitHub listed them, so the
+            summary can say which ones the index does not hold.
+        cut (dict[str, tuple[int, int]]): repository full name to how
+            many indexable files were read and how many it holds, for
+            every repository max_files_per_repository cut short.
         analyzed (dict[str, int]): repository full name to how many code
             files were analyzed in it, for the report at the end.
         acquired (set[str]): every URL already turned into a document, so
@@ -147,11 +169,16 @@ class GitHubApiSource:
         # asked for, because each costs a request of its own.
         self.read_documents = bool(options.get("read_documents", False))
         self.max_file_bytes = int(options.get("max_file_bytes") or 2_000_000)
+        self.max_repositories = int(options.get("max_repositories") or DEFAULT_MAX_REPOSITORIES)
+        self.max_files_per_repository = int(
+            options.get("max_files_per_repository") or DEFAULT_MAX_FILES_PER_REPOSITORY
+        )
         self.analyzed = {}
         self.registry = None
         self.settings = None
-        self.ceiling = None
         self.coverage = {}
+        self.unread = []
+        self.cut = {}
         self.acquired = set()
         self.mapped = set()
 
@@ -166,10 +193,12 @@ class GitHubApiSource:
         Args:
             registry (extractium.core.registry.Registry): where plugin
                 classes are looked up.
-            settings (extractium.sources.web.CrawlSettings): the page
-                ceiling, under which a file counts as one page, the
-                delay, the User-Agent, robots.txt handling, and the
-                allowed GitHub accounts.
+            settings (extractium.sources.web.CrawlSettings): the delay,
+                the User-Agent, robots.txt handling, the allowed GitHub
+                accounts, and the page ceiling the documentation crawl
+                runs under. Files read through the API are not counted
+                against that ceiling; the source's own two ceilings
+                cover them.
         """
         self.registry = registry
         self.settings = settings
@@ -241,15 +270,9 @@ class GitHubApiSource:
         twice when it tries again lower down.
         """
         selected = self._selected_repositories(client, progress)
-        ceiling = self._page_ceiling()
         for repository in selected:
             full_name = repository.get("full_name") or f"{self.owner}/{repository.get('name')}"
             if full_name in self.coverage:
-                continue
-            if ceiling.reached:
-                # Not read at all, and not marked as read: the summary
-                # then says truthfully which repositories the index holds.
-                progress(f"  {full_name}: not read; max_pages was reached")
                 continue
             try:
                 yield from self._read_repository(client, repository, tier, progress)
@@ -261,14 +284,15 @@ class GitHubApiSource:
                 progress(f"  {full_name}: skipped ({e})")
             self.coverage[full_name] = tier
 
-        ceiling.report(progress)
         owner_map = self._owner_map(selected)
         if owner_map is not None:
             yield owner_map
 
     def _selected_repositories(self, client, progress):
         """
-        The repositories to read, after the operator's filters.
+        The repositories to read, after the operator's filters and the
+        repository ceiling. A single repository named by its address is
+        never subject to the ceiling.
 
         Raises:
             GitHubSourceError: if the account or repository does not
@@ -279,7 +303,8 @@ class GitHubApiSource:
                 return [client.repository(self.owner, self.repository)]
             account = client.account(self.owner)
             listed = client.repositories_for(self.owner, account.get("type"))
-            return [r for r in listed if self._wanted(r, progress)]
+            wanted = [r for r in listed if self._wanted(r, progress)]
+            return self._within_repository_ceiling(wanted, progress)
         except GitHubNotFound as e:
             raise GitHubSourceError(
                 f"GitHub has no {self.target_description}. Check the spelling. ({e})"
@@ -325,10 +350,71 @@ class GitHubApiSource:
             return False
         return True
 
+    def _within_repository_ceiling(self, repositories, progress):
+        """
+        The first max_repositories of the repositories that passed the
+        filters, in the order GitHub listed them, which is alphabetical.
+
+        The listing is read whole so the repositories past the ceiling
+        can be named. A repository silently missing from an index is
+        indistinguishable from one that was never there, and the line
+        says how to choose which ones are read instead.
+        """
+        kept = repositories[:self.max_repositories]
+        for repository in repositories[self.max_repositories:]:
+            name = repository.get("name") or ""
+            if name in self.unread:
+                # A tier that failed partway through lists the account
+                # again lower down; the repositories past the ceiling
+                # are the same ones and are named once.
+                continue
+            self.unread.append(name)
+            progress(
+                f"  {name}: not read; max_repositories is {self.max_repositories} "
+                "(name it in include_repos to choose which repositories are read)"
+            )
+        return kept
+
+    def _within_file_ceiling(self, full_name, wanted, progress):
+        """
+        The files a repository contributes, cut to
+        max_files_per_repository in reading order.
+
+        Files are ranked by github_files.read_priority, so the root
+        README is always first, then the other READMEs, the rest of the
+        documentation, the manifests, the documents, and last the code.
+        The kept files are returned in inventory order, and the line
+        says what kinds were left out.
+
+        The code indexer holds its own ceiling of 3,000 code files a
+        repository. Code is the last kind read, so with the default
+        setting that ceiling never fires; it matters only when an
+        operator raises this setting past it.
+        """
+        if len(wanted) <= self.max_files_per_repository:
+            return wanted
+        kinds = {path: files.classify(path) for path in wanted}
+        ranked = sorted(wanted, key=lambda path: files.read_priority(path, kinds[path]))
+        kept = set(ranked[:self.max_files_per_repository])
+        left_out = [path for path in ranked if path not in kept]
+        counts = {}
+        for path in left_out:
+            counts[kinds[path]] = counts.get(kinds[path], 0) + 1
+        by_kind = ", ".join(
+            f"{counts[kind]} {kind}" for kind in files.READ_ORDER if kind in counts
+        )
+        self.cut[full_name] = (len(kept), len(wanted))
+        progress(
+            f"  {full_name}: reading {len(kept)} of {len(wanted)} indexable file(s); "
+            f"max_files_per_repository leaves out {len(left_out)} ({by_kind})"
+        )
+        return {path: entry for path, entry in wanted.items() if path in kept}
+
     def _read_repository(self, client, repository, tier, progress):
         """
-        Reads one repository: its inventory, then the files worth indexing,
-        then a summary record naming how completely it was read.
+        Reads one repository: its inventory, then the files worth indexing
+        up to the file ceiling, then a summary record naming how
+        completely it was read.
         """
         owner = (repository.get("owner") or {}).get("login") or self.owner
         name = repository.get("name") or ""
@@ -345,6 +431,9 @@ class GitHubApiSource:
 
         entries = client.tree(owner, name, branch)
         wanted = self._files_to_read(full_name, entries, progress)
+        # The ceiling is applied before the download, so a file past it
+        # costs no request.
+        wanted = self._within_file_ceiling(full_name, wanted, progress)
         # A repository the previous tier had already started is finished
         # rather than read again. Two documents for one file would be two
         # copies of the same text in the index.
@@ -352,10 +441,6 @@ class GitHubApiSource:
             path: entry for path, entry in wanted.items()
             if normalise(self._url_for(owner, name, branch, path)) not in self.acquired
         }
-        # The ceiling is applied before the download, so a file past it
-        # costs no request. A code file is a file like any other here.
-        ceiling = self._page_ceiling()
-        wanted = {path: entry for path, entry in wanted.items() if ceiling.allow()}
         bodies = self._download(client, owner, name, branch, repository, wanted, progress)
 
         indexed = 0
@@ -401,24 +486,21 @@ class GitHubApiSource:
         # Files and records are counted separately because they are not
         # the same number: one code file yields a record of its own and
         # one more for every definition in it.
+        cut = self.cut.get(full_name)
+        left_out = f"; {cut[1] - cut[0]} left out by max_files_per_repository" if cut else ""
         progress(
             f"  {full_name}: indexed {indexed} file(s) of {len(entries)}, "
-            f"as {records} record(s)"
+            f"as {records} record(s){left_out}"
         )
         if full_name not in self.mapped:
             self.mapped.add(full_name)
             yield _with_repository_metadata(
                 self._repository_map(
                     repository, full_name, owner, name, branch, indexed, tier, code_lines,
+                    cut=cut,
                 ),
                 repository,
             )
-
-    def _page_ceiling(self):
-        """The build's page ceiling, a file counting as one page, kept across tiers."""
-        if self.ceiling is None:
-            self.ceiling = PageCeiling.for_settings(self.settings, "file")
-        return self.ceiling
 
     ### Reading The Code ###
 
@@ -513,6 +595,12 @@ class GitHubApiSource:
             if kind == "document" and not self.read_documents:
                 continue
             size = entry.get("size")
+            if files.is_generated_by_size(path, size):
+                progress(
+                    f"  {full_name}/{path}: skipped ({size} bytes; a page or script this "
+                    "long is generated, not written)"
+                )
+                continue
             if size is not None and size > self.max_file_bytes:
                 progress(
                     f"  {full_name}/{path}: skipped ({size} bytes is over the "
@@ -719,7 +807,7 @@ class GitHubApiSource:
         )
 
     def _repository_map(self, repository, full_name, owner, name, branch, indexed, tier,
-                        code_lines=()):
+                        code_lines=(), cut=None):
         """
         The per-repository summary document.
 
@@ -727,6 +815,11 @@ class GitHubApiSource:
         searching the finished index sees the gap without going back to
         the build log. A gap the reader cannot see is a gap that will be
         mistaken for an answer.
+
+        Args:
+            cut (tuple[int, int] | None): how many indexable files were
+                read and how many the repository holds, when the file
+                ceiling cut it short.
         """
         licence = (repository.get("license") or {}).get("name") or "not stated"
         topics = ", ".join(repository.get("topics") or ()) or "none listed"
@@ -743,7 +836,11 @@ class GitHubApiSource:
             "",
             f"Read through the {TIER_NAMES[tier]}.",
             f"Coverage: {TIER_COVERAGE[tier]}.",
-            f"Files indexed: {indexed}.",
+            (
+                f"Files indexed: {indexed} of {cut[1]} indexable files; the rest were left "
+                "out by max_files_per_repository."
+                if cut else f"Files indexed: {indexed}."
+            ),
         ]
         lines += list(code_lines)
         return Document(
@@ -816,6 +913,10 @@ class GitHubApiSource:
         The requested scope survives: a request for one repository crawls
         that repository and does not widen to the owner's other work. What
         the API already read is not fetched again.
+
+        This is the one place the build's max_pages setting applies to
+        GitHub: the crawl is a real crawl, and WebSource counts every page
+        it reads against the ceiling.
         """
         if self.registry is None:
             raise GitHubSourceError(
@@ -907,11 +1008,13 @@ class GitHubApiSource:
         therefore missing from the index.
 
         Returns:
-            list[str]: the coverage report, empty when nothing was read.
+            list[str]: the coverage report, followed by one line for the
+            repositories past max_repositories and one for those cut by
+            max_files_per_repository, empty when nothing was read.
         """
-        if not self.coverage:
+        if not self.coverage and not self.unread and not self.cut:
             return []
-        width = max(len(name) for name in self.coverage)
+        width = max((len(name) for name in self.coverage), default=0)
         lines = []
         for name, tier in self.coverage.items():
             analyzed = self.analyzed.get(name)
@@ -919,6 +1022,16 @@ class GitHubApiSource:
             if analyzed:
                 coverage = f"{coverage}; {analyzed} code file(s) analyzed"
             lines.append(f"{name:<{width}}  {TIER_NAMES[tier]:<30}  {coverage}")
+        if self.unread:
+            lines.append(
+                f"{len(self.unread)} repository(ies) not read: max_repositories is "
+                f"{self.max_repositories}; name them in include_repos to choose which are read"
+            )
+        if self.cut:
+            lines.append(
+                f"{len(self.cut)} repository(ies) cut at {self.max_files_per_repository} "
+                f"files by max_files_per_repository: {', '.join(sorted(self.cut))}"
+            )
         return lines
 
 

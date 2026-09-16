@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-15
+# Last Modified: 2026-09-16
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -151,6 +151,9 @@ sources:
   #  ctags_fallback: true           # let Universal Ctags read languages no grammar covers
   #  read_documents: false          # read Word, OpenDocument, RTF, PDF, and slide files, one request each
   #  max_file_bytes: 2000000        # larger files are skipped, and each one is named
+  #  max_repositories: 100          # read this many of the account's repositories, alphabetically;
+  #                                 # the rest are named in the log, and include_repos chooses
+  #  max_files_per_repository: 1000 # the root README is always read first, code last
   #
   # Code analysis needs the optional parser set: pip install "extractium[code]".
   # Without it every source file is still recorded by name, with its language,
@@ -246,7 +249,9 @@ sources:
 # The most a source may read: web pages for a crawl, videos, deposits, or
 # files for the other kinds. This is a safety net: if an include pattern
 # is broader than you meant, the crawl still stops here, and a small value
-# makes a quick trial of every source.
+# makes a quick trial of every source. A github_api source has its own two
+# ceilings, max_repositories and max_files_per_repository, and meets this
+# one only when it falls back to crawling documentation pages.
 #max_pages: 10000
 
 # The least time, in seconds, between two requests to the same site, so the
