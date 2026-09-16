@@ -2210,8 +2210,79 @@ def test_a_linked_video_is_read_only_when_a_named_channel_published_it():
 
     assert {d.title.split(" -- ")[0] for d in documents} == {"Ours"}
     assert (built.found_offered, built.found_read, built.found_left_out) == (3, 1, 2)
+    assert (built.found_other_channel, built.found_unknown_publisher) == (1, 1)
     assert [call["video_id"] for call in reader.calls] == [VIDEO_A]
-    assert "3 video(s) linked from crawled pages: 1 read, 2 left out" in "\n".join(built.summary_lines())
+    report = "\n".join(built.summary_lines())
+    assert ("3 video(s) linked from crawled pages: 1 read, 1 left out because another channel "
+            "published it, 1 left out because YouTube would not say who published it") in report
+
+
+def test_the_linked_video_report_counts_videos_by_publisher():
+    """
+    The report says who published the linked videos, one line per
+    channel, so an operator can see at a glance which channel accounts
+    for the videos left out and decide whether to name it.
+    """
+    video_c, video_d = "cccccccccc3", "dddddddddd4"
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=()),
+        "oembed": [
+            FakeResponse(body={"title": "Ours", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+            FakeResponse(body={"title": "Theirs", "author_url": "https://www.youtube.com/@ExampleHospital"}),
+            FakeResponse(body={"title": "Theirs too", "author_url": "https://www.youtube.com/@ExampleHospital"}),
+            FakeResponse(status_code=403, body={}),
+        ],
+        # The other channel's handle resolves to its id through its page, once.
+        "@ExampleHospital": channel_page(channel_id="UCbbbbbbbbbbbbbbbbbbbbbb"),
+    })
+    built = source(reader=reader, channel_id=CHANNEL, include_playlists=False, only_channel_videos=False)
+    assert list(built.fetch(session, {}, quiet)) == []
+
+    links = [f"https://www.youtube.com/watch?v={v}" for v in (VIDEO_A, VIDEO_B, video_c, video_d)]
+    list(built.read_found_links(session, {}, quiet, links))
+
+    assert built.found_by_publisher == (
+        (f"channel/{CHANNEL}", 1, 1, "named"),
+        ("@ExampleHospital", 2, 0, "other"),
+        ("not reported by YouTube", 1, 0, "unknown"),
+    )
+    lines = built.summary_lines()
+    assert any(line.strip().startswith(f"channel/{CHANNEL}") and "1 linked" in line and "1 read" in line
+               and "a channel this source names" in line for line in lines)
+    assert any(line.strip().startswith("@ExampleHospital") and "2 linked" in line and "0 read" in line
+               and "another channel" in line for line in lines)
+    assert any(line.strip().startswith("not reported by YouTube") and "1 linked" in line
+               and "publisher unknown" in line for line in lines)
+
+
+def test_a_linked_video_accepted_but_not_read_is_reported_as_waiting_on_the_block(caption_library, monkeypatch):
+    """
+    Two linked videos this channel published; YouTube refuses the first
+    caption request and the audio packages are absent. Neither is read,
+    and the report says so instead of leaving them in no category.
+    """
+    from extractium.sources import youtube as youtube_source
+    monkeypatch.setattr(youtube_source, "audio_transcription_available", lambda: False)
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({
+        "playlist": channel_page(videos=()),
+        "oembed": [
+            FakeResponse(body={"title": "First", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+            FakeResponse(body={"title": "Second", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+        ],
+    })
+    built = source(reader=reader, channel_id=CHANNEL, include_playlists=False)
+    assert list(built.fetch(session, {}, quiet)) == []
+
+    links = [f"https://www.youtube.com/watch?v={VIDEO_A}", f"https://www.youtube.com/watch?v={VIDEO_B}"]
+    documents = list(built.read_found_links(session, {}, quiet, links))
+
+    assert documents == []
+    assert built.blocked is True
+    assert (built.found_offered, built.found_read, built.found_left_out, built.found_unread) == (2, 0, 0, 2)
+    report = "\n".join(built.summary_lines())
+    assert "2 video(s) linked from crawled pages: 0 read, 2 not read because YouTube refused this machine" in report
 
 
 def test_a_linked_video_the_data_api_will_not_describe_is_named_through_the_public_endpoint(api_key_set):

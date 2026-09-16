@@ -86,13 +86,14 @@ To write a first settings file, run `python -m extractium.cli init`. It asks the
 
 ## The optional extras
 
-The core install reads websites, GitHub documentation, DSpace repositories, knowledge bundles, and local folders. Five optional extras add what some builds need. Name them inside the square brackets, separated by commas.
+The core install reads websites, GitHub documentation, DSpace repositories, knowledge bundles, and local folders. Six optional extras add what some builds need. Name them inside the square brackets, separated by commas.
 
 | Extra | What it adds | When you need it |
 |---|---|---|
 | `dev` | `pytest` and `pytest-cov`, the test tools. | To run the test suite. |
 | `code` | The Tree-sitter parser and its language grammars. | To index the structure of a repository's code: what each file defines, imports, and calls. The build script installs it from the lock file already; a developer install has to name it. Without it, every source file is still recorded by name, language, and length. |
-| `youtube` | The caption library. | To fetch captions from YouTube. Without it, a build still reads transcripts already stored under `cache_dir`. |
+| `youtube` | The caption library. | To fetch captions from YouTube. The build script installs it from the lock file already; a developer install has to name it. Without it, a build still reads transcripts already stored under `cache_dir`. |
+| `whisper` | `yt-dlp` and `faster-whisper`, the audio transcription packages. | To transcribe a video from its audio when YouTube refuses its captions, which it does to most machines that build on a schedule and to many on shared networks. The build script installs it from the lock file already; a developer install has to name it. Without it, a refused build keeps what it read and reports the video content as incomplete. About 200 MB of packages, and a 75 MB model downloaded on first use. |
 | `pdf` | `pypdf`, the PDF reader. | To read PDF files when a source sets `read_documents: true`. The build script installs it from the lock file already; a developer install has to name it. Without it, every PDF is skipped with a line saying so, and Word, OpenDocument, and RTF files are still read. |
 | `keywords` | `yake`, the keyword extractor. | To name every section with keywords and every page with tags, which the build does by default. The build script installs it from the lock file already; a developer install has to name it. Without it, the build says so once and every output leaves the keyword fields empty. |
 
@@ -103,17 +104,17 @@ Two environment variables are optional as well. `GITHUB_TOKEN` raises the reques
 
 ## What the lock file pins
 
-`requirements-lock.txt` at the repository root records the exact version and the hash of every runtime dependency, of the code parsers, of the caption library, of the PDF reader, and of the keyword extractor. The build scripts and the scheduled workflow install from it with `--require-hashes`, so a package whose contents do not match what was locked is refused rather than installed. The development install does not use the lock file: `pip install -e .` resolves versions from the ranges in `pyproject.toml`.
+`requirements-lock.txt` at the repository root records the exact version and the hash of every runtime dependency, of the code parsers, of the caption library, of the audio transcription packages, of the PDF reader, and of the keyword extractor. The build scripts and the scheduled workflow install from it with `--require-hashes`, so a package whose contents do not match what was locked is refused rather than installed. The development install does not use the lock file: `pip install -e .` resolves versions from the ranges in `pyproject.toml`.
 
 The lock file is generated for every platform at once, so it lists packages that install on Linux only. Those are the CUDA libraries the embedding stack can use on a machine with a graphics card. A Linux install downloads them, which adds several gigabytes compared to a Windows or macOS install. The build does not need them and runs on the processor either way.
 
 To regenerate the file after changing a dependency, run the command recorded in its header. It needs the `uv` tool:
 
 ```bash
-uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashes --extra code --extra youtube --extra pdf --extra keywords -o requirements-lock.txt
+uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashes --extra code --extra youtube --extra pdf --extra keywords --extra whisper -o requirements-lock.txt
 ```
 
-Keep all four extras: tests check that every parser named in `pyproject.toml`, the caption library, the PDF reader, and the keyword extractor are pinned in the lock, because the build scripts install from the lock alone and a package missing from it is a package no scripted build has. Keep the license header at the top of the file when you do.
+Keep all five extras: tests check that every parser named in `pyproject.toml`, the caption library, the audio transcription packages, the PDF reader, and the keyword extractor are pinned in the lock, because the build scripts install from the lock alone and a package missing from it is a package no scripted build has. Keep the license header at the top of the file when you do.
 
 
 ## What the first build downloads

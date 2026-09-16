@@ -163,6 +163,22 @@ def test_the_lock_file_pins_the_caption_library(lock_text):
     assert "--extra youtube" in lock_text
 
 
+def test_the_lock_file_pins_the_audio_packages(lock_text):
+    """
+    A scripted build transcribes a refused video from its audio only
+    if the lock carries the whisper extra. YouTube refuses captions to
+    most machines that build on a schedule, so a lock without these
+    packages is a build that indexes no video from such a machine.
+    """
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^whisper = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
+    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
+    assert wanted == {"yt-dlp", "faster-whisper"}
+    assert wanted <= pinned
+    assert "--extra whisper" in lock_text
+
+
 def test_the_lock_file_pins_the_keyword_extractor(lock_text):
     """
     A scripted build names sections with keywords only if the lock
