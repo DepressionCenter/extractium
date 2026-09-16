@@ -1,46 +1,27 @@
 {
-	"_license": "This file is part of Extractium™. Copyright © 2026 The Regents of the University of Michigan. This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.",
-  "access": {
-    "embargo": { "active": false, "reason": null },
-    "files": "public",
-    "record": "public",
-    "status": "open"
-  },
-  "custom_fields": {
+  "_license": "This file is part of Extractium™. Copyright © 2026 The Regents of the University of Michigan. This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "gpl-3.0-or-later",
+  "creators": [
+    {
+      "name": "Mongefranco, Gabriel",
+      "affiliation": "University of Michigan",
+      "orcid": "0000-0001-7289-200X"
+    }
+  ],
+  "imprint_publisher": "Eisenberg Family Depression Center",
+  "copyright": "Copyright © 2026 The Regents of the University of Michigan",
+  "additional_titles": [
+    {
+      "title": "Extractium",
+      "type": { "id": "alternative-title" }
+    }
+  ],
+  "custom": {
     "code:codeRepository": "https://github.com/DepressionCenter/extractium",
-    "code:developmentStatus": { "id": "active", "title": { "en": "Active" } }
-  },
-  "metadata": {
-	"additional_titles": [
-      {
-        "title": "Extractium",
-        "type": {
-          "id": "alternative-title"
-        }
-      }
-    ],
-    "copyright": "Copyright © 2026 The Regents of the University of Michigan",
-    "creators": [
-	  {
-        "affiliations": [ { "id": "00jmfr291", "name": "University of Michigan" } ],
-        "person_or_org": {
-          "family_name": "Mongefranco",
-          "given_name": "Gabriel",
-          "identifiers": [ { "identifier": "0000-0001-7289-200X", "scheme": "orcid" } ],
-          "name": "Mongefranco, Gabriel",
-          "type": "personal"
-        }
-      }
-    ],
-    "publisher": "Eisenberg Family Depression Center",
-    "resource_type": { "id": "software", "title": { "de": "Software", "en": "Software" } },
-    "rights": [
-      {
-        "id": "gpl-3.0-or-later",
-        "props": { "scheme": "spdx", "url": "https://www.gnu.org/licenses/gpl-3.0-standalone.html" },
-        "title": { "en": "GNU General Public License v3.0 or later" }
-      }
-    ]
+    "code:developmentStatus": { "id": "active" },
+    "code:programmingLanguage": [ { "id": "python" } ]
   },
   "communities": [
     {
