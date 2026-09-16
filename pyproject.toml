@@ -2,7 +2,7 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
-# Last Modified: 2026-09-15
+# Last Modified: 2026-09-16
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
 # (single package; runtime deps, dev/code/youtube/pdf/keywords extras,
@@ -107,6 +107,13 @@ code = [
 # operator already committed never calls this package. MIT-licensed; its
 # only dependency beyond requests is defusedxml, a hardened XML parser.
 youtube = ["youtube-transcript-api>=1.2.4,<2.0.0"]
+# Transcribing a video's audio when YouTube refuses its captions. Optional
+# and not in the lock file: the two packages pull in CTranslate2, PyAV,
+# and an ONNX runtime, about 200 MB, and only a machine YouTube refuses
+# needs them. yt-dlp (Unlicense) downloads the audio; faster-whisper (MIT)
+# runs Whisper's smallest English model on the CPU. Both confirmed to
+# install and run on Python 3.14 on Windows on 2026-09-16.
+whisper = ["yt-dlp>=2026.1.0", "faster-whisper>=1.2.0,<2.0.0"]
 # Reading PDF files. Optional because the other document readers need
 # nothing beyond the standard library, and a build that reads no PDF
 # should not carry a parser for one. Checked against the dependency gate

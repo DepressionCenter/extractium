@@ -39,6 +39,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
+import functools
 import json
 from collections import Counter
 
@@ -90,6 +91,33 @@ def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
 # ---------------------------------------------------------------------------
 # quantize_int8
 # ---------------------------------------------------------------------------
+
+def test_embed_chunks_reports_progress_in_slices_and_returns_one_array(monkeypatch):
+    """A hundred thousand windows on a CPU take an hour; one line for all of it reads as a hang."""
+    class FakeModel:
+        def __init__(self):
+            self.batches = []
+
+        def encode(self, texts, normalize_embeddings=True, batch_size=None, show_progress_bar=False):
+            self.batches.append(len(texts))
+            return np.ones((len(texts), embed.DIMS), dtype=np.float32)
+
+    model = FakeModel()
+    monkeypatch.setattr(embed, "_load_model", functools.lru_cache(maxsize=1)(lambda: model))
+    monkeypatch.setattr(embed, "PROGRESS_EVERY", 3)
+    lines = []
+
+    vecs = embed.embed_chunks([{"t": "Page", "x": f"window {n}"} for n in range(7)], progress=lines.append)
+
+    assert vecs.shape == (7, embed.DIMS) and vecs.dtype == np.float32
+    assert model.batches == [3, 3, 1]
+    assert "Embedding 7 chunk(s)..." in lines
+    assert [line for line in lines if line.startswith("  embedded")] == [
+        "  embedded 3 of 7 chunk(s); about a minute left",
+        "  embedded 6 of 7 chunk(s); about a minute left",
+    ]
+    assert embed.embed_chunks([], progress=lines.append).shape == (0, embed.DIMS)
+
 
 def test_quantize_int8_rounds_scales_and_clips():
     vecs = np.array([[0.5, -0.5, 1.5, -1.5, 0.004]], dtype=np.float32)

@@ -48,7 +48,7 @@ That is why `config.yaml` sets `cache_dir: kb-cache` instead of leaving the defa
 
 | Path | What it holds |
 |---|---|
-| `youtube/videos/<video id>.json` | One video's title, publication date, description, tags, caption language, and timed caption lines. A file you write by hand needs only the caption lines. |
+| `youtube/videos/<video id>.json` | One video's title, publication date, description, tags, caption language, and timed caption lines, from the caption track or, when YouTube refused it, from the audio. A file you write by hand needs only the caption lines. |
 | `youtube/listings/<playlist id>.json` | The videos a playlist held the last time it could be listed. |
 
 The two files here now are synthetic examples, so you can see the shape before you have any of your own. Delete them when you add real ones.

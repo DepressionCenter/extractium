@@ -7,7 +7,7 @@ extractium/core/embed.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,6 +29,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
 import functools
+import time
 
 import numpy as np
 
@@ -70,6 +71,18 @@ def _load_model():
     return SentenceTransformer(EMBED_MODEL)
 
 
+# How many chunks are embedded between two progress lines. A build of a
+# hundred thousand windows on a laptop CPU runs for an hour or more, and
+# a single "Embedding..." line for all of it reads as a hang. At this
+# size a line arrives every minute or two on a CPU and every few
+# seconds on a GPU.
+PROGRESS_EVERY = 4096
+
+# How many texts the model encodes at once. Larger batches pad short
+# windows to the longest in the batch and gain little past this.
+BATCH_SIZE = 64
+
+
 def embed_chunks(chunks, progress=None):
     """
     Embeds a list of child chunks with the configured sentence-transformer
@@ -96,9 +109,27 @@ def embed_chunks(chunks, progress=None):
     model = _load_model()
     texts = [((c["t"] + "\n") if c.get("t") else "") + c["x"] for c in chunks]
     report(f"Embedding {len(texts)} chunk(s)...")
-    vecs = model.encode(texts, normalize_embeddings=True,
-                        batch_size=64, show_progress_bar=False)
+    if not texts:
+        return np.zeros((0, DIMS), dtype=np.float32)
+    started = time.monotonic()
+    parts = []
+    for start in range(0, len(texts), PROGRESS_EVERY):
+        parts.append(model.encode(texts[start:start + PROGRESS_EVERY], normalize_embeddings=True,
+                                  batch_size=BATCH_SIZE, show_progress_bar=False))
+        done = min(start + PROGRESS_EVERY, len(texts))
+        if done < len(texts):
+            elapsed = time.monotonic() - started
+            remaining = elapsed / done * (len(texts) - done)
+            report(f"  embedded {done} of {len(texts)} chunk(s); about {_minutes(remaining)} left")
+    vecs = np.concatenate(parts) if len(parts) > 1 else parts[0]
     return vecs.astype(np.float32)
+
+
+def _minutes(seconds):
+    """A remaining time as a person says it: under a minute, or whole minutes."""
+    if seconds < 60:
+        return "a minute"
+    return f"{int(round(seconds / 60))} minute(s)"
 
 
 ### Quantization ###
