@@ -12,7 +12,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -37,6 +37,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -178,9 +179,41 @@ def test_the_lock_file_pins_the_keyword_extractor(lock_text):
     assert "--extra keywords" in lock_text
 
 
+def _working_bash():
+    """
+    A bash that can run on this machine, or None.
+
+    On Windows, `bash` on the path is often the Windows Subsystem for
+    Linux launcher in System32, which fails before running anything when
+    no distribution is set up or the session cannot log on to it. The
+    bash that Git for Windows ships beside git.exe always works, so it
+    is tried first, then whatever the path names. Each candidate has to
+    run a trivial command before it is trusted with the script.
+    """
+    candidates = []
+    git = shutil.which("git")
+    if git and sys.platform == "win32":
+        install_root = pathlib.Path(git).resolve().parent.parent
+        candidates += [install_root / "usr" / "bin" / "bash.exe", install_root / "bin" / "bash.exe"]
+    on_path = shutil.which("bash")
+    if on_path:
+        candidates.append(pathlib.Path(on_path))
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            probe = subprocess.run([str(candidate), "-c", "exit 0"], capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probe.returncode == 0:
+            return str(candidate)
+    return None
+
+
 def test_the_posix_script_is_valid_shell():
-    if shutil.which("bash") is None:
-        pytest.skip("bash is not installed on this machine")
+    bash = _working_bash()
+    if bash is None:
+        pytest.skip("no working bash on this machine")
 
     # Read from standard input, because a Windows path means nothing to
     # the bash on the path, which may be either Git for Windows or the
@@ -189,7 +222,7 @@ def test_the_posix_script_is_valid_shell():
     # text mode would rewrite them for Windows, and a shell block ending
     # in a carriage return does not parse.
     result = subprocess.run(
-        ["bash", "-n"],
+        [bash, "-n"],
         input=(REPO_ROOT / "run.sh").read_bytes(),
         capture_output=True,
     )

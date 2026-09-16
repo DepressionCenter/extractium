@@ -15,7 +15,7 @@ tests/test_source_youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -978,13 +978,25 @@ def test_a_listing_that_cannot_be_read_with_nothing_stored_ends_the_build():
         list(built.fetch(session, {}, quiet))
 
 
-def test_a_blocked_caption_request_with_nothing_stored_ends_the_build(api_key_set, caption_library):
-    """The hosted-runner case: say what happened rather than index an empty video."""
+def test_a_blocked_caption_request_with_nothing_stored_does_not_end_the_build(api_key_set, caption_library):
+    """
+    The hosted-runner case, and the laptop-on-a-hotspot case: the source
+    yields nothing, names the refusal, and lets the rest of the build
+    finish. A crawl of a thousand pages is not thrown away over one
+    refused caption request.
+    """
     reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
     session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "A Talk"})})
+    built = source(reader=reader, video_ids=(VIDEO_A,))
 
-    with pytest.raises(YouTubeSourceError, match="cloud-provider"):
-        list(source(reader=reader, video_ids=(VIDEO_A,)).fetch(session, {}, quiet))
+    lines = []
+    documents = list(built.fetch(session, {}, lines.append))
+
+    assert documents == []
+    assert built.blocked is True
+    assert built.blocked_after == 0
+    assert any("cloud-provider" in line for line in lines)
+    assert any("INCOMPLETE" in line for line in built.summary_lines())
 
 
 def test_a_video_without_captions_is_skipped_and_the_build_carries_on(api_key_set, caption_library):
@@ -1728,13 +1740,42 @@ def test_a_block_after_some_videos_keeps_what_was_read(api_key_set, caption_libr
     assert "INCOMPLETE" in "\n".join(built.summary_lines())
 
 
-def test_a_block_before_anything_was_read_still_ends_the_build(api_key_set, caption_library):
-    """An index with no video content in it is not a knowledge base worth publishing."""
+def test_a_block_before_anything_was_read_is_reported_and_the_build_carries_on(api_key_set, caption_library):
+    """The summary says the video content is missing; nothing is raised."""
     reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
     session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "First"})})
+    built = source(reader=reader, video_ids=(VIDEO_A,))
 
-    with pytest.raises(YouTubeSourceError, match="no video content at all"):
-        list(source(reader=reader, video_ids=(VIDEO_A,)).fetch(session, {}, quiet))
+    assert list(built.fetch(session, {}, quiet)) == []
+    assert built.blocked_after == 0
+    assert any("refused this machine after 0 video" in line for line in built.summary_lines())
+
+
+def test_a_block_while_reading_linked_videos_keeps_the_configured_ones(caption_library):
+    """
+    The refusal that arrives after the crawl, while reading the videos
+    the pages linked to, keeps everything the configured list read and
+    asks for nothing more.
+    """
+    reader = FakeReader(
+        tracks={VIDEO_A: caption_lines(6)},
+        errors={VIDEO_B: caption_library.RequestBlocked(VIDEO_B)},
+    )
+    session = FakeYouTubeSession({"oembed": [
+        FakeResponse(body={"title": "Configured", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+        FakeResponse(body={"title": "Linked", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+    ]})
+    built = source(reader=reader, video_ids=(VIDEO_A,))
+    built.allowed_channels.add(CHANNEL)
+
+    configured = list(built.fetch(session, {}, quiet))
+    linked = list(built.read_found_links(session, {}, quiet, [f"https://www.youtube.com/watch?v={VIDEO_B}"]))
+
+    assert {d.title.split(" -- ")[0] for d in configured} == {"Configured"}
+    assert linked == []
+    assert built.blocked is True
+    assert built.blocked_after == 1
+    assert [call["video_id"] for call in reader.calls] == [VIDEO_A, VIDEO_B]
 
 
 def test_no_further_captions_are_requested_after_a_block(api_key_set, caption_library):

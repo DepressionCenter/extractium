@@ -15,6 +15,8 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 [Back to README](../README.md)
 
+### Summary
+
 This guide explains which Extractium™ image to use, how to keep it readable, and where its source files live. The pack extends the knowledge commons illustration and the formats diagram selected for the README. All image files are in `/images`.
 
 ### Visual direction
@@ -175,6 +177,10 @@ Original project artwork follows the GNU Free Documentation License v1.3 or late
 ### Using the pack
 
 Use the banner in the README, the social PNG for repository sharing, and the dedicated icon exports for applications. Choose SVG for scalable editing and PNG where the destination does not support SVG. Use the preserved editorial illustration for presentations and the vector workflow when exact labels matter.
+
+### Conclusion
+
+The pack gives every use one right file: the banner for the README, the social PNG for sharing, the icon exports for applications, and the SVG masters for editing. The colors, clear space, and text alternatives above are what keep the mark readable and accessible wherever it lands. Anything not covered here, such as trademark clearance or a screen-reader review of a page that uses the files, is still a human decision.
 
 ### Additional resources
 

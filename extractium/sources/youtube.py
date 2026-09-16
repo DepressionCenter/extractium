@@ -106,9 +106,9 @@ class YouTubeSourceError(Exception):
     """
     Raised when this source cannot produce the documents it was asked
     for: a channel or playlist that cannot be listed and has nothing
-    stored, or captions that must be fetched from a machine YouTube
-    refuses before anything at all could be read. The message names the
-    fix and quotes no credential.
+    stored, or a caption library that is needed and absent. A refusal
+    from YouTube is not one of these; see _Blocked. The message names
+    the fix and quotes no credential.
     """
 
 
@@ -116,9 +116,10 @@ class _Blocked(Exception):
     """
     One caption request was refused because of where it came from.
 
-    Caught inside fetch rather than shown to a caller: whether a block
-    ends the build depends on whether anything was read before it, and
-    only fetch knows that.
+    Caught inside fetch rather than shown to a caller. A block never
+    ends the build: the other sources' work is kept, every transcript
+    already read or stored is kept, and the summary says which videos
+    still need a machine YouTube answers.
     """
 
 
@@ -215,8 +216,11 @@ class YouTubeSource:
     Two things about YouTube shape this source. Listing a channel or a
     playlist needs a Data API key, while reading one video's captions
     needs none. And YouTube answers caption requests from
-    cloud-provider address ranges with a block, so a scheduled build on
-    a hosted runner cannot fetch a transcript at all. Everything read is
+    cloud-provider address ranges with a block, and from shared or busy
+    addresses such as a mobile carrier's, so a scheduled build on a
+    hosted runner cannot fetch a transcript at all and a laptop on a
+    hotspot often cannot either. A block never fails the build: what
+    was read is kept and the summary says what is missing. Everything read is
     therefore stored under the cache directory, and that store is meant
     to be committed to the data repository: an operator builds once on
     their own machine, commits what came back, and every later build
@@ -258,8 +262,10 @@ class YouTubeSource:
         self.found_read = 0
         self.found_left_out = 0
         self._read_ids = set()
-        # How many videos were read before YouTube began refusing this
-        # machine, or 0 when it never did.
+        # Whether YouTube refused this machine during this build, and
+        # how many videos were read before it did. A refusal before the
+        # first video leaves blocked True and blocked_after 0.
+        self.blocked = False
         self.blocked_after = 0
         # Built on first use, and only when there is no API key.
         self.page_reader = None
@@ -315,7 +321,7 @@ class YouTubeSource:
         Raises:
             YouTubeSourceError: if a channel or playlist cannot be listed
                 and nothing is stored for it, or captions have to be
-                fetched from a machine YouTube refuses.
+                fetched and the caption library is not installed.
         """
         client = self._client(session, progress)
         video_ids, discovered = self._video_ids(client, progress)
@@ -422,10 +428,6 @@ class YouTubeSource:
 
         Yields:
             extractium.core.models.Document: one per stretch.
-
-        Raises:
-            YouTubeSourceError: if YouTube refuses this machine before a
-                single video was read.
         """
         missing = []
         produced = 0
@@ -433,24 +435,27 @@ class YouTubeSource:
         for video_id in video_ids:
             if not ceiling.allow():
                 break
+            if self.blocked:
+                # Refused earlier in this build, in fetch or in
+                # read_found_links; every further request would be
+                # refused too, so none is made.
+                break
             try:
                 record, from_store = self._video(client, video_id, titles, progress)
             except _Blocked as e:
                 # YouTube has started refusing this machine. Every later
                 # request would be refused too, so no more are made. What
-                # was already read is kept: a build that indexed a
-                # hundred videos and then got blocked is worth having,
-                # and the report says plainly that it is incomplete.
-                if not produced:
-                    raise YouTubeSourceError(
-                        f"{e} Nothing was read before that, so this build has no "
-                        "video content at all."
-                    ) from e
-                self.blocked_after = produced
+                # was already read is kept, and so is everything the
+                # other sources read: one refused caption request is not
+                # a reason to throw away a whole crawl. The report says
+                # plainly that the video content is incomplete or absent.
+                self.blocked = True
+                self.blocked_after = len(self.coverage)
+                progress(f"  {e}")
                 progress(
-                    f"  YouTube refused this machine after {produced} video(s). "
-                    "Keeping those and reading no more; the rest need a machine "
-                    "YouTube answers, or a stored transcript."
+                    f"  YouTube refused this machine after {len(self.coverage)} "
+                    "video(s). Keeping those and reading no more; the rest need "
+                    "a machine YouTube answers, or a stored transcript."
                 )
                 break
             if record is None:
@@ -832,9 +837,10 @@ class YouTubeSource:
             which is a normal thing to meet rather than a failure.
 
         Raises:
-            YouTubeSourceError: if the transcript must be fetched and
-                YouTube refuses this machine, or the library needed to
-                fetch it is absent.
+            _Blocked: if the transcript must be fetched and YouTube
+                refuses this machine.
+            YouTubeSourceError: if the library needed to fetch it is
+                absent.
         """
         stored = cache_module.load_video(video_id)
         if stored is not None:
@@ -954,9 +960,9 @@ class YouTubeSource:
         Returns:
             list[str]: the coverage report, empty when nothing was read.
         """
-        if not self.coverage:
+        if not self.coverage and not self.blocked:
             return []
-        width = max(len(title) for title, _, _ in self.coverage)
+        width = max((len(title) for title, _, _ in self.coverage), default=0)
         lines = [
             f"{title:<{width}}  {count} section(s)  "
             f"{'stored' if from_store else 'fetched'}"
@@ -979,11 +985,12 @@ class YouTubeSource:
                 f"{self.found_read} read, {self.found_left_out} left out because no "
                 "channel this source names is known to have published them"
             )
-        if self.blocked_after:
+        if self.blocked:
             lines.append(
                 f"INCOMPLETE: YouTube refused this machine after {self.blocked_after} "
-                "video(s). Raise delay_seconds, or build where YouTube answers, then "
-                "commit the cache and build again to pick up the rest."
+                "video(s). It refuses cloud, shared, and rate-limited addresses. "
+                "Raise delay_seconds, or build where YouTube answers, then commit "
+                "the cache and build again to pick up the rest."
             )
         capped = getattr(self.page_reader, "capped_listings", ())
         if capped:

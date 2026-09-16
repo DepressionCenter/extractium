@@ -542,11 +542,11 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** Update Extractium™. In a data repository built from the template, `EXTRACTIUM_REF` in its workflow names the version of the tool it installs. Move it forward.
 
-### The build stops saying YouTube refused the request
+### The summary says YouTube refused this machine after 0 videos
 
-**Cause.** You are building somewhere YouTube blocks, which means almost any cloud runner, including GitHub Actions. YouTube refuses caption requests from cloud-provider addresses. This is not a setting you can change and not a key you can buy.
+**Cause.** You are building somewhere YouTube blocks. That means almost any cloud runner, including GitHub Actions, and often a laptop on a phone hotspot or another shared network, because YouTube refuses caption requests from cloud-provider addresses and from addresses that many people share. A Data API key does not help: it lists channels and playlists, and captions never go through it. The build finishes anyway. It keeps every other source and every transcript already stored, and the YouTube section of the summary says `INCOMPLETE`.
 
-**Fix.** Build on your own machine, then commit the cache folder so the scheduled run reads the transcripts instead of asking for them. [The cache README](../examples/data-repo/kb-cache/README.md) says what to commit. The message appears only when nothing is stored for that video yet.
+**Fix.** Build from a machine on a home or office network, then commit the cache folder so later builds read the transcripts instead of asking for them. [The cache README](../examples/data-repo/kb-cache/README.md) says what to commit. If a home network is refused too, wait an hour and try again, since a refusal can also be a rate limit on the address you are using.
 
 ### `fetching captions needs youtube-transcript-api`
 

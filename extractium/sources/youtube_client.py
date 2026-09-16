@@ -12,7 +12,7 @@ extractium/sources/youtube_client.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-11
+Last Modified: 2026-09-15
 Notes: See README file for documentation and full license information.
 """
 
@@ -668,8 +668,10 @@ def fetch_transcript(video_id, languages=("en",), reader=None, session=None):
     except RequestBlocked as e:
         raise YouTubeBlocked(
             f"YouTube refused a caption request for {video_id} because of where it "
-            "came from. It blocks cloud-provider address ranges, so fetch "
-            "transcripts on your own machine and commit the cache."
+            "came from. It blocks cloud-provider address ranges, shared addresses "
+            "such as a mobile carrier's, and any address that asked too often. "
+            "Fetch transcripts from a machine on a home or office network and "
+            "commit the cache."
         ) from e
     except (TranscriptsDisabled, NoTranscriptFound) as e:
         raise TranscriptUnavailable(
