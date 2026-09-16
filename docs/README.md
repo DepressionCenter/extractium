@@ -67,6 +67,7 @@ This folder holds the detailed documentation for Extractium™. The pages are gr
 
 These pages are about working on the repository rather than using the tool.
 
+* [Branding and Media Pack](branding.md): logos, colors, image files, and accessibility guidance.
 * [Implementation Plan](implementation-plan.md): the order in which the tool was built, kept as a project record.
 * [Page Template](doc-template.md): the layout new pages in this folder follow.
 * [Session Prompt Template](session-prompt-template.md): the fixed opening to paste into a new coding session.

@@ -22,16 +22,18 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 ![Eisenberg Family Depression Center](https://code.depressioncenter.org/images/EFDCLogo_375w.png "depressioncenter.org")
 
+![Extractium Banner](images/extractium-banner.svg)
+
 # Extractium™
 
 ## Description
 Extractium™ turns your organization's scattered public documentation into one searchable knowledge base. Point it at your website, knowledge base portal, GitHub repositories, YouTube channel, library repository, or a folder of files, and it gathers the content, prepares it for both keyword and meaning-based search, and writes it out in several formats. You can then use that knowledge base in a website search box, in your own scripts, or with the AI assistant of your choice, without depending on any one AI provider.
 
-![Extractium: from scatter content to shared knowledge for the AI era.](assets/extractium-from-scattered-content-to-shared-knowledge.png "Extractium: from scatter content to shared knowledge for the AI era.")
+![Extractium: from scatter content to shared knowledge for the AI era.](images/extractium-from-scattered-content-to-shared-knowledge.png "Extractium: from scatter content to shared knowledge for the AI era.")
 
 Unlike a vector database, Extractium™ needs no server, no database, and no API to run. Every output is a static file that you can host anywhere, including GitHub Pages, and the same build feeds all of them at once. Sources and outputs are plug-ins, so you can add your own if the built-in ones do not cover your needs.
 
-![Extractium: inputs and outputs diagram](assets/extractium-diagram.png "Extractium: inputs and outputs diagram")
+![Extractium: inputs and outputs diagram](images/extractium-diagram.png "Extractium: inputs and outputs diagram")
 
 | Output | Files | Best for |
 |---|---|---|
