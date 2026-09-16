@@ -298,6 +298,10 @@ outputs:
 The two helpers imported beside the guardrail, `page_address` and `page_title`, return a section's page address without its section anchor and the page's title without the section heading, so several sections of one page collapse to one line. The reference implementation is `extractium/adapters/llmstxt.py`, which writes two text files from the same records.
 
 
+## Trying a plug-in against unreleased code
+
+The run scripts build with the newest published release. A plug-in written against a change that has not been released yet, or one you want to check before a release, needs the current code instead. Set `EXTRACTIUM_REF` to `main` before running the script, after deleting the `extractium-src` folder from an earlier run; [how to run a weekly build](how-to/run-a-weekly-build.md) explains the variable and its two companions under "Building with a branch instead of a release". A development install from a checkout, as [the installation guide](how-to/install.md) describes, does the same thing without the script.
+
 ## Publishing a plug-in as a package
 
 A plug-in that several projects share can be installed rather than copied. Declare it in the package's `pyproject.toml` under the matching entry-point group, with the registry name on the left and the class on the right:
