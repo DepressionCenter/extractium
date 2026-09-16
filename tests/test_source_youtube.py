@@ -2036,6 +2036,51 @@ def test_a_linked_video_is_read_only_when_a_named_channel_published_it():
     assert "3 video(s) linked from crawled pages: 1 read, 2 left out" in "\n".join(built.summary_lines())
 
 
+def test_a_linked_video_the_data_api_will_not_describe_is_named_through_the_public_endpoint(api_key_set):
+    """
+    A key is the preferred way to learn a publisher, not the only way.
+    videos.list names the first video and says nothing about the second,
+    so the second is asked about through the public endpoint, which
+    reports the same channel, and both are read.
+    """
+    reader = FakeReader({VIDEO_A: caption_lines(6), VIDEO_B: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "videos": FakeResponse(body={"items": [
+            {"id": VIDEO_A, "snippet": {"title": "Listed", "publishedAt": "2026-01-02T03:04:05Z", "channelId": CHANNEL}},
+        ]}),
+        "oembed": FakeResponse(body={"title": "Unlisted", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+    })
+    built = source(reader=reader)
+    built.allowed_channels.add(CHANNEL)
+
+    links = [f"https://www.youtube.com/watch?v={VIDEO_A}", f"https://www.youtube.com/watch?v={VIDEO_B}"]
+    documents = list(built.read_found_links(session, {}, quiet, links))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"Listed", "Unlisted"}
+    assert (built.found_offered, built.found_read, built.found_left_out) == (2, 2, 0)
+    oembed_calls = [c for c in session.calls if c["resource"] == "oembed"]
+    assert [c["params"]["url"] for c in oembed_calls] == [f"https://www.youtube.com/watch?v={VIDEO_B}"]
+    assert all(FAKE_KEY not in c["url"] and FAKE_KEY not in str(c["params"]) for c in oembed_calls)
+
+
+def test_a_key_the_data_api_refuses_falls_back_to_the_public_endpoint_for_publishers(api_key_set):
+    """A key without the right rights, or a wrong one, must not empty the build of linked videos."""
+    reader = FakeReader({VIDEO_A: caption_lines(6)})
+    session = FakeYouTubeSession({
+        "videos": FakeResponse(status_code=403, body={"error": {"message": "forbidden"}}),
+        "oembed": FakeResponse(body={"title": "Ours", "author_url": f"https://www.youtube.com/channel/{CHANNEL}"}),
+    })
+    built = source(reader=reader)
+    built.allowed_channels.add(CHANNEL)
+
+    lines = []
+    documents = list(built.read_found_links(session, {}, lines.append, [f"https://www.youtube.com/watch?v={VIDEO_A}"]))
+
+    assert {d.title.split(" -- ")[0] for d in documents} == {"Ours"}
+    assert any("asking the public endpoint instead" in line for line in lines)
+    assert all(FAKE_KEY not in line for line in lines)
+
+
 def test_a_source_naming_no_channel_reads_no_linked_video():
     reader = FakeReader({VIDEO_A: caption_lines(6)})
     session = FakeYouTubeSession({"oembed": FakeResponse(body={"title": "A"})})

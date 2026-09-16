@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -427,7 +427,7 @@ Playlists and videos work the same way. A playlist may be its id or any address 
 
 #### Videos linked from other sites
 
-A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The build reports how many linked videos were offered, read, and left out.
+A page crawled by a `web` source may link to a video. The crawl never follows a YouTube link, but it collects the videos those links name, and once every source has run it offers them to each `youtube` source in the build. A source reads a linked video only when its publisher is known and is a channel the source names; a source that names no channel reads none of them, a video whose publisher cannot be read is left out, and `only_channel_videos` does not change this. The publisher comes from the Data API when a key is set, and from YouTube's public oEmbed endpoint for any video the API did not describe, or for every video when there is no key or the key is refused. An unlisted video is described by both. The build reports how many linked videos were offered, read, and left out.
 
 #### What gets read from a channel
 

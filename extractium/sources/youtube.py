@@ -13,7 +13,7 @@ extractium/sources/youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-16
 Notes: See README file for documentation and full license information.
 """
 
@@ -796,6 +796,15 @@ class YouTubeSource:
         transcript or not, because a linked video's publisher has to be
         known before it is read.
 
+        The Data API is the preferred path when a key is set, because it
+        names fifty videos in one request and reports the publication
+        date. It is not required: a key may be missing, restricted to
+        other services, or simply wrong, and the API leaves out a video
+        it will not describe. Every video the API did not name is asked
+        about again through the public endpoint, which answers for any public or unlisted video and
+        reports its channel's address. A publisher is therefore left
+        unknown only when both paths have nothing to say.
+
         Args:
             client (YouTubeClient): the Data API client.
             video_ids (Sequence[str]): the videos to name.
@@ -807,16 +816,37 @@ class YouTubeSource:
         """
         if not video_ids:
             return {}
+        details = {}
+        if client.key:
+            try:
+                details = client.video_details(video_ids)
+            except YouTubeError as e:
+                progress(f"  the Data API could not describe the videos ({e}); asking the public endpoint instead")
+        # A video the API named carries its publisher, because videos.list
+        # always reports channelId; only a video it left out is asked
+        # about again.
+        unresolved = [video_id for video_id in video_ids if video_id not in details]
+        if not unresolved:
+            return details
         try:
-            if client.key:
-                return client.video_details(video_ids)
-            return client.public_video_details(video_ids)
+            public = client.public_video_details(unresolved)
         except YouTubeError as e:
             # A missing title costs a readable heading, not the build:
             # the identifier stands in, and the transcript is still
             # indexed and still cited at the right moment.
             progress(f"  video titles could not be read ({e}); using video ids instead")
-            return {}
+            return details
+        for video_id, record in public.items():
+            known = details.get(video_id) or {}
+            # What the API said about a video it did name is kept; the
+            # public endpoint only fills in what it left blank.
+            details[video_id] = {
+                "title": known.get("title") or record["title"],
+                "published_at": known.get("published_at") or record["published_at"],
+                "channel_id": "",
+                "author_url": record["author_url"],
+            }
+        return details
 
     ### Reading One Video ###
 
