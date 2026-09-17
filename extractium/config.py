@@ -124,8 +124,8 @@ DEFAULT_REBUILD = "full"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
-def container_file_name(slug, gzip=False):
-    """The container's file name for one slug, with the compressed suffix when gzip is on."""
+def container_file_name(slug, gzip=True):
+    """The light container's file name for one slug, with the compressed suffix unless gzip is off."""
     return f"{slug}.json.gz" if gzip else f"{slug}.json"
 
 
@@ -337,7 +337,7 @@ SOURCE_OPTION_KEYS = {
 # Option keys per built-in output type, beyond "type" and "include_local",
 # which every output accepts.
 OUTPUT_OPTION_KEYS = {
-    "container": frozenset({"file", "gzip"}),
+    "container": frozenset({"file", "gzip", "full"}),
     "llmstxt": frozenset(),
     "sqlite": frozenset({"file"}),
     "okf": frozenset(),
@@ -1179,14 +1179,22 @@ def _read_slug(data, source):
 
 def _read_container_output(entry, source, slug):
     """
-    Validates a container output. With `gzip: true` the file is written
-    compressed and, unless `file` names it otherwise, carries a .json.gz
-    suffix so a host and a reader can both tell.
+    Validates a container output. The files are written compressed
+    unless the entry says `gzip: false`, and, unless `file` names the
+    light file otherwise, carry a .json.gz suffix so a host and a reader
+    can both tell. `full: false` leaves the full container out; the
+    adapter names that file after the light one.
+
+    An entry that names its own `file` and says nothing about `gzip` is
+    compressed when that name ends in .gz and written plain otherwise, so
+    a file called kb.json never holds compressed bytes by surprise.
     """
-    gzip = _read_bool(entry, "gzip", False, source)
+    named = entry.get("file")
+    gzip = _read_bool(entry, "gzip", named.endswith(".gz") if isinstance(named, str) else True, source)
     return {
         "file": _read_output_file(entry, "file", container_file_name(slug, gzip), source),
         "gzip": gzip,
+        "full": _read_bool(entry, "full", True, source),
     }
 
 

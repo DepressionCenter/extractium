@@ -10,7 +10,7 @@ extractium/adapters/container.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,7 +29,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-17"
 
 import gzip
 import json
@@ -38,7 +38,7 @@ import struct
 import numpy as np
 
 from extractium import __version__
-from extractium.adapters.base import output_compendium, prepare_out_dir
+from extractium.adapters.base import output_compendium, prepare_out_dir, without_code
 from extractium.core.models import ENRICHMENT_FIELDS
 
 ### Constants ###
@@ -55,7 +55,18 @@ CONTAINER_VERSION = 4
 OFFSET_UNIT = "utf16"
 
 # File name written when the output's entry gives none.
-DEFAULT_FILE = "compendium.json"
+DEFAULT_FILE = "compendium.json.gz"
+
+# The header's `variant` field. A light container holds one section per
+# page whose text is the page's description and keywords; a full one
+# holds every section. Neither holds code records.
+VARIANT_LIGHT = "light"
+VARIANT_FULL = "full"
+
+# What the full container's name gains, before the endings below, so the
+# two files sort together and the longer name is the larger file.
+FULL_SUFFIX = "-full"
+CONTAINER_ENDINGS = (".json.gz", ".json")
 
 # The vector bytes are little-endian, whatever the machine that built
 # them is, so a file built on one architecture reads on another.
@@ -144,13 +155,32 @@ def parent_record(parent):
     return record
 
 
-def build_header(compendium):
+def full_container_file_name(file):
+    """
+    The full container's file name, given the light one's.
+
+    Args:
+        file (str): the light container's name, which may include folders.
+
+    Returns:
+        str: the same name with `-full` before its `.json.gz` or `.json`
+        ending, or at the end of a name with neither.
+    """
+    for ending in CONTAINER_ENDINGS:
+        if file.endswith(ending):
+            return f"{file[:-len(ending)]}{FULL_SUFFIX}{ending}"
+    return f"{file}{FULL_SUFFIX}"
+
+
+def build_header(compendium, variant=VARIANT_FULL):
     """
     The complete JSON header of one container.
 
     Args:
         compendium (extractium.core.models.Compendium): the build result,
             already filtered to what this output may write.
+        variant (str): VARIANT_LIGHT or VARIANT_FULL. A reader that does
+            not know the field ignores it, so it is not a layout change.
 
     Returns:
         dict: every header field, in the order docs/container-format.md
@@ -160,6 +190,7 @@ def build_header(compendium):
         "_license": LICENSE_NOTICE,
         "format": CONTAINER_FORMAT,
         "v": CONTAINER_VERSION,
+        "variant": variant,
         "extractium": __version__,
         "builtAt": compendium.built_at,
         "site": compendium.name,
@@ -181,14 +212,20 @@ def build_header(compendium):
 
 class ContainerAdapter:
     """
-    Writes the version 3 binary container.
+    Writes the binary container, as a light file and a full file.
 
-    The file keeps a `.json` extension so a static host such as GitHub
+    The light file holds one section per page, whose text is the page's
+    description and keywords. It is small enough for a browser, a hosted
+    function with a small store, or a small model searching in memory.
+    The full file holds the text of every section. Neither holds code
+    records: both are read inside a language model's context window or
+    searched in memory, and the sqlite and okf outputs carry the code.
+
+    A file keeps `.json` in its name so a static host such as GitHub
     Pages serves it with a plain content type and no configuration, even
     though everything after the header is binary. With the `gzip` option
     the same bytes are written through gzip, under a `.json.gz` name by
-    default; a client inflates the file before reading it, which is a
-    fraction of the download for the browser client.
+    default; a client inflates the file before reading it.
 
     This adapter never fetches a URL and never runs the embedding model:
     it serializes the compendium it is given and nothing else.
@@ -198,24 +235,43 @@ class ContainerAdapter:
 
     def write(self, compendium, out_dir, options):
         """
-        Writes one container file.
+        Writes the light container and, unless told not to, the full one.
+
+        A caller that hands over no light compendium, such as a script
+        that builds and writes on its own, gets the full container under
+        the name `file` gives.
 
         Args:
             compendium (extractium.core.models.Compendium): the build result.
             out_dir (str | pathlib.Path): folder to write under; created
                 when it does not exist.
             options (Mapping): the output's validated options: `file` for
-                the name, `gzip` to compress the file, `include_local` for
-                the local-content guardrail.
+                the light file's name, `gzip` to compress both files,
+                `full` to write the full file, `include_local` for the
+                local-content guardrail, and `light`, the light
+                compendium of the same build or None.
 
         Returns:
-            tuple[pathlib.Path, ...]: the one path written.
+            tuple[pathlib.Path, ...]: the paths written, the light file first.
         """
-        compendium = output_compendium(compendium, options)
-        path = prepare_out_dir(out_dir) / options.get("file", DEFAULT_FILE)
+        out_dir = prepare_out_dir(out_dir)
+        file = options.get("file", DEFAULT_FILE)
+        gzipped = options.get("gzip", True)
+        full = without_code(output_compendium(compendium, options))
+        light = options.get("light")
+        if light is None:
+            return (self._write_file(out_dir / file, full, VARIANT_FULL, gzipped),)
 
+        written = [self._write_file(out_dir / file, output_compendium(light, options), VARIANT_LIGHT, gzipped)]
+        if options.get("full", True):
+            written.append(self._write_file(out_dir / full_container_file_name(file), full, VARIANT_FULL, gzipped))
+        return tuple(written)
+
+    @staticmethod
+    def _write_file(path, compendium, variant, gzipped):
+        """Writes one container file and returns its path."""
         header = json.dumps(
-            build_header(compendium), ensure_ascii=False, separators=(",", ":")
+            build_header(compendium, variant), ensure_ascii=False, separators=(",", ":")
         ).encode("utf-8")
         vectors = np.ascontiguousarray(
             compendium.vectors, dtype=STORAGE_DTYPES[compendium.embedding.dtype]
@@ -224,9 +280,9 @@ class ContainerAdapter:
         path.parent.mkdir(parents=True, exist_ok=True)
         # The gzip header carries no timestamp, so two builds of the same
         # compendium produce the same bytes and a rebuild changes nothing.
-        opener = (lambda p: gzip.GzipFile(p, "wb", mtime=0)) if options.get("gzip") else (lambda p: open(p, "wb"))
+        opener = (lambda p: gzip.GzipFile(p, "wb", mtime=0)) if gzipped else (lambda p: open(p, "wb"))
         with opener(path) as f:
             f.write(struct.pack("<I", len(header)))
             f.write(header)
             f.write(vectors)
-        return (path,)
+        return path

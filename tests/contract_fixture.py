@@ -10,7 +10,7 @@ tests/contract_fixture.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,7 +29,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-17"
 
 import json
 import pathlib
@@ -115,7 +115,9 @@ def write_contract_container(compendium, out_dir):
     Returns:
         pathlib.Path: the file written.
     """
-    (path,) = ContainerAdapter().write(compendium, out_dir, {"file": CONTAINER_FILE})
+    # Written plain, so the committed file can be read in a diff and by
+    # the JavaScript tests without inflating it first.
+    (path,) = ContainerAdapter().write(compendium, out_dir, {"file": CONTAINER_FILE, "gzip": False})
     return path
 
 
