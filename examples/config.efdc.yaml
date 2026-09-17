@@ -218,6 +218,8 @@ sources:
     collections:
       - https://hdl.handle.net/2027.42/195355    # Eisenberg Family Depression Center
       - https://hdl.handle.net/2027.42/195645    # MeTRIC
+    include_full_text: true    # index the text Deep Blue extracted from each deposit's
+                               # files, PDFs included; false indexes the description alone
 
   # 8. Campus Mind Works: https://campusmindworks.org/
   #    On the center's own list of resources, but a site for students rather
