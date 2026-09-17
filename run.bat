@@ -274,8 +274,9 @@ echo.
 echo Build finished. The summary above lists every file that was written.
 echo.
 if "%FIRST_RUN%"=="1" (
-    echo This first run stopped at 25 pages. Open dist\llms.txt to see which pages
-    echo were indexed. When the list looks right, run this script again to build
+    echo This first run stopped at 25 pages. Open dist\llms.txt, then the file it
+    echo links to under dist\llms\, to see which pages were indexed. When the list
+    echo looks right, run this script again to build
     echo the whole site. To change what is crawled, edit %CONFIG%.
     echo.
 )

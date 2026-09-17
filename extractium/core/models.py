@@ -83,7 +83,7 @@ DEFAULT_SOURCE_LABELS = {
 }
 
 # Longest a source label may be. Long enough for a program or center name,
-# short enough to head a section in llms.txt and to sit in a search result
+# short enough to name a source in llms.txt and to sit in a search result
 # without wrapping.
 MAX_SOURCE_LABEL_CHARS = 60
 

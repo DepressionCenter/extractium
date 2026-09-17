@@ -2,7 +2,7 @@
 This file is part of Extractium™
 docs/branding.md
 Created: 2026-09-16
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Visual identity, media inventory, licensing, and accessibility guidance.
 Copyright © 2026 The Regents of the University of Michigan
 Licensed under the GNU Free Documentation License v1.3 or later.
@@ -152,7 +152,7 @@ Websites and portals, GitHub repositories, library repositories, YouTube caption
 | Output | Uses |
 |---|---|
 | Search index (`compendium.json`) | Website search, scripts, local AI assistants, and hosted search |
-| AI-readable text (`llms.txt`, `llms-full.txt`) | AI assistants that browse the web |
+| AI-readable text (`llms.txt` and the `llms/` folder) | AI assistants that browse the web |
 | SQLite (`compendium.sqlite`) | SQL queries, reports, and hosted databases |
 | Markdown (`okf/`) | Reading, editing, and reuse with Open Knowledge Format tools |
 

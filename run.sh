@@ -3,7 +3,7 @@
 # run.sh
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-15
+# Last Modified: 2026-09-17
 # Summary: One-command build for macOS and Linux. Downloads Extractium when
 # this script is on its own, creates a virtual environment beside the
 # checkout, installs the pinned dependencies, installs Extractium into it,
@@ -291,8 +291,9 @@ echo
 echo "Build finished. The summary above lists every file that was written."
 echo
 if [ "$FIRST_RUN" -eq 1 ]; then
-    echo "This first run stopped at 25 pages. Open dist/llms.txt to see which pages"
-    echo "were indexed. When the list looks right, run this script again to build"
+    echo "This first run stopped at 25 pages. Open dist/llms.txt, then the file it"
+    echo "links to under dist/llms/, to see which pages were indexed. When the list"
+    echo "looks right, run this script again to build"
     echo "the whole site. To change what is crawled, edit $CONFIG."
     echo
 fi

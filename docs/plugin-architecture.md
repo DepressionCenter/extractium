@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/plugin-architecture.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: The three plugin kinds, the registry's resolution order, the
 three protocols with every member and every optional hook, how a source,
 a site handler, and an adapter each fit into a build, and a minimal
@@ -115,7 +115,7 @@ An `Extraction` carries `title`, `node` (the content node to chunk, or plain tex
 | Member | Required | Meaning |
 |---|---|---|
 | `name` | Yes | Class attribute. The registry key and the `type:` value in `outputs:`. |
-| `write(compendium, out_dir, options)` | Yes | Writes files under `out_dir` and returns the paths it wrote, so the command line can list them. `options` holds the entry's options; `include_local` is the one every output accepts. |
+| `write(compendium, out_dir, options)` | Yes | Writes files under `out_dir` and returns the paths it wrote, so the command line can list them. `options` holds the entry's options; `include_local` is the one every output accepts. The command line adds `sources`: one record per source label in the order the settings file lists them, each with `label`, `type`, `home_url` (where a reader would open the source, or an empty string), and `description` (from the source's optional `description` setting, or an empty string). An adapter that lists the sources reads it; any other adapter ignores it. A caller that is not the command line may leave it out. |
 
 An adapter is constructed with no arguments. Two helpers in `extractium/adapters/base.py` do the two things every adapter must: `output_compendium(compendium, options)` returns the compendium with local sections removed unless the output opted in, rebuilding the statistics to match, and `prepare_out_dir(out_dir)` creates the folder and returns it as a path. Start every `write` with those two calls. An adapter never fetches a URL and never runs a model.
 

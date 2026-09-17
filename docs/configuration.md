@@ -171,7 +171,7 @@ sources:
 | `label` | text | none (required) | The name a reader sees for this source. At most 60 characters. |
 | `description` | text | none | Optional. One or two sentences saying what this source is, at most 400 characters. `llms.txt` prints it beside the source's name. Without it, the description of the source's starting page is used. |
 
-The label travels with every section the source produces. It heads a section in `llms.txt`, it is stored in the index as `source_label`, and a search client uses it to say where an answer came from.
+The label travels with every section the source produces. It names the source's entry in `llms.txt` and its index file under `llms/`, it is stored in the index as `source_label`, and a search client uses it to say where an answer came from.
 
 The label is required rather than guessed because both sources above are of type `web`. Nothing in the address or the page says which is the main site and which is a program microsite. Only you know that. Without a label, a search result could say no more than "web", and a reader could not tell the two apart.
 
@@ -652,12 +652,12 @@ A type that is not one of the built-in types above is passed to the registry as 
 
 ## Outputs
 
-Leave `outputs` out to write the two defaults: the container file and the `llms.txt` pair. Every output accepts `include_local`.
+Leave `outputs` out to write the two defaults: the container file and the `llms.txt` index files. Every output accepts `include_local`.
 
 | Type | Options | Default | What it writes |
 |---|---|---|---|
 | `container` | `file`, `gzip` | `<slug>.json`, or `<slug>.json.gz` with `gzip: true` | The binary compendium every search client reads. See the [container format](container-format.md). `gzip: true` writes the same bytes compressed; both clients recognize the compressed form by its signature, and the JavaScript client's `inflateContainer` runs before its loader. |
-| `llmstxt` | none | | `llms.txt` and `llms-full.txt`. |
+| `llmstxt` | none | | `llms.txt`, which lists your sources, and the `llms/` folder, which holds one index file per source. See "What the llms.txt output writes" below. |
 | `sqlite` | `file` | `<slug>.sqlite` | A SQLite database with the same content. |
 | `okf` | none | | An Open Knowledge Format folder of Markdown files, written as `okf/` under `out_dir`. |
 
@@ -666,6 +666,26 @@ Leave `outputs` out to write the two defaults: the container file and the `llms.
 | `include_local` | true or false | `false` | Lets content from `local` sources into this output. |
 
 A `file` is always a relative path under `out_dir`. An absolute path, or one that climbs out with `..`, is refused. Leave `file` out and the output is named after the `slug` global setting, which is the usual choice: one short name, and every file follows it.
+
+### What the llms.txt output writes
+
+The `llmstxt` output is for a language model that can open a web page but cannot call a search tool. A model like that reads a file whole, and it keeps only the first part of a long one. So this output writes several short files, not one long one:
+
+| File | What it lists |
+|---|---|
+| `llms.txt` | Your sources, in the order the settings file lists them. Each entry has the source's `label`, a link to where the source starts, its `description`, and a link to the source's index file. |
+| `llms/<source>.txt` | The pages of one source, one line each: title, link, and a description. The file is named after the source's label. |
+| `llms/<source>/<group>.txt` | Written only for a source with more than 500 pages. The source's own file then lists its groups, and each group file lists the pages of one group. A group is a category the source's pages carry, or the first folder of a page's address when they carry none. A group with more than 500 pages continues in `<group>-2.txt`, and the first file ends with a link to it. |
+
+A page is described by its own summary. A page with no summary of its own is described by its keywords, and a page with neither by the opening of its text. A summary that more than three pages of one source share is the site's default description. It says nothing about any one page, so such a page is described by its keywords. No entry carries both a description and keywords, which keeps each file short.
+
+A `github_api` source is listed by repository. Each repository comes with the description it gives itself, then its files in this order: the files at the repository's root, the files under a `docs`, `doc`, `guide`, or `guides` folder, then everything else. A model that stops reading partway has then seen the files most likely to matter.
+
+Source code is not part of this output. These files are meant to be read inside a language model's context window, and the code analysis that `include_code` adds would crowd out the documentation. Every other output carries it.
+
+Links from one index file to another are relative to the file they appear in, so the files work at whatever address you publish them.
+
+A build removes index files it wrote earlier that no longer belong: `llms-full.txt`, which earlier versions of Extractium™ wrote, and the index file of a source you have removed. It recognizes its own files by the license line each one carries, names each file it removes in the log, and never removes a file it did not write.
 
 ```yaml
 slug: example-compendium    # writes example-compendium.json and example-compendium.sqlite
@@ -745,7 +765,7 @@ Where they appear:
 | Container | `summary`, `keywords`, and `tags` on every section, with `enriched_at` (UTC) and `enrich_ver`. |
 | SQLite | The same five columns on `parents`, the lists as JSON arrays. |
 | Open Knowledge Format | The summary as each concept file's description, the tags in its tag list, and a `keywords` list in its front matter. |
-| `llms.txt` | Each page's entry describes the page with its summary, or with an excerpt of its first section when it has none, and ends with `Keywords: ...`: the page's tags beyond its categories or, when it has none, the first section's keywords. |
+| `llms.txt` | Each page's entry in a source's index file describes the page with its own summary. A page with no summary of its own is described by `Keywords: ...` instead: the page's tags beyond its categories or, when it has none or shares them with the rest of its source, the first section's keywords. A page with neither is described by the opening of its text. |
 
 What was found is stored under `<cache_dir>/enrichment/keywords.json`, keyed by section, with a digest of the text it came from. A rebuild names afresh only the sections whose text changed, and embeds nothing for the rest.
 

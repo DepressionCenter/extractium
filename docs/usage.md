@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, what each exit code means, and how to try a small run
@@ -122,18 +122,20 @@ A first run against a new site is the best time to catch a URL pattern that is b
 python -m extractium.cli build --config config.yaml --max-pages 25 --out-dir trial
 ```
 
-Open `trial/llms.txt`. It lists every page that was indexed, one line each. If you see pages you did not expect, tighten `include_patterns` or add a `crawl_exclude_patterns` entry, and run again. When the list looks right, remove the limit.
+Open `trial/llms.txt`, then the file it links to under `trial/llms/`. That file lists every page that was indexed from the source, one line each. If you see pages you did not expect, tighten `include_patterns` or add a `crawl_exclude_patterns` entry, and run again. When the list looks right, remove the limit.
 
 
 ## What you get
 
-With the default settings, the output folder holds three files:
+With the default settings, the output folder holds the search index and the llms.txt index files:
 
 | File | What it is |
 |---|---|
 | `compendium.json` | The search index: text, vectors, and keyword statistics in one file. Despite the name it is partly binary. The `.json` extension keeps static hosts serving it correctly. The [container format](container-format.md) page describes it byte by byte. |
-| `llms.txt` | A short index, one line per page with its keywords, for a language model that browses the web. |
-| `llms-full.txt` | The whole indexed text, in reading order. |
+| `llms.txt` | A short index of your sources, for a language model that browses the web. Each entry names a source, says what it is, and links to that source's index file. |
+| `llms/` | One index file per source, listing its pages with a link and a description each. A source with more than 500 pages gets a folder of files, one per section of the source. |
+
+The llms.txt files are meant to be read whole inside a language model's context window, so they are kept short and they list documentation only, never source code. The full text of every page is in the search index, and in the `okf` folder if you add that output.
 
 Add a `sqlite` output for a database with the same content, or an `okf` output for a folder of Markdown files. See the [configuration reference](configuration.md).
 
@@ -150,8 +152,8 @@ Built 'Example Org Knowledge Base' at 2026-09-08T14:30:00Z
   windows  : 1944
   sources  : 233
   wrote    : dist/compendium.json (2.71 MB)
-  wrote    : dist/llms.txt (0.04 MB)
-  wrote    : dist/llms-full.txt (1.12 MB)
+  wrote    : dist/llms.txt (0.00 MB)
+  wrote    : dist/llms/example-org-website.txt (0.04 MB)
   wrote    : dist/okf (235 files, 1.18 MB)
 ```
 

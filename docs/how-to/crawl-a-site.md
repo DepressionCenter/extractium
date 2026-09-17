@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/crawl-a-site.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: How to set up your first real build: choosing a source type
 for each kind of content, the trial run and how to read llms.txt,
 tuning the include and exclude patterns, the two optional environment
@@ -46,7 +46,7 @@ A settings file lists sources. Each one has a type, a label, and a few options. 
 | A folder on your own computer | `local` | The folder path. Nothing from it reaches an output unless that output sets `include_local: true`. |
 | A knowledge bundle another build wrote | `okf` | The folder of an Open Knowledge Format bundle, from Extractium™ or any other tool. Each concept keeps the address it was read from. |
 
-Every source needs a `label`: the name a reader sees for it, such as "Staff Handbook". It heads a section in `llms.txt` and travels with every section in the index, so a search result can say where its answer came from.
+Every source needs a `label`: the name a reader sees for it, such as "Staff Handbook". It names the source in `llms.txt` and travels with every section in the index, so a search result can say where its answer came from.
 
 A section of a site you already crawl is not a separate source. Add it to that crawl as a second entry in `seed_urls`. A page two sources both reach is indexed once, by whichever reached it first, and the build tells you how many pages that happened to.
 
@@ -61,7 +61,7 @@ Limit the first run so a pattern broader than you meant costs seconds rather tha
 python -m extractium.cli build --config config.yaml --max-pages 25 --out-dir trial
 ```
 
-The run prints progress to the error stream and a summary to the output stream. When it finishes, open `trial/llms.txt`. It lists every page that was indexed, one line each, grouped under the label of the source it came from.
+The run prints progress to the error stream and a summary to the output stream. When it finishes, open `trial/llms.txt`. It lists your sources, each with a link to that source's own index file under `trial/llms/`. Open that file. It lists every page that was indexed from the source, one line each.
 
 Read that list with three questions:
 
@@ -144,7 +144,7 @@ Most builds can run on a schedule on GitHub. Two kinds cannot:
 
 ## Conclusion
 
-You can now write a settings file for each kind of content you have, test it with a limited run, tighten it by reading `llms.txt`, and understand every notice the build prints. Next, remove the limit, then read [how to deploy](deploy.md) to decide where the build should run and where its outputs should live.
+You can now write a settings file for each kind of content you have, test it with a limited run, tighten it by reading the page lists under `llms/`, and understand every notice the build prints. Next, remove the limit, then read [how to deploy](deploy.md) to decide where the build should run and where its outputs should live.
 
 
 ## Additional Resources

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/deploy.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-17
 Summary: The deployment choices side by side: build on your own computer
 and publish nowhere, build on GitHub and publish to Pages, publish the
 output folder to any static host, and keep a separate data repository.
@@ -104,7 +104,7 @@ Every arrangement above produces the same files, and the same consumers read the
 | A browser search page | The index, through the JavaScript client | Yes. The page and the index are served together, and the page embeds the query in the browser. |
 | An AI assistant on your own computer | The index, through a local MCP server | Yes, except from the loopback address. The server downloads the index once and caches it. |
 | An AI assistant anywhere | A hosted MCP server on Val Town or Cloudflare | Yes. The hosted server reads the published index or a database loaded from the SQLite output. |
-| A platform that browses but cannot call tools | `llms.txt` and `llms-full.txt`, from a system prompt | Yes. The prompt names the addresses. |
+| A platform that browses but cannot call tools | `llms.txt` and the index files it links to, from a system prompt | Yes. The prompt names the address. |
 | A person | The Open Knowledge Format folder, in any Markdown viewer | No. |
 | A SQL consumer | The SQLite output | No. |
 
@@ -119,7 +119,7 @@ The pages for each consumer:
 
 ## Choosing
 
-Start local and private, with a page limit, until the page list in `llms.txt` looks right. Then, for public documentation, move the settings file into a data repository and let GitHub build it weekly. Add a local build to that only when a source needs it: a local folder, or a channel's captions. Use another static host only when Pages is not available to you.
+Start local and private, with a page limit, until the page lists under `llms/` look right. Then, for public documentation, move the settings file into a data repository and let GitHub build it weekly. Add a local build to that only when a source needs it: a local folder, or a channel's captions. Use another static host only when Pages is not available to you.
 
 
 ## Conclusion

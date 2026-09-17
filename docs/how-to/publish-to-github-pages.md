@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/publish-to-github-pages.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-17
 Summary: How to publish a built index to GitHub Pages: turning Pages on,
 what the workflow uploads, the permissions it asks for and why, how to
 check the published files, and what to do before publishing anything that
@@ -53,11 +53,11 @@ Check three files:
 
 | Address | What you should see |
 |---|---|
-| `.../llms.txt` | A list of the pages that were indexed, one line each, with the build time near the top. |
-| `.../llms-full.txt` | The whole indexed text. |
+| `.../llms.txt` | A list of your sources, with the build time near the top and a link to each source's index file. |
+| `.../llms/<source>.txt` | The pages that were indexed from one source, one line each. Follow the link from `llms.txt` to reach it. |
 | `.../compendium.json` | A download rather than readable text. It is partly binary, which is expected. |
 
-If `llms.txt` lists pages you did not mean to index, fix the patterns in `config.yaml` and run again. Publishing is the last step of the build, so what you see is exactly what the crawl found.
+If a source's index file lists pages you did not mean to index, fix the patterns in `config.yaml` and run again. Publishing is the last step of the build, so what you see is exactly what the crawl found.
 
 
 ## What the workflow is allowed to do
@@ -81,7 +81,7 @@ A Pages site on a public repository is readable by anyone with the address, and 
 
 Two habits keep that safe:
 
-- Read the page list before the first publish. `llms.txt` is short and shows exactly what was indexed.
+- Read the page lists before the first publish. `llms.txt` links to one short file per source, and together they show exactly what was indexed.
 - Leave local content out. Content read from a local folder stays out of every output unless that output opts in, and the build's summary names any output that includes it. Do not turn that option on for a published file. The [compliance page](../compliance.md) says more.
 
 If your content is not for the public, publish to a private host instead. The build output is a folder of ordinary files, so anything that serves static files will do.

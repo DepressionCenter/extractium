@@ -52,7 +52,7 @@ slug: efdc-compendium
 # Every source carries a label: the name a reader sees for it. Several of the
 # sources below are websites, so without one a search result could say no
 # more than "web", and nobody could tell the main site from the Peer-to-Peer
-# program. These labels head the sections of dist/llms.txt, so keep them the
+# program. These labels name the sources in dist/llms.txt, so keep them the
 # names the center actually uses.
 #
 # Every source also carries a description: one or two sentences saying what
@@ -236,7 +236,11 @@ sources:
 outputs:
   # efdc-compendium.json: the compendium every search client reads.
   - type: container
-  # llms.txt and llms-full.txt, for language models that browse the web.
+  # llms.txt, which lists the sources, and llms/, one index file per source,
+  # for language models that browse the web. Documentation only: these files
+  # are meant to be read inside a model's context window, so the code
+  # analysis from the GitHub source is left out of them. The other outputs
+  # carry it.
   - type: llmstxt
   # efdc-compendium.sqlite: the same content as tables, for anyone who would
   # rather write SQL, and what the Cloudflare search server is loaded from.
@@ -269,8 +273,8 @@ respect_robots_txt: false
 cache_dir: .kb_cache
 
 # A ceiling for each source: web pages, videos, deposits, or files, whichever
-# the source reads. Raise it once the page list in dist/llms.txt
-# looks right. For a first run, cap it far lower from the command line instead
+# the source reads. Raise it once the page lists under dist/llms/
+# look right. For a first run, cap it far lower from the command line instead
 # of editing this file:
 #   python -m extractium.cli build --config config.yaml --max-pages 25
 # The GitHub source has its own two ceilings, set on its entry above, and

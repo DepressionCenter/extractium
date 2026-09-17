@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: README for the data-repository template: what the folder is, how
 to turn it into your own repository, how the weekly build runs, what gets
 published, and why the YouTube cache is committed rather than ignored.
@@ -43,19 +43,19 @@ This folder is a template. Copy it into a new repository of your own, change two
 2. Point it at your site. In `config.yaml`, change `seed_url` to the page your documentation starts from, and `name` to your organization's name.
 3. Turn on Pages. In the repository, open **Settings → Pages** and set **Source** to **GitHub Actions**. Nothing is published until you do.
 4. Run it once by hand. Open the **Actions** tab, choose **Build compendium**, and press **Run workflow**. Set *Visit at most this many pages* to `25` for the first run.
-5. Check what it found. When the run finishes, open the published site and read `llms.txt`. It lists every page that was indexed, one line each. If pages you did not expect are in there, tighten the patterns in `config.yaml` and run it again.
+5. Check what it found. When the run finishes, open the published site and read `llms.txt`. It lists your sources, and each entry links to an index file that lists every page indexed from that source, one line each. If pages you did not expect are in there, tighten the patterns in `config.yaml` and run it again.
 6. Let it run weekly. Once the list looks right, remove the page limit and leave the schedule alone. It runs every Monday morning UTC.
 
 
 ## What gets published
 
-The build writes three files and the workflow publishes the folder that holds them:
+The build writes these files and the workflow publishes the folder that holds them:
 
 | File | What it is |
 |---|---|
 | `compendium.json` | The search index: text, vectors, and keyword statistics in one file, for the Extractium clients. |
-| `llms.txt` | A short index, one line per page, for a language model that browses the web. |
-| `llms-full.txt` | The whole indexed text, in reading order. |
+| `llms.txt` | A short index of your sources, for a language model that browses the web. |
+| `llms/` | One index file per source, listing its pages with a link and a description each. |
 
 They are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/compendium.json`.
 

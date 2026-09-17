@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -49,7 +49,7 @@ Unlike a vector database, Extractium™ needs no server, no database, and no API
 | Output | Files | Best for |
 |---|---|---|
 | Search index | `compendium.json` | Fast keyword and meaning-based search with nothing to run: a search box on your website, a script, an AI assistant on your computer, or a hosted search endpoint. |
-| llms.txt files | `llms.txt`, `llms-full.txt` | AI assistants and platforms that can read web pages but cannot call tools. Also a readable list of everything that was indexed. |
+| llms.txt files | `llms.txt`, `llms/` | AI assistants and platforms that can read web pages but cannot call tools. `llms.txt` lists your sources, and each source has a short index file of its pages. Also a readable list of everything that was indexed. |
 | SQLite database | `compendium.sqlite` | SQL queries and reports, or loading the content into a hosted database. |
 | Markdown folder | `okf/` | Reading and editing the content as ordinary files, sharing it with other tools that use the Open Knowledge Format, or feeding it into another Extractium™ build. |
 
@@ -65,7 +65,7 @@ Extractium™ grew out of the indexing engine in [Field Station AI™](https://g
   run.bat        # Windows
   ```
 
-+ Open `dist/llms.txt` to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`. See `examples/config.efdc.yaml` for a complete example that uses every source type.
++ Open `dist/llms.txt`, then the file it links to under `dist/llms/`, to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`. See `examples/config.efdc.yaml` for a complete example that uses every source type.
 + To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube,whisper,pdf,keywords]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.
@@ -112,7 +112,7 @@ If you need assistance identifying a contact person, email the EFDC's Mobile Tec
 ### This work is based in part on the following projects, libraries and/or studies:
 + FieldStationAI™: A research platform for mobile and digital mental health studies. Its crawling and indexing engine was extracted into this project. https://github.com/DepressionCenter/FieldStationAI
 + BAAI/bge-small-en-v1.5: The sentence-embedding model used by every build and every client. MIT license. https://huggingface.co/BAAI/bge-small-en-v1.5
-+ llms.txt: The convention the `llms.txt` and `llms-full.txt` outputs follow. https://llmstxt.org/
++ llms.txt: The convention the `llms.txt` output follows. https://llmstxt.org/
 + Open Knowledge Format: The Markdown-with-front-matter format the `okf` output writes and the `okf` source reads. https://github.com/GoogleCloudPlatform/open-knowledge-format
 + Python libraries used: requests, curl_cffi, Beautiful Soup 4, Sentence Transformers, NumPy, Python-Markdown, PyYAML, and optionally Tree-sitter with its language grammars, Universal Ctags, youtube-transcript-api, pypdf, pytest, and uv.
 + JavaScript libraries used by the examples: @huggingface/transformers and the ONNX Runtime it brings.

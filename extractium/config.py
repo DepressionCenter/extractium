@@ -99,7 +99,7 @@ DEFAULT_PHI_LINT = "local"
 DEFAULT_KEYWORDS = True
 
 # Outputs written when the file lists none: the flagship container and
-# the two llms.txt files.
+# the llms.txt index files.
 DEFAULT_OUTPUTS = ({"type": "container"}, {"type": "llmstxt"})
 
 # File names the container and SQLite adapters write when none is given.
@@ -791,7 +791,7 @@ def _read_source_label(entry, type_name, source):
         _fail(
             source,
             f"label must be {MAX_SOURCE_LABEL_CHARS} characters or fewer; got {len(label)}. "
-            "It heads a section in llms.txt and sits beside a search result, so keep "
+            "It names the source in llms.txt and sits beside a search result, so keep "
             "it to a short name.",
         )
     return label
