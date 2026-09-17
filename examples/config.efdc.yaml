@@ -92,8 +92,8 @@ sources:
   #    is the guardrail working rather than an error. See github_owners below.
   - label: Depression Center Open Source Hub
     description: >-
-      The center's open source projects: the code.depressioncenter.org site
-      and the documentation of the DepressionCenter repositories on GitHub.
+      The center's open source projects on GitHub and the Open Source Hub
+      website at code.depressioncenter.org.
     type: web
     seed_url: https://code.depressioncenter.org/
 
@@ -131,6 +131,9 @@ sources:
   #    or Slides shared with the link. The leaf pattern reads each such file
   #    the site links to, without following any link found in it. A file
   #    that is not shared is reported and skipped.
+  #
+  #    read_documents turns the Word, PDF, and slide files the site links to
+  #    into text, each indexed once as a document of its own.
   - label: Depression Center Website
     description: >-
       The Eisenberg Family Depression Center's main website, including the
@@ -139,6 +142,7 @@ sources:
     seed_urls:
       - https://depressioncenter.org/
       - https://depressioncenter.org/outreach-education/depression-center-toolkit
+    read_documents: true
     leaf_patterns:
       - '^https://docs\.google\.com/'
 
@@ -180,8 +184,8 @@ sources:
   #    of docs/configuration.md and docs/troubleshooting.md.
   - label: Depression Center Video Library
     description: >-
-      Videos from the center's YouTube channel, indexed from what is said
-      in them.
+      Presentations, lectures and other videos from the center's YouTube
+      channel, with indexed transcripts.
     type: youtube
     channel_id: https://www.youtube.com/@DepressionCenter
     languages: [en]
