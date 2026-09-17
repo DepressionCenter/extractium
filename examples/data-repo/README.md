@@ -53,11 +53,12 @@ The build writes these files and the workflow publishes the folder that holds th
 
 | File | What it is |
 |---|---|
-| `compendium.json` | The search index: text, vectors, and keyword statistics in one file, for the Extractium clients. |
+| `compendium.json.gz` | The light search index, for the Extractium clients: one entry per page, holding the page's description and keywords, with vectors and keyword statistics. Small enough for a search box on a web page. |
+| `compendium-full.json.gz` | The full search index: the text of every section, with vectors and keyword statistics. For a client that needs to quote the page text. |
 | `llms.txt` | A short index of your sources, for a language model that browses the web. |
 | `llms/` | One index file per source, listing its pages with a link and a description each. |
 
-They are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/compendium.json`.
+They are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/compendium.json.gz`. Both index files are compressed with gzip, and the clients inflate them on their own. Neither holds code analysis from a GitHub source; add a `sqlite` or `okf` output to publish that.
 
 
 ## Choosing the version of the tool

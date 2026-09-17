@@ -31,7 +31,8 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-17"
 
 from extractium.adapters import base
-from extractium.core.models import Parent
+from extractium.core.build import build_compendium
+from extractium.core.models import CODE_CONTENT_TYPES, Document, Parent
 
 
 def section(n, url, **overrides):
@@ -160,3 +161,56 @@ def test_keywords_a_whole_source_shares_give_way_to_the_pages_own():
 def test_shared_keywords_with_nothing_else_to_say_leave_the_excerpt():
     parents = [section(n, f"https://example.org/{n}", tags=("wearables",)) for n in range(1, 6)]
     assert base.describe(base.page_records(parents)[0]) == "Opening words of page 1."
+
+
+# ---------------------------------------------------------------------------
+# Dropping code records
+# ---------------------------------------------------------------------------
+
+PROSE = (
+    "Sleep data from a wearable device is summarized nightly, and this page explains "
+    "how the summary is produced and where the figures in it come from."
+)
+CODE = (
+    "def summarize(nights): return sum(nights) / len(nights)  # the nightly mean, which "
+    "is long enough here for the chunker to keep it as a section of its own."
+)
+
+
+def compendium_of(embedder, with_code):
+    """Two prose pages, and one code record when asked for, built with the test embedder."""
+    documents = [
+        Document(url="https://example.org/a", title="Page A", content=PROSE,
+                 source_type="web", content_type="text"),
+        Document(url="https://example.org/b", title="Page B", content=PROSE.replace("Sleep", "Activity"),
+                 source_type="web", content_type="text"),
+    ]
+    if with_code:
+        documents.append(Document(
+            url="https://github.com/example/tool/blob/main/run.py", title="run.py", content=CODE,
+            source_type="github", content_type="code_file",
+        ))
+    return build_compendium(documents, name="Example Org", embedder=embedder,
+                            built_at="2026-01-02T03:04:05Z")
+
+
+def posting_count(compendium):
+    """How many term and window pairs the keyword statistics hold."""
+    return sum(len(entries) for entries in compendium.bm25["postings"].values())
+
+
+def test_without_code_drops_code_sections_and_everything_derived_from_them(fake_embed_chunks_core):
+    before = compendium_of(fake_embed_chunks_core, with_code=True)
+    after = base.without_code(before)
+
+    assert any(parent.content_type in CODE_CONTENT_TYPES for parent in before.parents)
+    assert all(parent.content_type not in CODE_CONTENT_TYPES for parent in after.parents)
+    assert len(after.children) < len(before.children)
+    assert after.vectors.shape[0] == len(after.children)
+    assert max(after.children.pid) == len(after.parents) - 1
+    assert posting_count(after) < posting_count(before)
+
+
+def test_without_code_returns_the_same_object_when_there_is_no_code(fake_embed_chunks_core):
+    compendium = compendium_of(fake_embed_chunks_core, with_code=False)
+    assert base.without_code(compendium) is compendium

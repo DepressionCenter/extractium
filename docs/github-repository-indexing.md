@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/github-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: How Extractium reads GitHub repositories: the three-tier
 ingestion ladder, the account guardrail, authentication, repository
 selection, file filtering, caching, and the lightweight static code
@@ -404,6 +404,10 @@ Categories use the existing hierarchy, not a second GitHub-only system. `Depress
 ### Goal
 
 Make a repository's code findable without cloning it, compiling it, running it, or sending it to a language model. A search can answer: where is this defined, what does this file contain, what does it import, what calls it, and where do I click to read it.
+
+### Where code analysis is published
+
+The code records are written to the `sqlite` and `okf` outputs only. The `llms.txt` files and both container files leave them out, because those files are read inside a language model's context window or searched by a small model in memory, and code records can be a quarter of a build. To search code, add a `sqlite` output and query it as [the SQLite database](sqlite-database.md) page shows, or load it into the Cloudflare example. The summary at the end of a build says how many code records it read and which of your outputs hold them.
 
 ### What a record holds, and what it never holds
 

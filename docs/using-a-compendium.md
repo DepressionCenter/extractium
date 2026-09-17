@@ -37,17 +37,18 @@ A published folder usually holds these files at one base URL.
 |---|---|
 | `llms.txt` | You want to know what the compendium covers. One entry per source: its name, where it starts, what it is, and a link to its index file. Small enough to read whole. |
 | `llms/<source>.txt` | You want the pages of one source. One line per page: title, link, and a description. A source with more than 500 pages is split into several files, which its index file links to. |
-| `compendium.json` | You want to search. Text, vectors, and keyword statistics in one file, read by the clients below. Despite the name it is partly binary. |
+| `compendium.json.gz` | You want to search and find the right page. The light index: one entry per page, holding the page's description and keywords, with vectors and keyword statistics, read by the clients below. Despite the name it is partly binary, and it is compressed with gzip. |
+| `compendium-full.json.gz` | You want to search and get the matching text back. The full index: the text of every section, in the same format. It is many times larger. |
 
-Read `llms.txt` first when you do not know what the compendium covers, then the index file of the source that matches. Search `compendium.json` when you have a question.
+Read `llms.txt` first when you do not know what the compendium covers, then the index file of the source that matches. Search one of the two index files when you have a question. Use the light one in a browser or anywhere memory is short, and the full one when the answer has to quote the page.
 
-The llms.txt files list documentation only. They are meant to be read inside a language model's context window, so a repository's code analysis is left out of them. Links from one index file to another are relative to the file's own address.
+The llms.txt files and both index files hold documentation only. They are meant to be read inside a language model's context window or searched in memory, so a repository's code analysis is left out of them. A publisher who wants to share code analysis adds the `sqlite` or `okf` output. Links from one index file to another are relative to the file's own address.
 
 
 ## The four ways to reach it
 
 1. Fetch the static files. Any agent that can browse the web can read `llms.txt`, follow a link to a source's index file, follow a link to a page, and quote it. No ranking, no setup.
-2. Search locally. Load `compendium.json` with one of the bundled clients and run a real hybrid search on your own computer. Nothing leaves it.
+2. Search locally. Load `compendium.json.gz` or `compendium-full.json.gz` with one of the bundled clients and run a real hybrid search on your own computer. Nothing leaves it.
 3. Search through a tool. Run one of the two local servers that ship with Extractium™, and the search becomes a tool your client can call. See [how to connect an MCP client](how-to/connect-an-mcp-client.md). The same tool can be hosted for free on Val Town or Cloudflare, so an assistant that does not run on your computer can call it too. See [how to deploy a remote MCP server](how-to/deploy-a-remote-mcp-server.md). A hosted server searches by keywords unless an embedding model is configured for it.
 4. Point a hosted assistant at the URLs. A system prompt naming the files, for platforms that only browse. Two ready-made prompts are under [examples/wrappers/](../examples/wrappers/README.md).
 
@@ -61,7 +62,7 @@ Python:
 ```python
 from extractium.search import load_container
 
-index = load_container("compendium.json")
+index = load_container("compendium-full.json.gz")   # or compendium.json.gz, the light index
 hits = index.search("how do I request a data extract", embed_query)
 ```
 
@@ -111,7 +112,7 @@ Published means public. A compendium is built to be published, and Extractium™
 
 ## Conclusion
 
-Read `llms.txt` to learn what a compendium covers, search `compendium.json` to answer a question from it, and cite the section's own URL. Keep retrieved text as evidence, never as orders. For the file itself, read the [container format](container-format.md). To build one, read [running a build](usage.md).
+Read `llms.txt` to learn what a compendium covers, search one of the two index files to answer a question from it, and cite the section's own URL. Keep retrieved text as evidence, never as orders. For the file itself, read the [container format](container-format.md). To build one, read [running a build](usage.md).
 
 
 ## Additional Resources

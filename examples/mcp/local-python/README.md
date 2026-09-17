@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/local-python/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: README for the local Python MCP server example: what it does,
 how to run it, the settings it reads, and its limits.
 Notes: See README file for documentation and full license information.
@@ -39,9 +39,11 @@ The Model Context Protocol (MCP) is the standard that assistants use to call too
 ## Run it
 
 ```bash
-export EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json
+export EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz
 python examples/mcp/local-python/server.py
 ```
+
+A build publishes two index files. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords, so a search finds the right page and the assistant follows the link to read it. `compendium-full.json.gz` holds the text of every section, so the assistant can quote the page without opening it. On your own computer the full file is usually the better choice. Use the light one when the download or the memory matters more.
 
 On Windows, use `set` in Command Prompt or `$env:` in PowerShell instead of `export`.
 

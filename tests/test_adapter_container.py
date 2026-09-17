@@ -10,7 +10,7 @@ tests/test_adapter_container.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-09
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,8 +29,9 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-17"
 
+import gzip
 import json
 import struct
 from dataclasses import replace
@@ -39,14 +40,23 @@ import numpy as np
 import pytest
 
 from extractium.adapters.base import output_compendium
-from extractium.adapters.container import ContainerAdapter, build_header
+from extractium.adapters.container import ContainerAdapter, build_header, full_container_file_name
 from extractium.core import build
-from extractium.core.models import Document
+from extractium.core.light import build_light_compendium
+from extractium.core.models import CODE_CONTENT_TYPES, Document
 from tests.test_build import document_from_fixture
 
 # A build time fixed in the past, so the committed snapshot does not
 # change every time the tests run.
 FIXED_BUILT_AT = "2026-01-02T03:04:05Z"
+
+# The two bytes every gzip stream begins with.
+GZIP_SIGNATURE = b"\x1f\x8b"
+
+CODE_TEXT = (
+    "def summarize(nights): return sum(nights) / len(nights)  # the nightly mean, which "
+    "is long enough here for the chunker to keep it as a section of its own."
+)
 
 LOCAL_TEXT = (
     "Internal note that is comfortably longer than the minimum chunk size, so the "
@@ -80,6 +90,8 @@ def mixed_compendium(fixtures_dir, embedder):
 def read_container(path):
     """Reads a container back the way docs/container-format.md tells a client to."""
     data = path.read_bytes()
+    if data[:2] == GZIP_SIGNATURE:
+        data = gzip.decompress(data)
     (length,) = struct.unpack("<I", data[:4])
     header = json.loads(data[4:4 + length].decode("utf-8"))
     return header, data[4 + length:]
@@ -147,7 +159,7 @@ def test_write_produces_the_documented_byte_layout(tmp_path, fixtures_dir, fake_
 
     (path,) = ContainerAdapter().write(compendium, tmp_path, {})
 
-    assert path == tmp_path / "compendium.json"
+    assert path == tmp_path / "compendium.json.gz"
     header, vectors = read_container(path)
     assert header["site"] == "Example Org"
     assert len(vectors) == len(compendium.children) * header["embedding"]["dims"]
@@ -311,10 +323,8 @@ def test_dropping_local_parents_leaves_a_valid_compendium(
 
 
 def test_write_with_gzip_produces_the_same_bytes_compressed(tmp_path, fixtures_dir, fake_embed_chunks_core):
-    import gzip
-
     compendium = sample_compendium(fixtures_dir, fake_embed_chunks_core)
-    (plain,) = ContainerAdapter().write(compendium, tmp_path, {"file": "compendium.json"})
+    (plain,) = ContainerAdapter().write(compendium, tmp_path, {"file": "compendium.json", "gzip": False})
     (packed,) = ContainerAdapter().write(compendium, tmp_path, {"file": "compendium.json.gz", "gzip": True})
 
     assert packed.name == "compendium.json.gz"
@@ -351,3 +361,87 @@ def test_the_header_leaves_out_enrichment_fields_until_a_pass_sets_them(fixtures
     assert record["enrich_ver"] == "test-1"
     assert "summary" not in record and "enriched_at" not in record
     assert list(record)[:11] == list(plain[0])
+
+
+# ---------------------------------------------------------------------------
+# The light file and the full file
+# ---------------------------------------------------------------------------
+
+def compendium_with_code(fixtures_dir, embedder):
+    """Two crawled pages and one code record, every section named with a keyword."""
+    documents = [
+        document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team"),
+        document_from_fixture(fixtures_dir, "page_boilerplate_b.html", "https://example.org/project"),
+        Document(url="https://github.com/example/tool/blob/main/run.py", title="run.py", content=CODE_TEXT,
+                 source_type="github", content_type="code_file"),
+    ]
+    compendium = build.build_compendium(documents, name="Example Org", embedder=embedder,
+                                        built_at=FIXED_BUILT_AT)
+    return replace(compendium, parents=tuple(replace(p, keywords=("sleep",)) for p in compendium.parents))
+
+
+def test_write_produces_a_light_and_a_full_container(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    compendium = compendium_with_code(fixtures_dir, fake_embed_chunks_core)
+
+    written = ContainerAdapter().write(compendium, tmp_path, {
+        "file": "kb.json.gz", "gzip": True, "full": True, "include_local": False,
+        "light": build_light_compendium(compendium, embedder=fake_embed_chunks_core),
+    })
+
+    assert [path.name for path in written] == ["kb.json.gz", "kb-full.json.gz"]
+    (light_header, light_vectors), (full_header, full_vectors) = (read_container(path) for path in written)
+    assert (light_header["variant"], full_header["variant"]) == ("light", "full")
+    assert light_header["v"] == full_header["v"] == 4
+    assert any(parent.content_type in CODE_CONTENT_TYPES for parent in compendium.parents)
+    assert all(p["content_type"] not in CODE_CONTENT_TYPES for p in full_header["parents"])
+    assert all(p["content_type"] not in CODE_CONTENT_TYPES for p in light_header["parents"])
+    assert [p["u"] for p in light_header["parents"]] == ["https://example.org/team", "https://example.org/project"]
+    assert len(light_header["parents"]) < len(full_header["parents"])
+    assert all(p["keywords"] == ["sleep"] for p in light_header["parents"])
+    assert len(light_vectors) == len(light_header["children"]["pid"]) * 384
+    assert len(full_vectors) == len(full_header["children"]["pid"]) * 384
+
+
+def test_full_false_writes_only_the_light_file(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    compendium = compendium_with_code(fixtures_dir, fake_embed_chunks_core)
+
+    written = ContainerAdapter().write(compendium, tmp_path, {
+        "file": "kb.json", "gzip": False, "full": False, "include_local": False,
+        "light": build_light_compendium(compendium, embedder=fake_embed_chunks_core),
+    })
+
+    assert [path.name for path in written] == ["kb.json"]
+    assert read_container(written[0])[0]["variant"] == "light"
+    assert not (tmp_path / "kb-full.json").exists()
+
+
+def test_without_a_light_compendium_the_one_file_is_the_full_container(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    compendium = compendium_with_code(fixtures_dir, fake_embed_chunks_core)
+
+    written = ContainerAdapter().write(compendium, tmp_path,
+                                       {"file": "kb.json", "gzip": False, "include_local": False})
+
+    assert [path.name for path in written] == ["kb.json"]
+    header, _ = read_container(written[0])
+    assert header["variant"] == "full"
+    assert all(p["content_type"] not in CODE_CONTENT_TYPES for p in header["parents"])
+
+
+def test_local_content_is_dropped_from_the_light_file_too(tmp_path, fixtures_dir, fake_embed_chunks_core):
+    compendium = mixed_compendium(fixtures_dir, fake_embed_chunks_core)
+    light = build_light_compendium(compendium, embedder=fake_embed_chunks_core)
+    assert any(parent.local for parent in light.parents)
+
+    written = ContainerAdapter().write(compendium, tmp_path, {"include_local": False, "light": light})
+
+    for path in written:
+        header, _ = read_container(path)
+        assert header["parents"] and not any(p["local"] for p in header["parents"])
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("kb.json.gz", "kb-full.json.gz"), ("kb.json", "kb-full.json"), ("index", "index-full"),
+    ("nested/kb.json.gz", "nested/kb-full.json.gz"),
+])
+def test_the_full_file_is_named_after_the_light_one(name, expected):
+    assert full_container_file_name(name) == expected

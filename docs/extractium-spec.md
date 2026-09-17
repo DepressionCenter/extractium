@@ -200,11 +200,11 @@ The [architecture](architecture.md) page says which module writes each format.
 
 | Format | Files | Notes |
 |---|---|---|
-| Binary container, version 4 | `<slug>.json`, `compendium.json` by default; `<slug>.json.gz` with `gzip: true` | The main output. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. Planned, Phase 20 of the [implementation plan](implementation-plan.md): two files from one build, `<slug>.json.gz` (light, the default) and `<slug>-full.json.gz`. The light file holds one section per page whose text is the page's description and keywords. The full file holds every section except code records. `gzip: false` writes `.json` names. |
+| Binary container, version 4 | `<slug>.json.gz` and `<slug>-full.json.gz`, `compendium.json.gz` and `compendium-full.json.gz` by default | The main output. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. Two files from one build. The light file holds one section per page whose text is the page's description and keywords, built without the chunker or the near-duplicate step so no page is lost for a short or shared description. The full file holds every section except code records. A `variant` header field tells them apart, and the layout version is unchanged. `gzip: false` writes `.json` names, and `full: false` writes the light file only. |
 | llms.txt | `llms.txt`, `llms/<source>.txt`, `llms/<source>/<group>.txt` | For web-browsing language models, which read a file whole and keep only its first part when it is long. `llms.txt` is an index of the sources: name, where the source starts, a description, and a link to the source's index file. A source's index file lists its pages, one link and one description each. A source past 500 entries splits into one file per category, or per first folder of the address where pages carry no category, and a group past 500 continues in numbered files. A GitHub source lists each repository with its own description, then its files: repository root, then `docs`, `doc`, `guide`, and `guides`, then the rest. Links between index files are relative. No code records. The full text of every page is in the OKF bundle and the container, not here. |
-| SQLite | `<slug>.sqlite`, `compendium.sqlite` by default | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). Planned, Phases 20 and 21 of the [implementation plan](implementation-plan.md): the only single-file output that carries code records, with postings stored by integer term id. |
+| SQLite | `<slug>.sqlite`, `compendium.sqlite` by default | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). The only single-file output that carries code records; the `okf` folder carries them too. Postings are stored by integer term id. The tables are drawn and described in [the SQLite database](sqlite-database.md). |
 | OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them. Every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. A file the tool wrote for a page no longer in the compendium is removed on the next build. |
-| gzip container | the container output's `gzip` option | The same bytes through gzip, recognized by the gzip signature rather than the name. The Python client inflates inside `load_container`. The JavaScript client's `inflateContainer` runs before `loadContainer`, through `DecompressionStream`. |
+| gzip container | the container output's `gzip` option, on by default | The same bytes through gzip, recognized by the gzip signature rather than the name. The Python client inflates inside `load_container`. The JavaScript client's `inflateContainer` runs before `loadContainer`, through `DecompressionStream`. |
 
 Decided against: a JSONL file with a separate vector file, because there is no ecosystem behind it and the container covers the case; Parquet and DuckDB outputs, because no consumer asked for them and each would add a dependency for a format the SQLite output already serves.
 
@@ -412,9 +412,10 @@ sources:
     delay_seconds: 1                # seconds between requests to YouTube; never less than 1
 
 outputs:                            # omit = container + llmstxt
-  - type: container         # written as <slug>.json; file: overrides
+  - type: container         # <slug>.json.gz, light, and <slug>-full.json.gz; file: names the light one
     include_local: false
-    gzip: false             # true writes <slug>.json.gz, the same bytes compressed
+    gzip: true              # false writes .json names, not compressed
+    full: true              # false writes the light file only
   - type: llmstxt
   - type: sqlite            # written as <slug>.sqlite; file: overrides
     include_local: true

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/connect-an-mcp-client.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: How to let an AI assistant on your own computer search a
 published compendium: which of the two local servers to pick, how to
 configure a client, how to check it works without a client, and what the
@@ -43,12 +43,12 @@ Both read the same index file, so you can change your mind later. If the assista
 
 ## Step 1: Get the index address
 
-You need the address of a built compendium, usually `compendium.json` in a published folder. If you built one yourself, the file is in `dist/` and you can point at it directly instead.
+You need the address of a built compendium's index file in a published folder. A build publishes two. `compendium-full.json.gz` holds the text of every section, so the assistant can quote the page, and it is the usual choice on your own computer. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords, for when the download or the memory matters more. If you built one yourself, the files are in `dist/` and you can point at one directly instead.
 
 Check that the address answers before you go further:
 
 ```bash
-curl -I https://example.org/kb/compendium.json
+curl -I https://example.org/kb/compendium-full.json.gz
 ```
 
 A `200` means you are ready. A `404` means the path is wrong. The address must start with `https://`, unless it is on `localhost`. Both servers refuse anything else, because an index fetched over an open connection can be swapped in transit for whatever someone else wants your assistant to read.
@@ -61,14 +61,14 @@ This proves the server runs before an assistant depends on it.
 Python:
 
 ```bash
-EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json python examples/mcp/local-python/server.py
+EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz python examples/mcp/local-python/server.py
 ```
 
 Node:
 
 ```bash
 cd examples/mcp/local-node && npm install
-EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json node server.js
+EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz node server.js
 ```
 
 On Windows, set the variable first (`set NAME=value` in Command Prompt, `$env:NAME = 'value'` in PowerShell), then run the command without the prefix.
@@ -84,7 +84,7 @@ You can drive the server yourself. Send it two messages, one per line:
 printf '%s\n%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_kb","arguments":{"query":"how do I request a data extract"}}}' \
-  | EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json python examples/mcp/local-python/server.py
+  | EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz python examples/mcp/local-python/server.py
 ```
 
 You get two lines back. The first lists the one tool, `search_kb`. The second holds the sections it found. The first search is slow, because it downloads the embedding model, about 130 MB. Later ones are quick.
@@ -102,7 +102,7 @@ Python:
     "extractium": {
       "command": "python",
       "args": ["C:/Path/To/extractium/examples/mcp/local-python/server.py"],
-      "env": { "EXTRACTIUM_INDEX_URL": "https://example.org/kb/compendium.json" }
+      "env": { "EXTRACTIUM_INDEX_URL": "https://example.org/kb/compendium-full.json.gz" }
     }
   }
 }
@@ -116,7 +116,7 @@ Node:
     "extractium": {
       "command": "node",
       "args": ["C:/Path/To/extractium/examples/mcp/local-node/server.js"],
-      "env": { "EXTRACTIUM_INDEX_URL": "https://example.org/kb/compendium.json" }
+      "env": { "EXTRACTIUM_INDEX_URL": "https://example.org/kb/compendium-full.json.gz" }
     }
   }
 }

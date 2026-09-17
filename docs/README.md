@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -51,7 +51,8 @@ This folder holds the detailed documentation for Extractium™. The pages are gr
 * [Architecture](architecture.md): the modules, what each one does, and the design decisions behind them.
 * [Plug-in Architecture](plugin-architecture.md): the three plug-in kinds, how the tool finds them, and a working example of each.
 * [Data Flow](data-flow.md): what happens to content between the site it came from and the files a build writes, and where private content is kept out.
-* [Container Format](container-format.md): the search index file every client reads, byte by byte, with a checklist for writing your own reader.
+* [Container Format](container-format.md): the search index files every client reads, byte by byte, with a checklist for writing your own reader.
+* [The SQLite Database](sqlite-database.md): a diagram of the tables, every column, and sample queries.
 * [Compliance and Posture](compliance.md): the security, privacy, and accessibility controls in place, the evidence for each, the dependency licenses, and the known gaps.
 * [Specification](extractium-spec.md): the design of the tool: plug-in protocols, data model, output formats, sources, and access tiers.
 

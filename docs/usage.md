@@ -131,13 +131,14 @@ With the default settings, the output folder holds the search index and the llms
 
 | File | What it is |
 |---|---|
-| `compendium.json` | The search index: text, vectors, and keyword statistics in one file. Despite the name it is partly binary. The `.json` extension keeps static hosts serving it correctly. The [container format](container-format.md) page describes it byte by byte. |
+| `compendium.json.gz` | The light search index: one entry per page, holding the page's description and keywords, with vectors and keyword statistics. Small enough for a search box on a web page or a free hosted server. Despite the name it is partly binary, and it is compressed with gzip; the clients inflate it for you. The [container format](container-format.md) page describes it byte by byte. |
+| `compendium-full.json.gz` | The full search index: the text of every section, in the same format. For a client that needs to quote the page text and can afford a larger download. |
 | `llms.txt` | A short index of your sources, for a language model that browses the web. Each entry names a source, says what it is, and links to that source's index file. |
 | `llms/` | One index file per source, listing its pages with a link and a description each. A source with more than 500 pages gets a folder of files, one per section of the source. |
 
-The llms.txt files are meant to be read whole inside a language model's context window, so they are kept short and they list documentation only, never source code. The full text of every page is in the search index, and in the `okf` folder if you add that output.
+The llms.txt files are meant to be read whole inside a language model's context window, so they are kept short and they list documentation only, never source code. The full text of every page is in the full search index, and in the `okf` folder if you add that output. Neither search index holds source code either. Code analysis from a GitHub source is written to the `sqlite` and `okf` outputs only, and the summary at the end of the build says so.
 
-Add a `sqlite` output for a database with the same content, or an `okf` output for a folder of Markdown files. See the [configuration reference](configuration.md).
+Add a `sqlite` output for [a database](sqlite-database.md) with the same content, or an `okf` output for a folder of Markdown files. See the [configuration reference](configuration.md).
 
 Publish the folder as it is. Nothing in it needs a server or a database.
 
@@ -151,7 +152,8 @@ Built 'Example Org Knowledge Base' at 2026-09-08T14:30:00Z
   sections : 812
   windows  : 1944
   sources  : 233
-  wrote    : dist/compendium.json (2.71 MB)
+  wrote    : dist/compendium.json.gz (0.12 MB)
+  wrote    : dist/compendium-full.json.gz (0.84 MB)
   wrote    : dist/llms.txt (0.00 MB)
   wrote    : dist/llms/example-org-website.txt (0.04 MB)
   wrote    : dist/okf (235 files, 1.18 MB)

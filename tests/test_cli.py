@@ -32,6 +32,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-17"
 
+import gzip
 import json
 import struct
 import textwrap
@@ -73,6 +74,21 @@ class FixedSource:
                            source_type="web", content_type="page")
 
 
+class CodeSource:
+    name = "coded"
+
+    def __init__(self, options):
+        self.options = options
+
+    def fetch(self, session, cache, progress):
+        url, title, body = PAGES[0]
+        yield Document(url=url, title=title, content=body, source_type="web", content_type="page")
+        yield Document(url="https://github.com/example/tool/blob/main/run.py", title="run.py",
+                       content="def summarize(nights): return sum(nights) / len(nights)  # a nightly "
+                               "mean, written long enough for the chunker to keep it as a section.",
+                       source_type="github", content_type="code_file")
+
+
 class EmptySource:
     name = "empty"
 
@@ -86,6 +102,7 @@ class EmptySource:
 def register(registry):
     registry.register_source(FixedSource)
     registry.register_source(EmptySource)
+    registry.register_source(CodeSource)
 '''
 
 # The tests never load the real embedding model. This replacement gives
@@ -130,8 +147,14 @@ def write_config(folder, body, name="config.yaml"):
     return str(path)
 
 
-def read_container(path):
+def inflated(path):
+    """A container file's bytes, inflated when the file is compressed, which is the default."""
     data = path.read_bytes()
+    return gzip.decompress(data) if data[:2] == bytes((0x1F, 0x8B)) else data
+
+
+def read_container(path):
+    data = inflated(path)
     (length,) = struct.unpack("<I", data[:4])
     return json.loads(data[4:4 + length].decode("utf-8"))
 
@@ -156,15 +179,16 @@ def test_build_writes_every_configured_output(build_workspace, capsys):
 
     assert code == cli.EXIT_OK
     out_dir = build_workspace / "dist"
-    assert (out_dir / "compendium.json").exists()
+    assert (out_dir / "compendium.json.gz").exists()
+    assert (out_dir / "compendium-full.json.gz").exists()
     assert (out_dir / "llms.txt").exists()
     assert (out_dir / "llms" / "fixed-source.txt").exists()
     assert not (out_dir / "llms-full.txt").exists()
-    header = read_container(out_dir / "compendium.json")
+    header = read_container(out_dir / "compendium-full.json.gz")
     assert header["site"] == "Example Org"
     assert header["v"] == 4
     assert len(header["parents"]) == 2
-    assert capsys.readouterr().out.count("wrote    :") == 3
+    assert capsys.readouterr().out.count("wrote    :") == 4
 
 
 def test_the_label_a_source_is_given_reaches_every_output(build_workspace):
@@ -183,7 +207,7 @@ def test_the_label_a_source_is_given_reaches_every_output(build_workspace):
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
 
     out_dir = build_workspace / "dist"
-    header = read_container(out_dir / "compendium.json")
+    header = read_container(out_dir / "compendium-full.json.gz")
     assert all(p["source_label"] == "Peer Program" for p in header["parents"])
     assert "[Peer Program](llms/peer-program.txt)" in (out_dir / "llms.txt").read_text(encoding="utf-8")
     assert "## Peer Program" in (out_dir / "llms" / "peer-program.txt").read_text(encoding="utf-8")
@@ -208,8 +232,25 @@ def test_build_defaults_to_the_container_and_llmstxt_outputs(build_workspace):
     """)
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
-    assert (build_workspace / "dist" / "compendium.json").exists()
-    assert (build_workspace / "dist" / "llms.txt").exists()
+    dist = build_workspace / "dist"
+    assert read_container(dist / "compendium.json.gz")["variant"] == "light"
+    assert read_container(dist / "compendium-full.json.gz")["variant"] == "full"
+    assert (dist / "llms.txt").exists()
+    assert (dist / "llms").is_dir()
+
+
+def test_a_build_with_no_container_output_describes_no_pages(build_workspace, capsys):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+        outputs:
+          - type: llmstxt
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+    assert "Light container" not in capsys.readouterr().err
 
 
 def test_build_writes_an_open_knowledge_format_folder(build_workspace):
@@ -290,7 +331,7 @@ def test_build_names_the_index_after_the_first_page_when_the_file_does_not(build
 
     cli.main(["build", "--config", config])
 
-    assert read_container(build_workspace / "dist" / "compendium.json")["site"] == "Alpha Page"
+    assert read_container(build_workspace / "dist" / "compendium-full.json.gz")["site"] == "Alpha Page"
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +349,7 @@ def test_out_dir_flag_overrides_the_configuration_file(build_workspace):
 
     cli.main(["build", "--config", config, "--out-dir", "published"])
 
-    assert (build_workspace / "published" / "compendium.json").exists()
+    assert (build_workspace / "published" / "compendium-full.json.gz").exists()
     assert not (build_workspace / "dist").exists()
 
 
@@ -322,7 +363,7 @@ def test_float32_vecs_flag_changes_the_stored_vector_type(build_workspace):
 
     cli.main(["build", "--config", config, "--float32-vecs"])
 
-    embedding = read_container(build_workspace / "dist" / "compendium.json")["embedding"]
+    embedding = read_container(build_workspace / "dist" / "compendium-full.json.gz")["embedding"]
     assert embedding["dtype"] == "float32"
     assert "scale" not in embedding
 
@@ -489,8 +530,8 @@ def test_a_local_source_reaches_no_output_that_did_not_opt_in(build_workspace, c
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
 
-    published = (build_workspace / "dist" / "compendium.json").read_bytes()
-    assert b"AB123456" not in published
+    for name in ("compendium.json.gz", "compendium-full.json.gz"):
+        assert b"AB123456" not in inflated(build_workspace / "dist" / name)
     assert "NOTICE" not in capsys.readouterr().out
 
 
@@ -517,7 +558,8 @@ def test_an_output_that_opts_in_gets_the_local_content_and_is_named_in_the_summa
     out = capsys.readouterr().out
     assert "output 'sqlite' includes local content" in out
     assert "output 'container' includes local content" not in out
-    assert b"AB123456" not in (build_workspace / "dist" / "compendium.json").read_bytes()
+    for name in ("compendium.json.gz", "compendium-full.json.gz"):
+        assert b"AB123456" not in inflated(build_workspace / "dist" / name)
     assert b"AB123456" in (build_workspace / "dist" / "compendium.sqlite").read_bytes()
 
 
@@ -995,7 +1037,7 @@ def test_build_names_sections_with_keywords_and_stores_them_under_the_cache(buil
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
 
-    header = read_container(build_workspace / "dist" / "compendium.json")
+    header = read_container(build_workspace / "dist" / "compendium-full.json.gz")
     assert all(set(p["keywords"]) == {"peer support", "depression"} for p in header["parents"])
     assert all(p["enrich_ver"] == keywords.PASS_VERSION for p in header["parents"])
     assert all(p["tags"] for p in header["parents"])
@@ -1024,7 +1066,7 @@ def test_build_without_the_keyword_library_says_so_and_goes_on(build_workspace, 
     err = capsys.readouterr().err
     assert "Keywords: the keywords extra is not installed" in err
     assert 'pip install "extractium[keywords]"' in err
-    header = read_container(build_workspace / "dist" / "compendium.json")
+    header = read_container(build_workspace / "dist" / "compendium-full.json.gz")
     assert all("keywords" not in p for p in header["parents"])
     assert not (build_workspace / ".cache" / "enrichment").exists()
 
@@ -1044,7 +1086,7 @@ def test_build_with_keywords_off_never_asks_for_the_library(build_workspace, mon
 
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
 
-    header = read_container(build_workspace / "dist" / "compendium.json")
+    header = read_container(build_workspace / "dist" / "compendium-full.json.gz")
     assert all("keywords" not in p for p in header["parents"])
 
 
@@ -1076,3 +1118,48 @@ def test_every_output_is_told_which_sources_the_build_read(build_workspace, monk
         "label": "Fixed Source", "type": "fixed", "home_url": "",
         "description": "Three pages that never change.",
     },)
+
+
+# ---------------------------------------------------------------------------
+# Where the code records went
+# ---------------------------------------------------------------------------
+
+CODE_BUILD = """
+    cache_dir: .cache
+    sources:
+      - type: {source}
+        label: Fixed Source
+    outputs:
+{outputs}
+"""
+
+WHY_NO_CODE = ("The llms files and both containers leave code out, because they are read "
+               "inside a language model's context window.")
+
+
+def summary_of_code_build(build_workspace, capsys, source, outputs):
+    listed = "".join(f"      - type: {name}\n" for name in outputs)
+    config = write_config(build_workspace, CODE_BUILD.format(source=source, outputs=listed))
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+    return capsys.readouterr().out
+
+
+def test_the_summary_says_which_output_holds_the_code_records(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "coded", ["container", "llmstxt", "sqlite"])
+    assert f"  coverage : 1 code record(s) are in the sqlite output only. {WHY_NO_CODE}" in out
+
+
+def test_the_summary_names_both_outputs_that_hold_code_records(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "coded", ["container", "okf", "sqlite"])
+    assert "1 code record(s) are in the sqlite and okf outputs only." in out
+
+
+def test_the_summary_says_when_no_output_keeps_the_code_records(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "coded", ["container", "llmstxt"])
+    assert (f"  coverage : 1 code record(s) were read and no configured output keeps them. {WHY_NO_CODE} "
+            "Add a sqlite or okf output to publish code analysis.") in out
+
+
+def test_a_build_with_no_code_says_nothing_about_code(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "fixed", ["container", "sqlite"])
+    assert "code record" not in out

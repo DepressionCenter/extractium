@@ -13,7 +13,7 @@ tests/test_retain.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-12"
+__date__ = "2026-09-17"
 
 import dataclasses
 import json
@@ -300,7 +300,7 @@ def run_build(workspace, monkeypatch, fake_session_factory, first_build, rebuild
           - type: container
     """), encoding="utf-8")
     assert cli.main(["build", "--config", str(settings)]) == cli.EXIT_OK
-    header = read_container(workspace / "dist" / "compendium.json")
+    header = read_container(workspace / "dist" / "compendium-full.json.gz")
     return sorted({p["u"] for p in header["parents"]})
 
 

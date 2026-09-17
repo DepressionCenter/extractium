@@ -26,9 +26,10 @@
 
 name: Eisenberg Family Depression Center Resource Library
 
-# The short name every output file is named after: efdc-compendium.json is
-# the container the clients read, efdc-compendium.sqlite the same content as
-# tables. It is also the name the published address ends in.
+# The short name every output file is named after: efdc-compendium.json.gz
+# and efdc-compendium-full.json.gz are the containers the clients read,
+# efdc-compendium.sqlite the same content as tables. It is also the name the
+# published address ends in.
 slug: efdc-compendium
 
 
@@ -242,19 +243,29 @@ sources:
 # ---------------------------------------------------------------------------
 
 outputs:
-  # efdc-compendium.json: the compendium every search client reads.
+  # The two files the search clients read, both compressed with gzip.
+  # efdc-compendium.json.gz is the light container: one entry per page,
+  # holding the page's description and keywords, small enough for a browser
+  # or a hosted server with a small store. efdc-compendium-full.json.gz is
+  # the full container: the text of every section.
+  # Neither file holds code analysis. They are meant to be loaded into a
+  # language model's context window or searched by a small model in memory;
+  # the sqlite and okf outputs carry the code.
   - type: container
+    gzip: true    # false writes .json files that are not compressed
+    full: true    # false writes the light container only
   # llms.txt, which lists the sources, and llms/, one index file per source,
   # for language models that browse the web. Documentation only: these files
   # are meant to be read inside a model's context window, so the code
-  # analysis from the GitHub source is left out of them. The other outputs
-  # carry it.
+  # analysis from the GitHub source is left out of them. The sqlite and okf
+  # outputs carry it.
   - type: llmstxt
-  # efdc-compendium.sqlite: the same content as tables, for anyone who would
-  # rather write SQL, and what the Cloudflare search server is loaded from.
+  # efdc-compendium.sqlite: the same content as tables, code analysis
+  # included, for anyone who would rather write SQL, and what the Cloudflare
+  # search server is loaded from.
   - type: sqlite
   # okf/: one Markdown file per page, in the Open Knowledge Format, readable
-  # in any Markdown viewer.
+  # in any Markdown viewer. Code analysis is included.
   - type: okf
 
 

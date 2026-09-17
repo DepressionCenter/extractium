@@ -119,7 +119,7 @@ PNG dimensions match the corresponding SVG canvas unless noted. SVG files contai
 | [extractium-workflow.png](../images/extractium-workflow.png) | 1600 × 900 | Websites and portals, GitHub repositories, library repositories, YouTube captions, local folders, and knowledge bundles feed one Extractium build. The search index supports websites, scripts, local AI, and hosted search. llms.txt files support web-browsing AI. SQLite supports queries, reports, and hosted databases. Markdown supports reading, editing, and reuse through Open Knowledge Format. Plug-ins can add sources and outputs. |
 | [extractium-workflow-mobile.svg](../images/extractium-workflow-mobile.svg) | 480 × 1900 | Websites and portals, GitHub repositories, library repositories, YouTube captions, local folders, and knowledge bundles feed one Extractium build. The search index supports websites, scripts, local AI, and hosted search. llms.txt files support web-browsing AI. SQLite supports queries, reports, and hosted databases. Markdown supports reading, editing, and reuse through Open Knowledge Format. Plug-ins can add sources and outputs. |
 | [extractium-workflow-mobile.png](../images/extractium-workflow-mobile.png) | 480 × 1900 | Websites and portals, GitHub repositories, library repositories, YouTube captions, local folders, and knowledge bundles feed one Extractium build. The search index supports websites, scripts, local AI, and hosted search. llms.txt files support web-browsing AI. SQLite supports queries, reports, and hosted databases. Markdown supports reading, editing, and reuse through Open Knowledge Format. Plug-ins can add sources and outputs. |
-| [extractium-knowledge-commons.png](../images/extractium-knowledge-commons.png) | 1651 × 865 | Preserved user-edited README image; unchanged bytes. |
+| [extractium-knowledge-commons.png](../images/extractium-knowledge-commons.png) | 1651 × 865 | The README image, as edited by hand. Its label for the llms.txt output was corrected to `llms.txt / llms/`; nothing else in it was redrawn. |
 | [extractium-diagram.png](../images/extractium-diagram.png) | 1322 × 740 | Preserved user-edited README image; unchanged bytes. |
 
 The repository preview and thumbnail depict the same composition. The thumbnail is resized uniformly with minimal padding for the small aspect-ratio difference.
@@ -151,7 +151,7 @@ Websites and portals, GitHub repositories, library repositories, YouTube caption
 
 | Output | Uses |
 |---|---|
-| Search index (`compendium.json`) | Website search, scripts, local AI assistants, and hosted search |
+| Search index (`compendium.json.gz` and `compendium-full.json.gz`) | Website search, scripts, local AI assistants, and hosted search |
 | AI-readable text (`llms.txt` and the `llms/` folder) | AI assistants that browse the web |
 | SQLite (`compendium.sqlite`) | SQL queries, reports, and hosted databases |
 | Markdown (`okf/`) | Reading, editing, and reuse with Open Knowledge Format tools |

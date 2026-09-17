@@ -751,7 +751,7 @@ def test_any_other_transport_setting_is_refused(mode):
 def test_the_slug_defaults_and_names_the_default_output_files():
     cfg = config.config_from_mapping(minimal(outputs=[{"type": "container"}, {"type": "sqlite"}]))
     assert cfg.slug == config.DEFAULT_SLUG == "compendium"
-    assert cfg.outputs[0].options["file"] == "compendium.json"
+    assert cfg.outputs[0].options["file"] == "compendium.json.gz"
     assert cfg.outputs[1].options["file"] == "compendium.sqlite"
 
 
@@ -762,7 +762,7 @@ def test_a_slug_names_every_output_that_names_no_file_of_its_own():
     ))
     assert cfg.slug == "efdc-compendium"
     assert [o.options.get("file") for o in cfg.outputs] == [
-        "efdc-compendium.json", "efdc-compendium.sqlite", "custom.json",
+        "efdc-compendium.json.gz", "efdc-compendium.sqlite", "custom.json",
     ]
 
 
@@ -926,16 +926,30 @@ def test_user_agent_cannot_carry_header_injection():
         config.config_from_mapping(minimal(user_agent="Bot/1.0\r\nX-Injected: yes"))
 
 
-def test_a_container_output_may_be_gzip_compressed_and_is_then_named_with_the_suffix():
-    cfg = config.config_from_mapping({
-        "sources": [{"type": "web", "label": "Site", "seed_url": SEED}],
-        "slug": "example",
-        "outputs": [{"type": "container", "gzip": True}, {"type": "container", "file": "plain.json"}],
-    })
+def test_the_container_is_compressed_and_writes_both_files_by_default():
+    cfg = config.config_from_mapping(minimal(slug="kb", outputs=[{"type": "container"}]))
+    assert cfg.outputs[0].options == {"file": "kb.json.gz", "gzip": True, "full": True}
 
-    packed, plain = cfg.outputs
-    assert (packed.options["file"], packed.options["gzip"]) == ("example.json.gz", True)
-    assert (plain.options["file"], plain.options["gzip"]) == ("plain.json", False)
+
+def test_gzip_false_gives_the_plain_name_and_full_false_is_kept():
+    cfg = config.config_from_mapping(minimal(slug="kb", outputs=[{"type": "container", "gzip": False, "full": False}]))
+    assert cfg.outputs[0].options == {"file": "kb.json", "gzip": False, "full": False}
+
+
+def test_a_container_that_names_its_file_is_compressed_only_when_the_name_says_so():
+    cfg = config.config_from_mapping(minimal(outputs=[
+        {"type": "container", "file": "plain.json"},
+        {"type": "container", "file": "packed.json.gz"},
+        {"type": "container", "file": "forced.json", "gzip": True},
+    ]))
+    assert [(o.options["file"], o.options["gzip"]) for o in cfg.outputs] == [
+        ("plain.json", False), ("packed.json.gz", True), ("forced.json", True),
+    ]
+
+
+def test_full_must_be_true_or_false():
+    with pytest.raises(config.ConfigError):
+        config.config_from_mapping(minimal(outputs=[{"type": "container", "full": "yes"}]))
 
 
 def test_the_gzip_option_must_be_true_or_false():
