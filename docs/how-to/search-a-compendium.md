@@ -74,6 +74,7 @@ The client adds the file's query prefix for you before calling your function, so
 |---|---|
 | `parent` | The whole section: its heading (`t`), text (`x`), URL (`u`), categories, and the rest of the fields the [container format](../container-format.md) lists. This is what you show a reader or hand to a language model. |
 | `score` | How strong the match was. Useful for ordering and for comparing hits inside one result list. It is not a percentage. |
+| `cosine` | How close the matched window is to your question, as a cosine similarity between 0 and 1. This is the number the relevance floor is checked against. |
 | `child_index` | Which search window matched. |
 | `start`, `end` | Where that window sits inside the section text, in UTF-16 code units. |
 | `window_text` | Just the matched window, when you want to highlight it. |
@@ -115,7 +116,9 @@ const embedder = await pipeline('feature-extraction', index.embedding.browserMod
 const embedQuery = async (text) => (await embedder(text, { pooling: 'cls', normalize: true })).data;
 ```
 
-A hit carries the same fields as in Python, with JavaScript names: `parent`, `score`, `childIndex`, `start`, `end`, and `windowText`. When you already have a query vector, call `index.searchWithVector(query, vector)` and skip the promise.
+Let the library pick the precision, as above, or name `q8`, `q4`, or `fp32`. Do not run the embedder with 16-bit arithmetic on a graphics card, which is what `dtype: 'fp16'` or `'q4f16'` with `device: 'webgpu'` asks for. On at least one integrated graphics card that distorts the query vector badly enough that a 0.88 match scores 0.63, and most questions then find nothing. If you change the precision, embed one sentence both ways and check that the two vectors agree to about 0.98.
+
+A hit carries the same fields as in Python, with JavaScript names: `parent`, `score`, `cosine`, `childIndex`, `start`, `end`, and `windowText`. When you already have a query vector, call `index.searchWithVector(query, vector)` and skip the promise.
 
 
 ## What the search does
@@ -124,10 +127,12 @@ Both clients run the same six steps. You do not have to configure any of them.
 
 1. Two searches, not one. Your question is compared with every window by vector similarity, and separately matched word for word against the keyword statistics. A vector search finds text that means the same thing in other words. A keyword search finds an exact product name or error code. Neither alone is enough.
 2. Fusing the two lists. The two rankings are merged by reciprocal rank fusion, which uses each result's position in its own list and ignores the raw scores. That is what makes two scores on completely different scales comparable.
-3. Deciding what counts as relevant. A result must clear the strictest of three tests: an absolute floor, the middle of this query's own results plus a margin, and a distance above the average match the build measured for this corpus. The middle test is the one that keeps working when you change sites or models.
+3. Deciding what counts as relevant. A result must pass two tests. Its place in the merged ranking must be well above the middle of this query's own results. And the window itself must be close enough to the question: its cosine similarity must reach 0.67. The second test is the one that returns nothing for a question the compendium cannot answer, because a merged ranking always has a first place, whatever was asked.
 4. Keeping the answers varied. Near-identical windows are pushed down so that four results say four things rather than one thing four times.
 5. Limiting any one section. At most two windows from the same section survive, so a long article cannot fill the whole answer.
 6. Returning whole sections. Small windows are searched, and whole sections are returned. The match is precise, and the text you get back still has enough around it to answer from.
+
+The 0.67 in step 3 belongs to the embedding model, `BAAI/bge-small-en-v1.5` with its query prefix. With that model, the best window for a question a compendium answers scored 0.70 and higher in testing, and the best window for an unrelated question mostly stayed under 0.67. It is not a perfect line. A question close to the compendium's subject that it does not answer can still pass, so an assistant should read what comes back before it answers from it. To use another floor, call the selection step yourself: `diversify` takes the floor as its last argument in both clients. The light container holds page descriptions in place of page text, and scores against it run about 0.05 lower than against the full container.
 
 
 ## Keeping the two clients in agreement

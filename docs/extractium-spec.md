@@ -279,7 +279,7 @@ A local folder can hold content that must never be published. The rules:
 
 | Language | Notes |
 |---|---|
-| JavaScript | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, calibration threshold, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
+| JavaScript | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, a relevance floor on the raw cosine, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
 | Python | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
 | Others | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). |
 

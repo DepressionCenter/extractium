@@ -11,7 +11,7 @@ tests/test_search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-12
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-17"
 
 import json
 import struct
@@ -40,10 +40,12 @@ import pytest
 
 from extractium.search import (
     CANDIDATE_POOL,
+    COSINE_MIN,
     RRF_K,
     SCORE_MIN,
     SOURCE_CAP,
     ContainerError,
+    attach_cosines,
     bm25_candidates,
     diversify,
     load_container,
@@ -234,22 +236,58 @@ def test_relevance_cutoff_rises_with_the_pool_median():
     assert relevance_cutoff([{"s": 0.8}, {"s": 0.9}, {"s": 0.95}]) == pytest.approx(0.93)
 
 
-def test_relevance_cutoff_uses_the_calibration_statistics_when_they_are_stricter():
-    candidates = [{"s": 0.5}, {"s": 0.5}, {"s": 0.5}]
-
-    cutoff = relevance_cutoff(candidates, {"mean": 0.7, "std": 0.1})
-
-    assert cutoff == pytest.approx(0.8)
-
-
-def test_relevance_cutoff_ignores_calibration_with_no_spread():
-    candidates = [{"s": 0.5}, {"s": 0.5}, {"s": 0.5}]
-
-    assert relevance_cutoff(candidates, {"mean": 0.9, "std": 0}) == pytest.approx(0.53)
-
-
 def test_relevance_cutoff_of_an_empty_pool_admits_nothing():
     assert relevance_cutoff([]) == float("-inf")
+
+
+# ---------------------------------------------------------------------------
+# The cosine floor
+# ---------------------------------------------------------------------------
+
+def test_attach_cosines_records_the_raw_cosine_whatever_the_ranking_score_is():
+    vectors = np.asarray([[1, 0], [0, 1], [0.6, 0.8]], dtype=np.float32)
+    candidates = [{"i": 2, "s": 0.98}, {"i": 0, "s": 0.49}]
+
+    attach_cosines(candidates, [2, 0], vectors)     # not unit length: normalized before use
+
+    assert [candidate["cos"] for candidate in candidates] == pytest.approx([0.6, 1.0])
+    assert [candidate["s"] for candidate in candidates] == [0.98, 0.49]
+
+
+# Five unit vectors and a pool whose median ranking score is low, so the
+# pool's own cutoff sits at SCORE_MIN and only the cosine floor decides
+# between the two candidates that rank well.
+FLOOR_VECTORS = np.eye(5, dtype=np.float32)
+
+
+def floor_pool(first_cosine, second_cosine):
+    weak = [{"i": i, "s": score, "cos": 0.9} for i, score in ((2, 0.3), (3, 0.2), (4, 0.1))]
+    return [{"i": 0, "s": 0.98, "cos": first_cosine}, {"i": 1, "s": 0.90, "cos": second_cosine}] + weak
+
+
+def test_a_candidate_under_the_cosine_floor_is_dropped_however_well_it_ranks():
+    selected = diversify(floor_pool(COSINE_MIN - 0.01, COSINE_MIN), FLOOR_VECTORS, 4, str)
+
+    assert [candidate["i"] for candidate in selected] == [1]
+
+
+def test_a_candidate_that_carries_no_cosine_is_judged_on_its_ranking_score_alone():
+    pool = floor_pool(0.1, 0.1)
+    del pool[0]["cos"]
+
+    selected = diversify(pool, FLOOR_VECTORS, 4, str)
+
+    assert [candidate["i"] for candidate in selected] == [0]
+
+
+def test_a_caller_may_set_its_own_cosine_floor():
+    pool = floor_pool(0.60, 0.50)
+
+    assert diversify(pool, FLOOR_VECTORS, 4, str) == []
+    assert [c["i"] for c in diversify(pool, FLOOR_VECTORS, 4, str, cosine_min=0.55)] == [0]
+    # An older caller passed the file's calibration object in this place.
+    assert diversify(pool, FLOOR_VECTORS, 4, str, False, {"mean": 0.1, "std": 0.1}) == []
+    assert diversify(pool, FLOOR_VECTORS, 4, str, False, None) == []
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +461,39 @@ def test_search_adds_the_query_prefix_the_file_records_before_embedding():
     assert seen == [
         "Represent this sentence for searching relevant passages: how do I rebuild"
     ]
+
+
+def test_the_files_calibration_figures_never_hide_a_close_match():
+    """
+    The calibration figures say how similar the windows are to each other.
+    In a large or repetitive corpus that is about 0.93, which no query
+    reaches, so a cutoff built on them once rejected every hit.
+    """
+    header = sample_header(bm25=KEYWORD_STATS, calibration={"mean": 0.93, "std": 0.047, "sampleSize": 500})
+    header["parents"].append(parent_record("cccccccccccccccc"))
+    header["children"] = {"pid": [0, 1, 2], "start": [0, 0, 0], "end": [5, 5, 5]}
+    index = load_container(container_bytes(header, [[1, 0], [0, 1], [0.8, 0.6]]))
+
+    # 0.8 from the third window, which also holds the query's one rare word.
+    hits = index.search("crawler", lambda text: [1, 0], k=1)
+
+    assert [hit.parent["id"] for hit in hits] == ["cccccccccccccccc"]
+    assert hits[0].cosine == pytest.approx(0.8)
+
+
+def test_an_unrelated_query_gets_nothing_even_when_keywords_rank_a_window_first():
+    header = sample_header(bm25=KEYWORD_STATS)
+    header["parents"].append(parent_record("cccccccccccccccc"))
+    header["children"] = {"pid": [0, 1, 2], "start": [0, 0, 0], "end": [5, 5, 5]}
+    index = load_container(container_bytes(header, [[1, 0], [0.8, 0.6], [0.6, 0.8]]))
+
+    # The query is at most 0.28 from any window, far under the floor, although
+    # "crawler" puts the third window first in the keyword list and the
+    # fused ranking score of every window is high.
+    pool = index.candidates("crawler index", [-0.6, 0.8])
+    assert max(candidate["s"] for candidate in pool) > SCORE_MIN
+    assert index.search("crawler index", lambda text: [-0.6, 0.8]) == []
+    assert index.search("crawler index", lambda text: [-0.6, 0.8], no_threshold=True) != []
 
 
 def test_search_returns_nothing_when_no_section_clears_the_relevance_cutoff():

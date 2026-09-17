@@ -123,7 +123,7 @@ Each section is named with up to five keywords and each page with tags. A statis
 Two sets of numbers are built over what survives, in this order:
 
 - Keyword statistics (BM25): how often each word appears in each window and in how many windows. Words are runs of three or more letters or digits, lowercased. A search must split a query the same way or nothing matches.
-- Calibration: the mean and standard deviation of how similar a sample of windows are to their nearest neighbour. A client uses these to decide what counts as a good match in this particular corpus, instead of a threshold hand-tuned per site.
+- Calibration: the mean and standard deviation of how similar a sample of windows are to their nearest neighbour. It describes how repetitive the corpus is. The clients do not use it to decide what counts as a good match, because a query never scores as high against a window as two windows score against each other.
 
 The keyword statistics must be built after the collapse, because they refer to windows by position in the final list.
 
