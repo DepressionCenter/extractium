@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -682,6 +682,23 @@ Any Markdown viewer opens the folder. A program that reads Open Knowledge Format
 The folder holds the text of every page, so decide what to publish exactly as you would for the container. A build removes a file it wrote in an earlier build when that page is no longer in the compendium, and names each removal in its log. A file you added to the folder by hand is never touched. See "Full and incremental rebuilds" below.
 
 The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
+
+The tables are `meta` (one row per setting of the build), `parents` (one row per section), `children` (one row per search window), `vectors` (one row per window), `bm25_terms` (one row per distinct term), and `bm25_postings` (one row per term and window pair). A term's text is stored once, in `bm25_terms`. The postings name a term by its number, `tid`, because the text repeated in every posting was the largest part of the file. To find the windows a word appears in, join the two tables:
+
+```sql
+-- Grain: one row per search window that contains the term.
+SELECT
+    p.cid,                      -- the window, which is children.cid
+    p.tf                        -- how many times the term appears in it
+FROM bm25_terms AS t
+INNER JOIN bm25_postings AS p
+    ON p.tid = t.tid            -- 1:many; one term has many postings
+WHERE t.term = 'sleep'          -- terms are stored in lower case
+ORDER BY p.tf DESC
+;
+```
+
+The `meta` row `sqlite.schema` names this table layout. Its value is `2`. A file with no such row was written by an earlier version of Extractium™, which stored the term's text in every posting. A program that reads the keyword tables by column name should check the row first, as the Cloudflare search example does.
 
 
 ## Full and incremental rebuilds
