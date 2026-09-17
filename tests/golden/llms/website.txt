@@ -1,0 +1,18 @@
+# Example Org: Website
+
+> 2 pages from Website, one source of the Example Org compendium, compiled on 2026-01-02T03:04:05Z.
+
+This file lists the pages of one source. Each entry names one page, links to it, and describes it: with the page's own description where it has one, otherwise with the keywords it is about or the opening of its text.
+
+The index of every source is [llms.txt](../llms.txt).
+
+Links to other index files are relative to this file's address.
+
+Source code is not listed here. These files are meant to be read inside a language model's context window, so they hold documentation only.
+
+Compiled by Extractium (https://github.com/DepressionCenter/extractium), copyright (c) 2026 The Regents of the University of Michigan, licensed under the GNU General Public License v3.0 or later. The indexed content remains under the license of the site it was read from.
+
+## Website
+
+- [Team Directory](https://example.org/team): Synthetic unique content for page A describing a fictional team member and their placeholder research focus area, for characterization testing purposes only.
+- [Project Overview](https://example.org/project): Synthetic unique content for page B describing a fictional placeholder research project overview, for characterization testing purposes only.

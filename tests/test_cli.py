@@ -158,7 +158,8 @@ def test_build_writes_every_configured_output(build_workspace, capsys):
     out_dir = build_workspace / "dist"
     assert (out_dir / "compendium.json").exists()
     assert (out_dir / "llms.txt").exists()
-    assert (out_dir / "llms-full.txt").exists()
+    assert (out_dir / "llms" / "fixed-source.txt").exists()
+    assert not (out_dir / "llms-full.txt").exists()
     header = read_container(out_dir / "compendium.json")
     assert header["site"] == "Example Org"
     assert header["v"] == 4
@@ -184,7 +185,8 @@ def test_the_label_a_source_is_given_reaches_every_output(build_workspace):
     out_dir = build_workspace / "dist"
     header = read_container(out_dir / "compendium.json")
     assert all(p["source_label"] == "Peer Program" for p in header["parents"])
-    assert "## Peer Program" in (out_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "[Peer Program](llms/peer-program.txt)" in (out_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "## Peer Program" in (out_dir / "llms" / "peer-program.txt").read_text(encoding="utf-8")
 
 
 def test_a_source_missing_its_label_stops_the_build_with_a_config_error(build_workspace):
@@ -245,6 +247,25 @@ def test_a_folder_of_files_is_summarized_rather_than_listed_line_by_line(tmp_pat
     assert len(lines) == 1
     assert str(folder) in lines[0]
     assert f"{len(paths)} files" in lines[0]
+
+
+def test_a_file_beside_a_folder_of_them_is_named_and_the_folder_is_counted(tmp_path):
+    """The index tree is one file at the top and a folder of files beside it."""
+    top = tmp_path / "llms.txt"
+    top.write_text("x", encoding="utf-8")
+    folder = tmp_path / "llms"
+    folder.mkdir()
+    paths = [top]
+    for number in range(cli.PATHS_NAMED + 1):
+        path = folder / f"source-{number}.txt"
+        path.write_text("x", encoding="utf-8")
+        paths.append(path)
+
+    lines = cli.wrote_lines(paths)
+
+    assert len(lines) == 2
+    assert lines[0].startswith(str(top))
+    assert lines[1].startswith(str(folder)) and f"{len(paths) - 1} files" in lines[1]
 
 
 def test_a_handful_of_files_is_still_named_one_by_one(tmp_path):
@@ -981,7 +1002,9 @@ def test_build_names_sections_with_keywords_and_stores_them_under_the_cache(buil
     store = json.loads((build_workspace / ".cache" / "enrichment" / "keywords.json").read_text(encoding="utf-8"))
     assert store["version"] == keywords.PASS_VERSION
     assert set(store["sections"]) == {p["id"] for p in header["parents"]}
-    assert "Keywords: " in (build_workspace / "dist" / "llms.txt").read_text(encoding="utf-8")
+    # The fixed pages carry no summary of their own, so their keywords describe them.
+    listed = (build_workspace / "dist" / "llms" / "fixed-source.txt").read_text(encoding="utf-8")
+    assert "Keywords: " in listed
 
 
 def test_build_without_the_keyword_library_says_so_and_goes_on(build_workspace, monkeypatch, capsys):

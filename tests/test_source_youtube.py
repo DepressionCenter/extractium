@@ -15,7 +15,7 @@ tests/test_source_youtube.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-11"
+__date__ = "2026-09-17"
 
 import json
 
@@ -1249,11 +1249,11 @@ def test_the_index_file_names_a_video_once_however_many_sections_it_has(
     couple of minutes, so the page list names the video and not each
     moment in it.
     """
-    from extractium.adapters import llmstxt
+    from extractium.adapters import base
 
     compendium = video_compendium(fake_embed_chunks_core)
 
-    pages = llmstxt.pages_in_order(compendium.parents)
+    pages = base.page_records(compendium.parents)
 
     assert len(pages) == 1
     assert pages[0]["url"] == f"https://www.youtube.com/watch?v={VIDEO_A}"
@@ -1261,13 +1261,13 @@ def test_the_index_file_names_a_video_once_however_many_sections_it_has(
 
 
 def test_the_index_file_still_tells_two_videos_apart(fake_embed_chunks_core):
-    from extractium.adapters import llmstxt
+    from extractium.adapters import base
 
     compendium = video_compendium(
         fake_embed_chunks_core, videos=((VIDEO_A, "First Talk"), (VIDEO_B, "Second Talk")),
     )
 
-    pages = llmstxt.pages_in_order(compendium.parents)
+    pages = base.page_records(compendium.parents)
 
     assert [page["title"] for page in pages] == ["First Talk", "Second Talk"]
 

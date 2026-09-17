@@ -77,7 +77,8 @@ def test_a_page_record_carries_what_an_index_needs_to_place_it():
     assert page == {
         "url": "https://example.org/a", "title": "Page 1", "source_label": "Main Site",
         "source_type": "web", "content_type": "page", "categories": ("Site", "News"),
-        "text": "Opening words of page 1.", "summary": "About A.", "keywords": ("sleep",),
+        "text": "Opening words of page 1.", "summary": "About A.", "given_summary": "About A.",
+        "keywords": ("sleep",),
     }
 
 
@@ -114,6 +115,7 @@ def test_a_summary_shared_across_a_source_is_the_sites_and_not_the_pages():
     pages = base.page_records(parents)
 
     assert all(page["summary"] == "" for page in pages)
+    assert all(page["given_summary"] == shared for page in pages)
     assert base.describe(pages[0]) == "Keywords: topic."
 
 
@@ -129,3 +131,13 @@ def test_the_same_summary_on_two_sources_is_counted_per_source():
     parents = [section(n, f"https://example.org/{n}", summary=shared,
                        source_label="Main Site" if n % 2 else "Other Site") for n in range(1, 7)]
     assert all(page["summary"] == shared for page in base.page_records(parents))
+
+
+def test_keywords_named_prefers_shared_tags_over_the_sections_own_keywords():
+    parent = section(1, "https://example.org/a", tags=("Guides", "sleep"), categories=("Guides",),
+                     keywords=("caffeine",))
+
+    assert base.keywords_named(parent) == ("sleep",)
+    assert base.keywords_named(section(2, "https://example.org/b", tags=("Guides",), categories=("Guides",),
+                                       keywords=("caffeine",))) == ("caffeine",)
+    assert base.keywords_named(section(3, "https://example.org/c")) == ()

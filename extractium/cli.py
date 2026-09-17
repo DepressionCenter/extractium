@@ -438,16 +438,30 @@ def wrote_lines(paths, limit=PATHS_NAMED):
         limit (int): the most files to name one by one.
 
     Returns:
-        list[str]: one line per named file, or a single folder line.
+        list[str]: one line per named file, or a single folder line, or
+        both when a few files sit beside one folder holding the rest.
 
     Raises:
         OSError: if a written file can no longer be read.
     """
+    def named(path):
+        return f"{path} ({path.stat().st_size / 1024 / 1024:.2f} MB)"
+
+    def counted(group):
+        total_mb = sum(path.stat().st_size for path in group) / 1024 / 1024
+        folder = os.path.commonpath([str(path) for path in group])
+        return f"{folder} ({len(group)} files, {total_mb:.2f} MB)"
+
     if len(paths) <= limit:
-        return [f"{path} ({path.stat().st_size / 1024 / 1024:.2f} MB)" for path in paths]
-    total_mb = sum(path.stat().st_size for path in paths) / 1024 / 1024
-    folder = os.path.commonpath([str(path) for path in paths])
-    return [f"{folder} ({len(paths)} files, {total_mb:.2f} MB)"]
+        return [named(path) for path in paths]
+    # An index file with a folder of files beside it reads better as the
+    # file and then the folder than as one count for the folder above both.
+    top = os.path.commonpath([str(path) for path in paths])
+    beside = [path for path in paths if str(path.parent) == top]
+    below = [path for path in paths if str(path.parent) != top]
+    if beside and below and len(beside) <= limit and os.path.commonpath([str(p) for p in below]) != top:
+        return [named(path) for path in beside] + [counted(below)]
+    return [counted(paths)]
 
 
 def print_summary(compendium, written, notes=()):

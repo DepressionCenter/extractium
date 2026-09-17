@@ -197,8 +197,10 @@ def page_records(parents):
 
     Returns:
         list[dict]: url, title, source_label, source_type, content_type,
-        categories, the first section's text, the page's own summary or
-        "", and its keywords.
+        categories, the first section's text, `summary` (the page's own,
+        or "" when its source's pages share it), `given_summary` (what the
+        source gave, shared or not, because a site's default description
+        is the right description of the site), and its keywords.
     """
     pages = {}
     for parent in parents:
@@ -214,6 +216,7 @@ def page_records(parents):
             "categories": tuple(parent.categories),
             "text": parent.x,
             "summary": (parent.summary or "").strip(),
+            "given_summary": (parent.summary or "").strip(),
             "keywords": keywords_named(parent),
         }
     records = list(pages.values())
