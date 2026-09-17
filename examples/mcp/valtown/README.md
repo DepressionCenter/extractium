@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/valtown/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: README for the Val Town example: what it does, the three ways
 to push it, the settings it reads, what search it runs with and without an
 embedding service, and its limits.
@@ -63,7 +63,7 @@ Make a token at [val.town/settings/api](https://www.val.town/settings/api) with 
 ```bash
 cd examples/mcp/valtown
 VALTOWN_API_TOKEN=EXAMPLE_TOKEN python push.py --push --name my-compendium \
-  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json
+  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json.gz
 ```
 
 On Windows, set the variable first (`$env:VALTOWN_API_TOKEN = 'EXAMPLE_TOKEN'` in PowerShell), then run the command without the prefix.
@@ -107,7 +107,8 @@ With one, the val runs exactly the search the [JavaScript client](../../../docs/
 
 ## Limits
 
-- The Val Town free plan allows 10 MB of blob storage in total. A larger container is still served, but cannot be kept in the store, so every cold start downloads it again; the val's log says so. The Pro plan allows 1 GB.
+- The Val Town free plan allows 10 MB of blob storage in total. The light container, `compendium.json.gz`, is the file meant for it: the val stores the compressed bytes as it fetched them and inflates them after reading them back. If you point the val at the full container, `compendium-full.json.gz`, it is still served, but a file over the limit cannot be kept in the store, so every cold start downloads it again; the val's log says so. The Pro plan allows 1 GB.
+- With the light container, a search result is a page's description and keywords with a link to the page, not the page's text. With the full container, a result is the text of the matching section.
 - A val has one minute of wall-clock time per request and four gigabytes of memory, which is far more than one search needs. The first request after a cold start also pays for the download.
 - While the val stays warm, the index is revalidated against the published address at most every ten minutes, so a new build appears within that time without a push.
 - One tool, no writes: the val reads one static file and, when configured, calls one embedding service.

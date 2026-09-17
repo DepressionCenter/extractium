@@ -23,7 +23,7 @@
 
 # Display name of the published compendium, the collection this build writes.
 name: "Example Org Knowledge Base"
-slug: compendium              # names the output files: compendium.json, compendium.sqlite
+slug: compendium              # names the output files: compendium.json.gz, compendium.sqlite
 
 # Where the built files land. The workflow publishes this folder.
 out_dir: dist

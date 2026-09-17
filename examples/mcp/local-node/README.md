@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/local-node/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: README for the local Node MCP server example: what it does, how
 to run it, the settings it reads, the one package it installs, and its
 limits.
@@ -42,8 +42,10 @@ The Model Context Protocol (MCP) is the standard that assistants use to call too
 ```bash
 cd examples/mcp/local-node
 npm install
-EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json node server.js
+EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz node server.js
 ```
+
+A build publishes two index files. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords, so a search finds the right page and the assistant follows the link to read it. `compendium-full.json.gz` holds the text of every section, so the assistant can quote the page without opening it. On your own computer the full file is usually the better choice. Use the light one when the download or the memory matters more.
 
 On Windows, set the variable with `set` in Command Prompt or `$env:` in PowerShell, then run `node server.js`.
 
