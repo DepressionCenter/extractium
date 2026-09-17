@@ -58,12 +58,13 @@ outputs:
   - type: container
   - type: llmstxt
 
-# A safety net while you are still tuning the patterns. Raise it once the
-# page list in dist/llms.txt looks right.
-max_pages: 500
+# A ceiling for each source, so a pattern broader than you meant cannot
+# run away. For a first trial, cap it far lower from the command line:
+#   python -m extractium.cli build --config config.yaml --max-pages 25
+max_pages: 10000
 
 # Seconds between requests, so the crawl stays polite to the site it reads.
-delay_seconds: 0.5
+delay_seconds: 0.8
 
 # Where fetched content is kept between builds. Named here rather than
 # left at the default, because a YouTube build commits part of it: see

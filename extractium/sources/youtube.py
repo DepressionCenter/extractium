@@ -300,6 +300,11 @@ class YouTubeSource:
         # first video leaves blocked True and blocked_after 0.
         self.blocked = False
         self.blocked_after = 0
+        # The refusal that ended the reading, as YouTube or the audio
+        # downloader worded it, and whether the audio path was tried
+        # and refused too. Both decide what the summary advises.
+        self.blocked_reason = ""
+        self.audio_refused = False
         # Built on first use, and only when there is no API key.
         self.page_reader = None
         self.settings = None
@@ -518,6 +523,7 @@ class YouTubeSource:
                 # plainly that the video content is incomplete or absent.
                 self.blocked = True
                 self.blocked_after = len(self.coverage)
+                self.blocked_reason = str(e)
                 progress(f"  {e}")
                 progress(
                     f"  YouTube refused this machine after {len(self.coverage)} "
@@ -1086,6 +1092,7 @@ class YouTubeSource:
                 video_id, language=self.languages[0] if self.languages else "en", progress=progress,
             )
         except YouTubeError as e:
+            self.audio_refused = True
             reason = f"{refusal} " if refusal is not None else ""
             raise _Blocked(f"{reason}The audio could not be transcribed either: {e}") from e
         title = title if title != video_id else (metadata.get("title") or video_id)
@@ -1227,13 +1234,9 @@ class YouTubeSource:
             )
             lines.extend(self._found_publisher_lines())
         if self.blocked:
-            lines.append(
-                f"INCOMPLETE: YouTube refused this machine after {self.blocked_after} "
-                "video(s). It refuses cloud, shared, and rate-limited addresses. "
-                "Raise delay_seconds, install the audio packages (extractium[whisper]), "
-                "or build where YouTube answers, then commit the cache and build again "
-                "to pick up the rest."
-            )
+            lines.append(self._block_summary())
+            if self.blocked_reason:
+                lines.append(f"  last refusal: {self.blocked_reason}")
         capped = getattr(self.page_reader, "capped_listings", ())
         if capped:
             lines.append(
@@ -1241,6 +1244,44 @@ class YouTubeSource:
                 "an API key, or respect_robots_txt to false, for the whole listing"
             )
         return lines
+
+    def _block_summary(self):
+        """
+        The INCOMPLETE line, worded for what was actually refused.
+
+        Three builds end blocked, and each needs different advice: one
+        that transcribed audio until YouTube walled that path too, one
+        that has the audio path switched off, and one without the audio
+        packages.
+
+        Returns:
+            str: the line.
+        """
+        refused = (
+            f"INCOMPLETE: YouTube refused this machine after {self.blocked_after} video(s)"
+        )
+        if self.audio_refused:
+            return (
+                f"{refused}: first the captions, then the audio download. It refuses "
+                "cloud, shared, and rate-limited addresses, and it limits how many "
+                "audio downloads one address may make in a run. Commit the cache and "
+                "build again in a few hours: what was stored is not asked for again, "
+                "so each build picks up more."
+            )
+        if not self.audio_fallback:
+            return (
+                f"{refused}. It refuses cloud, shared, and rate-limited addresses, and "
+                "audio_fallback is switched off on this source. Switch it on to "
+                "transcribe refused videos from their audio, raise delay_seconds, or "
+                "build where YouTube answers, then commit the cache and build again "
+                "to pick up the rest."
+            )
+        return (
+            f"{refused}. It refuses cloud, shared, and rate-limited addresses. "
+            "Raise delay_seconds, install the audio packages (extractium[whisper]), "
+            "or build where YouTube answers, then commit the cache and build again "
+            "to pick up the rest."
+        )
 
     def _found_outcomes(self):
         """

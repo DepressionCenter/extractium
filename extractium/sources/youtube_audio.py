@@ -37,8 +37,10 @@ __date__ = "2026-09-16"
 
 import functools
 import os
+import random
 import re
 import tempfile
+import time
 
 from extractium.core import cache as cache_module
 from extractium.sources.youtube_client import YouTubeError, checked_video_id, watch_url
@@ -65,6 +67,14 @@ WHISPER_COMPUTE_TYPE = "int8"
 # punctuation, and the caption library's automatic captions are no
 # better than this.
 WHISPER_BEAM_SIZE = 1
+
+# The least and most seconds waited before every audio download after
+# the first in a build. YouTube puts a sign-in wall on an address that
+# downloads audio in a steady stream, which is what ended a real run
+# after several dozen videos. The wait is random within the range so
+# the downloads do not arrive at a fixed beat. Ordinary randomness is
+# right here: nothing about it is secret.
+AUDIO_PAUSE_SECONDS = (3.0, 8.0)
 
 # Whisper's own language codes are two letters; a configured "en-US"
 # means the same track.
@@ -337,14 +347,22 @@ class AudioTranscriber:
     Downloads a video's audio and transcribes it, cleaning up after
     itself. One instance serves a build; the model loads on first use.
 
+    Every download after the first waits a random few seconds first,
+    AUDIO_PAUSE_SECONDS apart, whether or not the one before it
+    succeeded: a refused download counts against the address too.
+
     Attributes:
         work_dir (str): the folder audio files are written under while
             they are transcribed. Each video gets its own temporary
             folder inside it, removed when the video is done.
+        sleep (Callable[[float], None]): how the pause is waited out;
+            time.sleep unless a test gives something else.
     """
 
-    def __init__(self, work_dir=None):
+    def __init__(self, work_dir=None, sleep=time.sleep):
         self.work_dir = work_dir or os.path.join(cache_module.CACHE_YOUTUBE_DIR, AUDIO_WORK_DIR_NAME)
+        self.sleep = sleep
+        self.downloads = 0
 
     def transcribe(self, video_id, language="en", progress=None):
         """
@@ -368,6 +386,9 @@ class AudioTranscriber:
         """
         report = progress or (lambda message: None)
         os.makedirs(self.work_dir, exist_ok=True)
+        if self.downloads:
+            self.sleep(random.uniform(*AUDIO_PAUSE_SECONDS))
+        self.downloads += 1
         with tempfile.TemporaryDirectory(prefix=f"{checked_video_id(video_id)}-", dir=self.work_dir) as folder:
             path, metadata = download_audio(video_id, folder)
             size = os.path.getsize(path)

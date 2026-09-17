@@ -250,12 +250,13 @@ cache_dir: .kb_cache
 #   python -m extractium.cli build --config config.yaml --max-pages 25
 # The GitHub source has its own two ceilings, set on its entry above, and
 # meets this one only when it falls back to crawling documentation pages.
-max_pages: 20000
+max_pages: 10000
 
 # The least time between two requests to one site. These are the center's
-# own sites, but they are shared university infrastructure, so the polite
-# default stays. It holds per site however many sources run at once.
-delay_seconds: 0.7
+# own sites, but they are shared university infrastructure, so this sits a
+# little above the default. It holds per site however many sources run at
+# once.
+delay_seconds: 0.8
 
 # Seven sources on seven hosts, so running them together cuts the build to
 # the time its longest source takes, the portal. Each source's progress lines
