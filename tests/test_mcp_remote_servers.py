@@ -14,7 +14,7 @@ tests/test_mcp_remote_servers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-12"
+__date__ = "2026-09-17"
 
 import importlib.util
 import io
@@ -111,8 +111,9 @@ def test_loading_the_export_reproduces_every_table(contract_sqlite, golden_dir):
     loaded = load_export(golden_dir / D1_GOLDEN_FILE)
     try:
         for table in export_d1.TABLES:
-            expected = source.execute(f"SELECT * FROM {table} ORDER BY rowid;").fetchall()
-            actual = loaded.execute(f"SELECT * FROM {table} ORDER BY rowid;").fetchall()
+            order = export_d1.ROW_ORDER.get(table, "rowid")
+            expected = source.execute(f"SELECT * FROM {table} ORDER BY {order};").fetchall()
+            actual = loaded.execute(f"SELECT * FROM {table} ORDER BY {order};").fetchall()
             assert actual == expected, table
     finally:
         source.close()
@@ -204,6 +205,25 @@ def test_the_command_writes_the_file_and_reports_the_count(contract_sqlite, tmp_
     assert code == export_d1.EXIT_OK
     assert out.exists()
     assert "statements" in capsys.readouterr().out
+
+
+def test_a_database_from_before_the_term_ids_is_refused_by_name(contract_sqlite, tmp_path, capsys):
+    """
+    The worker reads postings by term id. A database written before that
+    layout would export without error and then fail on every search, so
+    the export says what to do instead.
+    """
+    older = sqlite3.connect(contract_sqlite)
+    older.execute("DELETE FROM meta WHERE key = 'sqlite.schema';")
+    older.commit()
+    older.close()
+    out = tmp_path / "out.sql"
+
+    code = export_d1.main([str(contract_sqlite), str(out)])
+
+    assert code == export_d1.EXIT_OLDER_LAYOUT
+    assert "build again" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def test_a_missing_input_is_a_distinct_exit_code(tmp_path, capsys):
