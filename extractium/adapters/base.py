@@ -300,11 +300,54 @@ def output_compendium(compendium, options):
     """
     if options.get("include_local") or not compendium.local_parents():
         return compendium
-    return _without_local(compendium)
+    return without_parents(compendium, lambda parent: parent.local)
 
 
-def _without_local(compendium):
-    """A copy of the compendium with every local parent, and everything derived from one, removed."""
+### Dropping Sections ###
+
+def without_code(compendium):
+    """
+    The compendium without its code records.
+
+    An output read inside a language model's context window, or searched
+    by a small model in memory, leaves code analysis out. The outputs
+    that keep it never call this.
+
+    Args:
+        compendium (extractium.core.models.Compendium): the build result.
+
+    Returns:
+        extractium.core.models.Compendium: the original when it holds no
+        code record, else a copy without them.
+    """
+    return without_parents(compendium, lambda parent: parent.content_type in CODE_CONTENT_TYPES)
+
+
+def without_parents(compendium, drop):
+    """
+    A copy of the compendium with some sections, and everything derived
+    from them, removed.
+
+    Dropping a section drops its search windows and their vectors. The
+    keyword statistics and the calibration figures describe the whole
+    corpus, so they are rebuilt over what remains.
+
+    Args:
+        compendium (extractium.core.models.Compendium): the build result.
+        drop (Callable[[extractium.core.models.Parent], bool]): answers
+            True for a section to remove.
+
+    Returns:
+        extractium.core.models.Compendium: the original, untouched, when
+        nothing is dropped; else the copy.
+
+    Raises:
+        ValueError: when the search windows carry no offsets, so their
+            text cannot be recovered to rebuild the statistics.
+    """
+    kept_pids = [i for i, parent in enumerate(compendium.parents) if not drop(parent)]
+    if len(kept_pids) == len(compendium.parents):
+        return compendium
     if len(compendium.children) and not compendium.children.start:
         # Without offsets there is no way to recover what each window's
         # text was, so the keyword statistics cannot be rebuilt over the
@@ -312,10 +355,10 @@ def _without_local(compendium):
         # alternative is publishing an output whose statistics still
         # describe content that was supposed to be dropped.
         raise ValueError(
-            "cannot drop local content from a compendium whose children carry no offsets; "
-            "rebuild it, or set include_local on this output if that is what you intend."
+            "cannot drop content from a compendium whose children carry no offsets; "
+            "rebuild it, or set include_local on this output if local content is what "
+            "was being dropped and you intend to publish it."
         )
-    kept_pids = [i for i, parent in enumerate(compendium.parents) if not parent.local]
     old_to_new = {old: new for new, old in enumerate(kept_pids)}
     parents = tuple(compendium.parents[old] for old in kept_pids)
 
