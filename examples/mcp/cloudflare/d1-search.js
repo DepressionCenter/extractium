@@ -13,7 +13,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-12
- * Last Modified: 2026-09-12
+ * Last Modified: 2026-09-17
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -275,8 +275,9 @@ export class D1Search {
      * Keyword search picks the candidate pool. Without an embedder the
      * pool is weighted per section and passed through diversity
      * selection; with one, the pool is also ranked by cosine similarity
-     * and the two rankings are fused by reciprocal rank, thresholded, and
-     * diversified exactly as the clients do. A section that shares no
+     * and the two rankings are fused by reciprocal rank, held to the
+     * clients' relevance tests, the cosine floor included, and diversified
+     * exactly as the clients do. A section that shares no
      * term with the query cannot appear either way; that is the trade
      * the database-side design makes.
      *
@@ -322,7 +323,14 @@ export class D1Search {
                 { items: vectorRanked, listWeight: RRF_VECTOR_WEIGHT },
                 { items: keywordRanked, listWeight: RRF_BM25_WEIGHT },
             ], weightOf);
-            selected = diversify(fused, vectors, dims, k, sourceKeyOf, false, this.meta.calibration);
+            // Fusion leaves a rank score on each candidate. The client's
+            // relevance floor is checked against the raw cosine, so each
+            // candidate carries that too. The database's calibration
+            // figures are not used: they describe how similar the windows
+            // are to each other, which no query reaches.
+            const cosineOf = new Map(vectorRanked.map((entry) => [entry.i, entry.s]));
+            for (const candidate of fused) candidate.cos = cosineOf.get(candidate.i);
+            selected = diversify(fused, vectors, dims, k, sourceKeyOf, false);
         }
 
         return selected.map((candidate) => {
