@@ -11,7 +11,7 @@ tests/test_models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -422,3 +422,12 @@ def test_parent_enrichment_lists_become_tuples_and_bad_values_are_refused():
         make_parent(summary=["not text"])
     with pytest.raises(ValueError, match="enriched_at"):
         make_parent(enriched_at=1757894400)
+
+
+def test_code_content_types_are_known_types_and_leave_prose_alone():
+    from extractium.core import models
+
+    assert models.CODE_CONTENT_TYPES == {"manifest", "repo_map", "code_file", "code_symbol"}
+    assert models.CODE_CONTENT_TYPES < models.CONTENT_TYPES
+    assert not models.CODE_CONTENT_TYPES & {"readme", "text", "article", "page", "wiki",
+                                            "release_notes", "video_transcript"}

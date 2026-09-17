@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -100,6 +100,13 @@ CONTENT_TYPES = frozenset({
     "article", "readme", "wiki", "release_notes", "page", "text", "video_transcript",
     "manifest", "repo_map", "code_file", "code_symbol",
 })
+
+# The records that describe a repository's code rather than its prose: a
+# build file, a map of the repository, a source file, and one definition
+# in it. Outputs read inside a language model's context window leave
+# these out, because they multiply the index and answer no question a
+# reader of documentation asks. The SQLite and OKF outputs keep them.
+CODE_CONTENT_TYPES = frozenset({"manifest", "repo_map", "code_file", "code_symbol"})
 
 # A local document's URL is "local:" plus a path relative to the source
 # folder, so an absolute path from the operator's disk never reaches an
