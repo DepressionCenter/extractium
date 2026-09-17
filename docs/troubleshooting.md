@@ -554,6 +554,12 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** Make sure the audio packages are installed on the machine that builds, and build again: a refused video is then transcribed from its audio, which YouTube does not gate the same way, and the transcript is stored like any other. The build scripts and the scheduled workflow install them from the lock file; a developer install names them with `pip install -e ".[whisper]"`. The summary says when they are missing. The [configuration reference](configuration.md) says what that costs. Or build from a machine on a home or office network. Either way, commit the cache folder afterwards so later builds read the transcripts instead of asking for them; [the cache README](../examples/data-repo/kb-cache/README.md) says what to commit.
 
+### The summary says YouTube refused first the captions, then the audio download
+
+**Cause.** The build fell back to transcribing audio and did so for a while, and then YouTube put a sign-in wall on the audio downloads too. The line under the summary, `last refusal`, quotes it: "Sign in to confirm you're not a bot". YouTube does this to an address that downloads many videos in one run, and a shared address such as a mobile carrier's reaches that point sooner. Every transcript made before the wall is stored.
+
+**Fix.** Commit the cache folder and build again in a few hours. A stored transcript is never asked for again, so each build picks up more of the channel until every video is stored. The build already waits a random few seconds between downloads; there is no setting that avoids the wall.
+
 ### The summary says a video's audio could not be transcribed either
 
 **Cause.** YouTube refused the caption request, the audio packages are installed, and the audio download or the transcription failed too. The message names which. A download fails when the network cannot reach YouTube's audio servers, when the video has no audio-only rendition under the 500 MB ceiling, or when yt-dlp is too old for the pages YouTube now serves. A transcription fails when the file could not be decoded.

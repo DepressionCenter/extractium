@@ -101,6 +101,45 @@ def test_transcribe_audio_uses_the_model_it_is_given():
     assert model.calls == [{"path": "talk.m4a", "language": "en", "beam_size": audio.WHISPER_BEAM_SIZE}]
 
 
+def test_downloads_after_the_first_wait_a_random_few_seconds(monkeypatch, tmp_path):
+    """
+    YouTube puts a sign-in wall on an address that downloads audio in a
+    steady stream, so every download after the first in a build waits a
+    random few seconds. The first waits for nothing.
+    """
+    def fake_download(video_id, folder):
+        path = tmp_path / f"{video_id}.m4a"
+        path.write_bytes(b"audio")
+        return str(path), {"title": video_id}
+
+    monkeypatch.setattr(audio, "download_audio", fake_download)
+    monkeypatch.setattr(audio, "transcribe_audio", lambda path, language="en": ("en", []))
+    pauses = []
+    transcriber = audio.AudioTranscriber(work_dir=str(tmp_path), sleep=pauses.append)
+
+    for video_id in ("VIDEOAAAAAA", "VIDEOBBBBBB", "VIDEOCCCCCC"):
+        transcriber.transcribe(video_id)
+
+    low, high = audio.AUDIO_PAUSE_SECONDS
+    assert len(pauses) == 2
+    assert all(low <= pause <= high for pause in pauses)
+
+
+def test_a_failed_download_still_counts_towards_the_pause(monkeypatch, tmp_path):
+    def refuse(video_id, folder):
+        raise audio.AudioTranscriptionFailed(f"the audio of {video_id} could not be downloaded (refused).")
+
+    monkeypatch.setattr(audio, "download_audio", refuse)
+    pauses = []
+    transcriber = audio.AudioTranscriber(work_dir=str(tmp_path), sleep=pauses.append)
+
+    for video_id in ("VIDEOAAAAAA", "VIDEOBBBBBB"):
+        with pytest.raises(audio.AudioTranscriptionFailed):
+            transcriber.transcribe(video_id)
+
+    assert len(pauses) == 1
+
+
 def test_a_video_identifier_is_checked_before_anything_is_downloaded():
     with pytest.raises(audio.YouTubeError):
         audio.download_audio("../not-a-video", ".")

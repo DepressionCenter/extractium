@@ -256,8 +256,9 @@ sources:
 
 # The least time, in seconds, between two requests to the same site, so the
 # crawl stays polite to the site it is reading. It holds across every source
-# and every worker in the build. Use 0 for no wait.
-#delay_seconds: 0.5
+# and every worker in the build. The default is 0.5; 0.8 is a kinder
+# setting for a shared server. Use 0 for no wait.
+#delay_seconds: 0.8
 
 # How many sources run at the same time, and how many page fetches one web
 # crawl keeps in flight. Both change how long a build takes and nothing

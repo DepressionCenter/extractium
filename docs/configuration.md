@@ -547,6 +547,7 @@ pip install -e ".[whisper]"
 A few things to know:
 
 - One model, everywhere. Every build uses Whisper's `base.en`, its smallest English model, on the CPU with 8-bit weights, so two machines transcribing the same video store the same words. The model is about 75 MB and downloads once, into the same cache the embedding model uses. It reads a talk well enough to search; it does not know speaker names, and neither do YouTube's own automatic captions.
+- Pacing. Every audio download after the first in a build waits a random three to eight seconds, because YouTube puts a sign-in wall on an address that downloads audio in a steady stream. The wait is fixed in the code and is not a setting.
 - Speed. On a plain laptop CPU it transcribes about ten to fifteen minutes of speech per minute, so a one-hour talk takes four to six minutes. A channel of two hundred talks is an afternoon, once, because a stored transcript is never fetched again.
 - Disk. The audio of a video is downloaded under `<cache_dir>/youtube/audio/` while it is transcribed and removed as soon as the transcript is stored. Nothing over 500 MB is downloaded.
 - Weight. The extra pulls in about 200 MB of packages. It is in the lock file anyway, because YouTube refuses captions to most machines that build on a schedule, so the audio path is the usual one rather than the exception. Commit the cache after a build, and later builds read the store instead of transcribing again.

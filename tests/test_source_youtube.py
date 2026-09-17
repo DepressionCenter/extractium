@@ -1863,6 +1863,22 @@ def test_a_refusal_the_audio_cannot_answer_either_is_reported_as_a_block(api_key
     assert documents == []
     assert built.blocked is True and built.transcribed == 0
     assert any("could not be transcribed either" in line and "HTTP Error 403" in line for line in lines)
+    summary = "\n".join(built.summary_lines())
+    assert "INCOMPLETE: YouTube refused this machine after 0 video(s): first the captions, then the audio download" in summary
+    assert "extractium[whisper]" not in summary
+    assert "last refusal: " in summary and "HTTP Error 403" in summary
+
+
+def test_the_block_summary_names_the_audio_setting_when_it_is_off(api_key_set, caption_library):
+    reader = FakeReader(errors={VIDEO_A: caption_library.RequestBlocked(VIDEO_A)})
+    session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "A Talk"})})
+    built = source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=False)
+
+    list(built.fetch(session, {}, quiet))
+
+    summary = "\n".join(built.summary_lines())
+    assert "audio_fallback is switched off on this source" in summary
+    assert "extractium[whisper]" not in summary
 
 
 def test_the_block_message_says_how_to_get_the_audio_path(api_key_set, caption_library, monkeypatch):
@@ -1872,8 +1888,10 @@ def test_the_block_message_says_how_to_get_the_audio_path(api_key_set, caption_l
     session = FakeYouTubeSession({"videos": videos_page({VIDEO_A: "A Talk"})})
 
     lines = []
-    list(source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=True).fetch(session, {}, lines.append))
+    built = source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=True)
+    list(built.fetch(session, {}, lines.append))
     assert any('extractium[whisper]' in line for line in lines)
+    assert any('extractium[whisper]' in line for line in built.summary_lines())
 
     lines = []
     list(source(reader=reader, video_ids=(VIDEO_A,), audio_fallback=False).fetch(session, {}, lines.append))
