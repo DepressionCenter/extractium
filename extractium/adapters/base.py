@@ -11,7 +11,7 @@ extractium/adapters/base.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-11
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,18 +30,19 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-17"
 
 import dataclasses
 import pathlib
 import re
+from collections import Counter
 
 import numpy as np
 
 from extractium.core.bm25 import build_bm25_index
 from extractium.core.build import utf16_slice
 from extractium.core.calibration import compute_calibration_stats
-from extractium.core.models import Children, page_address_of
+from extractium.core.models import CODE_CONTENT_TYPES, Children, page_address_of
 
 ### Constants ###
 
@@ -55,6 +56,15 @@ WHITESPACE_RUN = re.compile(r"\s+")
 # Longest one-line excerpt of a page's text. Long enough to tell two
 # similarly named pages apart, short enough to stay a single line.
 EXCERPT_CHARS = 180
+
+# How much of a summary an index entry quotes. Long enough for two
+# sentences, short enough that five hundred entries stay one readable file.
+DESCRIPTION_CHARS = 300
+
+# A summary carried by more pages of one source than this is the site's
+# default description, repeated on every page that has none of its own.
+# It says nothing about any one page, so it is treated as absent.
+SHARED_SUMMARY_PAGES = 3
 
 ### Page Addresses ###
 
@@ -127,6 +137,110 @@ def excerpt(text, limit=EXCERPT_CHARS):
         return flat
     cut = flat.rfind(" ", 0, limit)
     return flat[:cut if cut > 0 else limit].rstrip() + "..."
+
+
+### Pages ###
+
+def prose_parents(parents):
+    """
+    The sections that are not code records, in the order given.
+
+    Args:
+        parents (Iterable[extractium.core.models.Parent]): sections in
+            build order.
+
+    Returns:
+        tuple[extractium.core.models.Parent, ...]: the sections whose
+        content type is not one of CODE_CONTENT_TYPES.
+    """
+    return tuple(parent for parent in parents if parent.content_type not in CODE_CONTENT_TYPES)
+
+
+def keywords_named(parent):
+    """
+    The keywords that describe the page a section belongs to.
+
+    The page's own tags come first, less the categories the source
+    recorded, because those are the keywords most of its sections
+    share. A page whose sections share none is described by its first
+    section's keywords instead, so a page is not left without any
+    merely for being about several things.
+
+    Args:
+        parent (extractium.core.models.Parent): the page's first section.
+
+    Returns:
+        tuple[str, ...]: the keywords, most telling first; empty when
+        no keyword step ran.
+    """
+    categories = set(parent.categories)
+    shared = tuple(tag for tag in (parent.tags or ()) if tag not in categories)
+    return shared or tuple(parent.keywords or ())
+
+
+def page_records(parents):
+    """
+    One record per page, in the order that page first appears.
+
+    Grain: one record per page, not per section. A page contributes
+    several sections and is named once. A video counts as one page
+    however many stretches of its transcript were indexed, so a long talk
+    is one record and not one every couple of minutes.
+
+    A summary that more than SHARED_SUMMARY_PAGES pages of one source
+    carry is that site's default description, so it is blanked here and
+    describe() falls back to what the page itself offers.
+
+    Args:
+        parents (Iterable[extractium.core.models.Parent]): the sections an
+            output may write, in build order.
+
+    Returns:
+        list[dict]: url, title, source_label, source_type, content_type,
+        categories, the first section's text, the page's own summary or
+        "", and its keywords.
+    """
+    pages = {}
+    for parent in parents:
+        address = page_address(parent)
+        if address in pages:
+            continue
+        pages[address] = {
+            "url": address,
+            "title": page_title(parent.t),
+            "source_label": parent.source_label,
+            "source_type": parent.source_type,
+            "content_type": parent.content_type,
+            "categories": tuple(parent.categories),
+            "text": parent.x,
+            "summary": (parent.summary or "").strip(),
+            "keywords": keywords_named(parent),
+        }
+    records = list(pages.values())
+    carried = Counter((page["source_label"], page["summary"]) for page in records if page["summary"])
+    for page in records:
+        if carried[(page["source_label"], page["summary"])] > SHARED_SUMMARY_PAGES:
+            page["summary"] = ""
+    return records
+
+
+def describe(page, limit=DESCRIPTION_CHARS):
+    """
+    What an index says about one page: its own summary, else its
+    keywords, else the opening of its text.
+
+    Args:
+        page (dict): one record from page_records.
+        limit (int): longest summary quoted, in characters.
+
+    Returns:
+        str: one line of text.
+    """
+    if page["summary"]:
+        return excerpt(page["summary"], limit)
+    if page["keywords"]:
+        return f"Keywords: {', '.join(page['keywords'])}."
+    return excerpt(page["text"])
 
 
 ### Output Folder ###

@@ -35,6 +35,7 @@ __date__ = "2026-09-16"
 from extractium.adapters.base import (
     count_of,
     excerpt,
+    keywords_named,
     link,
     output_compendium,
     page_address,
@@ -87,28 +88,6 @@ FULL_ORIENTATION = (
 
 
 ### Page Grouping ###
-
-def keywords_named(parent):
-    """
-    The keywords an index entry lists for the page a section belongs to.
-
-    The page's own tags come first, less the categories the source
-    recorded, because those are the keywords most of its sections
-    share. A page whose sections share none is described by its first
-    section's keywords instead, so a page is not left without any
-    merely for being about several things.
-
-    Args:
-        parent (extractium.core.models.Parent): the page's first section.
-
-    Returns:
-        tuple[str, ...]: the keywords, most telling first; empty when
-        no keyword step ran.
-    """
-    categories = set(parent.categories)
-    shared = tuple(tag for tag in (parent.tags or ()) if tag not in categories)
-    return shared or tuple(parent.keywords or ())
-
 
 def pages_in_order(parents):
     """
