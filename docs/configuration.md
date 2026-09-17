@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -169,6 +169,7 @@ sources:
 | Option | Type | Default | What it does |
 |---|---|---|---|
 | `label` | text | none (required) | The name a reader sees for this source. At most 60 characters. |
+| `description` | text | none | Optional. One or two sentences saying what this source is, at most 400 characters. `llms.txt` prints it beside the source's name. Without it, the description of the source's starting page is used. |
 
 The label travels with every section the source produces. It heads a section in `llms.txt`, it is stored in the index as `source_label`, and a search client uses it to say where an answer came from.
 
@@ -176,7 +177,17 @@ The label is required rather than guessed because both sources above are of type
 
 Keep it short and use the name people actually say. "Video Library" is better than "YouTube channel for the center".
 
-Two sources may share a label on purpose. Two sibling collections of one repository are one place to a person looking for an answer, so giving both the same label puts them under one heading.
+Two sources may share a label on purpose. Two sibling collections of one repository are one place to a person looking for an answer, so giving both the same label puts them under one heading. Sources that share a label are described once, so put the `description` on the first of them.
+
+A description is worth writing. A language model that reads `llms.txt` picks which source to open from these few sentences, and only you know what each source is for:
+
+```yaml
+sources:
+  - type: web
+    label: Peer-to-Peer Program
+    description: Lesson plans and campaign materials for schools running the program.
+    seed_url: 'https://peer.example.org/'
+```
 
 ### `web`: crawl a website
 

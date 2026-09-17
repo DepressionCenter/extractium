@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-16
+# Last Modified: 2026-09-17
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -33,6 +33,11 @@
 # result can say where its answer came from. Two web sources cannot be told
 # apart without it, which is why it is required rather than guessed.
 #
+# A source may also carry a description: one or two sentences saying what
+# it is. llms.txt prints it beside the source's name, and it is how a
+# language model decides which source to open. Without one, the description
+# of the source's starting page is used.
+#
 # A page two sources both reach is indexed once, by whichever reached it
 # first, and the build says how many pages that happened to. An overlap
 # costs duplicated fetching, not a failed build; a section of a site you
@@ -55,6 +60,7 @@ sources:
   # address to use instead.
   - type: web
     label: Example Knowledge Base
+    #description: "How-to articles and policies for staff and students."
     seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 
     # Pages the crawl is allowed to visit. A URL must match at least one

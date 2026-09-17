@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-17"
 
 import dataclasses
 import pathlib
@@ -998,3 +998,71 @@ def test_leaf_patterns_are_validated_like_the_other_pattern_lists():
         config.config_from_mapping({"sources": [web(leaf_patterns=["/docs/["])]})
     with pytest.raises(config.ConfigError, match="leaf_patterns entry 1 is blank"):
         config.config_from_mapping({"sources": [web(leaf_patterns=[" "])]})
+
+
+# ---------------------------------------------------------------------------
+# What a source says about itself
+# ---------------------------------------------------------------------------
+
+def test_a_source_may_carry_a_description():
+    built = config.config_from_mapping(minimal(sources=[
+        {"type": "web", "label": "Main Site", "seed_url": "https://example.org/",
+         "description": "Programs, events, and contact details."},
+    ]))
+
+    assert built.sources[0].description == "Programs, events, and contact details."
+    assert "description" not in built.sources[0].options
+    assert config.source_descriptors(built) == ({
+        "label": "Main Site", "type": "web",
+        "home_url": "https://example.org/",
+        "description": "Programs, events, and contact details.",
+    },)
+
+
+def test_a_source_without_a_description_has_an_empty_one():
+    built = config.config_from_mapping(minimal())
+    assert built.sources[0].description == ""
+    assert config.source_descriptors(built)[0]["description"] == ""
+
+
+def test_a_description_must_be_text():
+    with pytest.raises(config.ConfigError, match="description"):
+        config.config_from_mapping(minimal(sources=[
+            {"type": "web", "label": "Main Site", "seed_url": "https://example.org/", "description": 7},
+        ]))
+
+
+def test_a_description_longer_than_the_limit_is_refused():
+    with pytest.raises(config.ConfigError, match="description"):
+        config.config_from_mapping(minimal(sources=[
+            web(description="x" * (config.MAX_SOURCE_DESCRIPTION_CHARS + 1)),
+        ]))
+
+
+def test_two_sources_sharing_a_label_are_described_once():
+    built = config.config_from_mapping(minimal(sources=[
+        {"type": "web", "label": "Docs", "seed_url": "https://example.org/a/"},
+        {"type": "web", "label": "Docs", "seed_url": "https://example.org/b/"},
+    ]))
+    assert [d["home_url"] for d in config.source_descriptors(built)] == ["https://example.org/a/"]
+
+
+@pytest.mark.parametrize("entry, expected", [
+    ({"type": "github_api", "label": "Code", "org": "ExampleOrg"}, "https://github.com/ExampleOrg"),
+    ({"type": "github_api", "label": "Code", "url": "https://github.com/ExampleOrg/tool"},
+     "https://github.com/ExampleOrg/tool"),
+    ({"type": "youtube", "label": "Videos", "channel_id": "@ExampleChannel"},
+     "https://www.youtube.com/@ExampleChannel"),
+    ({"type": "youtube", "label": "Videos", "channel_id": "UCaaaaaaaaaaaaaaaaaaaaaa"},
+     "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaaaa"),
+    ({"type": "dspace", "label": "Papers", "api_url": "https://repository.example.edu/server/api",
+      "site_url": "https://repository.example.edu",
+      "collections": ["https://hdl.handle.net/2027.42/195355"]}, "https://repository.example.edu"),
+    ({"type": "local", "label": "Notes", "path": "notes"}, ""),
+    ({"type": "someplugin", "label": "Plugin", "seed_url": "https://example.net/start"},
+     "https://example.net/start"),
+    ({"type": "someplugin", "label": "Plugin", "seed_url": "javascript:alert(1)"}, ""),
+])
+def test_a_source_home_address_comes_from_what_the_source_names(entry, expected):
+    built = config.config_from_mapping(minimal(sources=[entry]))
+    assert config.source_descriptors(built)[0]["home_url"] == expected

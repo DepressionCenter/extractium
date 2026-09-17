@@ -11,7 +11,7 @@ tests/test_cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-15
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-17"
 
 import json
 import struct
@@ -1023,3 +1023,33 @@ def test_build_with_keywords_off_never_asks_for_the_library(build_workspace, mon
 
     header = read_container(build_workspace / "dist" / "compendium.json")
     assert all("keywords" not in p for p in header["parents"])
+
+
+### What Every Output Is Told About The Sources ###
+
+def test_every_output_is_told_which_sources_the_build_read(build_workspace, monkeypatch):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+            description: Three pages that never change.
+        outputs:
+          - type: llmstxt
+    """)
+    from extractium.adapters import llmstxt
+
+    seen = {}
+    real_write = llmstxt.LlmsTxtAdapter.write
+
+    def spy(self, compendium, out_dir, options):
+        seen.update(options)
+        return real_write(self, compendium, out_dir, options)
+
+    monkeypatch.setattr(llmstxt.LlmsTxtAdapter, "write", spy)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+    assert seen["sources"] == ({
+        "label": "Fixed Source", "type": "fixed", "home_url": "",
+        "description": "Three pages that never change.",
+    },)

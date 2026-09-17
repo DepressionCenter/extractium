@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-17"
 
 import pathlib
 import re
@@ -302,7 +302,14 @@ SUGGESTED_SOURCE_LABELS = {
     "okf": "Knowledge Bundle",
 }
 
-# Option keys per built-in source type, beyond "type" and "label", which
+# The settings every source accepts, whatever its type.
+COMMON_SOURCE_KEYS = ("type", "label", "description")
+
+# A source's description sits beside its name in a list of sources, so it
+# is held to a couple of sentences.
+MAX_SOURCE_DESCRIPTION_CHARS = 400
+
+# Option keys per built-in source type, beyond the common ones, which
 # every source accepts. A type not listed here belongs to a plugin, and
 # its options are passed through for that plugin to check.
 SOURCE_OPTION_KEYS = {
@@ -362,11 +369,15 @@ class SourceConfig:
         options (Mapping): the entry's validated options, read-only. For a
             built-in type every option is present with its default filled
             in; for a plugin type the options are as written.
+        description (str): one or two sentences saying what this source
+            is, for an output that lists the sources. Empty when the
+            settings file gives none.
     """
 
     type: str
     label: str
     options: Mapping
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -722,6 +733,28 @@ def _read_type(entry, source):
     return type_name
 
 
+def _read_source_description(entry, source):
+    """
+    Reads a source's optional description.
+
+    Returns:
+        str: the description on one line, or "" when none is given.
+
+    Raises:
+        ConfigError: if the value is not text, is blank, or is longer than
+            MAX_SOURCE_DESCRIPTION_CHARS.
+    """
+    description = _read_text(entry, "description", "", source)
+    if len(description) > MAX_SOURCE_DESCRIPTION_CHARS:
+        _fail(
+            source,
+            f"description must be {MAX_SOURCE_DESCRIPTION_CHARS} characters or fewer; "
+            f"got {len(description)}. It is one or two sentences beside the source's name.",
+        )
+    # One line, because an output prints it inside a list entry.
+    return " ".join(description.split())
+
+
 def _read_source_label(entry, type_name, source):
     """
     Reads the display name a source must give itself.
@@ -1042,9 +1075,11 @@ def _read_sources(data, source):
         type_name = _read_type(entry, where)
         where = f"{where} ({type_name})"
         source_label = _read_source_label(entry, type_name, where)
-        # "type" and "label" are read the same way for every source, so a
-        # plugin source type gets a label without knowing the setting exists.
-        options = {k: v for k, v in entry.items() if k not in ("type", "label")}
+        description = _read_source_description(entry, where)
+        # "type", "label", and "description" are read the same way for
+        # every source, so a plugin source type gets them without knowing
+        # the settings exist.
+        options = {k: v for k, v in entry.items() if k not in COMMON_SOURCE_KEYS}
         reader = _SOURCE_READERS.get(type_name)
         if reader is not None:
             _check_known_keys(options, SOURCE_OPTION_KEYS[type_name], where)
@@ -1053,8 +1088,79 @@ def _read_sources(data, source):
             type=type_name,
             label=source_label,
             options=MappingProxyType(options),
+            description=description,
         ))
     return tuple(sources)
+
+
+def _http_address(value):
+    """The value when it is an absolute http or https address, else ""."""
+    if isinstance(value, str) and value.strip().lower().startswith(("http://", "https://")):
+        return value.strip()
+    return ""
+
+
+def _source_home_url(entry):
+    """
+    Where a reader would go to see a source for themselves.
+
+    A web crawl starts at its first seed, a repository source has the
+    address deposits open at, a GitHub source has its account or
+    repository page, and a video source has its channel page. A source
+    read from a folder has no address a reader can open.
+
+    Args:
+        entry (SourceConfig): one validated source.
+
+    Returns:
+        str: an absolute http or https address, or "" when the source
+        names nothing a reader can open.
+    """
+    options = entry.options
+    for key in ("seed_url", "site_url", "url"):
+        address = _http_address(options.get(key))
+        if address:
+            return address
+    if entry.type == "github_api":
+        account = options.get("org") or options.get("user")
+        return f"https://github.com/{account}" if account else ""
+    if entry.type == "youtube":
+        channel = options.get("channel_id") or ""
+        if _http_address(channel):
+            return _http_address(channel)
+        if channel.startswith("@"):
+            return f"https://www.youtube.com/{channel}"
+        if channel.startswith("UC"):
+            return f"https://www.youtube.com/channel/{channel}"
+    return ""
+
+
+def source_descriptors(config):
+    """
+    What an output that lists the sources needs to know about each one.
+
+    Grain: one record per source label, in the order the settings file
+    lists them. Two sources sharing a label are one collection to a
+    reader, so they are described once, by the first of them.
+
+    Args:
+        config (Config): the validated configuration.
+
+    Returns:
+        tuple[dict, ...]: each with `label`, `type`, `home_url` (an
+        absolute http or https address, or ""), and `description` (or "").
+    """
+    described = {}
+    for entry in config.sources:
+        if entry.label in described:
+            continue
+        described[entry.label] = {
+            "label": entry.label,
+            "type": entry.type,
+            "home_url": _source_home_url(entry),
+            "description": entry.description,
+        }
+    return tuple(described.values())
 
 
 ### Validate Outputs ###

@@ -2,7 +2,7 @@
 # examples/data-repo/config.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-16
+# Last Modified: 2026-09-17
 # Summary: Settings file for a data repository: one web source, an
 # optional YouTube source, the two default outputs, and a name for the
 # published compendium. Change the seed URL to your own site and the
@@ -35,6 +35,9 @@ out_dir: dist
 sources:
   - type: web
     label: Example Knowledge Base
+    # One or two sentences saying what this source is. llms.txt prints it
+    # beside the label, and a language model picks a source by it.
+    #description: "How-to articles and policies for staff and students."
     seed_url: "https://example.edu/TDClient/000/ExampleOrg/Home/"
 
   # A channel's captions. Remove the comment markers to turn it on, and
