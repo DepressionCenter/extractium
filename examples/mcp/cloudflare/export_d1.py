@@ -11,7 +11,7 @@ examples/mcp/cloudflare/export_d1.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-12
-Last Modified: 2026-09-12
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,14 +30,14 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-12"
+__date__ = "2026-09-17"
 
 import argparse
 import pathlib
 import sqlite3
 import sys
 
-from extractium.adapters.sqlite_out import SCHEMA
+from extractium.adapters.sqlite_out import SCHEMA, SQLITE_SCHEMA_VERSION
 
 ### Constants ###
 
@@ -46,6 +46,11 @@ from extractium.adapters.sqlite_out import SCHEMA
 # an older build replaces it rather than piling rows on top.
 TABLES = ("meta", "parents", "children", "bm25_terms", "bm25_postings", "vectors")
 
+# The order each table's rows are written in. A table keeps the order it
+# was filled in, which its row ids record, unless it is listed here: the
+# postings table is stored without row ids, in the order of its key.
+ROW_ORDER = {"bm25_postings": "tid, cid"}
+
 # One INSERT is flushed once its text passes this size. D1 refuses a
 # statement past 100 KB, and a section's text can run to several KB.
 MAX_STATEMENT_CHARS = 64 * 1024
@@ -53,6 +58,15 @@ MAX_STATEMENT_CHARS = 64 * 1024
 # Exit codes. 2 is what argparse uses for a bad command line.
 EXIT_OK = 0
 EXIT_INPUT_MISSING = 3
+EXIT_OLDER_LAYOUT = 4
+
+
+class OlderLayoutError(ValueError):
+    """
+    Raised when the database was written with a table layout other than
+    the one this export and the search worker read. The message says what
+    to do and quotes nothing from the file.
+    """
 
 
 ### Literals ###
@@ -123,6 +137,22 @@ def schema_statements():
     return SCHEMA.strip()
 
 
+def check_layout(connection):
+    """
+    Confirms the database has the table layout this export writes out.
+
+    Raises:
+        OlderLayoutError: if the `sqlite.schema` row is absent or names
+            another layout.
+    """
+    row = connection.execute("SELECT value FROM meta WHERE key = 'sqlite.schema';").fetchone()
+    if row is None or row[0] != str(SQLITE_SCHEMA_VERSION):
+        raise OlderLayoutError(
+            "this database was written by a version of Extractium with a different table layout. "
+            "Run the build again with this version, then export the new database."
+        )
+
+
 def dump(sqlite_path):
     """
     Every statement that rebuilds the compendium in D1.
@@ -136,14 +166,17 @@ def dump(sqlite_path):
     Raises:
         sqlite3.DatabaseError: if the file is not a SQLite database or
             does not hold the expected tables.
+        OlderLayoutError: if the database has another table layout.
     """
     connection = sqlite3.connect(f"file:{pathlib.Path(sqlite_path).as_posix()}?mode=ro", uri=True)
     try:
+        check_layout(connection)
         for table in reversed(TABLES):
             yield f"DROP TABLE IF EXISTS {table};"
         yield schema_statements()
         for table in TABLES:
-            cursor = connection.execute(f"SELECT * FROM {table} ORDER BY rowid;")
+            # Both names come from the constants above, never from the file.
+            cursor = connection.execute(f"SELECT * FROM {table} ORDER BY {ROW_ORDER.get(table, 'rowid')};")
             columns = [description[0] for description in cursor.description]
             yield from insert_statements(table, columns, cursor)
     finally:
@@ -160,10 +193,19 @@ def write_sql(sqlite_path, out_path):
 
     Returns:
         int: how many statements were written.
+
+    Raises:
+        OlderLayoutError: if the database has another table layout.
+            Nothing is written in that case.
     """
-    count = 0
+    statements = dump(sqlite_path)
+    # The first statement is asked for before the file is opened, so a
+    # refused database leaves no empty file behind.
+    first = next(statements)
+    count = 1
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:
-        for statement in dump(sqlite_path):
+        handle.write(first + "\n\n")
+        for statement in statements:
             handle.write(statement + "\n\n")
             count += 1
     return count
@@ -189,7 +231,11 @@ def main(argv=None):
     if not source.is_file():
         print(f"export_d1: {source} is not a file.", file=sys.stderr)
         return EXIT_INPUT_MISSING
-    count = write_sql(source, args.out_path)
+    try:
+        count = write_sql(source, args.out_path)
+    except OlderLayoutError as e:
+        print(f"export_d1: {e}", file=sys.stderr)
+        return EXIT_OLDER_LAYOUT
     print(f"wrote {count} statements to {args.out_path}")
     return EXIT_OK
 

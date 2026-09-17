@@ -515,6 +515,12 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** Keep `worker.js` to its default export. Put anything a test needs to import in `d1-search.js`, which is where the search already lives.
 
+### The hosted search says the database was exported from an older build
+
+**Cause.** The SQLite output's keyword tables changed shape: a posting now names its term by number, and the term's text is stored once. The Worker reads the new shape, and the database in D1 was loaded from a build made before the change. The export script stops for the same reason, with `this database was written by a version of Extractium with a different table layout`.
+
+**Fix.** Build again with the current version, so that `dist/compendium.sqlite` has the new tables. Then run `export_d1.py` on it and load the file into D1 again with `npx wrangler d1 execute`. The export begins by dropping the old tables, so nothing has to be deleted by hand.
+
 ### The Worker logs `which Workers AI does not serve; using keyword search alone`
 
 **Cause.** The `AI` binding is on, but the `meta` table says the index was built with a model other than `bge-small-en-v1.5`, so Workers AI's vectors would not be comparable with the stored ones.

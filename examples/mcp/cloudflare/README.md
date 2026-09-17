@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/cloudflare/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: README for the Cloudflare Worker example: what it does, how to
 load a build into D1 and deploy, the settings it reads, what search it
 runs with and without Workers AI, and its limits.
@@ -62,6 +62,8 @@ npx wrangler d1 execute extractium-kb --remote --file compendium.d1.sql
 
 `d1 create` prints a `database_id`. Replace the zeros in `wrangler.jsonc` with it. The export begins by dropping the tables, so loading a newer build replaces the older one rather than adding to it. Repeat the two `export` and `execute` steps after every build you want the server to answer from.
 
+The Worker and the database have to come from the same version of Extractium™. The build records the layout of its tables in the `meta` table, as the row `sqlite.schema`, and both the export script and the Worker check it. After you update Extractium™, build again, then repeat the `export` and `execute` steps, then deploy the Worker. A database from an earlier version is refused with a message that says to export it again, because the keyword search would fail on it.
+
 The export is text. On a real compendium it runs to tens of megabytes, because it carries every vector as hexadecimal. That is expected.
 
 
@@ -111,7 +113,7 @@ npx wrangler secret put EXTRACTIUM_BEARER_TOKEN
 
 ## What search it runs
 
-Keyword search runs as one SQL statement over the postings table: the inverse document frequency of each query term is computed in the Worker from the term's document count, and the database does the rest of the BM25 arithmetic, using the constants the build recorded in the `meta` table. The fifty best windows come back, their sections are read, and the clients' diversity selection picks the answer. Every term is bound as a parameter; nothing from the question is ever spliced into the statement.
+Keyword search first looks up the number each query term goes by, because the postings table stores a term's number and not its text. It then runs as one SQL statement over the postings table: the inverse document frequency of each query term is computed in the Worker from the term's document count, and the database does the rest of the BM25 arithmetic, using the constants the build recorded in the `meta` table. The fifty best windows come back, their sections are read, and the clients' diversity selection picks the answer. Every term is bound as a parameter; nothing from the question is ever spliced into the statement.
 
 With the `AI` binding, the Worker embeds the question through Workers AI's `@cf/baai/bge-small-en-v1.5`, which is the model Extractium builds with, and ranks those same fifty windows by cosine similarity against their stored vectors. The two rankings are fused by reciprocal rank, thresholded, and diversified exactly as the clients do. The binding is used only when the `meta` table says the index was built with that model; otherwise the Worker logs why and answers from keywords alone.
 

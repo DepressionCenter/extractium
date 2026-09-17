@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/deploy-a-remote-mcp-server.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-17
 Summary: How to give an assistant anywhere a search tool over a published
 compendium, with no server of your own: which of the two hosted examples
 to pick, how to deploy each, how to protect the endpoint, how to connect
@@ -75,6 +75,8 @@ npx wrangler d1 create extractium-kb          # put the printed id into wrangler
 npx wrangler d1 execute extractium-kb --remote --file compendium.d1.sql
 npx wrangler deploy
 ```
+
+After you update Extractium™, build again and repeat the `export_d1.py` and `d1 execute` steps before you deploy. The Worker checks that the database has the table layout it reads and refuses one exported by an earlier version.
 
 Each command prints the address of the endpoint. You can run the Cloudflare example on your own computer first, with no account, through `wrangler dev`. Its README shows how.
 

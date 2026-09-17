@@ -112,6 +112,20 @@ test('a database that is not an Extractium compendium is refused', async () => {
     await assert.rejects(() => readMeta(old), /version "3" is not supported/);
 });
 
+test('a database exported before postings were stored by term id is refused by name', async () => {
+    const withoutTheRow = D1_SQL.replace("('sqlite.schema', '2'),", '');
+    assert.notEqual(withoutTheRow, D1_SQL);
+    await assert.rejects(() => readMeta(new FakeD1(withoutTheRow)), /export the database again/);
+
+    const anotherLayout = D1_SQL.replace("('sqlite.schema', '2')", "('sqlite.schema', '9')");
+    await assert.rejects(() => readMeta(new FakeD1(anotherLayout)), /export the database again/);
+});
+
+test('the postings table names a term by number, so the keyword query joins on it', () => {
+    const columns = db.db.prepare('PRAGMA table_info(bm25_postings)').all().map((row) => row.name);
+    assert.deepEqual(columns, ['tid', 'cid', 'tf']);
+});
+
 test('Workers AI is used only for an index built with the model it serves', () => {
     assert.equal(embeddableByWorkersAi({ model: 'BAAI/bge-small-en-v1.5', dims: 384 }), true);
     assert.equal(embeddableByWorkersAi({ model: 'BAAI/bge-base-en-v1.5', dims: 768 }), false);

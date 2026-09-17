@@ -60,6 +60,12 @@ const WORKERS_AI_MODEL_TAIL = 'bge-small-en-v1.5';
 // hundred parameters to one statement, and each term costs two.
 export const MAX_QUERY_TERMS = 32;
 
+// The table layout this Worker's statements are written for, as the
+// `sqlite.schema` row of the meta table names it. Layout 2 stores postings
+// by integer term id. A database without the row stored the term's text in
+// every posting, and the keyword query would fail on it.
+export const SQLITE_SCHEMA_VERSION = '2';
+
 // Width of the vectors this Worker will decode; anything else is refused
 // rather than read wrongly.
 const DTYPE_WIDTHS = { int8: 1, float32: 4 };
@@ -72,7 +78,7 @@ const DTYPE_WIDTHS = { int8: 1, float32: 4 };
  * @param {D1Database} db The database binding.
  * @returns {Promise<Object>} The settings, with numbers converted.
  * @throws {Error} If the database does not hold an Extractium
- *     compendium of the version this Worker reads.
+ *     compendium of the version and table layout this Worker reads.
  */
 export async function readMeta(db) {
     const { results } = await db.prepare('SELECT key, value FROM meta').all();
@@ -82,6 +88,9 @@ export async function readMeta(db) {
     }
     if (Number(meta.get('v')) !== CONTAINER_VERSION) {
         throw new Error(`compendium version ${JSON.stringify(meta.get('v'))} is not supported; this Worker reads version ${CONTAINER_VERSION}.`);
+    }
+    if (meta.get('sqlite.schema') !== SQLITE_SCHEMA_VERSION) {
+        throw new Error('this database was exported from an older build; build again and export the database again.');
     }
     const dtype = meta.get('embedding.dtype');
     if (!Object.prototype.hasOwnProperty.call(DTYPE_WIDTHS, dtype)) {
@@ -125,7 +134,9 @@ export function embeddableByWorkersAi(meta) {
  *
  * The formula is the one the clients use, with the inverse document
  * frequency computed here from each term's document count and handed to
- * the statement as a value, so the database does only arithmetic.
+ * the statement as a value, so the database does only arithmetic. The
+ * query terms are looked up once for their ids, and the postings are
+ * then read by id, because the postings table stores no term text.
  *
  * @param {D1Database} db The database binding.
  * @param {Object} meta From readMeta.
@@ -139,21 +150,21 @@ export async function keywordPool(db, meta, terms, poolSize = CANDIDATE_POOL) {
 
     const placeholders = unique.map(() => '?').join(', ');
     const { results: known } = await db
-        .prepare(`SELECT term, df FROM bm25_terms WHERE term IN (${placeholders})`)
+        .prepare(`SELECT tid, df FROM bm25_terms WHERE term IN (${placeholders})`)
         .bind(...unique)
         .all();
     if (!known.length) return [];
 
     const weighted = known.map((row) => {
         const df = Number(row.df);
-        return [row.term, Math.log(1 + (meta.childCount - df + 0.5) / (df + 0.5))];
+        return [Number(row.tid), Math.log(1 + (meta.childCount - df + 0.5) / (df + 0.5))];
     });
     const values = weighted.map(() => '(?, ?)').join(', ');
-    const sql = `WITH q(term, idf) AS (VALUES ${values})
+    const sql = `WITH q(tid, idf) AS (VALUES ${values})
         SELECT c.cid AS cid,
                SUM(q.idf * (? + p.tf * (? + 1.0)) / (p.tf + ? * (1.0 - ? + ? * c.doc_len / ?))) AS s
         FROM q
-        JOIN bm25_postings p ON p.term = q.term
+        JOIN bm25_postings p ON p.tid = q.tid
         JOIN children c ON c.cid = p.cid
         GROUP BY c.cid
         ORDER BY s DESC, c.cid ASC

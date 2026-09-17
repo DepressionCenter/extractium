@@ -714,6 +714,23 @@ The folder holds the text of every page, so decide what to publish exactly as yo
 
 The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
 
+The tables are `meta` (one row per setting of the build), `parents` (one row per section), `children` (one row per search window), `vectors` (one row per window), `bm25_terms` (one row per distinct term), and `bm25_postings` (one row per term and window pair). A term's text is stored once, in `bm25_terms`. The postings name a term by its number, `tid`, because the text repeated in every posting was the largest part of the file. To find the windows a word appears in, join the two tables:
+
+```sql
+-- Grain: one row per search window that contains the term.
+SELECT
+    p.cid,                      -- the window, which is children.cid
+    p.tf                        -- how many times the term appears in it
+FROM bm25_terms AS t
+INNER JOIN bm25_postings AS p
+    ON p.tid = t.tid            -- 1:many; one term has many postings
+WHERE t.term = 'sleep'          -- terms are stored in lower case
+ORDER BY p.tf DESC
+;
+```
+
+The `meta` row `sqlite.schema` names this table layout. Its value is `2`. A file with no such row was written by an earlier version of Extractium™, which stored the term's text in every posting. A program that reads the keyword tables by column name should check the row first, as the Cloudflare search example does.
+
 
 ## Full and incremental rebuilds
 

@@ -584,6 +584,8 @@ Replacing the host, source label, and address columns of the SQLite file with lo
 
 **Done when** the postings table holds no term text, the `bm25_postings_term` index is gone, the worker returns the contract results from the new schema and refuses the old one by name, and the center's SQLite file is measurably smaller.
 
+*Finished 2026-09-17 on branch `sqlite-integer-term-ids`. Built as written, with one addition: the export script checks the `sqlite.schema` row too and stops before writing anything, so an older database is caught at the export and not only at the first search. Measured by rewriting the database of the 2026-09-16 build in the new layout, which holds 51,279 terms and 2,733,451 postings: the file went from 247,169,024 bytes to 125,857,792, and the two keyword tables with their indexes from 148,385,792 bytes to 35,397,632. That is more than the 50 MB this plan expected, because the old table carried the term text three times: in its rows, in the index behind its primary key, and in `bm25_postings_term`. The postings of three sample terms read back identical from both files, and SQLite's integrity check passes on the new one. Loading the new layout into a local D1 through `wrangler` was not tried here; the Worker's suite runs its statements against Node's SQLite with the regenerated contract export. Lookup tables for the host, source label, and address columns were considered and left out at 3.9 MB.*
+
 ### After Phase 15
 
 What is left is listed here so a reader of this page knows what was deferred and what was ruled out, and why. A decision recorded here is meant to save somebody proposing the same thing again from first principles.
