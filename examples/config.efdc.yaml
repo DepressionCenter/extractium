@@ -189,6 +189,8 @@ sources:
     type: youtube
     channel_id: https://www.youtube.com/@DepressionCenter
     languages: [en]
+    audio_fallback: true       # transcribe a video from its audio when YouTube refuses
+                               # its captions; false leaves a refused video unread
 
   # 7. The two U-M Library Deep Blue collections.
   #
