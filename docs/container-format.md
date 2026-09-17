@@ -115,7 +115,7 @@ A parent is one section of a page: the text a language model is shown when a sea
 |---|---|---|
 | `id` | text | Stable identifier, 16 lowercase hexadecimal characters. See "Identifiers". |
 | `t` | text | Heading, in the form `Page title -- Section heading`, or just the page title for text before the first heading. |
-| `x` | text | The section text. At most `CHUNK_MAX_CHARS` characters; longer sections are split into several parents with the same heading. |
+| `x` | text | The section text. At most `CHUNK_MAX_CHARS` characters; longer sections are split into several parents with the same heading, at a line break, a sentence end, or a space. No text of a page appears in two parents. |
 | `u` | text | Source URL. For local files, `local:` followed by the path relative to the source folder. |
 | `host` | text | Host name of `u`, lowercase. Empty for local files. |
 | `source_type` | text | Which kind of source the parent came from. One of: `kb` (TeamDynamix portal), `github`, `web`, `youtube`, `local`, `repository` (a scholarly repository such as a DSpace instance). |

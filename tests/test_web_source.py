@@ -13,7 +13,7 @@ tests/test_web_source.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-15
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,10 +32,11 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-17"
 
 import importlib
 import pathlib
+import re
 import tomllib
 
 import pytest
@@ -104,7 +105,14 @@ def chunk_all(documents):
 
 
 def pick(record, keys):
-    return {key: record[key] for key in keys}
+    """
+    The named fields of one record, with runs of spaces in its text made
+    one space. The frozen reference script joins a page's pieces with a
+    space, whitespace-only pieces included, so its text carries doubled
+    spaces. The chunker gathers text string by string and never produces
+    them. Everything else about the two must still agree.
+    """
+    return {key: re.sub(" {2,}", " ", record[key]) if key == "x" else record[key] for key in keys}
 
 
 REFERENCE_FIELDS = ("t", "x", "u", "host", "weight")

@@ -15,7 +15,7 @@ tests/test_core_chunking.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-04"
+__date__ = "2026-09-17"
 
 from bs4 import BeautifulSoup
 
@@ -92,7 +92,7 @@ def test_split_into_parents_with_headings_yields_one_parent_per_section(fixtures
     assert [p["id"] for p in parents] == [chunk.parent_id(url, p["t"], 0) for p in parents]
 
 
-def test_split_into_parents_hard_splits_long_section_without_newlines(fixtures_dir):
+def test_split_into_parents_cuts_a_long_section_between_words(fixtures_dir):
     url = "https://example.org/long-section"
     extraction = _extract(fixtures_dir, "page_long_section.html", url)
     node, title = extraction.node, extraction.title
@@ -101,13 +101,84 @@ def test_split_into_parents_hard_splits_long_section_without_newlines(fixtures_d
 
     assert len(parents) == 3
     assert all(len(p["x"]) <= chunk.CHUNK_MAX_CHARS for p in parents)
-    # The source paragraph has no embedded newline, so
-    # text.rfind("\n", 0, CHUNK_MAX_CHARS) always finds nothing and the
-    # code falls back to a hard cut at exactly CHUNK_MAX_CHARS for every
-    # chunk except the final remainder.
-    assert len(parents[0]["x"]) == chunk.CHUNK_MAX_CHARS
-    assert len(parents[1]["x"]) == chunk.CHUNK_MAX_CHARS
-    assert len(parents[2]["x"]) < chunk.CHUNK_MAX_CHARS
+    # The source paragraph has no line break to cut at, so each cut falls
+    # at a sentence end or a space. No part starts or ends inside a word,
+    # and put back together the parts are the whole paragraph.
+    whole = " ".join(extraction.node.find("p").get_text(" ", strip=True).split())
+    assert " ".join(p["x"] for p in parents) == whole
+    assert all(p["x"] == p["x"].strip() for p in parents)
+
+
+SECTION_BODY = (
+    "This paragraph is long enough to be kept as a section of its own by the chunker, "
+    "which drops anything shorter than sixty characters."
+)
+
+
+def _page(markup):
+    return BeautifulSoup(f"<main>{markup}</main>", "html.parser").main
+
+
+def test_headings_inside_a_wrapper_divide_the_page_and_nothing_is_indexed_twice():
+    """
+    Most sites put an article's headings inside a wrapper element. The
+    text before the first heading must stop at that heading wherever it
+    sits, or the whole page is gathered as "before" text and indexed a
+    second time beside its own sections.
+    """
+    flat = (f"<p>Intro. {SECTION_BODY}</p><h2>First</h2><p>Alpha. {SECTION_BODY}</p>"
+            f"<h3>Second</h3><p>Beta. {SECTION_BODY}</p>")
+    url = "https://example.org/page"
+
+    direct = chunk.split_into_parents("Page", _page(flat), url)
+    wrapped = chunk.split_into_parents("Page", _page(f"<div class='article'><section>{flat}</section></div>"), url)
+
+    assert [p["t"] for p in wrapped] == ["Page", "Page -- First", "Page -- Second"]
+    assert [(p["t"], p["x"], p["id"]) for p in wrapped] == [(p["t"], p["x"], p["id"]) for p in direct]
+    assert wrapped[0]["x"] == f"Intro. {SECTION_BODY}"
+    everything = " ".join(p["x"] for p in wrapped)
+    assert everything.count("Alpha.") == 1 and everything.count("Beta.") == 1
+
+
+def test_a_section_runs_to_the_next_heading_at_any_depth():
+    markup = (f"<div><h2>First</h2><p>Alpha. {SECTION_BODY}</p></div>"
+              f"<div><div><h2>Second</h2></div><p>Beta. {SECTION_BODY}</p></div>")
+
+    parents = chunk.split_into_parents("Page", _page(markup), "https://example.org/page")
+
+    assert [(p["t"], p["x"][:6]) for p in parents] == [("Page -- First", "Alpha."), ("Page -- Second", "Beta. ")]
+
+
+def test_heading_text_scripts_and_comments_are_not_section_text():
+    markup = (f"<h2>First <em>part</em></h2><p>Alpha. {SECTION_BODY}</p>"
+              "<script>var tracked = true;</script><style>p { color: red; }</style><!-- a note -->")
+
+    (parent,) = chunk.split_into_parents("Page", _page(markup), "https://example.org/page")
+
+    assert parent["t"] == "Page -- First part"
+    assert parent["x"] == f"Alpha. {SECTION_BODY}"
+
+
+def test_cut_position_prefers_a_line_break_then_a_sentence_end_then_a_space():
+    sentences = "A sentence of ordinary words that ends here. " * 40
+    assert sentences[:chunk.cut_position(sentences)].endswith("ends here. ")
+
+    lines = ("word " * 100).strip() + chr(10) + "word " * 300
+    assert chunk.cut_position(lines) == lines.index(chr(10))
+
+    words = "word " * 400                       # no sentence end anywhere
+    assert words[chunk.cut_position(words)] == " "
+
+    assert chunk.cut_position("x" * 3000) == chunk.CHUNK_MAX_CHARS      # nothing to cut at
+
+
+def test_a_sentence_end_early_in_the_text_does_not_throw_most_of_it_away():
+    text = "Short. " + "word " * 400
+
+    cut = chunk.cut_position(text)
+
+    assert cut > chunk.CHUNK_MAX_CHARS * chunk.SENTENCE_CUT_MIN_SHARE
+    assert text[cut] == " "
 
 
 # ---------------------------------------------------------------------------
