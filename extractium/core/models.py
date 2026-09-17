@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-17"
 
 import re
 import urllib.parse
@@ -83,7 +83,7 @@ DEFAULT_SOURCE_LABELS = {
 }
 
 # Longest a source label may be. Long enough for a program or center name,
-# short enough to head a section in llms.txt and to sit in a search result
+# short enough to name a source in llms.txt and to sit in a search result
 # without wrapping.
 MAX_SOURCE_LABEL_CHARS = 60
 
@@ -100,6 +100,13 @@ CONTENT_TYPES = frozenset({
     "article", "readme", "wiki", "release_notes", "page", "text", "video_transcript",
     "manifest", "repo_map", "code_file", "code_symbol",
 })
+
+# The records that describe a repository's code rather than its prose: a
+# build file, a map of the repository, a source file, and one definition
+# in it. Outputs read inside a language model's context window leave
+# these out, because they multiply the index and answer no question a
+# reader of documentation asks. The SQLite and OKF outputs keep them.
+CODE_CONTENT_TYPES = frozenset({"manifest", "repo_map", "code_file", "code_symbol"})
 
 # A local document's URL is "local:" plus a path relative to the source
 # folder, so an absolute path from the operator's disk never reaches an

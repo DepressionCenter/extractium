@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: How to keep a compendium current: the one-command local
 build with run.sh or run.bat, the scheduled GitHub Actions build, how the
 crawl cache makes a rebuild cheap, and how to choose between the two.
@@ -106,7 +106,7 @@ The workflow lives at `.github/workflows/build-compendium.yml`. The version to c
 2. Change `seed_url` and `name` in `config.yaml`.
 3. Turn on Pages, as described in [how to publish to GitHub Pages](publish-to-github-pages.md).
 4. Open the **Actions** tab, choose **Build compendium**, and press **Run workflow**. For the first run, set *Visit at most this many pages* to `25`.
-5. When it finishes, open your published `llms.txt` and check the page list. Tighten the patterns in `config.yaml` if pages you did not expect are there.
+5. When it finishes, open your published `llms.txt`, follow the link to each source's index file, and check the page list. Tighten the patterns in `config.yaml` if pages you did not expect are there.
 6. Leave the schedule alone. It runs every Monday at 06:17 UTC.
 
 ### Changing the day or time

@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/wrappers/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-14
+Last Modified: 2026-09-17
 Summary: README for the hosted-assistant prompts: what each one is for,
 what to replace before use, and why they say what they say.
 Notes: See README file for documentation and full license information.
@@ -31,7 +31,7 @@ This folder holds two plain-text system prompts for assistants that run on someb
 
 | File | Use it when | What the assistant can do |
 |---|---|---|
-| [browsing-assistant.txt](browsing-assistant.txt) | The platform can fetch web pages but cannot call tools. | Reads `llms.txt`, opens the matching pages, and quotes them. No ranking: it finds pages by their titles and summaries. |
+| [browsing-assistant.txt](browsing-assistant.txt) | The platform can fetch web pages but cannot call tools. | Reads `llms.txt`, then the matching source's index file, opens the matching pages, and quotes them. No ranking: it finds pages by their titles and summaries. |
 | [mcp-connected-assistant.txt](mcp-connected-assistant.txt) | The platform can connect to a remote Model Context Protocol (MCP) server. | Calls `search_kb` on a [hosted search server](../../docs/how-to/deploy-a-remote-mcp-server.md) and gets ranked sections back. |
 
 If the platform offers both, use the second: a ranked search over whole sections answers more questions, and answers them from less text.
@@ -40,7 +40,7 @@ If the platform offers both, use the second: a ranked search over whole sections
 ## Before you use one
 
 1. Replace `EXAMPLE ORGANIZATION` with the name of your organization.
-2. In the browsing prompt, replace the two addresses with the ones your build publishes. They are `llms.txt` and `llms-full.txt` in your published folder; [how to publish to GitHub Pages](../../docs/how-to/publish-to-github-pages.md) says where that is.
+2. In the browsing prompt, replace the address with the one your build publishes. It is `llms.txt` in your published folder, and the prompt reaches every other index file from it; [how to publish to GitHub Pages](../../docs/how-to/publish-to-github-pages.md) says where that is.
 3. In the connected prompt, connect the platform to your hosted server first. The prompt assumes a tool named `search_kb` exists.
 4. Delete the last line of the prompt, which is a note to you.
 

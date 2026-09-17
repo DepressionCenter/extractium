@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/using-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: How an AI agent uses a published Extractium compendium: which
 file to read for which job, how to search the index with the bundled
 clients, how to cite what it finds, and the rules it must follow about
@@ -31,20 +31,22 @@ An Extractium™ build turns an organization's public documentation into a few s
 
 ## What a published index contains
 
-A published folder usually holds three files at one base URL.
+A published folder usually holds these files at one base URL.
 
 | File | Use it when |
 |---|---|
-| `llms.txt` | You want a map of the compendium. One line per page: title, link, and the opening sentence. Small enough to read whole. |
-| `llms-full.txt` | You want everything and can afford the tokens. The complete indexed text, in reading order. Good for one-shot summarizing, poor for finding one fact in a large corpus. |
+| `llms.txt` | You want to know what the compendium covers. One entry per source: its name, where it starts, what it is, and a link to its index file. Small enough to read whole. |
+| `llms/<source>.txt` | You want the pages of one source. One line per page: title, link, and a description. A source with more than 500 pages is split into several files, which its index file links to. |
 | `compendium.json` | You want to search. Text, vectors, and keyword statistics in one file, read by the clients below. Despite the name it is partly binary. |
 
-Read `llms.txt` first when you do not know what the compendium covers. Search `compendium.json` when you have a question.
+Read `llms.txt` first when you do not know what the compendium covers, then the index file of the source that matches. Search `compendium.json` when you have a question.
+
+The llms.txt files list documentation only. They are meant to be read inside a language model's context window, so a repository's code analysis is left out of them. Links from one index file to another are relative to the file's own address.
 
 
 ## The four ways to reach it
 
-1. Fetch the static files. Any agent that can browse the web can read `llms.txt`, follow a link, and quote the page. No ranking, no setup.
+1. Fetch the static files. Any agent that can browse the web can read `llms.txt`, follow a link to a source's index file, follow a link to a page, and quote it. No ranking, no setup.
 2. Search locally. Load `compendium.json` with one of the bundled clients and run a real hybrid search on your own computer. Nothing leaves it.
 3. Search through a tool. Run one of the two local servers that ship with Extractium™, and the search becomes a tool your client can call. See [how to connect an MCP client](how-to/connect-an-mcp-client.md). The same tool can be hosted for free on Val Town or Cloudflare, so an assistant that does not run on your computer can call it too. See [how to deploy a remote MCP server](how-to/deploy-a-remote-mcp-server.md). A hosted server searches by keywords unless an embedding model is configured for it.
 4. Point a hosted assistant at the URLs. A system prompt naming the files, for platforms that only browse. Two ready-made prompts are under [examples/wrappers/](../examples/wrappers/README.md).

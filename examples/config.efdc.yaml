@@ -2,7 +2,7 @@
 # examples/config.efdc.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-09
-# Last Modified: 2026-09-16
+# Last Modified: 2026-09-17
 # Summary: A build configuration for the Eisenberg Family Depression Center at
 # the University of Michigan. It gathers the center's public documentation --
 # the U-M Health Research Resource Library, the Open Source Hub, the GitHub
@@ -52,8 +52,13 @@ slug: efdc-compendium
 # Every source carries a label: the name a reader sees for it. Several of the
 # sources below are websites, so without one a search result could say no
 # more than "web", and nobody could tell the main site from the Peer-to-Peer
-# program. These labels head the sections of dist/llms.txt, so keep them the
+# program. These labels name the sources in dist/llms.txt, so keep them the
 # names the center actually uses.
+#
+# Every source also carries a description: one or two sentences saying what
+# it is. dist/llms.txt prints it beside the label, and it is how a language
+# model decides which source to open. Two sources that share a label are
+# described once, by the first of them.
 #
 # A page two sources both reach is indexed once, by whichever reached it
 # first, and the build says how many pages that happened to. So an overlap
@@ -73,6 +78,9 @@ sources:
   #    The files attached to articles (Word, PDF, and the other formats
   #    the readers handle) are read as documents of their own.
   - label: U-M Health Research Resource Library
+    description: >-
+      The Depression Center's knowledge base: how-to articles and
+      documentation for its research tools, data services, and projects.
     type: web
     seed_url: https://teamdynamix.umich.edu/TDClient/210/DepressionCenter/Home/
     read_documents: true
@@ -83,6 +91,9 @@ sources:
   #    names are. The build counts them and names them once at the end, which
   #    is the guardrail working rather than an error. See github_owners below.
   - label: Depression Center Open Source Hub
+    description: >-
+      The center's open source projects on GitHub and the Open Source Hub
+      website at code.depressioncenter.org.
     type: web
     seed_url: https://code.depressioncenter.org/
 
@@ -120,11 +131,18 @@ sources:
   #    or Slides shared with the link. The leaf pattern reads each such file
   #    the site links to, without following any link found in it. A file
   #    that is not shared is reported and skipped.
+  #
+  #    read_documents turns the Word, PDF, and slide files the site links to
+  #    into text, each indexed once as a document of its own.
   - label: Depression Center Website
+    description: >-
+      The Eisenberg Family Depression Center's main website, including the
+      Depression Center Toolkit.
     type: web
     seed_urls:
       - https://depressioncenter.org/
       - https://depressioncenter.org/outreach-education/depression-center-toolkit
+    read_documents: true
     leaf_patterns:
       - '^https://docs\.google\.com/'
 
@@ -140,6 +158,9 @@ sources:
   #    shared is reported and skipped; the video files on the delivery
   #    network are left out as files that hold no readable text.
   - label: Peer-to-Peer Depression Awareness Program Resource Center
+    description: >-
+      Materials for schools running the Peer-to-Peer Depression Awareness
+      Program.
     type: web
     seed_url: https://p2p.depressioncenter.org/
     read_documents: true
@@ -162,9 +183,14 @@ sources:
   #    reuse the transcripts stored under cache_dir; see the youtube section
   #    of docs/configuration.md and docs/troubleshooting.md.
   - label: Depression Center Video Library
+    description: >-
+      Presentations, lectures and other videos from the center's YouTube
+      channel, with indexed transcripts.
     type: youtube
     channel_id: https://www.youtube.com/@DepressionCenter
     languages: [en]
+    audio_fallback: true       # transcribe a video from its audio when YouTube refuses
+                               # its captions; false leaves a refused video unread
 
   # 7. The two U-M Library Deep Blue collections.
   #
@@ -185,18 +211,25 @@ sources:
   #    site a reader opens; that is not a mistake. See
   #    docs/dspace-repository-indexing.md.
   - label: Depression Center Deep Blue Documents Collections
+    description: >-
+      Documents the center and MeTRIC have deposited in Deep Blue, the
+      University of Michigan Library's repository.
     type: dspace
     api_url: https://backend.production.deepblue-documents.lib.umich.edu/server/api
     site_url: https://deepblue.lib.umich.edu
     collections:
       - https://hdl.handle.net/2027.42/195355    # Eisenberg Family Depression Center
       - https://hdl.handle.net/2027.42/195645    # MeTRIC
+    include_full_text: true    # index the text Deep Blue extracted from each deposit's
+                               # files, PDFs included; false indexes the description alone
 
   # 8. Campus Mind Works: https://campusmindworks.org/
   #    On the center's own list of resources, but a site for students rather
   #    than documentation for researchers.
   #
   - label: Campus Mind Works
+    description: >-
+      Mental health information and support resources for students.
     type: web
     seed_url: https://campusmindworks.org/
 
@@ -211,7 +244,11 @@ sources:
 outputs:
   # efdc-compendium.json: the compendium every search client reads.
   - type: container
-  # llms.txt and llms-full.txt, for language models that browse the web.
+  # llms.txt, which lists the sources, and llms/, one index file per source,
+  # for language models that browse the web. Documentation only: these files
+  # are meant to be read inside a model's context window, so the code
+  # analysis from the GitHub source is left out of them. The other outputs
+  # carry it.
   - type: llmstxt
   # efdc-compendium.sqlite: the same content as tables, for anyone who would
   # rather write SQL, and what the Cloudflare search server is loaded from.
@@ -244,8 +281,8 @@ respect_robots_txt: false
 cache_dir: .kb_cache
 
 # A ceiling for each source: web pages, videos, deposits, or files, whichever
-# the source reads. Raise it once the page list in dist/llms.txt
-# looks right. For a first run, cap it far lower from the command line instead
+# the source reads. Raise it once the page lists under dist/llms/
+# look right. For a first run, cap it far lower from the command line instead
 # of editing this file:
 #   python -m extractium.cli build --config config.yaml --max-pages 25
 # The GitHub source has its own two ceilings, set on its entry above, and

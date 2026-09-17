@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -409,7 +409,7 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Fix.** In **Settings → Actions → General**, check that workflows are allowed to run and that the default permissions are not set to a level below what the workflow requests. The workflow asks for `contents: read` overall, and `pages: write` with `id-token: write` in the publishing job alone.
 
-### `llms.txt` lists pages that should not be indexed
+### An index file under `llms/` lists pages that should not be indexed
 
 **Cause.** An include pattern is broader than intended, or a listing page is being indexed rather than only crawled.
 

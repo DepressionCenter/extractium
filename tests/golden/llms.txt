@@ -2,13 +2,14 @@
 
 > A compendium of 3 sections drawn from 2 pages on example.org, compiled on 2026-01-02T03:04:05Z.
 
-This file is an index, not the content itself. Each entry below names one page, links to it, quotes the opening of its text, and lists the keywords it is about when the build found any, so you can judge whether a page answers your question before fetching it. Each heading names one of the sources this compendium was built from, and the entries under it are the pages that came from that source.
+This file is an index of the sources this compendium was built from, not the content itself. Each entry below names one source, links to where it starts, says what it holds, and links to that source's own index file, which lists its pages with a description of each. Pick the source that matches your question, fetch its index file, then fetch the page you need.
 
-llms-full.txt, written alongside this file, holds the complete text of every page listed here, in the same order. Read that instead if you want everything at once rather than following links.
+Links to other index files are relative to this file's address.
+
+Source code is not listed here. These files are meant to be read inside a language model's context window, so they hold documentation only.
 
 Compiled by Extractium (https://github.com/DepressionCenter/extractium), copyright (c) 2026 The Regents of the University of Michigan, licensed under the GNU General Public License v3.0 or later. The indexed content remains under the license of the site it was read from.
 
-## Website
+## Sources
 
-- [Team Directory](https://example.org/team): Synthetic unique content for page A describing a fictional team member and their placeholder research focus area, for characterization testing purposes only.
-- [Project Overview](https://example.org/project): Synthetic unique content for page B describing a fictional placeholder research project overview, for characterization testing purposes only.
+- [Website](llms/website.txt): 2 pages from example.org.
