@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: The design of Extractium™: what the tool is for, how its parts
 fit together, what it reads, what it writes, and what it will never do.
 Written for developers and plug-in authors.
@@ -200,9 +200,9 @@ The [architecture](architecture.md) page says which module writes each format.
 
 | Format | Files | Notes |
 |---|---|---|
-| Binary container, version 4 | `<slug>.json`, `compendium.json` by default; `<slug>.json.gz` with `gzip: true` | The main output. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. |
-| llms.txt | `llms.txt`, `llms-full.txt` | Root manifest and full concatenation for web-browsing language models. |
-| SQLite | `<slug>.sqlite`, `compendium.sqlite` by default | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). |
+| Binary container, version 4 | `<slug>.json`, `compendium.json` by default; `<slug>.json.gz` with `gzip: true` | The main output. Four-byte header length, minified JSON header, raw vector bytes. Children carry offsets, not text. Fully specified in the [container format](container-format.md) page. Planned, Phase 20 of the [implementation plan](implementation-plan.md): two files from one build, `<slug>.json.gz` (light, the default) and `<slug>-full.json.gz`. The light file holds one section per page whose text is the page's description and keywords. The full file holds every section except code records. `gzip: false` writes `.json` names. |
+| llms.txt | `llms.txt`, `llms-full.txt` | Root manifest and full concatenation for web-browsing language models. Planned, Phase 19 of the [implementation plan](implementation-plan.md): `llms.txt`, `llms/<source>.txt`, and `llms/<source>/<group>.txt` in place of these two files. An index of sources, then one index file per source, split by category past 500 entries. Links and descriptions only. No code records, and no `llms-full.txt`. |
+| SQLite | `<slug>.sqlite`, `compendium.sqlite` by default | Standard-library `sqlite3`, no new dependency. Tables for metadata, parents, children, BM25 terms and postings, int8 vectors. Also the import source for a hosted SQLite service (section 9.3). Planned, Phases 20 and 21 of the [implementation plan](implementation-plan.md): the only single-file output that carries code records, with postings stored by integer term id. |
 | OKF bundle | `okf/` directory with `index.md`, `log.md`, one Markdown file per page | Open Knowledge Format v0.2: YAML front matter with `type`, `title`, `description`, `resource`, `tags`, `generated`, `sources`. `type` is the only field the format requires, and it names the record's content type in words. Concept files are filed under the name of the source that produced them. Every name is built from an allowlist, so a page title can never reach outside the folder. OKF defines no archive packaging, so none is written. A file the tool wrote for a page no longer in the compendium is removed on the next build. |
 | gzip container | the container output's `gzip` option | The same bytes through gzip, recognized by the gzip signature rather than the name. The Python client inflates inside `load_container`. The JavaScript client's `inflateContainer` runs before `loadContainer`, through `DecompressionStream`. |
 

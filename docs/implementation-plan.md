@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
@@ -490,6 +490,97 @@ Still not built: following a YouTube link found while crawling something else an
 **Done when** a lone copy of either script on a computer without git downloads the release, asks the three questions, and builds.
 
 *Finished 2026-09-14 on branch `feat-init-command`. Built as written. Both scripts were tried from a lone copy: on Windows with git hidden from the path, the script resolved "latest" against a repository that has releases, downloaded the archive through PowerShell, unpacked it, and handed over; with git present it cloned. On this machine the bash script cloned through git and downloaded a branch archive through curl. The questions stop at one website on purpose. The other source types each need something a person may not have ready, such as a channel that must be built locally or a repository interface address that is not guessable, and a first run should not become a reading assignment. A guided setup that offers the other types, or a friendlier interface for a full setup, is an open issue.*
+
+### Why the outputs get smaller in Phases 19 to 21
+
+A build of the Eisenberg Family Depression Center's sources on 2026-09-16 read 10,309 distinct addresses and produced 27,491 sections and 76,496 search windows. Every file it wrote was too large for the thing that reads it. The three phases after this section each shrink one output, and this section records what was measured and what each file is for, so the reason for each change stays with the plan.
+
+The build wrote these files:
+
+| File | Size | What it is for | What fills it |
+|---|---|---|---|
+| `llms.txt` | 3,517,083 bytes (3.4 MiB), 6,884 lines | An index of the compendium for a language model that can fetch a web page but cannot call a search tool. It is meant to be read whole. | One line per page with an excerpt and keywords. That is about a million tokens, more than most context windows. A browsing model keeps the first part of a fetched page and drops the rest, so it sees one source and nothing after it. |
+| `llms-full.txt` | 27,839,247 bytes (26.5 MiB), 375,326 lines | The full text of every page in one file, for a model that wants everything at once. | About seven million tokens. No platform can read it. |
+| `efdc-compendium.json` | 104,203,062 bytes (99.4 MiB) | The search index every client loads: the browser client, the Python client, the local servers, and the Val Town server, which holds it in memory. | A 74,828,594-byte JSON header and 29,374,464 bytes of int8 vectors. In the header: section text 22.7 MB, tags 3.7 MB, keywords 2.9 MB, addresses 2.7 MB, summaries 2.6 MB, titles 2.3 MB, other section fields about 9.6 MB, keyword postings 34.2 MB, window offsets 1.2 MB. |
+| `efdc-compendium.sqlite` | 247,169,024 bytes (235.7 MiB) | The same content as tables, for SQL users and for loading into Cloudflare D1, where the hosted worker searches it. It is never loaded into a context window or a browser. | Postings about 95 MB: the table plus two indexes that each repeat the term text, 17 MB of term strings per copy. Sections about 51 MB, vectors about 31 MB, the rest small. The file has no free pages. |
+| `okf/` | 51 MB, 6,856 files | One Markdown file per page, for people and for tools that read Markdown. | Unchanged by these phases. |
+
+Three findings decided the design:
+
+1. Code analysis is a quarter of the index, and no reader that works inside a context window wants it. 6,614 of the 27,491 sections and 17,245 of the 76,496 windows are `code_file`, `code_symbol`, `repo_map`, or `manifest` records from the GitHub source.
+2. The free Val Town plan stores 10 MB of blobs. A 99 MiB container cannot be kept there, so every cold start downloads all of it. A browser front end would download it for every visitor and parse a 75 MB JSON string.
+3. Summaries are thin. 14,791 sections have no summary, and 1,079 more carry their website's default description. An index built on summaries needs a fallback, and the keywords every section already has are that fallback.
+
+What each file becomes:
+
+| File | After Phases 19 to 21 | Why |
+|---|---|---|
+| `llms.txt` | A short index of the sources: name, link to where the source starts, a description, and a link to that source's own index file. No keywords. | It has to fit in a small context window and be useful in its first screen. |
+| `llms/<source>.txt`, `llms/<source>/<group>.txt` | One line per page: link and description. Keywords appear only as the description of a page that has no summary of its own. GitHub lists each repository with its README's description, then its Markdown and text files: root first, then the `docs` and `guide` folders, then the rest. No code records. | A model reads the one source it needs. If it stops reading partway, it has already seen the most important files. |
+| `llms-full.txt` | Not written. A stale copy this tool wrote is removed. | Nothing can read it at this size, and the full text is already in `okf/` and in the full container. |
+| `<slug>.json.gz` | The light container, and the default: one section per page whose text is the page's description plus its keywords, with vectors and keyword statistics over that. No code records. | Small enough for a browser, for a small model held in memory, and for the 10 MB Val Town store. |
+| `<slug>-full.json.gz` | The container as it is today, without code records. Keeps keywords and tags. | The complete text search for a client that can afford it. |
+| `<slug>.sqlite` | Everything, code included, with postings stored by integer term id. | It is a server-side file. Nobody loads it into a context window, so it is the right home for code analysis, along with `okf/`. |
+
+Code records are left out of the llms files and both containers because those outputs are read inside a language model's context window or searched by a small model in memory. They stay in the SQLite and OKF outputs, and the documentation, the example settings files, and the build summary all say so.
+
+Replacing the host, source label, and address columns of the SQLite file with lookup tables was considered and left out. Together those columns are 3.9 MB of the 235.7 MiB file. The repeated term text in the postings is where the size is.
+
+### Phase 19: An index tree in place of one long llms.txt
+
+**Goal.** Make `llms.txt` something a browsing language model can read whole: an index of the sources, with one index file per source underneath it, and no code records anywhere in the tree.
+
+**Deliverables.**
+
+- The code record types (`manifest`, `repo_map`, `code_file`, `code_symbol`) named once in `extractium/core/models.py`, so every output that leaves code out does it the same way.
+- An optional `description` setting on every source. Every output is told which sources the build read, with each one's label, type, starting address, and description.
+- One description rule for a page, shared by the outputs: its own summary, then its keywords, then the opening of its text. A summary carried by more than three pages of one source is the site's default description and counts as absent.
+- `llms.txt` lists the sources. `llms/<source>.txt` lists one source's pages with a link and a description each. A source over 500 entries splits into one file per category under `llms/<source>/`, and a category over 500 continues in numbered files. Links between index files are relative, and each file says so.
+- A GitHub source lists each repository with its root README's description, then its files: repository root first, then `docs`, `doc`, `guide`, and `guides` folders, then the rest.
+- `llms-full.txt` is no longer written. A copy this tool wrote, and any index file it wrote for a source that is gone, is removed. A file the tool did not write is never touched.
+- The browsing assistant prompt walks the tree: the root file, the source's file, then the page.
+
+**Tests.** The code types are known content types and include no prose type. A source's description is read, checked, and handed to every adapter, and two sources sharing a label are described once. A page is one record however many sections it has; the description falls back in order; a shared summary counts as absent. The root file lists sources and no pages or keywords; a source file lists each page with its description; code records appear nowhere; a repository lists root files, then documentation folders, then the rest; a source over the cap splits by category; a group over the cap continues in a numbered file; no file exceeds the cap. Writing produces the tree and no full file; a stale file this tool wrote is removed and a stranger's is kept. The committed snapshots hold the tree.
+
+**Documentation.** The configuration reference, the pages on using and publishing a compendium, the build, crawling, weekly-build, and deploy guides, the architecture and data-flow pages, the specification (section 4 and the access tiers), the branding page, the browsing prompt and its README, the data-repository README, both example settings files, and the site's landing page.
+
+**Done when** `llms.txt` for the center's build is under 50 KB, no index file holds more than 500 page entries, no code record appears in any of them, a repository's root files come before its `docs` files, and `llms-full.txt` is gone from a folder that had one.
+
+### Phase 20: A light container and a full container
+
+**Goal.** Write two search indexes from one build: a light one small enough for a browser, a small model held in memory, or a free hosted store, and a full one with every section of prose. Neither holds code records.
+
+**Deliverables.**
+
+- An output can drop any set of sections from a compendium, with the windows, vectors, keyword statistics, and calibration rebuilt over what remains. Dropping local content and dropping code both use it.
+- A light compendium built from the one the build produced: one document per page whose text is the page's description and its keywords, embedded and scored through the ordinary build step, carrying each page's keywords and tags.
+- The `container` output writes `<slug>.json.gz`, the light file, and `<slug>-full.json.gz`, the full file without code. `gzip` defaults to `true`, and `gzip: false` writes `.json` names. `full: false` writes only the light file. `file` names the light file, and the full file's name is derived from it.
+- Both files are version 4 containers that every existing reader opens. A `variant` header field, `light` or `full`, says which one a reader has.
+- The build summary counts the code records and names the outputs that carry them, or says that no configured output does.
+- The Val Town example, the two local servers, the data-repository template, the workflows, the example settings files, and the landing page name the new files.
+
+**Tests.** Dropping code removes the code sections and everything derived from them, and a compendium without code is returned unchanged. A light document is one per page and holds the description and keywords; a page described by its keywords does not repeat them; a local page stays local; the light compendium has no code and keeps the keywords. The output's defaults and the derived file name. Writing produces both files with the right variant and no code; `full: false` writes one; a caller that supplies no light compendium gets the full file under the one name. A whole build through the command line writes both. The summary line with and without an output that keeps code.
+
+**Documentation.** The container format page (a section on the two files and the `variant` field), the configuration reference (the output's options and what each output holds), the pages on using, searching, publishing, and deploying a compendium, the MCP guides, the architecture, data-flow, and GitHub indexing pages, the specification, and the example README files.
+
+**Done when** a default build writes `<slug>.json.gz` and `<slug>-full.json.gz`, neither holds a code record, both open in the Python and JavaScript clients unchanged, the center's light file is under 10 MB compressed, and the summary says where the code went.
+
+### Phase 21: SQLite postings by term id
+
+**Goal.** Store each term's text once in the SQLite output. The postings table and its two indexes repeat it today, and that repetition is the largest part of the file.
+
+**Deliverables.**
+
+- `bm25_terms` gains an integer `tid` primary key, with `term` unique. `bm25_postings` holds `tid`, `cid`, and `tf`, keyed on `(tid, cid)` and stored `WITHOUT ROWID`, so the table is its own index. The separate `bm25_postings_term` index is dropped.
+- Term ids follow sorted term order, so two builds of the same compendium write the same file.
+- A `meta` row, `sqlite.schema` = `2`. The Cloudflare D1 worker looks postings up by term id and refuses a database without that row, with a message that says to export the database again.
+- The D1 contract file is regenerated from the new schema.
+
+**Tests.** The postings table's columns, the absent index, and the schema row. A term's postings read back through the join equal the ones the compendium holds. Term ids follow sorted order. The worker returns the contract results from the new schema and refuses a database without the schema row by name.
+
+**Documentation.** The specification's SQLite row, the architecture page, the Cloudflare README, the guide to deploying a remote server, and a troubleshooting entry for the refusal.
+
+**Done when** the postings table holds no term text, the `bm25_postings_term` index is gone, the worker returns the contract results from the new schema and refuses the old one by name, and the center's SQLite file is measurably smaller.
 
 ### After Phase 15
 
