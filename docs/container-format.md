@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -40,7 +40,23 @@ This layout replaces the version 2 layout that Field Station AI's `build-kb-inde
 
 A knowledge index has two kinds of data: text and metadata, which JSON handles well, and thousands of numeric vectors, which JSON handles badly. Encoding vectors as JSON arrays or base64 costs about a third more bytes and a slow parse. The container keeps the JSON for what JSON is good at and stores the vectors as raw bytes right after it.
 
-The file keeps a `.json` extension so static hosts such as GitHub Pages serve it with a plain content type and no special configuration.
+The file keeps `.json` in its name so static hosts such as GitHub Pages serve it with a plain content type and no special configuration.
+
+
+## The light file and the full file
+
+A build writes two containers. Both follow this page exactly, both are version 4, and any reader opens either one.
+
+| File | What it holds | Load it when |
+|---|---|---|
+| `<slug>.json.gz`, the light file | One section per page. The section's text is the page's description, then a blank line, then `Keywords:` and the page's keywords. A page with no summary of its own is described by its keywords, and then the keyword line is not repeated. The heading is the page title and `u` is the page's address. | You search in a browser, on a phone, in a hosted function with a small store, or with a small model in memory. A hit tells you which page answers the question, and you follow its address to read the page. |
+| `<slug>-full.json.gz`, the full file | Every section of every page, with its full text. | You need to quote the page's text in the answer, and you can afford the download and the memory. |
+
+Neither file holds code analysis. They are meant to be loaded into a language model's context window or searched by a small model in memory; the `sqlite` and `okf` outputs carry the code.
+
+The header field `variant` says which file you have: `light` or `full`. A light section keeps the `id` of the page's first section, so the same page has the same identifier in both files. A light section's text is never run through the chunker or the near-duplicate step, so a page with a very short description, or the same description as another page, is still in the file.
+
+The layout version did not change for this. `variant` is a field a reader can ignore, the sections and windows are laid out as before, and a reader written before there were two files opens both.
 
 
 ## Byte layout
@@ -61,6 +77,7 @@ A reader copies the vector bytes into a fresh buffer before viewing them as a ty
 | `_license` | text | The license notice for the file. Present because the file is a JSON document with no other place for a notice. |
 | `format` | text | Always `extractium-compendium`. A reader refuses any other value. |
 | `v` | whole number | Layout version. This page describes `4`. |
+| `variant` | text | `light` or `full`. See "The light file and the full file" above. A file written before there were two has no such field, and holds every section, code records included. |
 | `extractium` | text | Version of the tool that wrote the file, for example `0.2`. |
 | `builtAt` | text | Build time in UTC, ISO 8601 with a `Z` suffix, for example `2026-09-04T12:00:00Z`. |
 | `site` | text | Display name of the compendium. Defaults to the title of the first page crawled. |
@@ -231,7 +248,7 @@ Measured on the Field Station AI index built on 2026-08-14 (2,464 parents, 5,910
 
 ## Compressed form
 
-A container output with `gzip: true` writes the same bytes through gzip, under `<slug>.json.gz` unless `file` names another, with no timestamp in the gzip header so two builds of one compendium produce identical files. Nothing inside the container changes, so the version stays 4. A reader recognizes the compressed form by the gzip signature, the bytes `1f 8b`, rather than by the file name, so a file renamed on the way to a host still reads. The Python client inflates inside `load_container`; the JavaScript client's loader is synchronous, so a caller passes the download through `inflateContainer` first, and the loader names that step when handed compressed bytes.
+The container output writes its files through gzip unless it says `gzip: false`, under `<slug>.json.gz` and `<slug>-full.json.gz` unless `file` names another, with no timestamp in the gzip header so two builds of one compendium produce identical files. Nothing inside the container changes, so the version stays 4. A reader recognizes the compressed form by the gzip signature, the bytes `1f 8b`, rather than by the file name, so a file renamed on the way to a host still reads. The Python client inflates inside `load_container`; the JavaScript client's loader is synchronous, so a caller passes the download through `inflateContainer` first, and the loader names that step when handed compressed bytes.
 
 
 ## Versioning rule

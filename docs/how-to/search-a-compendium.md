@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/search-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-14
+Last Modified: 2026-09-17
 Summary: How to search a built compendium with the two client libraries:
 loading the container in Python and in JavaScript, supplying a query
 embedder, reading the results, and what the search does behind the two
@@ -26,12 +26,13 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-A build writes one file, `compendium.json`, that holds your text, its vectors, and its keyword statistics. This page shows you how to search that file from Python and from JavaScript. Both clients ship with Extractium™, need no server and no database, and give the same answers for the same question. Read it if you are writing a tool, a script, or a web page over a published index.
+A build writes two index files. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords. `compendium-full.json.gz` is the full one: the text of every section. Each also holds its vectors and keyword statistics. This page shows you how to search either file from Python and from JavaScript. Both clients ship with Extractium™, need no server and no database, and give the same answers for the same question. Read it if you are writing a tool, a script, or a web page over a published index.
 
 
 ## What you need
 
 1. A built compendium. The [build page](../usage.md) shows how to make one.
+   Pick the file that fits. Load the light file in a browser, on a phone, or anywhere memory is short: a hit names the page that answers the question, and its text is the page's description. Load the full file when you need the matching passage itself. Both are read the same way.
 2. A way to turn a question into a vector, using the same embedding model the file was built with. The file names that model in its `embedding.model` field, so you never have to guess.
 3. Python 3.10 or newer for the Python client, or Node 18 or newer, a browser, or an edge runtime for the JavaScript client.
 
@@ -43,7 +44,7 @@ The clients do not embed the query themselves. That keeps them small and lets th
 ```python
 from extractium.search import load_container
 
-index = load_container("dist/compendium.json")   # a compendium.json.gz reads the same way
+index = load_container("dist/compendium-full.json.gz")   # or dist/compendium.json.gz, the light file
 
 hits = index.search("how do I request a data extract", embed_query)
 
@@ -84,7 +85,7 @@ An empty list means nothing was relevant enough. That is a real answer. Say so r
 Tell the loader which embedder you will use, and it refuses a file built with another one instead of returning quietly wrong results:
 
 ```python
-index = load_container("dist/compendium.json", model="BAAI/bge-small-en-v1.5", dims=384)
+index = load_container("dist/compendium-full.json.gz", model="BAAI/bge-small-en-v1.5", dims=384)
 ```
 
 
@@ -95,7 +96,7 @@ The client is one file with no dependencies and no build step: `clients/js/extra
 ```javascript
 import { inflateContainer, loadContainer } from './extractium-client.js';
 
-const response = await fetch('https://example.org/kb/compendium.json');
+const response = await fetch('https://example.org/kb/compendium.json.gz');   // the light file, sized for a browser
 const index = loadContainer(await inflateContainer(await response.arrayBuffer()));
 
 const hits = await index.search('how do I request a data extract', embedQuery);

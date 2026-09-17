@@ -151,7 +151,7 @@ Websites and portals, GitHub repositories, library repositories, YouTube caption
 
 | Output | Uses |
 |---|---|
-| Search index (`compendium.json`) | Website search, scripts, local AI assistants, and hosted search |
+| Search index (`compendium.json.gz` and `compendium-full.json.gz`) | Website search, scripts, local AI assistants, and hosted search |
 | AI-readable text (`llms.txt` and the `llms/` folder) | AI assistants that browse the web |
 | SQLite (`compendium.sqlite`) | SQL queries, reports, and hosted databases |
 | Markdown (`okf/`) | Reading, editing, and reuse with Open Knowledge Format tools |

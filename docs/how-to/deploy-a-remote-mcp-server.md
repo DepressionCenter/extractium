@@ -38,12 +38,12 @@ Two hosted examples ship with Extractium™. Both expose one tool, `search_kb`, 
 | [Val Town](../../examples/mcp/valtown/README.md) | You want the shortest path: paste six files in the browser, or run one Python command with a token. Nothing to install. | Holds the whole index file in memory. Keyword search out of the box, and the full hybrid search if you point it at an embedding service. |
 | [Cloudflare](../../examples/mcp/cloudflare/README.md) | You already use Cloudflare, or you want hybrid search without a third service. | Reads a database you load the build into. Keyword search out of the box, and hybrid search with Workers AI turned on, over the keyword candidates. |
 
-Both are free at the scale a documentation search runs at. The Val Town free plan stores 10 MB of blobs, so an index larger than that is downloaded on every cold start there. Cloudflare's free plan has no such limit on a database, but its Worker never sees the index file at all.
+Both are free at the scale a documentation search runs at. The Val Town free plan stores 10 MB of blobs. The light index, `compendium.json.gz`, is made to fit in that, and it is the file to point the val at. With it, a search result is a page's description and keywords with a link to the page. If you point the val at the full index instead, a file over the limit is downloaded on every cold start. Cloudflare's free plan has no such limit on a database, but its Worker never sees the index file at all.
 
 
 ## Step 1: Publish the index
 
-You need a published `compendium.json` for Val Town, or a `compendium.sqlite` for Cloudflare. [How to publish to GitHub Pages](publish-to-github-pages.md) covers the first. For the second, add a `sqlite` output to your settings file and run a build:
+You need a published `compendium.json.gz` for Val Town, or a `compendium.sqlite` for Cloudflare. [How to publish to GitHub Pages](publish-to-github-pages.md) covers the first. For the second, add a `sqlite` output to your settings file and run a build:
 
 ```yaml
 outputs:
@@ -61,7 +61,7 @@ Val Town:
 ```bash
 cd examples/mcp/valtown
 VALTOWN_API_TOKEN=EXAMPLE_TOKEN python push.py --push --name my-compendium \
-  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json
+  --set EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium.json.gz
 ```
 
 The token comes from [val.town/settings/api](https://www.val.town/settings/api) with read and write on vals. The script prints the endpoint. If you would rather not make a token, `python push.py` alone writes the six files for you to paste into a new val in the browser. The README walks through both ways.

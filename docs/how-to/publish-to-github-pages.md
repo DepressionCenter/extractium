@@ -55,7 +55,7 @@ Check three files:
 |---|---|
 | `.../llms.txt` | A list of your sources, with the build time near the top and a link to each source's index file. |
 | `.../llms/<source>.txt` | The pages that were indexed from one source, one line each. Follow the link from `llms.txt` to reach it. |
-| `.../compendium.json` | A download rather than readable text. It is partly binary, which is expected. |
+| `.../compendium.json.gz` and `.../compendium-full.json.gz` | A download rather than readable text. Both are binary and compressed, which is expected. |
 
 If a source's index file lists pages you did not mean to index, fix the patterns in `config.yaml` and run again. Publishing is the last step of the build, so what you see is exactly what the crawl found.
 

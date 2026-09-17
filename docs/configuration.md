@@ -76,7 +76,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 | Setting | Type | Default | What it does |
 |---|---|---|---|
 | `name` | text | title of the first page crawled | Display name of the compendium, the collection this build writes, recorded in every output. |
-| `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json` for the container and `<slug>.sqlite` for the database, so `slug: efdc-compendium` publishes `efdc-compendium.json`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
+| `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json.gz` and `<slug>-full.json.gz` for the containers and `<slug>.sqlite` for the database, so `slug: efdc-compendium` publishes `efdc-compendium.json.gz`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
 | `max_pages` | whole number | `10000` | The most a source may read, counted in the source's own unit: pages for a `web` crawl (document files included), videos for `youtube`, deposits for `dspace`, files for `local`, and concept files for `okf`. Each source counts its own against it, so two sources may read twice as many between them. A source that stops here says so in the log. Must be 1 or more. A `github_api` source has two ceilings of its own, `max_repositories` and `max_files_per_repository`, and meets `max_pages` only when it falls back to crawling a repository's documentation pages. |
@@ -341,7 +341,7 @@ Markdown, plain text, and HTML are read by default. Word, OpenDocument, RTF, PDF
 | `exclude_repos` | list of text | empty | Repository names to leave out. An exclusion always wins. |
 | `include_forks` | true or false | `false` | Reads forks too. Off by default, because a project and several forks of it fill the index with near-identical copies. |
 | `include_archived` | true or false | `true` | Reads archived repositories. On by default, because archived documentation is still documentation. |
-| `include_code` | true or false | `true` | Reads the structure of the repository's code as well as its documentation. See "Reading the code" below. |
+| `include_code` | true or false | `true` | Reads the structure of the repository's code as well as its documentation. Code analysis is written to the `sqlite` and `okf` outputs only. See "Reading the code" below. |
 | `ctags_fallback` | true or false | `true` | Lets Universal Ctags read the languages no grammar covers, when it is installed. Set it to `false` to keep a build from launching any other program at all. |
 | `read_documents` | true or false | `false` | Whether Word, OpenDocument, RTF, and PDF files in a repository are read into text, one request each. See "Reading document files" above. |
 | `max_file_bytes` | whole number | `2000000` | Largest single file to download. Anything larger is skipped, and every skipped file is named in the log. Raise it for a repository whose documentation is a few large files; a text file over 200,000 characters is then indexed as an outline rather than whole, as [GitHub repository indexing](github-repository-indexing.md) explains under "The ceilings". |
@@ -386,7 +386,7 @@ Without it a build still reads every source file and records its path, language,
 
 Notebooks, R Markdown, Quarto, Lua Server Pages, and HTML pages are read twice over: their prose is indexed as documentation, and the code inside them is parsed with the language it is written in. A notebook's saved outputs are never read, because they can hold printed rows of real data.
 
-Code multiplies the size of an index. Reading this project's own repository produces about 135 documentation records, or about 1,900 records with `include_code` on, and a 10 MB index file rather than a 4 MB one. Keep that in mind before pointing a build at a whole account. Set `include_code: false` on sources where the code is not what people are searching for.
+Code multiplies the size of a build. Reading this project's own repository produces about 135 documentation records, or about 1,900 records with `include_code` on. The container files and the llms.txt files leave the code records out, so the cost falls on the build time, the SQLite file, and the `okf` folder. Keep that in mind before pointing a build at a whole account. Set `include_code: false` on sources where the code is not what people are searching for.
 
 How files are downloaded: a repository is normally downloaded once, as a single archive, and the wanted files are read out of it in memory. Nothing is ever extracted to disk. This spends one request per repository instead of one per file, which matters because reading GitHub anonymously allows only about sixty requests an hour in total. A repository too large to hold in memory has its files requested one at a time instead. Either way, each file is stored under its blob name, so the next build downloads nothing that has not changed.
 
@@ -652,13 +652,13 @@ A type that is not one of the built-in types above is passed to the registry as 
 
 ## Outputs
 
-Leave `outputs` out to write the two defaults: the container file and the `llms.txt` index files. Every output accepts `include_local`.
+Leave `outputs` out to write the two defaults: the container files and the `llms.txt` index files. Every output accepts `include_local`.
 
 | Type | Options | Default | What it writes |
 |---|---|---|---|
-| `container` | `file`, `gzip` | `<slug>.json`, or `<slug>.json.gz` with `gzip: true` | The binary compendium every search client reads. See the [container format](container-format.md). `gzip: true` writes the same bytes compressed; both clients recognize the compressed form by its signature, and the JavaScript client's `inflateContainer` runs before its loader. |
+| `container` | `file`, `gzip`, `full` | `<slug>.json.gz` and `<slug>-full.json.gz` | The two binary files the search clients read: a light one and a full one. See "What the container output writes" below and the [container format](container-format.md). |
 | `llmstxt` | none | | `llms.txt`, which lists your sources, and the `llms/` folder, which holds one index file per source. See "What the llms.txt output writes" below. |
-| `sqlite` | `file` | `<slug>.sqlite` | A SQLite database with the same content. |
+| `sqlite` | `file` | `<slug>.sqlite` | A SQLite database with everything the build read, code analysis included. See [the SQLite database](sqlite-database.md) for the tables and sample queries. |
 | `okf` | none | | An Open Knowledge Format folder of Markdown files, written as `okf/` under `out_dir`. |
 
 | Option on every output | Type | Default | What it does |
@@ -666,6 +666,32 @@ Leave `outputs` out to write the two defaults: the container file and the `llms.
 | `include_local` | true or false | `false` | Lets content from `local` sources into this output. |
 
 A `file` is always a relative path under `out_dir`. An absolute path, or one that climbs out with `..`, is refused. Leave `file` out and the output is named after the `slug` global setting, which is the usual choice: one short name, and every file follows it.
+
+### What is in each output
+
+| Output | What it is for | Code analysis |
+|---|---|---|
+| `llms.txt` and `llms/` | A language model that browses the web reads them whole, so they are short: a link and a description for each page. | Left out |
+| `<slug>.json.gz`, the light container | Search in a browser, on a phone, in a hosted function with a small store, or with a small model in memory. One entry per page, holding the page's description and keywords. | Left out |
+| `<slug>-full.json.gz`, the full container | Search that returns the text of the matching section, for a client that can afford a larger download. | Left out |
+| `<slug>.sqlite` | SQL queries, reports, and loading into a hosted database. It runs on a server or your own computer, never inside a context window. | Included |
+| `okf/` | One Markdown file per page, for people and for tools that read Markdown. | Included |
+
+The llms.txt files and both containers leave out the code analysis that `include_code` adds to a GitHub source. They are meant to be loaded into a language model's context window or searched by a small model in memory, and on a build with many repositories the code records are a quarter of the index. The `sqlite` and `okf` outputs carry the code. The build summary says how many code records it read and which of your outputs hold them.
+
+### What the container output writes
+
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `file` | text | `<slug>.json.gz` | The name of the light file. The full file takes the same name with `-full` added before `.json`: `kb.json.gz` gives `kb-full.json.gz`. |
+| `gzip` | true or false | `true` | Writes both files compressed with gzip. `false` writes `<slug>.json` and `<slug>-full.json`. When you name a `file` and leave `gzip` out, the file is compressed only if its name ends in `.gz`. |
+| `full` | true or false | `true` | Writes the full file. `false` writes the light file only. |
+
+The light file holds one entry per page: the page's title, its address, and a text made of the page's description and keywords. A search over it answers "which page covers this?", and the reader follows the address for the rest. The full file holds the text of every section, so a search over it returns the passage itself. Pick one per client; they are separate, complete files.
+
+Both clients recognize a compressed file by its first bytes and not by its name. The Python client inflates inside `load_container`. In JavaScript, pass the download through `inflateContainer` before `loadContainer`.
+
+A build describes every page once more to make the light file, which means running the embedding model over those short descriptions. That adds about a minute for a few thousand pages. A build with no `container` output skips the step.
 
 ### What the llms.txt output writes
 
@@ -681,14 +707,15 @@ A page is described by its own summary. A page with no summary of its own is des
 
 A `github_api` source is listed by repository. Each repository comes with the description it gives itself, then its files in this order: the files at the repository's root, the files under a `docs`, `doc`, `guide`, or `guides` folder, then everything else. A model that stops reading partway has then seen the files most likely to matter.
 
-Source code is not part of this output. These files are meant to be read inside a language model's context window, and the code analysis that `include_code` adds would crowd out the documentation. Every other output carries it.
+Source code is not part of this output. These files are meant to be read inside a language model's context window, and the code analysis that `include_code` adds would crowd out the documentation. The `sqlite` and `okf` outputs carry it.
 
 Links from one index file to another are relative to the file they appear in, so the files work at whatever address you publish them.
 
 A build removes index files it wrote earlier that no longer belong: `llms-full.txt`, which earlier versions of Extractium™ wrote, and the index file of a source you have removed. It recognizes its own files by the license line each one carries, names each file it removes in the log, and never removes a file it did not write.
 
 ```yaml
-slug: example-compendium    # writes example-compendium.json and example-compendium.sqlite
+slug: example-compendium    # writes example-compendium.json.gz, example-compendium-full.json.gz,
+                            # and example-compendium.sqlite
 outputs:
   - type: container
   - type: llmstxt
@@ -712,7 +739,7 @@ Any Markdown viewer opens the folder. A program that reads Open Knowledge Format
 
 The folder holds the text of every page, so decide what to publish exactly as you would for the container. A build removes a file it wrote in an earlier build when that page is no longer in the compendium, and names each removal in its log. A file you added to the folder by hand is never touched. See "Full and incremental rebuilds" below.
 
-The SQLite file holds the same content as the container, including the text of every section, in tables you can query with SQL. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
+The SQLite file holds the same content as the full container, plus the code analysis, including the text of every section, in tables you can query with SQL. [The SQLite database](sqlite-database.md) has a diagram of the tables, every column, and sample queries. It is not a description of the data; a service that answers a search has to return the text it matched. Treat it exactly as you treat the container when you decide what to publish.
 
 The tables are `meta` (one row per setting of the build), `parents` (one row per section), `children` (one row per search window), `vectors` (one row per window), `bm25_terms` (one row per distinct term), and `bm25_postings` (one row per term and window pair). A term's text is stored once, in `bm25_terms`. The postings name a term by its number, `tid`, because the text repeated in every posting was the largest part of the file. To find the windows a word appears in, join the two tables:
 

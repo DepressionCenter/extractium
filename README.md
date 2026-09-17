@@ -48,7 +48,7 @@ Unlike a vector database, Extractium™ needs no server, no database, and no API
 
 | Output | Files | Best for |
 |---|---|---|
-| Search index | `compendium.json` | Fast keyword and meaning-based search with nothing to run: a search box on your website, a script, an AI assistant on your computer, or a hosted search endpoint. |
+| Search index | `compendium.json.gz`, `compendium-full.json.gz` | Fast keyword and meaning-based search with nothing to run: a search box on your website, a script, an AI assistant on your computer, or a hosted search endpoint. |
 | llms.txt files | `llms.txt`, `llms/` | AI assistants and platforms that can read web pages but cannot call tools. `llms.txt` lists your sources, and each source has a short index file of its pages. Also a readable list of everything that was indexed. |
 | SQLite database | `compendium.sqlite` | SQL queries and reports, or loading the content into a hosted database. |
 | Markdown folder | `okf/` | Reading and editing the content as ordinary files, sharing it with other tools that use the Open Knowledge Format, or feeding it into another Extractium™ build. |

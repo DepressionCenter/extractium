@@ -49,12 +49,14 @@ flowchart TD
     G --> N[Name sections with keywords and pages with tags]
     N --> H[Keyword and calibration statistics]
     H -->|one Compendium| I[Adapters]
-    I --> J[out_dir: compendium.json or .json.gz, llms.txt, llms/, compendium.sqlite, okf/]
+    H --> L[Describe each page once for the light container]
+    L -->|light Compendium| I
+    I --> J[out_dir: compendium.json.gz, compendium-full.json.gz, llms.txt, llms/, compendium.sqlite, okf/]
     C -.reads and updates.-> K[(.kb_cache)]
     N -.reads and updates.-> K
 ```
 
-The same thing in words, for anyone whose reader does not show the diagram: the settings file names the sources and the outputs. The registry finds the matching plugins. Each source fetches pages, using and updating the cache folder, and hands back document records. The chunker cuts each document into sections and then into smaller windows. Every window is embedded once. Near-identical windows are dropped, and any section left with no windows is removed with them. Each surviving section is then named with keywords and each page with tags, reusing from the cache folder what an earlier build found for a section whose text has not changed. The keyword and calibration statistics are then built over what survives. That single result, the compendium, goes to each adapter, and each adapter writes it into the output folder in its own format: the index file, the llms.txt index files, a database, or a folder of Markdown.
+The same thing in words, for anyone whose reader does not show the diagram: the settings file names the sources and the outputs. The registry finds the matching plugins. Each source fetches pages, using and updating the cache folder, and hands back document records. The chunker cuts each document into sections and then into smaller windows. Every window is embedded once. Near-identical windows are dropped, and any section left with no windows is removed with them. Each surviving section is then named with keywords and each page with tags, reusing from the cache folder what an earlier build found for a section whose text has not changed. The keyword and calibration statistics are then built over what survives. When a container output is configured, each page is then described once, by its summary and keywords, and those short descriptions are embedded to make the light compendium. The compendium, and the light one beside it, go to each adapter, and each adapter writes into the output folder in its own format: the two index files, the llms.txt index files, a database, or a folder of Markdown. The code analysis of a GitHub source is written to the database and the Markdown folder only.
 
 
 ## What the data looks like at each stage
