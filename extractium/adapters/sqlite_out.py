@@ -12,7 +12,7 @@ extractium/adapters/sqlite_out.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-15
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-17"
 
 import json
 import sqlite3
@@ -53,6 +53,13 @@ from extractium.adapters.container import (
 
 # File name written when the output's entry gives none.
 DEFAULT_FILE = "compendium.sqlite"
+
+# The layout of the tables, stored in the meta table as `sqlite.schema`.
+# A consumer that queries the keyword tables by column name, such as the
+# hosted search worker, checks it before trusting them. Layout 2 stores
+# postings by integer term id; a file without the row is layout 1, which
+# stored the term's text in every posting.
+SQLITE_SCHEMA_VERSION = 2
 
 # The schema. The grain of every table is stated above it, because a
 # consumer joining these tables has to know what one row means before the
@@ -108,20 +115,24 @@ CREATE TABLE children (
 );
 
 -- Grain: one row per distinct term in the corpus, with the number of
--- windows it appears in.
+-- windows it appears in. `tid` is the number the postings use in place
+-- of the term's text, so the text is stored once. It is the term's
+-- position in sorted order, counted from zero.
 CREATE TABLE bm25_terms (
-    term TEXT PRIMARY KEY,
+    tid  INTEGER PRIMARY KEY,
+    term TEXT NOT NULL UNIQUE,
     df   INTEGER NOT NULL
 );
 
 -- Grain: one row per (term, window) pair, with how often that term appears
--- in that window.
+-- in that window. Stored without a row id, in (tid, cid) order, so the
+-- table is its own index and a term's postings sit together on disk.
 CREATE TABLE bm25_postings (
-    term TEXT NOT NULL REFERENCES bm25_terms(term),
-    cid  INTEGER NOT NULL REFERENCES children(cid),
-    tf   INTEGER NOT NULL,
-    PRIMARY KEY (term, cid)
-);
+    tid INTEGER NOT NULL REFERENCES bm25_terms(tid),
+    cid INTEGER NOT NULL REFERENCES children(cid),
+    tf  INTEGER NOT NULL,
+    PRIMARY KEY (tid, cid)
+) WITHOUT ROWID;
 
 -- Grain: one row per search window. The vector for that window, as raw
 -- little-endian bytes in the dtype the meta table names, so a file built on
@@ -132,7 +143,6 @@ CREATE TABLE vectors (
 );
 
 CREATE INDEX children_pid ON children(pid);
-CREATE INDEX bm25_postings_term ON bm25_postings(term);
 """
 
 
@@ -168,6 +178,7 @@ def meta_rows(compendium):
         ("site", compendium.name),
         ("sourceCount", str(compendium.source_count)),
         ("offsetUnit", OFFSET_UNIT),
+        ("sqlite.schema", str(SQLITE_SCHEMA_VERSION)),
         ("embedding.model", embedding.model),
         ("embedding.browserModel", embedding.browser_model),
         ("embedding.dims", str(embedding.dims)),
@@ -229,18 +240,34 @@ def child_rows(compendium):
     ]
 
 
+def term_ids(compendium):
+    """
+    The number each term goes by in the postings table.
+
+    Returns:
+        dict[str, int]: term to its position in sorted order, from zero.
+        Sorted, so two builds of the same compendium write the same file.
+    """
+    return {term: tid for tid, term in enumerate(sorted(compendium.bm25["df"]))}
+
+
 def term_rows(compendium):
-    """One row per term, with the number of windows it appears in."""
-    return sorted(compendium.bm25["df"].items())
+    """One row per term: its number, its text, and the number of windows it appears in."""
+    df = compendium.bm25["df"]
+    return [(tid, term, df[term]) for term, tid in term_ids(compendium).items()]
 
 
 def posting_rows(compendium):
-    """One row per (term, window) pair, with the term's count in that window."""
-    return [
-        (term, cid, tf)
-        for term, postings in sorted(compendium.bm25["postings"].items())
+    """
+    One row per (term, window) pair, with the term's count in that window,
+    in (tid, cid) order, which is the order the table stores them in.
+    """
+    tids = term_ids(compendium)
+    return sorted(
+        (tids[term], cid, tf)
+        for term, postings in compendium.bm25["postings"].items()
         for cid, tf in postings
-    ]
+    )
 
 
 def vector_rows(compendium):
@@ -317,9 +344,9 @@ class SqliteAdapter:
                 "VALUES (?, ?, ?, ?, ?);",
                 child_rows(compendium),
             )
-            connection.executemany("INSERT INTO bm25_terms (term, df) VALUES (?, ?);",
+            connection.executemany("INSERT INTO bm25_terms (tid, term, df) VALUES (?, ?, ?);",
                                    term_rows(compendium))
-            connection.executemany("INSERT INTO bm25_postings (term, cid, tf) VALUES (?, ?, ?);",
+            connection.executemany("INSERT INTO bm25_postings (tid, cid, tf) VALUES (?, ?, ?);",
                                    posting_rows(compendium))
             connection.executemany("INSERT INTO vectors (cid, v) VALUES (?, ?);",
                                    vector_rows(compendium))

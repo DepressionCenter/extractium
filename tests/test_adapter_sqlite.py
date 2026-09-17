@@ -28,7 +28,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-09"
+__date__ = "2026-09-17"
 
 import json
 import sqlite3
@@ -155,10 +155,59 @@ def test_the_keyword_statistics_are_stored_term_by_term(tmp_path, compendium):
     term, postings = sorted(compendium.bm25["postings"].items())[0]
 
     df = query(path, "SELECT df FROM bm25_terms WHERE term = ?;", term)[0][0]
-    stored = query(path, "SELECT cid, tf FROM bm25_postings WHERE term = ? ORDER BY cid;", term)
+    stored = query(
+        path,
+        "SELECT p.cid, p.tf FROM bm25_postings AS p "
+        "INNER JOIN bm25_terms AS t ON t.tid = p.tid "   # 1:many; one term has many postings
+        "WHERE t.term = ? ORDER BY p.cid;",
+        term,
+    )
 
     assert df == compendium.bm25["df"][term]
     assert stored == [tuple(posting) for posting in sorted(postings)]
+
+
+def test_postings_name_a_term_by_number_and_the_text_is_stored_once(tmp_path, compendium):
+    """
+    The term text is the largest thing a posting could repeat. It is
+    stored once, in the terms table, and the postings table is its own
+    index, so no second copy of it exists anywhere in the file.
+    """
+    path = write(compendium, tmp_path)
+
+    assert [row[1] for row in query(path, "PRAGMA table_info(bm25_postings);")] == ["tid", "cid", "tf"]
+    assert [row[1] for row in query(path, "PRAGMA table_info(bm25_terms);")] == ["tid", "term", "df"]
+    assert query(path, "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'bm25_postings';") == []
+    assert "WITHOUT ROWID" in query(
+        path, "SELECT sql FROM sqlite_master WHERE name = 'bm25_postings';")[0][0]
+
+
+def test_term_ids_follow_sorted_order_so_a_rebuild_is_identical(tmp_path, compendium):
+    path = write(compendium, tmp_path)
+
+    terms = [row[0] for row in query(path, "SELECT term FROM bm25_terms ORDER BY tid;")]
+
+    assert terms == sorted(compendium.bm25["df"])
+    assert [row[0] for row in query(path, "SELECT tid FROM bm25_terms ORDER BY tid;")] == list(range(len(terms)))
+
+
+def test_every_posting_names_a_term_that_exists(tmp_path, compendium):
+    path = write(compendium, tmp_path)
+
+    orphans = query(
+        path,
+        "SELECT COUNT(*) FROM bm25_postings AS p LEFT JOIN bm25_terms AS t ON t.tid = p.tid "
+        "WHERE t.tid IS NULL;",
+    )[0][0]
+
+    assert orphans == 0
+
+
+def test_the_meta_table_names_the_table_layout(tmp_path, compendium):
+    """A consumer that queries the keyword tables checks this before it trusts their columns."""
+    from extractium.adapters import sqlite_out
+
+    assert meta(write(compendium, tmp_path))["sqlite.schema"] == str(sqlite_out.SQLITE_SCHEMA_VERSION) == "2"
 
 
 def test_every_posting_points_at_a_window_that_exists(tmp_path, compendium):
