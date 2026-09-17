@@ -74,6 +74,21 @@ class FixedSource:
                            source_type="web", content_type="page")
 
 
+class CodeSource:
+    name = "coded"
+
+    def __init__(self, options):
+        self.options = options
+
+    def fetch(self, session, cache, progress):
+        url, title, body = PAGES[0]
+        yield Document(url=url, title=title, content=body, source_type="web", content_type="page")
+        yield Document(url="https://github.com/example/tool/blob/main/run.py", title="run.py",
+                       content="def summarize(nights): return sum(nights) / len(nights)  # a nightly "
+                               "mean, written long enough for the chunker to keep it as a section.",
+                       source_type="github", content_type="code_file")
+
+
 class EmptySource:
     name = "empty"
 
@@ -87,6 +102,7 @@ class EmptySource:
 def register(registry):
     registry.register_source(FixedSource)
     registry.register_source(EmptySource)
+    registry.register_source(CodeSource)
 '''
 
 # The tests never load the real embedding model. This replacement gives
@@ -1102,3 +1118,48 @@ def test_every_output_is_told_which_sources_the_build_read(build_workspace, monk
         "label": "Fixed Source", "type": "fixed", "home_url": "",
         "description": "Three pages that never change.",
     },)
+
+
+# ---------------------------------------------------------------------------
+# Where the code records went
+# ---------------------------------------------------------------------------
+
+CODE_BUILD = """
+    cache_dir: .cache
+    sources:
+      - type: {source}
+        label: Fixed Source
+    outputs:
+{outputs}
+"""
+
+WHY_NO_CODE = ("The llms files and both containers leave code out, because they are read "
+               "inside a language model's context window.")
+
+
+def summary_of_code_build(build_workspace, capsys, source, outputs):
+    listed = "".join(f"      - type: {name}\n" for name in outputs)
+    config = write_config(build_workspace, CODE_BUILD.format(source=source, outputs=listed))
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+    return capsys.readouterr().out
+
+
+def test_the_summary_says_which_output_holds_the_code_records(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "coded", ["container", "llmstxt", "sqlite"])
+    assert f"  coverage : 1 code record(s) are in the sqlite output only. {WHY_NO_CODE}" in out
+
+
+def test_the_summary_names_both_outputs_that_hold_code_records(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "coded", ["container", "okf", "sqlite"])
+    assert "1 code record(s) are in the sqlite and okf outputs only." in out
+
+
+def test_the_summary_says_when_no_output_keeps_the_code_records(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "coded", ["container", "llmstxt"])
+    assert (f"  coverage : 1 code record(s) were read and no configured output keeps them. {WHY_NO_CODE} "
+            "Add a sqlite or okf output to publish code analysis.") in out
+
+
+def test_a_build_with_no_code_says_nothing_about_code(build_workspace, capsys):
+    out = summary_of_code_build(build_workspace, capsys, "fixed", ["container", "sqlite"])
+    assert "code record" not in out

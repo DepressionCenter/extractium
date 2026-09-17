@@ -53,6 +53,7 @@ from extractium.core import retain
 from extractium.core.build import page_key_of
 from extractium.core.build import build_compendium
 from extractium.core.light import build_light_compendium
+from extractium.core.models import CODE_CONTENT_TYPES
 from extractium.core.registry import RegistryError, build_registry
 from extractium.core.transport import make_session
 from extractium.sources.github import accounts_named_by
@@ -75,6 +76,11 @@ EXIT_OUTPUT = 4            # an output could not be written
 # The output type that writes the light compendium. It is built only when
 # an output of this type is configured, because building it embeds text.
 LIGHT_OUTPUT_TYPE = "container"
+
+
+# The output types that publish code records, in the order the summary
+# names them. Every other built-in output leaves code out.
+CODE_OUTPUT_TYPES = ("sqlite", "okf")
 
 
 ### Progress And Messages ###
@@ -424,6 +430,32 @@ def light_compendium_for(config, compendium, progress):
     return build_light_compendium(compendium, progress=progress)
 
 
+def code_note(config, compendium):
+    """
+    The summary line that says where the code records went, so nobody
+    looks for code analysis in a file that was never going to hold it.
+
+    Args:
+        config (extractium.config.Config): the validated configuration.
+        compendium (extractium.core.models.Compendium): the build result.
+
+    Returns:
+        str | None: the line, or None when the build read no code.
+    """
+    count = sum(1 for parent in compendium.parents if parent.content_type in CODE_CONTENT_TYPES)
+    if not count:
+        return None
+    configured = {entry.type for entry in config.outputs}
+    carrying = [name for name in CODE_OUTPUT_TYPES if name in configured]
+    why = ("The llms files and both containers leave code out, because they are read "
+           "inside a language model's context window.")
+    if not carrying:
+        return (f"{count} code record(s) were read and no configured output keeps them. {why} "
+                f"Add a sqlite or okf output to publish code analysis.")
+    where = " and ".join(carrying)
+    return f"{count} code record(s) are in the {where} output{'s' if len(carrying) > 1 else ''} only. {why}"
+
+
 def run_outputs(config, registry, compendium, progress, light=None):
     """
     Writes every configured output and returns what each one wrote.
@@ -637,6 +669,9 @@ def run_build(args):
     except OSError as e:
         return fail(f"an output could not be written: {e}", EXIT_OUTPUT)
 
+    note = code_note(config, compendium)
+    if note:
+        notes.append(note)
     print_summary(compendium, written, notes)
     return EXIT_OK
 
