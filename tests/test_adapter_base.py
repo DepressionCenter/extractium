@@ -78,7 +78,7 @@ def test_a_page_record_carries_what_an_index_needs_to_place_it():
         "url": "https://example.org/a", "title": "Page 1", "source_label": "Main Site",
         "source_type": "web", "content_type": "page", "categories": ("Site", "News"),
         "text": "Opening words of page 1.", "summary": "About A.", "given_summary": "About A.",
-        "keywords": ("sleep",),
+        "keywords": ("sleep",), "own_keywords": ("sleep",),
     }
 
 
@@ -141,3 +141,22 @@ def test_keywords_named_prefers_shared_tags_over_the_sections_own_keywords():
     assert base.keywords_named(section(2, "https://example.org/b", tags=("Guides",), categories=("Guides",),
                                        keywords=("caffeine",))) == ("caffeine",)
     assert base.keywords_named(section(3, "https://example.org/c")) == ()
+
+
+def test_keywords_a_whole_source_shares_give_way_to_the_pages_own():
+    """
+    A repository's topics are tags on every one of its files. They say
+    what the repository is about and nothing about one file, so a file is
+    described by the keywords found in its own text.
+    """
+    topics = ("Docs", "wearables", "sleep")
+    parents = [section(n, f"https://example.org/{n}", tags=topics, categories=("Docs",),
+                       keywords=(f"subject {n}",)) for n in range(1, 6)]
+    pages = base.page_records(parents)
+
+    assert [base.describe(page) for page in pages] == [f"Keywords: subject {n}." for n in range(1, 6)]
+
+
+def test_shared_keywords_with_nothing_else_to_say_leave_the_excerpt():
+    parents = [section(n, f"https://example.org/{n}", tags=("wearables",)) for n in range(1, 6)]
+    assert base.describe(base.page_records(parents)[0]) == "Opening words of page 1."

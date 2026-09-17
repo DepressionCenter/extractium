@@ -189,7 +189,8 @@ def page_records(parents):
 
     A summary that more than SHARED_SUMMARY_PAGES pages of one source
     carry is that site's default description, so it is blanked here and
-    describe() falls back to what the page itself offers.
+    describe() falls back to what the page itself offers. A keyword list
+    shared the same way is replaced by the first section's own keywords.
 
     Args:
         parents (Iterable[extractium.core.models.Parent]): the sections an
@@ -200,7 +201,9 @@ def page_records(parents):
         categories, the first section's text, `summary` (the page's own,
         or "" when its source's pages share it), `given_summary` (what the
         source gave, shared or not, because a site's default description
-        is the right description of the site), and its keywords.
+        is the right description of the site), `keywords` (the page's
+        tags, or the keywords of its first section when its source's pages
+        share the tags), and `own_keywords` (the first section's).
     """
     pages = {}
     for parent in parents:
@@ -218,12 +221,19 @@ def page_records(parents):
             "summary": (parent.summary or "").strip(),
             "given_summary": (parent.summary or "").strip(),
             "keywords": keywords_named(parent),
+            "own_keywords": tuple(parent.keywords or ()),
         }
     records = list(pages.values())
-    carried = Counter((page["source_label"], page["summary"]) for page in records if page["summary"])
+    summaries = Counter((page["source_label"], page["summary"]) for page in records if page["summary"])
+    keywords = Counter((page["source_label"], page["keywords"]) for page in records if page["keywords"])
     for page in records:
-        if carried[(page["source_label"], page["summary"])] > SHARED_SUMMARY_PAGES:
+        if summaries[(page["source_label"], page["summary"])] > SHARED_SUMMARY_PAGES:
             page["summary"] = ""
+        # The same holds for keywords: a repository's topics or a channel's
+        # tags sit on every page of the source, so a page carrying only
+        # those is described by the keywords found in its own text.
+        if keywords[(page["source_label"], page["keywords"])] > SHARED_SUMMARY_PAGES:
+            page["keywords"] = page["own_keywords"]
     return records
 
 
