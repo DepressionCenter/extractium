@@ -13,7 +13,7 @@ extractium/init.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-14
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-17"
 
 import json
 import pathlib
@@ -80,8 +80,9 @@ FALLBACK_TEMPLATE = """# Extractium build settings. Every setting is explained i
 # Display name of the compendium, recorded in every output.
 name: {name}
 
-# The short name the output files are named after: <slug>.json and
-# <slug>.sqlite. Lowercase letters, digits, and hyphens.
+# The short name the output files are named after: <slug>.json.gz,
+# <slug>-full.json.gz, and <slug>.sqlite. Lowercase letters, digits, and
+# hyphens.
 slug: {slug}
 
 sources:

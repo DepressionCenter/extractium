@@ -15,7 +15,7 @@ extractium/search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-17"
 
 import gzip
 import json
@@ -67,10 +67,9 @@ DTYPE_CODES = {"int8": "<i1", "float32": "<f4"}
 # matching simply stops working.
 TOKEN_RE = re.compile(r"[a-z0-9]{3,}")
 
-# Absolute similarity floor. Below this, a window is never relevant no
-# matter how it compares with the rest of the pool. The value suits
-# bge-small-en-v1.5, whose cosine similarities run high even for
-# unrelated text; a different embedding model needs it retuned.
+# Floor on a candidate's ranking score. Once vector and keyword results
+# are fused that score is a rank score, where this value admits a window
+# ranked in about the first eight places of one list, or present in both.
 SCORE_MIN = 0.44
 
 # A hit must also beat the median of its own candidate pool by this
@@ -78,10 +77,19 @@ SCORE_MIN = 0.44
 # scores sit somewhere else entirely.
 SCORE_MARGIN = 0.03
 
-# How far above the corpus calibration mean, in standard deviations, a
-# score must sit to count as relevant. Used only when the file carries
-# calibration statistics.
-ZSCORE_MARGIN = 1.0
+# Floor on the raw cosine similarity between the query and a window,
+# checked whatever scale the ranking score is on. A fused rank score says
+# how two lists agree and nothing about how close a window is, so an
+# unrelated question still produces confident-looking ranks. With
+# bge-small-en-v1.5 and its query prefix, the best window for a question
+# a corpus answers scored 0.70 and up in testing, and the best window for
+# an unrelated question mostly stayed under 0.67. The value belongs to
+# the embedding model; a different model needs it measured again.
+#
+# The container's `calibration` figures are not used here. They describe
+# how similar the windows are to each other, which is a far higher number
+# than any query reaches, so a cutoff built on them rejects every hit.
+COSINE_MIN = 0.67
 
 # Raw candidates pulled per query, before thresholding and diversity.
 CANDIDATE_POOL = 50
@@ -236,6 +244,9 @@ class Hit:
         score (float): fused relevance score. Comparable within one
             result list; not a probability and not a cosine similarity
             once keyword and vector results have been fused.
+        cosine (float | None): raw cosine similarity between the query
+            and the matched window, which is what the relevance floor is
+            checked against. None when the candidate carried none.
         child_index (int): position of the matched window in the
             container's child columns.
         start (int | None): start of the matched window inside the
@@ -249,6 +260,7 @@ class Hit:
     child_index: int
     start: object = None
     end: object = None
+    cosine: object = None
 
     @property
     def window_text(self):
@@ -398,25 +410,48 @@ def bm25_candidates(terms, bm25, child_count, pool_size=CANDIDATE_POOL):
     return [{"i": int(i), "s": float(s)} for i, s in ranked[:pool_size]]
 
 
-def relevance_cutoff(candidates, calibration=None):
+def attach_cosines(candidates, query_vector, vectors):
     """
-    The score a candidate must reach to count as relevant.
+    Records on every candidate its raw cosine similarity to the query,
+    as `cos`.
 
-    Three tests, whichever is strictest: an absolute floor, the median of
-    this query's own candidate pool plus a margin, and, when the file
-    carries calibration statistics, a fixed number of standard deviations
-    above the corpus mean. The relative test is the one that survives a
-    change of corpus or embedding model; the other two are safety nets.
+    Fusion replaces a candidate's score with a rank score, and a window
+    the keyword list found may never have been in the vector list at
+    all, so the cosine is looked up here for every candidate alike.
 
-    Note that once vector and keyword results have been fused, a
-    candidate's score is a fused rank score rather than a cosine
-    similarity, so the two absolute tests are approximations on that
-    scale. The relative test is unaffected, because it moves with the
-    pool.
+    Args:
+        candidates (Sequence[dict]): candidates with an `i` key.
+        query_vector (Sequence[float]): the embedded query.
+        vectors (numpy.ndarray): shape (child count, dims).
+
+    Returns:
+        Sequence[dict]: the same candidates, each with a `cos` key.
+    """
+    if not candidates:
+        return candidates
+    query = np.asarray(query_vector, dtype=np.float32).reshape(-1)
+    norm = float(np.linalg.norm(query))
+    if norm > 0:
+        query = query / norm
+    rows = np.fromiter((candidate["i"] for candidate in candidates), dtype=np.int64, count=len(candidates))
+    for candidate, cosine in zip(candidates, vectors[rows] @ query):
+        candidate["cos"] = float(cosine)
+    return candidates
+
+
+def relevance_cutoff(candidates):
+    """
+    The ranking score a candidate must reach to count as relevant.
+
+    Two tests, whichever is stricter: a floor, and the median of this
+    query's own candidate pool plus a margin. Both work on the ranking
+    score, which is a cosine similarity when the vector ranking stands
+    alone and a fused rank score otherwise, so they say where a candidate
+    stands in its pool and not how close it is to the query. How close it
+    is gets its own test, the cosine floor in `diversify`.
 
     Args:
         candidates (Sequence[Mapping]): the scored candidate pool.
-        calibration (Mapping | None): the container's calibration object.
 
     Returns:
         float: the cutoff, or negative infinity for an empty pool.
@@ -425,19 +460,29 @@ def relevance_cutoff(candidates, calibration=None):
         return -math.inf
     scores = sorted(candidate["s"] for candidate in candidates)
     median = scores[len(scores) // 2]
-    cutoff = max(SCORE_MIN, median + SCORE_MARGIN)
-    if calibration and calibration.get("std"):
-        cutoff = max(cutoff, calibration["mean"] + ZSCORE_MARGIN * calibration["std"])
-    return cutoff
+    return max(SCORE_MIN, median + SCORE_MARGIN)
 
 
-def diversify(candidates, vectors, k, source_key_of, no_threshold=False, calibration=None):
+def is_relevant(candidate, cutoff, cosine_min):
+    """
+    Whether one candidate passes both relevance tests: its ranking score
+    reaches the pool's cutoff, and its raw cosine reaches the floor. A
+    candidate that carries no cosine is judged on its ranking score alone.
+    """
+    if candidate["s"] < cutoff:
+        return False
+    cosine = candidate.get("cos")
+    return cosine is None or cosine >= cosine_min
+
+
+def diversify(candidates, vectors, k, source_key_of, no_threshold=False, cosine_min=COSINE_MIN):
     """
     Picks the windows to return: relevant, varied, and spread across
     sections.
 
-    Runs in three passes. First the relevance cutoff drops weak
-    candidates. Then a greedy maximal-marginal-relevance pass prefers a
+    Runs in three passes. First the relevance tests drop weak
+    candidates: the pool's cutoff on the ranking score, and the floor on
+    the raw cosine. Then a greedy maximal-marginal-relevance pass prefers a
     candidate that is both similar to the query and unlike what is
     already chosen, so several near-copies of one paragraph cannot fill
     the answer. Finally a per-section cap keeps one long article from
@@ -450,9 +495,9 @@ def diversify(candidates, vectors, k, source_key_of, no_threshold=False, calibra
         k (int): how many windows to select.
         source_key_of (Callable[[int], str]): identity of the section a
             child belongs to, for the per-section cap.
-        no_threshold (bool): skip the relevance cutoff, for a caller that
+        no_threshold (bool): skip the relevance tests, for a caller that
             wants the closest windows whether or not they are relevant.
-        calibration (Mapping | None): the container's calibration object.
+        cosine_min (float): the floor a candidate's `cos` must reach.
 
     Returns:
         list[dict]: the selected candidates, in the order chosen.
@@ -462,8 +507,12 @@ def diversify(candidates, vectors, k, source_key_of, no_threshold=False, calibra
     if no_threshold:
         surviving = list(candidates)
     else:
-        cutoff = relevance_cutoff(candidates, calibration)
-        surviving = [candidate for candidate in candidates if candidate["s"] >= cutoff]
+        # An older caller passed the file's calibration object in this
+        # place; anything that is not a number means the default floor.
+        if isinstance(cosine_min, bool) or not isinstance(cosine_min, (int, float)):
+            cosine_min = COSINE_MIN
+        cutoff = relevance_cutoff(candidates)
+        surviving = [candidate for candidate in candidates if is_relevant(candidate, cutoff, cosine_min)]
     if not surviving:
         return []
 
@@ -531,6 +580,14 @@ class SearchIndex:
         """
         return self.embedding.get("queryPrefix", "")
 
+    @property
+    def cosine_min(self):
+        """
+        The floor a window's raw cosine similarity to the query must
+        reach to count as relevant in this compendium.
+        """
+        return COSINE_MIN
+
     def __len__(self):
         """Number of search windows in the corpus."""
         return len(self.children["pid"])
@@ -571,6 +628,8 @@ class SearchIndex:
         appear in them. Otherwise the vector ranking stands alone. Either
         way the per-section weight is applied, so a weighted source does
         not quietly lose its weight on a query with no keyword matches.
+        Every candidate also carries `cos`, its raw cosine similarity to
+        the query, which the relevance floor is checked against.
 
         Args:
             query (str): the query text, for keyword matching.
@@ -578,7 +637,8 @@ class SearchIndex:
             pool_size (int): how many candidates to keep.
 
         Returns:
-            list[dict]: `{"i": child index, "s": score}`, best first.
+            list[dict]: `{"i": child index, "s": score, "cos": cosine}`,
+            best first.
         """
         vector_ranked = vector_candidates(query_vector, self.vectors, pool_size)
         terms = tokenize(query) if self.bm25 else []
@@ -589,11 +649,12 @@ class SearchIndex:
                 for entry in vector_ranked
             ]
             weighted.sort(key=lambda entry: (-entry["s"], entry["i"]))
-            return weighted
-        return rrf_fuse(
+            return attach_cosines(weighted, query_vector, self.vectors)
+        fused = rrf_fuse(
             [(vector_ranked, RRF_VECTOR_WEIGHT), (keyword_ranked, RRF_BM25_WEIGHT)],
             self._weight_of,
         )
+        return attach_cosines(fused, query_vector, self.vectors)
 
     def search(self, query, embed_query, k=TOP_K, no_threshold=False):
         """
@@ -611,17 +672,17 @@ class SearchIndex:
                 object. Called once per search.
             k (int): how many sections to return.
             no_threshold (bool): return the closest sections even when
-                none clears the relevance cutoff. Use it to show a reader
+                none passes the relevance tests. Use it to show a reader
                 what was nearest, never to answer from.
 
         Returns:
             list[Hit]: the selected sections, best first. Empty when
-            nothing clears the cutoff.
+            nothing passes the relevance tests.
         """
         query_vector = embed_query(self.query_prefix + query)
         pool = self.candidates(query, query_vector)
         selected = diversify(
-            pool, self.vectors, k, self._source_key_of, no_threshold, self.calibration
+            pool, self.vectors, k, self._source_key_of, no_threshold, self.cosine_min
         )
         return [self._hit_of(candidate) for candidate in selected]
 
@@ -636,6 +697,7 @@ class SearchIndex:
             child_index=child_index,
             start=starts[child_index] if child_index < len(starts) else None,
             end=ends[child_index] if child_index < len(ends) else None,
+            cosine=candidate.get("cos"),
         )
 
 

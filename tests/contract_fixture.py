@@ -63,11 +63,15 @@ CONTRACT_PAGES = (
 # keyword half of the search contributes and the fusion path is exercised.
 CONTRACT_QUERY = "standard disclaimer for the fictional test site"
 
-# The window whose vector stands in for an embedded query. Using a real
-# vector from the file keeps the fixture honest -- the ranking it produces
-# is the ranking a query landing on that window would produce -- and needs
-# no embedding model to generate.
-CONTRACT_QUERY_CHILD = 1
+# The windows whose vectors, added together, stand in for an embedded
+# query. Using real vectors from the file keeps the fixture honest and
+# needs no embedding model to generate. Two windows of different pages are
+# blended so that the query sits about 0.7 from each of them and near
+# zero from every other window: the test vectors are random, so nothing
+# else comes close. That puts two sections above the clients' cosine
+# floor and the rest of the pool below it, which is what holds both
+# clients to the same relevance rule and not only to the same ranking.
+CONTRACT_QUERY_CHILDREN = (1, 14)
 
 # How many candidates the committed ranking records. Small enough to read
 # in a diff, long enough to catch a client that fuses or sorts differently.
@@ -132,7 +136,7 @@ def contract_expectations(container_path):
         dict: the contents of the query file, ready to serialize.
     """
     index = load_container(container_path)
-    query_vector = index.vectors[CONTRACT_QUERY_CHILD]
+    query_vector = index.vectors[list(CONTRACT_QUERY_CHILDREN)].sum(axis=0)
     query_vector = query_vector / np.linalg.norm(query_vector)
 
     pool = index.candidates(CONTRACT_QUERY, query_vector)

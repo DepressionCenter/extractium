@@ -205,7 +205,7 @@ Safety note for JavaScript readers: `df` and `postings` are keyed by words taken
 
 ## Calibration
 
-`calibration` gives a corpus-relative sense of what a "good" similarity score is, so a client can set a relevance threshold without hand-tuning it per compendium.
+`calibration` says how similar the windows of this compendium are to each other.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -213,7 +213,9 @@ Safety note for JavaScript readers: `df` and `postings` are keyed by words taken
 | `std` | number | Standard deviation of the same values. |
 | `sampleSize` | whole number | Number of children sampled, at most 500. `0` when the corpus has fewer than two children, in which case `mean` and `std` are `0`. |
 
-A client that treats scores below `mean + margin × std` as "not relevant" adapts to each corpus. The sample is drawn with a fixed seed, so rebuilding an unchanged corpus reproduces the same numbers.
+The sample is drawn with a fixed seed, so rebuilding an unchanged corpus reproduces the same numbers.
+
+Do not build a relevance threshold from these figures. They compare a window with other windows, and a search compares a window with a query, which scores far lower. Windows of one section overlap and share a heading, so `mean` is about 0.9 in almost any compendium, and 0.93 in a large one. A query's best window scores between 0.70 and 0.90 with the model this format ships with, so a threshold of `mean + margin × std` rejects every result. Earlier versions of both reference clients did exactly that. They now ignore `calibration` and require a window's cosine similarity to the query to reach a fixed floor. See [how to search a compendium](how-to/search-a-compendium.md).
 
 
 ## Identifiers
@@ -269,7 +271,7 @@ A field that is always present, and that a reader would use if it knew about it,
 5. Refuse the file unless `embedding.model` and `embedding.dims` match the embedder you will use for queries.
 6. Copy the remaining bytes into a fresh buffer and check the length against `len(children.pid) × embedding.dims × width(dtype)`.
 7. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
-8. Treat `calibration` as optional: if `sampleSize` is `0`, fall back to a fixed threshold.
+8. Do not threshold on `calibration`. Decide relevance from the cosine similarity between the query and the window, as the reference clients do, and keep that test apart from any fused ranking score.
 9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
 10. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
 

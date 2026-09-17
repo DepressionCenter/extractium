@@ -15,7 +15,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-12
+ * Last Modified: 2026-09-17
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -51,10 +51,9 @@ const DTYPE_WIDTHS = { int8: 1, float32: 4 };
 // matching simply stops working.
 const TOKEN_RE = /[a-z0-9]{3,}/g;
 
-// Absolute similarity floor. Below this, a window is never relevant no
-// matter how it compares with the rest of the pool. The value suits
-// bge-small-en-v1.5, whose cosine similarities run high even for
-// unrelated text; a different embedding model needs it retuned.
+// Floor on a candidate's ranking score. Once vector and keyword results
+// are fused that score is a rank score, where this value admits a window
+// ranked in about the first eight places of one list, or present in both.
 export const SCORE_MIN = 0.44;
 
 // A hit must also beat the median of its own candidate pool by this
@@ -62,10 +61,19 @@ export const SCORE_MIN = 0.44;
 // scores sit somewhere else entirely.
 export const SCORE_MARGIN = 0.03;
 
-// How far above the corpus calibration mean, in standard deviations, a
-// score must sit to count as relevant. Used only when the file carries
-// calibration statistics.
-export const ZSCORE_MARGIN = 1.0;
+// Floor on the raw cosine similarity between the query and a window,
+// checked whatever scale the ranking score is on. A fused rank score says
+// how two lists agree and nothing about how close a window is, so an
+// unrelated question still produces confident-looking ranks. With
+// bge-small-en-v1.5 and its query prefix, the best window for a question
+// a corpus answers scored 0.70 and up in testing, and the best window for
+// an unrelated question mostly stayed under 0.67. The value belongs to
+// the embedding model; a different model needs it measured again.
+//
+// The container's `calibration` figures are not used here. They describe
+// how similar the windows are to each other, which is a far higher number
+// than any query reaches, so a cutoff built on them rejects every hit.
+export const COSINE_MIN = 0.67;
 
 // Raw candidates pulled per query, before thresholding and diversity.
 export const CANDIDATE_POOL = 50;
@@ -357,39 +365,73 @@ export function bm25Candidates(terms, bm25, childCount, poolSize = CANDIDATE_POO
 }
 
 /**
- * The score a candidate must reach to count as relevant.
+ * Records on every candidate its raw cosine similarity to the query, as
+ * `cos`.
  *
- * Three tests, whichever is strictest: an absolute floor, the median of
- * this query's own candidate pool plus a margin, and, when the file
- * carries calibration statistics, a fixed number of standard deviations
- * above the corpus mean. The relative test is the one that survives a
- * change of corpus or embedding model; the other two are safety nets.
+ * Fusion replaces a candidate's score with a rank score, and a window the
+ * keyword list found may never have been in the vector list at all, so
+ * the cosine is looked up here for every candidate alike.
  *
- * Note that once vector and keyword results have been fused, a
- * candidate's score is a fused rank score rather than a cosine
- * similarity, so the two absolute tests are approximations on that scale.
- * The relative test is unaffected, because it moves with the pool.
+ * @param {Array<{i: number}>} candidates The candidates to mark.
+ * @param {ArrayLike<number>} queryVector The embedded query.
+ * @param {Float32Array} vectors The corpus vectors, flat, in child order.
+ * @param {number} dims Vector length.
+ * @returns {Array<{i: number, cos: number}>} The same candidates.
+ */
+export function attachCosines(candidates, queryVector, vectors, dims) {
+    if (!candidates.length) return candidates;
+    const query = Float32Array.from(queryVector);
+    let norm = 0;
+    for (let d = 0; d < dims; d += 1) norm += query[d] * query[d];
+    norm = Math.sqrt(norm);
+    if (norm > 0) for (let d = 0; d < dims; d += 1) query[d] /= norm;
+    for (const candidate of candidates) {
+        candidate.cos = cosineSim(query, 0, vectors, candidate.i * dims, dims);
+    }
+    return candidates;
+}
+
+/**
+ * The ranking score a candidate must reach to count as relevant.
+ *
+ * Two tests, whichever is stricter: a floor, and the median of this
+ * query's own candidate pool plus a margin. Both work on the ranking
+ * score, which is a cosine similarity when the vector ranking stands
+ * alone and a fused rank score otherwise, so they say where a candidate
+ * stands in its pool and not how close it is to the query. How close it
+ * is gets its own test, the cosine floor in `diversify`.
  *
  * @param {Array<{s: number}>} candidates The scored candidate pool.
- * @param {Object} [calibration] The container's calibration object.
  * @returns {number} The cutoff, or -Infinity for an empty pool.
  */
-export function relevanceCutoff(candidates, calibration) {
+export function relevanceCutoff(candidates) {
     if (!candidates.length) return -Infinity;
     const scores = candidates.map((candidate) => candidate.s).sort((a, b) => a - b);
     const median = scores[Math.floor(scores.length / 2)];
-    let cutoff = Math.max(SCORE_MIN, median + SCORE_MARGIN);
-    if (calibration && calibration.std) {
-        cutoff = Math.max(cutoff, calibration.mean + ZSCORE_MARGIN * calibration.std);
-    }
-    return cutoff;
+    return Math.max(SCORE_MIN, median + SCORE_MARGIN);
+}
+
+/**
+ * Whether one candidate passes both relevance tests: its ranking score
+ * reaches the pool's cutoff, and its raw cosine reaches the floor. A
+ * candidate that carries no cosine is judged on its ranking score alone.
+ *
+ * @param {{s: number, cos?: number}} candidate The candidate.
+ * @param {number} cutoff From relevanceCutoff.
+ * @param {number} cosineMin The floor on `cos`.
+ * @returns {boolean}
+ */
+export function isRelevant(candidate, cutoff, cosineMin) {
+    if (candidate.s < cutoff) return false;
+    return candidate.cos === undefined || candidate.cos === null || candidate.cos >= cosineMin;
 }
 
 /**
  * Picks the windows to return: relevant, varied, and spread across
  * sections.
  *
- * Runs in three passes. First the relevance cutoff drops weak candidates.
+ * Runs in three passes. First the relevance tests drop weak candidates:
+ * the pool's cutoff on the ranking score, and the floor on the raw cosine.
  * Then a greedy maximal-marginal-relevance pass prefers a candidate that
  * is both similar to the query and unlike what is already chosen, so
  * several near-copies of one paragraph cannot fill the answer. Finally a
@@ -401,16 +443,19 @@ export function relevanceCutoff(candidates, calibration) {
  * @param {number} k How many windows to select.
  * @param {(childIndex: number) => string} sourceKeyOf Identity of the
  *     section a child belongs to, for the per-section cap.
- * @param {boolean} [noThreshold] Skip the relevance cutoff.
- * @param {Object} [calibration] The container's calibration object.
+ * @param {boolean} [noThreshold] Skip the relevance tests.
+ * @param {number} [cosineMin] The floor a candidate's `cos` must reach.
  * @returns {Array<{i: number, s: number}>} The selection, in the order chosen.
  */
-export function diversify(candidates, vectors, dims, k, sourceKeyOf, noThreshold, calibration) {
+export function diversify(candidates, vectors, dims, k, sourceKeyOf, noThreshold, cosineMin = COSINE_MIN) {
     if (!candidates.length) return [];
     let surviving = candidates;
     if (!noThreshold) {
-        const cutoff = relevanceCutoff(candidates, calibration);
-        surviving = candidates.filter((candidate) => candidate.s >= cutoff);
+        // An older caller passed the file's calibration object in this
+        // place; anything that is not a number means the default floor.
+        const floor = Number.isFinite(cosineMin) ? cosineMin : COSINE_MIN;
+        const cutoff = relevanceCutoff(candidates);
+        surviving = candidates.filter((candidate) => isRelevant(candidate, cutoff, floor));
     }
     if (!surviving.length) return [];
 
@@ -485,6 +530,16 @@ export class SearchIndex {
         return this.embedding.queryPrefix || '';
     }
 
+    /**
+     * The floor a window's raw cosine similarity to the query must reach
+     * to count as relevant in this compendium.
+     *
+     * @returns {number}
+     */
+    get cosineMin() {
+        return COSINE_MIN;
+    }
+
     /** Number of search windows in the corpus. */
     get size() {
         return this.children.pid.length;
@@ -532,29 +587,33 @@ export class SearchIndex {
      * file carries keyword statistics and the query has terms that appear
      * in them. Otherwise the vector ranking stands alone. Either way the
      * per-section weight is applied, so a weighted source does not
-     * quietly lose its weight on a query with no keyword matches.
+     * quietly lose its weight on a query with no keyword matches. Every
+     * candidate also carries `cos`, its raw cosine similarity to the
+     * query, which the relevance floor is checked against.
      *
      * @param {string} query The query text, for keyword matching.
      * @param {ArrayLike<number>} queryVector The embedded query.
      * @param {number} [poolSize] How many candidates to keep.
-     * @returns {Array<{i: number, s: number}>} Best first.
+     * @returns {Array<{i: number, s: number, cos: number}>} Best first.
      */
     candidates(query, queryVector, poolSize = CANDIDATE_POOL) {
         const vectorRanked = vectorCandidates(queryVector, this.vectors, this.dims, poolSize);
         const terms = this.bm25 ? tokenize(query) : [];
         const keywordRanked = bm25Candidates(terms, this.bm25, this.size, poolSize);
         if (!keywordRanked.length) {
-            return sortCandidates(
+            const weighted = sortCandidates(
                 vectorRanked.map((entry) => ({ i: entry.i, s: entry.s * this.weightOf(entry.i) }))
             );
+            return attachCosines(weighted, queryVector, this.vectors, this.dims);
         }
-        return rrfFuse(
+        const fused = rrfFuse(
             [
                 { items: vectorRanked, listWeight: RRF_VECTOR_WEIGHT },
                 { items: keywordRanked, listWeight: RRF_BM25_WEIGHT },
             ],
             this.weightOf
         );
+        return attachCosines(fused, queryVector, this.vectors, this.dims);
     }
 
     /**
@@ -569,14 +628,14 @@ export class SearchIndex {
      *     from `queryPrefix + query`.
      * @param {{k?: number, noThreshold?: boolean}} [options] How many
      *     sections to return, and whether to return the closest sections
-     *     even when none clears the relevance cutoff.
+     *     even when none passes the relevance tests.
      * @returns {Array<Object>} The selected sections, best first.
      */
     searchWithVector(query, queryVector, options = {}) {
         const k = options.k || TOP_K;
         const pool = this.candidates(query, queryVector);
         const selected = diversify(
-            pool, this.vectors, this.dims, k, this.sourceKeyOf, !!options.noThreshold, this.calibration
+            pool, this.vectors, this.dims, k, this.sourceKeyOf, !!options.noThreshold, this.cosineMin
         );
         return selected.map((candidate) => this.hitOf(candidate));
     }
@@ -615,6 +674,10 @@ export class SearchIndex {
         return {
             parent,
             score: candidate.s,
+            // Raw cosine similarity to the query, which is what the
+            // relevance floor is checked against. The score above is a
+            // fused rank score once keyword results take part.
+            cosine: candidate.cos === undefined ? null : candidate.cos,
             childIndex,
             start,
             end,

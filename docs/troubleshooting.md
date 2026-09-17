@@ -451,9 +451,9 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### Every search returns an empty list
 
-**Cause.** Usually one of two things: the query is being embedded without the file's query prefix, or the embedder is not the model the file was built with. Both leave every score below the relevance cutoff.
+**Cause.** Usually one of four things. The query is being embedded without the file's query prefix. The embedder is not the model the file was built with. The embedder runs with 16-bit arithmetic on a graphics card, which can distort the query vector; see [how to search a compendium](how-to/search-a-compendium.md). Or the client is an older copy: before this was fixed, both clients built their cutoff from the file's `calibration` figures, which no query can reach in a large or repetitive compendium, so every search of such a file came back empty. The first three leave every score below the relevance floor.
 
-**Fix.** Let the client add the prefix. `index.search(...)` in Python and `index.search(...)` in JavaScript both do it for you; only pass a pre-embedded vector to `searchWithVector` if you have added `index.queryPrefix` yourself. To see what the nearest sections were, search again with `no_threshold` set, which skips the relevance test.
+**Fix.** Use the current `extractium/search.py` or `clients/js/extractium-client.js`; a hosted or local search server carries its own copy of the client, so deploy it again after you update. Let the client add the prefix. `index.search(...)` in Python and `index.search(...)` in JavaScript both do it for you; only pass a pre-embedded vector to `searchWithVector` if you have added `index.queryPrefix` yourself. To see what the nearest sections were, search again with `no_threshold` set, which skips the relevance test.
 
 ### `vector bytes ... do not match ... children`
 

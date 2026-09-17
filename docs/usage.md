@@ -51,8 +51,8 @@ This asks three questions and writes `config.yaml` in the current folder:
 ```
 Creating config.yaml. Press Enter to accept a default shown in brackets.
 
-Name of your compendium [Compendium]: EFDC Compendium
-Short name for the output files (lowercase letters, digits, hyphens) [efdc-compendium]:
+Name of your compendium [Compendium]: Example Org Compendium
+Short name for the output files (lowercase letters, digits, hyphens) [example-org-compendium]:
 Website to start crawling from, such as https://example.edu/docs/: https://example.edu/kb/
 
 Wrote config.yaml. Every setting is explained in its comments; add more sources or outputs there.

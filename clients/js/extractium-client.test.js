@@ -12,7 +12,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-12
+ * Last Modified: 2026-09-17
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -38,10 +38,12 @@ import { fileURLToPath } from 'node:url';
 
 import {
     CANDIDATE_POOL,
+    COSINE_MIN,
     ContainerError,
     RRF_K,
     SCORE_MIN,
     SOURCE_CAP,
+    attachCosines,
     bm25Candidates,
     diversify,
     inflateContainer,
@@ -214,25 +216,65 @@ test('rrfFuse applies the per-section weight after fusion', () => {
 test('relevanceCutoff never drops below the absolute floor', () => {
     const candidates = [{ s: 0.1 }, { s: 0.2 }, { s: 0.3 }];
 
-    assert.equal(relevanceCutoff(candidates, null), SCORE_MIN);
+    assert.equal(relevanceCutoff(candidates), SCORE_MIN);
 });
 
 test('relevanceCutoff rises with the pool median', () => {
     const candidates = [{ s: 0.8 }, { s: 0.9 }, { s: 0.95 }];
 
-    assert.ok(Math.abs(relevanceCutoff(candidates, null) - 0.93) < 1e-9);
+    assert.ok(Math.abs(relevanceCutoff(candidates) - 0.93) < 1e-9);
 });
 
-test('relevanceCutoff uses the calibration statistics when they are stricter', () => {
-    const candidates = [{ s: 0.5 }, { s: 0.5 }, { s: 0.5 }];
-
-    assert.ok(Math.abs(relevanceCutoff(candidates, { mean: 0.7, std: 0.1 }) - 0.8) < 1e-9);
+test('relevanceCutoff of an empty pool admits nothing', () => {
+    assert.equal(relevanceCutoff([]), -Infinity);
 });
 
-test('relevanceCutoff ignores calibration with no spread and falls back to the pool', () => {
-    const candidates = [{ s: 0.5 }, { s: 0.5 }, { s: 0.5 }];
+/* ### The Cosine Floor ### */
 
-    assert.ok(Math.abs(relevanceCutoff(candidates, { mean: 0.9, std: 0 }) - 0.53) < 1e-9);
+// Five unit vectors and a pool whose median ranking score is low, so the
+// pool's own cutoff sits at SCORE_MIN and only the cosine floor decides
+// between the two candidates that rank well.
+const FLOOR_VECTORS = Float32Array.from([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1]);
+
+function floorPool(firstCosine, secondCosine) {
+    const weak = [[2, 0.3], [3, 0.2], [4, 0.1]].map(([i, s]) => ({ i, s, cos: 0.9 }));
+    return [{ i: 0, s: 0.98, cos: firstCosine }, { i: 1, s: 0.9, cos: secondCosine }, ...weak];
+}
+
+test('attachCosines records the raw cosine whatever the ranking score is', () => {
+    const vectors = Float32Array.from([1, 0, 0, 1, 0.6, 0.8]);
+    const candidates = [{ i: 2, s: 0.98 }, { i: 0, s: 0.49 }];
+
+    attachCosines(candidates, [2, 0], vectors, 2); // not unit length: normalized before use
+
+    assert.ok(Math.abs(candidates[0].cos - 0.6) < 1e-6);
+    assert.ok(Math.abs(candidates[1].cos - 1) < 1e-6);
+    assert.deepEqual(candidates.map((candidate) => candidate.s), [0.98, 0.49]);
+});
+
+test('a candidate under the cosine floor is dropped however well it ranks', () => {
+    const selected = diversify(floorPool(COSINE_MIN - 0.01, COSINE_MIN), FLOOR_VECTORS, 5, 4, String);
+
+    assert.deepEqual(selected.map((candidate) => candidate.i), [1]);
+});
+
+test('a candidate that carries no cosine is judged on its ranking score alone', () => {
+    const pool = floorPool(0.1, 0.1);
+    delete pool[0].cos;
+
+    const selected = diversify(pool, FLOOR_VECTORS, 5, 4, String);
+
+    assert.deepEqual(selected.map((candidate) => candidate.i), [0]);
+});
+
+test('a caller may set its own cosine floor, and anything that is not a number means the default', () => {
+    const pool = floorPool(0.6, 0.5);
+
+    assert.deepEqual(diversify(pool, FLOOR_VECTORS, 5, 4, String), []);
+    assert.deepEqual(diversify(pool, FLOOR_VECTORS, 5, 4, String, false, 0.55).map((c) => c.i), [0]);
+    // An older caller passed the file's calibration object in this place.
+    assert.deepEqual(diversify(pool, FLOOR_VECTORS, 5, 4, String, false, { mean: 0.1, std: 0.1 }), []);
+    assert.deepEqual(diversify(pool, FLOOR_VECTORS, 5, 4, String, false, null), []);
 });
 
 /* ### Diversity Selection ### */
@@ -393,6 +435,45 @@ test('search adds the query prefix the file records before embedding', async () 
     await index.search('how do I rebuild', (text) => { seen.push(text); return [1, 0]; }, { noThreshold: true });
 
     assert.deepEqual(seen, ['Represent this sentence for searching relevant passages: how do I rebuild']);
+});
+
+/** Three windows with keyword statistics, as plain JSON the way a file carries them. */
+function keywordHeader(overrides = {}) {
+    return sampleHeader({
+        parents: [parent('aaaaaaaaaaaaaaaa'), parent('bbbbbbbbbbbbbbbb'), parent('cccccccccccccccc')],
+        children: { pid: [0, 1, 2], start: [0, 0, 0], end: [5, 5, 5] },
+        bm25: {
+            k: 1.2, b: 0.75, d: 0.5, avgDocLen: 10, docLen: [10, 10, 10],
+            df: { crawler: 1, index: 3 },
+            postings: { crawler: [[2, 3]], index: [[0, 1], [1, 1], [2, 1]] },
+        },
+        ...overrides,
+    });
+}
+
+test('the calibration figures of a file never hide a close match', async () => {
+    // The figures say how similar the windows are to each other. In a
+    // large or repetitive corpus that is about 0.93, which no query
+    // reaches, so a cutoff built on them once rejected every hit.
+    const header = keywordHeader({ calibration: { mean: 0.93, std: 0.047, sampleSize: 500 } });
+    const index = loadContainer(containerBytes(header, [1, 0, 0, 1, 0.8, 0.6]));
+
+    const hits = await index.search('crawler', () => [1, 0], { k: 1 });
+
+    assert.deepEqual(hits.map((hit) => hit.parent.id), ['cccccccccccccccc']);
+    assert.ok(Math.abs(hits[0].cosine - 0.8) < 1e-6);
+});
+
+test('an unrelated query gets nothing even when keywords rank a window first', async () => {
+    const index = loadContainer(containerBytes(keywordHeader(), [1, 0, 0.8, 0.6, 0.6, 0.8]));
+
+    // The query is at most 0.28 from any window, far under the floor,
+    // although "crawler" puts the third window first in the keyword list
+    // and the fused ranking score of every window is high.
+    const pool = index.candidates('crawler index', [-0.6, 0.8]);
+    assert.ok(Math.max(...pool.map((candidate) => candidate.s)) > SCORE_MIN);
+    assert.deepEqual(await index.search('crawler index', () => [-0.6, 0.8]), []);
+    assert.notDeepEqual(await index.search('crawler index', () => [-0.6, 0.8], { noThreshold: true }), []);
 });
 
 test('search returns nothing when no section clears the relevance cutoff', async () => {
