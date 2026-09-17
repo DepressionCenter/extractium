@@ -123,7 +123,7 @@ Each section is named with up to five keywords and each page with tags. A statis
 Two sets of numbers are built over what survives, in this order:
 
 - Keyword statistics (BM25): how often each word appears in each window and in how many windows. Words are runs of three or more letters or digits, lowercased. A search must split a query the same way or nothing matches.
-- Calibration: the mean and standard deviation of how similar a sample of windows are to their nearest neighbour. It describes how repetitive the corpus is. The clients do not use it to decide what counts as a good match, because a query never scores as high against a window as two windows score against each other.
+- Calibration, in two parts. The first is the mean and standard deviation of how similar a sample of windows are to their nearest neighbour. It describes how repetitive the corpus is, and no client uses it to decide what counts as a good match, because a query never scores as high against a window as two windows score against each other. The second is what an unrelated question scores here: the build embeds 64 everyday questions as queries, finds the best match each one reaches, and records the median and the spread. A client sets its relevance floor just above that. The light compendium, and any output that drops local or code sections, measures its own figures with the same 64 vectors, so no output needs the embedding model.
 
 The keyword statistics must be built after the collapse, because they refer to windows by position in the final list.
 

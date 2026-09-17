@@ -388,7 +388,8 @@ def without_parents(compendium, drop):
         children=children,
         vectors=vectors,
         bm25=build_bm25_index(surviving),
-        calibration=compute_calibration_stats(_as_float(vectors, compendium.embedding)),
+        calibration=compute_calibration_stats(_as_float(vectors, compendium.embedding),
+                                              probe_vecs=compendium.probe_vectors),
     )
 
 

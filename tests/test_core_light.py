@@ -163,3 +163,17 @@ def test_a_build_of_code_alone_has_no_light_compendium(fake_embed_chunks_core):
              source_type="github", content_type="code_file"),
     ])
     assert light.build_light_compendium(compendium, embedder=fake_embed_chunks_core) is None
+
+
+def test_the_light_compendium_measures_its_own_unrelated_figures_with_the_builds_probes(fake_embed_chunks_core):
+    compendium = built(fake_embed_chunks_core, [
+        page("https://example.org/a", "Page A"),
+        page("https://example.org/b", "Page B", SECTION.replace("nightly", "weekly")),
+    ], summary="What the page covers.")
+
+    result = light.build_light_compendium(compendium, embedder=fake_embed_chunks_core)
+
+    assert result.probe_vectors is compendium.probe_vectors
+    assert result.calibration["unrelatedProbes"] == len(compendium.probe_vectors)
+    # Measured against the light windows, not copied from the full ones.
+    assert result.calibration["unrelatedMedian"] != compendium.calibration["unrelatedMedian"]

@@ -587,8 +587,13 @@ class Compendium:
         embedding (EmbeddingInfo): how the vectors were made.
         bm25 (Mapping): keyword statistics as build_bm25_index returns
             them (k, b, d, avgDocLen, docLen, df, postings).
-        calibration (Mapping): mean, std, sampleSize as
-            compute_calibration_stats returns them.
+        calibration (Mapping): the figures compute_calibration_stats
+            returns.
+        probe_vectors (numpy.ndarray | None): the embedded unrelated probe
+            questions the calibration figures were measured with. Kept so
+            an output that drops sections, or the light compendium, can
+            measure its own figures without the embedding model. Never
+            written to a file. None when the build embedded no probes.
 
     Raises:
         ValueError: if the vectors, children, and parents disagree in
@@ -604,6 +609,7 @@ class Compendium:
     embedding: EmbeddingInfo
     bm25: Mapping
     calibration: Mapping
+    probe_vectors: object = None
 
     def __post_init__(self):
         _require_text(self.name, "name")

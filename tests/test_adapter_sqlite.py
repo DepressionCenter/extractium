@@ -226,6 +226,20 @@ def test_every_posting_points_at_a_window_that_exists(tmp_path, compendium):
 # Metadata and vectors
 # ---------------------------------------------------------------------------
 
+def test_the_meta_table_records_what_an_unrelated_question_scores(tmp_path, compendium):
+    """The same three figures the container carries, so a search over the database sets the same floor."""
+    rows = meta(write(compendium, tmp_path))
+
+    for key in ("unrelatedMedian", "unrelatedSpread", "unrelatedProbes"):
+        assert rows[f"calibration.{key}"] == str(compendium.calibration[key])
+
+
+def test_a_compendium_built_without_probes_writes_no_unrelated_rows(tmp_path, compendium):
+    bare = replace(compendium, calibration={k: v for k, v in compendium.calibration.items() if not k.startswith("unrelated")})
+
+    assert not [key for key in meta(write(bare, tmp_path)) if key.startswith("calibration.unrelated")]
+
+
 def test_the_meta_table_records_how_the_vectors_were_made(tmp_path, compendium):
     """A consumer compares these against its own embedder before trusting a vector."""
     rows = meta(write(compendium, tmp_path))

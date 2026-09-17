@@ -194,6 +194,11 @@ def meta_rows(compendium):
         ("calibration.std", str(calibration["std"])),
         ("calibration.sampleSize", str(calibration["sampleSize"])),
     ]
+    # What an unrelated question scores in this corpus, which a search sets
+    # its relevance floor from. Absent when the build embedded no probes.
+    for key in ("unrelatedMedian", "unrelatedSpread", "unrelatedProbes"):
+        if key in calibration:
+            rows.append((f"calibration.{key}", str(calibration[key])))
     if embedding.scale is not None:
         rows.append(("embedding.scale", str(embedding.scale)))
     return rows

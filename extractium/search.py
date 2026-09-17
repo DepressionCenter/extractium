@@ -41,6 +41,7 @@ import json
 import math
 import re
 import struct
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -86,10 +87,31 @@ SCORE_MARGIN = 0.03
 # an unrelated question mostly stayed under 0.67. The value belongs to
 # the embedding model; a different model needs it measured again.
 #
-# The container's `calibration` figures are not used here. They describe
-# how similar the windows are to each other, which is a far higher number
-# than any query reaches, so a cutoff built on them rejects every hit.
+# This fixed value serves a file that does not say what an unrelated
+# question scores in it; see relevance_floor. The `mean` and `std` of a
+# file's `calibration` are never used: they describe how similar the
+# windows are to each other, which is a far higher number than any query
+# reaches, so a cutoff built on them rejects every hit.
 COSINE_MIN = 0.67
+
+# A file built with the unrelated-question figures carries its own floor:
+# the median of the best scores unrelated questions reached in it, plus
+# this many spreads. In testing on a 59,000-window file, one and a half
+# spreads let through none of 30 held-out unrelated questions and lost
+# no question or exact term the corpus answered; two spreads lost three
+# single-word queries whose best window scored just under the floor.
+UNRELATED_MARGIN = 1.5
+
+# A floor read from a file is held inside this range. Under the low end a
+# window shares nothing with the question beyond being text in the same
+# language; the high end keeps a file whose probes were nearly all on
+# topic, a general encyclopedia, from rejecting every real question.
+COSINE_MIN_LOWEST = 0.50
+COSINE_MIN_HIGHEST = 0.80
+
+# Figures measured with fewer probes than this are too noisy to set a
+# floor from, and the fixed floor is used.
+MIN_UNRELATED_PROBES = 16
 
 # Raw candidates pulled per query, before thresholding and diversity.
 CANDIDATE_POOL = 50
@@ -439,6 +461,36 @@ def attach_cosines(candidates, query_vector, vectors):
     return candidates
 
 
+def relevance_floor(calibration):
+    """
+    The floor a window's raw cosine similarity to the query must reach in
+    one compendium.
+
+    A file that records what an unrelated question scores in it gets a
+    floor just above that: the median plus UNRELATED_MARGIN spreads, held
+    inside COSINE_MIN_LOWEST and COSINE_MIN_HIGHEST. That follows the size
+    of the corpus and the kind of file, which a fixed number cannot. Any
+    other file gets COSINE_MIN.
+
+    Args:
+        calibration (Mapping | None): the container's calibration object.
+
+    Returns:
+        float: the floor.
+    """
+    if not isinstance(calibration, Mapping):
+        return COSINE_MIN
+    median = calibration.get("unrelatedMedian")
+    spread = calibration.get("unrelatedSpread")
+    probes = calibration.get("unrelatedProbes")
+    for value in (median, spread, probes):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            return COSINE_MIN
+    if probes < MIN_UNRELATED_PROBES or spread < 0:
+        return COSINE_MIN
+    return min(COSINE_MIN_HIGHEST, max(COSINE_MIN_LOWEST, median + UNRELATED_MARGIN * spread))
+
+
 def relevance_cutoff(candidates):
     """
     The ranking score a candidate must reach to count as relevant.
@@ -584,9 +636,10 @@ class SearchIndex:
     def cosine_min(self):
         """
         The floor a window's raw cosine similarity to the query must
-        reach to count as relevant in this compendium.
+        reach to count as relevant in this compendium: measured for this
+        file when it carries the figures, else the fixed COSINE_MIN.
         """
-        return COSINE_MIN
+        return relevance_floor(self.calibration)
 
     def __len__(self):
         """Number of search windows in the corpus."""

@@ -13,7 +13,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,16 +32,16 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-17"
 
 from datetime import datetime, timezone
 
 from extractium.core.bm25 import build_bm25_index
-from extractium.core.calibration import compute_calibration_stats
+from extractium.core.calibration import compute_calibration_stats, probe_chunks
 from extractium.core.chunk import chunk_document
 from extractium.core.fetch import normalise
 from extractium.core.dedup import drop_near_duplicates, remap_parents_after_dedup
-from extractium.core.embed import quantize_int8
+from extractium.core.embed import QUERY_PREFIX, quantize_int8
 from extractium.core.models import ENRICHMENT_FIELDS, Children, Compendium, EmbeddingInfo, Parent
 
 ### Constants ###
@@ -308,7 +308,13 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
 
     ### Score ###
     bm25 = build_bm25_index(children)
-    calibration = compute_calibration_stats(vecs)
+    # The unrelated probe questions are embedded as queries, once. Their
+    # vectors travel with the result, so the light compendium and any
+    # output that drops sections measure against the same probes.
+    probes = probe_chunks(QUERY_PREFIX)
+    report(f"Measuring what an unrelated question scores here, with {len(probes)} probe question(s).")
+    probe_vecs = embedder(probes)
+    calibration = compute_calibration_stats(vecs, probe_vecs=probe_vecs)
 
     ### Quantize ###
     if float32_vecs:
@@ -327,4 +333,5 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
         embedding=EmbeddingInfo(dtype=dtype),
         bm25=bm25,
         calibration=calibration,
+        probe_vectors=probe_vecs,
     )

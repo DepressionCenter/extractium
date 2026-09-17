@@ -29,13 +29,14 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-17"
 
 import numpy as np
 import pytest
 from bs4 import BeautifulSoup
 
 from extractium.core import build
+from extractium.core.calibration import UNRELATED_PROBES
 from extractium.core.models import Document
 from extractium.sources.generic import GenericHandler
 
@@ -213,8 +214,33 @@ def test_build_compendium_matches_the_reference_pipeline_on_the_same_fixtures(
     assert [p.x for p in compendium.parents] == [p["x"] for p in ref_parents]
     assert list(compendium.children.pid) == [c["pid"] for c in ref_children]
     assert compendium.bm25 == reference.build_bm25_index(ref_children)
-    assert compendium.calibration == reference.compute_calibration_stats(ref_vecs)
+    # The reference knows the window-to-window figures only; the figures for
+    # unrelated questions are an addition it never had.
+    reference_stats = reference.compute_calibration_stats(ref_vecs)
+    assert {key: compendium.calibration[key] for key in reference_stats} == reference_stats
+    assert compendium.calibration["unrelatedProbes"] == len(UNRELATED_PROBES)
     assert compendium.vectors.tobytes() == reference.quantize_int8(ref_vecs).tobytes()
+
+
+def test_the_build_embeds_the_unrelated_probes_once_as_queries_and_keeps_their_vectors(fixtures_dir):
+    embedded = []
+
+    def embedder(chunks):
+        embedded.append([chunk["x"] for chunk in chunks])
+        rng = np.random.default_rng(len(embedded))
+        vectors = rng.normal(size=(len(chunks), 384)).astype(np.float32)
+        return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+    compendium = build.build_compendium(
+        [document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team")],
+        name="Example Org", embedder=embedder, built_at="2026-01-02T03:04:05Z",
+    )
+
+    probe_calls = [texts for texts in embedded if texts[0].endswith(UNRELATED_PROBES[0])]
+    assert len(probe_calls) == 1
+    assert all(text.startswith("Represent this sentence for searching relevant passages: ") for text in probe_calls[0])
+    assert compendium.probe_vectors.shape == (len(UNRELATED_PROBES), 384)
+    assert compendium.calibration["unrelatedProbes"] == len(UNRELATED_PROBES)
 
 
 def test_build_compendium_child_offsets_slice_their_window_out_of_the_parent(

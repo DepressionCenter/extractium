@@ -39,6 +39,8 @@ import { fileURLToPath } from 'node:url';
 import {
     CANDIDATE_POOL,
     COSINE_MIN,
+    COSINE_MIN_HIGHEST,
+    COSINE_MIN_LOWEST,
     ContainerError,
     RRF_K,
     SCORE_MIN,
@@ -49,6 +51,7 @@ import {
     inflateContainer,
     loadContainer,
     relevanceCutoff,
+    relevanceFloor,
     rrfFuse,
     tokenize,
     vectorCandidates,
@@ -435,6 +438,45 @@ test('search adds the query prefix the file records before embedding', async () 
     await index.search('how do I rebuild', (text) => { seen.push(text); return [1, 0]; }, { noThreshold: true });
 
     assert.deepEqual(seen, ['Represent this sentence for searching relevant passages: how do I rebuild']);
+});
+
+/* ### A Floor Measured For The File ### */
+
+function unrelated(median, spread, probes = 64) {
+    return { mean: 0.93, std: 0.05, sampleSize: 500, unrelatedMedian: median, unrelatedSpread: spread, unrelatedProbes: probes };
+}
+
+test('a file with the unrelated figures sets its own floor', () => {
+    assert.ok(Math.abs(relevanceFloor(unrelated(0.618, 0.048)) - 0.69) < 1e-9);
+    assert.ok(Math.abs(relevanceFloor(unrelated(0.565, 0.046)) - 0.634) < 1e-9);
+});
+
+test('a file without usable figures gets the fixed floor', () => {
+    assert.equal(relevanceFloor(null), COSINE_MIN);
+    assert.equal(relevanceFloor({ mean: 0.93, std: 0.05, sampleSize: 500 }), COSINE_MIN);
+    assert.equal(relevanceFloor(unrelated(0.6, 0.04, 3)), COSINE_MIN); // too few probes to trust
+    assert.equal(relevanceFloor(unrelated('0.6', 0.04)), COSINE_MIN); // not a number
+    assert.equal(relevanceFloor(unrelated(NaN, 0.04)), COSINE_MIN);
+    assert.equal(relevanceFloor(unrelated(0.6, -0.04)), COSINE_MIN);
+});
+
+test('a floor read from a file stays inside a sane range', () => {
+    assert.equal(relevanceFloor(unrelated(0.05, 0.04)), COSINE_MIN_LOWEST); // random test vectors
+    assert.equal(relevanceFloor(unrelated(0.95, 0.1)), COSINE_MIN_HIGHEST); // every probe on topic
+});
+
+test('search uses the floor the file carries', async () => {
+    const header = sampleHeader({
+        calibration: unrelated(0.47, 0.04), // floor 0.53
+        parents: [parent('aaaaaaaaaaaaaaaa'), parent('bbbbbbbbbbbbbbbb'), parent('cccccccccccccccc')],
+        children: { pid: [0, 1, 2], start: [0, 0, 0], end: [5, 5, 5] },
+    });
+    const index = loadContainer(containerBytes(header, [1, 0, 0.6, 0.8, 0, 1]));
+
+    assert.ok(Math.abs(index.cosineMin - 0.53) < 1e-9);
+    // 0.6 from the first window: under the fixed 0.67, over this file's floor.
+    const hits = await index.search('anything', () => [0.6, -0.8], { k: 1 });
+    assert.deepEqual(hits.map((hit) => hit.parent.id), ['aaaaaaaaaaaaaaaa']);
 });
 
 /** Three windows with keyword statistics, as plain JSON the way a file carries them. */

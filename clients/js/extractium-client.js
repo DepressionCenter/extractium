@@ -70,10 +70,31 @@ export const SCORE_MARGIN = 0.03;
 // an unrelated question mostly stayed under 0.67. The value belongs to
 // the embedding model; a different model needs it measured again.
 //
-// The container's `calibration` figures are not used here. They describe
-// how similar the windows are to each other, which is a far higher number
-// than any query reaches, so a cutoff built on them rejects every hit.
+// This fixed value serves a file that does not say what an unrelated
+// question scores in it; see relevanceFloor. The `mean` and `std` of a
+// file's `calibration` are never used: they describe how similar the
+// windows are to each other, which is a far higher number than any query
+// reaches, so a cutoff built on them rejects every hit.
 export const COSINE_MIN = 0.67;
+
+// A file built with the unrelated-question figures carries its own floor:
+// the median of the best scores unrelated questions reached in it, plus
+// this many spreads. In testing on a 59,000-window file, one and a half
+// spreads let through none of 30 held-out unrelated questions and lost
+// no question or exact term the corpus answered; two spreads lost three
+// single-word queries whose best window scored just under the floor.
+export const UNRELATED_MARGIN = 1.5;
+
+// A floor read from a file is held inside this range. Under the low end a
+// window shares nothing with the question beyond being text in the same
+// language; the high end keeps a file whose probes were nearly all on
+// topic, a general encyclopedia, from rejecting every real question.
+export const COSINE_MIN_LOWEST = 0.5;
+export const COSINE_MIN_HIGHEST = 0.8;
+
+// Figures measured with fewer probes than this are too noisy to set a
+// floor from, and the fixed floor is used.
+export const MIN_UNRELATED_PROBES = 16;
 
 // Raw candidates pulled per query, before thresholding and diversity.
 export const CANDIDATE_POOL = 50;
@@ -392,6 +413,29 @@ export function attachCosines(candidates, queryVector, vectors, dims) {
 }
 
 /**
+ * The floor a window's raw cosine similarity to the query must reach in
+ * one compendium.
+ *
+ * A file that records what an unrelated question scores in it gets a
+ * floor just above that: the median plus UNRELATED_MARGIN spreads, held
+ * inside COSINE_MIN_LOWEST and COSINE_MIN_HIGHEST. That follows the size
+ * of the corpus and the kind of file, which a fixed number cannot. Any
+ * other file gets COSINE_MIN.
+ *
+ * @param {Object|null} calibration The container's calibration object.
+ * @returns {number} The floor.
+ */
+export function relevanceFloor(calibration) {
+    if (!calibration || typeof calibration !== 'object') return COSINE_MIN;
+    const { unrelatedMedian: median, unrelatedSpread: spread, unrelatedProbes: probes } = calibration;
+    for (const value of [median, spread, probes]) {
+        if (typeof value !== 'number' || !Number.isFinite(value)) return COSINE_MIN;
+    }
+    if (probes < MIN_UNRELATED_PROBES || spread < 0) return COSINE_MIN;
+    return Math.min(COSINE_MIN_HIGHEST, Math.max(COSINE_MIN_LOWEST, median + UNRELATED_MARGIN * spread));
+}
+
+/**
  * The ranking score a candidate must reach to count as relevant.
  *
  * Two tests, whichever is stricter: a floor, and the median of this
@@ -532,12 +576,13 @@ export class SearchIndex {
 
     /**
      * The floor a window's raw cosine similarity to the query must reach
-     * to count as relevant in this compendium.
+     * to count as relevant in this compendium: measured for this file
+     * when it carries the figures, else the fixed COSINE_MIN.
      *
      * @returns {number}
      */
     get cosineMin() {
-        return COSINE_MIN;
+        return relevanceFloor(this.calibration);
     }
 
     /** Number of search windows in the corpus. */
