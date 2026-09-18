@@ -12,7 +12,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-16
+Last Modified: 2026-09-18
 Notes: See README file for documentation and full license information.
 """
 
@@ -121,7 +121,7 @@ def test_the_lock_file_pins_every_code_parser(lock_text):
     """
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     block = re.search(r"^code = \[(.*?)^\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
-    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    wanted = {re.split(r"[<>=!~]", item, maxsplit=1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
     pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
 
     assert wanted
@@ -135,7 +135,7 @@ def test_the_lock_file_pins_the_pdf_reader(lock_text):
     """
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     block = re.search(r"^pdf = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
-    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    wanted = {re.split(r"[<>=!~]", item, maxsplit=1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
     pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
 
     assert wanted == {"pypdf"}
@@ -156,7 +156,7 @@ def test_the_lock_file_pins_the_caption_library(lock_text):
     """
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     block = re.search(r"^youtube = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
-    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    wanted = {re.split(r"[<>=!~]", item, maxsplit=1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
     pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
     assert wanted == {"youtube-transcript-api"}
     assert wanted <= pinned
@@ -172,7 +172,7 @@ def test_the_lock_file_pins_the_audio_packages(lock_text):
     """
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     block = re.search(r"^whisper = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
-    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    wanted = {re.split(r"[<>=!~]", item, maxsplit=1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
     pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
     assert wanted == {"yt-dlp", "faster-whisper"}
     assert wanted <= pinned
@@ -187,7 +187,7 @@ def test_the_lock_file_pins_the_keyword_extractor(lock_text):
     """
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     block = re.search(r"^keywords = \[(.*?)\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
-    wanted = {re.split(r"[<>=!~]", item, 1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
+    wanted = {re.split(r"[<>=!~]", item, maxsplit=1)[0].lower() for item in re.findall(r'"([^"]+)"', block)}
     pinned = {line.split("==")[0].lower() for line in lock_text.splitlines() if "==" in line}
 
     assert wanted == {"yake"}
