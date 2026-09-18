@@ -13,7 +13,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-12
- * Last Modified: 2026-09-17
+ * Last Modified: 2026-09-18
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -37,8 +37,10 @@ import {
     CONTAINER_VERSION,
     RRF_BM25_WEIGHT,
     RRF_VECTOR_WEIGHT,
+    SCORE_PLACES,
     diversify,
     relevanceFloor,
+    roundScore,
     rrfFuse,
     tokenize,
 } from '../../../clients/js/extractium-client.js';
@@ -166,9 +168,13 @@ export async function keywordPool(db, meta, terms, poolSize = CANDIDATE_POOL) {
         return [Number(row.tid), Math.log(1 + (meta.childCount - df + 0.5) / (df + 0.5))];
     });
     const values = weighted.map(() => '(?, ?)').join(', ');
+    // Grain: one row per window that holds at least one query term.
+    // The score is rounded to the precision every client shares, and the
+    // ordering and the cut are taken from the rounded value, so this
+    // database returns the pool an in-memory client would build.
     const sql = `WITH q(tid, idf) AS (VALUES ${values})
         SELECT c.cid AS cid,
-               SUM(q.idf * (? + p.tf * (? + 1.0)) / (p.tf + ? * (1.0 - ? + ? * c.doc_len / ?))) AS s
+               ROUND(SUM(q.idf * (? + p.tf * (? + 1.0)) / (p.tf + ? * (1.0 - ? + ? * c.doc_len / ?))), ?) AS s
         FROM q
         JOIN bm25_postings p ON p.tid = q.tid
         JOIN children c ON c.cid = p.cid
@@ -177,7 +183,7 @@ export async function keywordPool(db, meta, terms, poolSize = CANDIDATE_POOL) {
         LIMIT ?`;
     const { results } = await db
         .prepare(sql)
-        .bind(...weighted.flat(), meta.d, meta.k, meta.k, meta.b, meta.b, meta.avgDocLen, poolSize)
+        .bind(...weighted.flat(), meta.d, meta.k, meta.k, meta.b, meta.b, meta.avgDocLen, SCORE_PLACES, poolSize)
         .all();
     return results.map((row) => ({ cid: Number(row.cid), s: Number(row.s) }));
 }
@@ -311,7 +317,7 @@ export class D1Search {
         let dims = 0;
         if (this.embedQuery === null) {
             const weighted = keywordRanked
-                .map((entry) => ({ i: entry.i, s: entry.s * weightOf(entry.i) }))
+                .map((entry) => ({ i: entry.i, s: roundScore(entry.s * weightOf(entry.i)) }))
                 .sort((a, b) => (b.s - a.s) || (a.i - b.i));
             selected = diversify(weighted, vectors, dims, k, sourceKeyOf, true);
         } else {
@@ -323,7 +329,7 @@ export class D1Search {
             norm = Math.sqrt(norm) || 1;
             const unit = raw.map((value) => value / norm);
             const vectorRanked = keywordRanked
-                .map((entry) => ({ i: entry.i, s: similarity(unit, vectors, entry.i, dims) }))
+                .map((entry) => ({ i: entry.i, s: roundScore(similarity(unit, vectors, entry.i, dims)) }))
                 .sort((a, b) => (b.s - a.s) || (a.i - b.i));
             const fused = rrfFuse([
                 { items: vectorRanked, listWeight: RRF_VECTOR_WEIGHT },

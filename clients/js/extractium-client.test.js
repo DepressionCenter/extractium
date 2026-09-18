@@ -12,7 +12,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-17
+ * Last Modified: 2026-09-18
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -52,6 +52,7 @@ import {
     loadContainer,
     relevanceCutoff,
     relevanceFloor,
+    roundScore,
     rrfFuse,
     tokenize,
     vectorCandidates,
@@ -162,6 +163,36 @@ test('vectorCandidates breaks score ties on the child index', () => {
     assert.deepEqual(vectorCandidates([1, 0], vectors, 2).map((entry) => entry.i), [0, 1, 2]);
 });
 
+test('vectorCandidates rounds to the shared precision', () => {
+    const vectors = Float32Array.from([0.6, 0.8]);
+
+    const [hit] = vectorCandidates([0.28, 0.96], vectors, 2);
+
+    assert.equal(hit.s, roundScore(hit.s));
+});
+
+// Two near-copies of one page score a hair apart, and the hair is smaller
+// than the difference between two clients adding up the same products.
+// Rounding puts them on one score so the child index, which every client
+// agrees on, decides their order.
+test('two windows scoring closer than the precision tie and order by index', () => {
+    const dims = 384;
+    const first = new Float32Array(dims);
+    for (let d = 0; d < dims; d += 1) first[d] = 0.01 + (d * 0.99) / (dims - 1);
+    let norm = Math.hypot(...first);
+    for (let d = 0; d < dims; d += 1) first[d] /= norm;
+    const second = Float32Array.from(first);
+    second[7] += 3e-7;
+    norm = Math.hypot(...second);
+    for (let d = 0; d < dims; d += 1) second[d] /= norm;
+    const vectors = Float32Array.from([...second, ...first]);
+
+    const ranked = vectorCandidates(first, vectors, dims);
+
+    assert.equal(ranked[0].s, ranked[1].s);
+    assert.deepEqual(ranked.map((entry) => entry.i), [0, 1]);
+});
+
 /* ### Keyword Candidates ### */
 
 const KEYWORD_STATS = {
@@ -193,6 +224,26 @@ test('bm25Candidates returns nothing without statistics or terms', () => {
     assert.deepEqual(bm25Candidates([], KEYWORD_STATS, 3), []);
 });
 
+test('bm25Candidates rounds to the shared precision', () => {
+    const ranked = bm25Candidates(['crawler', 'index'], KEYWORD_STATS, 3);
+
+    assert.ok(ranked.length > 0);
+    for (const entry of ranked) assert.equal(entry.s, roundScore(entry.s));
+});
+
+/* ### Shared Precision ### */
+
+test('roundScore keeps the places every client shares', () => {
+    assert.equal(roundScore(0.1234564999), 0.123456);
+    assert.equal(roundScore(0.12345678), 0.123457);
+    assert.equal(roundScore(2), 2);
+});
+
+test('roundScore leaves a score that is already that short alone', () => {
+    assert.equal(roundScore(0.5), 0.5);
+    assert.equal(roundScore(0), 0);
+});
+
 /* ### Fusion ### */
 
 test('rrfFuse scores by rank alone, not by the incoming scores', () => {
@@ -201,9 +252,9 @@ test('rrfFuse scores by rank alone, not by the incoming scores', () => {
 
     const fused = rrfFuse([{ items: vectorList, listWeight: 0.5 }, { items: keywordList, listWeight: 0.5 }]);
 
-    const expected = 0.5 * (RRF_K / (RRF_K + 1)) + 0.5 * (RRF_K / (RRF_K + 2));
+    const expected = roundScore(0.5 * (RRF_K / (RRF_K + 1)) + 0.5 * (RRF_K / (RRF_K + 2)));
     assert.equal(fused.length, 2);
-    for (const entry of fused) assert.ok(Math.abs(entry.s - expected) < 1e-12);
+    for (const entry of fused) assert.equal(entry.s, expected);
 });
 
 test('rrfFuse applies the per-section weight after fusion', () => {
@@ -253,6 +304,7 @@ test('attachCosines records the raw cosine whatever the ranking score is', () =>
     assert.ok(Math.abs(candidates[0].cos - 0.6) < 1e-6);
     assert.ok(Math.abs(candidates[1].cos - 1) < 1e-6);
     assert.deepEqual(candidates.map((candidate) => candidate.s), [0.98, 0.49]);
+    for (const candidate of candidates) assert.equal(candidate.cos, roundScore(candidate.cos));
 });
 
 test('a candidate under the cosine floor is dropped however well it ranks', () => {

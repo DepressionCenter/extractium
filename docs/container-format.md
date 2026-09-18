@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-18
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -280,7 +280,8 @@ A field that is always present, and that a reader would use if it knew about it,
 7. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
 8. Decide relevance from the cosine similarity between the query and the window, and keep that test apart from any fused ranking score. Take the floor from `calibration.unrelatedMedian` and `calibration.unrelatedSpread` when the file has them, and never from `calibration.mean` and `calibration.std`.
 9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
-10. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
+10. Round every score to six decimal places before you sort on it or compare it. Two clients adding up the same list of products do not reach the same last digits, so windows that score very close together, which is what near-copies of one page produce, otherwise come back in a different order from each client. Break the ties that rounding creates on the child index, lowest first.
+11. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
 
 
 ## Conclusion

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/search-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-18
 Summary: How to search a built compendium with the two client libraries:
 loading the container in Python and in JavaScript, supplying a query
 embedder, reading the results, and what the search does behind the two
@@ -73,7 +73,7 @@ The client adds the file's query prefix for you before calling your function, so
 | Field | What it holds |
 |---|---|
 | `parent` | The whole section: its heading (`t`), text (`x`), URL (`u`), categories, and the rest of the fields the [container format](../container-format.md) lists. This is what you show a reader or hand to a language model. |
-| `score` | How strong the match was. Useful for ordering and for comparing hits inside one result list. It is not a percentage. |
+| `score` | How strong the match was. Useful for ordering and for comparing hits inside one result list. It is not a percentage, and it is rounded to six decimal places. |
 | `cosine` | How close the matched window is to your question, as a cosine similarity between 0 and 1. This is the number the relevance floor is checked against. |
 | `child_index` | Which search window matched. |
 | `start`, `end` | Where that window sits inside the section text, in UTF-16 code units. |
@@ -138,6 +138,8 @@ The floor in step 3 comes from the file. The build asks 64 everyday questions th
 ## Keeping the two clients in agreement
 
 The repository keeps a small committed compendium in `tests/golden/` and, beside it, a fixed query vector and the ranking both clients must return for it. The Python suite rebuilds that file, checks it has not drifted, checks its own ranking, and then runs the Node suite, which ranks the same file. If a change makes the two clients disagree, those tests fail.
+
+One difference between them cannot be tested away, so both clients work around it. Adding up the same 384 numbers gives slightly different answers depending on the order and the precision you add them in, and the two clients do that differently. Their scores for the same window came out about two hundred-millionths apart. That is far too small to matter on its own, but two near-copies of one page can score closer together than that, and then each client put them in a different order. Both clients now round every score to six decimal places before sorting, which is coarse enough to hide the difference and far finer than anything you would act on. Windows that land on the same rounded score are ordered by their position in the file, which every client agrees on. If you write your own client, do the same.
 
 Run them with:
 
