@@ -165,5 +165,5 @@ def build_light_compendium(compendium, embedder=None, progress=None):
         children=children,
         vectors=quantize_int8(vectors) if compendium.embedding.dtype == "int8" else vectors,
         bm25=build_bm25_index(windows),
-        calibration=compute_calibration_stats(vectors),
+        calibration=compute_calibration_stats(vectors, probe_vecs=compendium.probe_vectors),
     )

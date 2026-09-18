@@ -171,7 +171,8 @@ Every value is text. Convert the numbers you need.
 | `sqlite.schema` | The layout of these tables. It is `2`. A file without this row was written by an earlier version, which stored the word's text in every posting. |
 | `embedding.model`, `embedding.browserModel`, `embedding.dims`, `embedding.normalized`, `embedding.queryPrefix`, `embedding.passagePrefix`, `embedding.dtype`, `embedding.scale` | How the vectors were made. A program that searches by meaning has to embed the query the same way. `embedding.scale` is present only for `int8` vectors. |
 | `bm25.k`, `bm25.b`, `bm25.d`, `bm25.avgDocLen` | The settings and the average window length the keyword ranking uses. |
-| `calibration.mean`, `calibration.std`, `calibration.sampleSize` | The figures the clients use to decide whether a result is relevant enough to show. |
+| `calibration.mean`, `calibration.std`, `calibration.sampleSize` | How similar the windows are to each other. No client thresholds on these. |
+| `calibration.unrelatedMedian`, `calibration.unrelatedSpread`, `calibration.unrelatedProbes` | What an unrelated question scores in this compendium. A search sets its relevance floor at the median plus one and a half spreads. Absent from a file written before these existed. |
 
 
 ## Sample queries

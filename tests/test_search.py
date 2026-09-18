@@ -41,6 +41,8 @@ import pytest
 from extractium.search import (
     CANDIDATE_POOL,
     COSINE_MIN,
+    COSINE_MIN_HIGHEST,
+    COSINE_MIN_LOWEST,
     RRF_K,
     SCORE_MIN,
     SOURCE_CAP,
@@ -50,6 +52,7 @@ from extractium.search import (
     diversify,
     load_container,
     relevance_cutoff,
+    relevance_floor,
     rrf_fuse,
     tokenize,
     vector_candidates,
@@ -461,6 +464,47 @@ def test_search_adds_the_query_prefix_the_file_records_before_embedding():
     assert seen == [
         "Represent this sentence for searching relevant passages: how do I rebuild"
     ]
+
+
+# ---------------------------------------------------------------------------
+# A floor measured for the file
+# ---------------------------------------------------------------------------
+
+def unrelated(median, spread, probes=64):
+    return {"mean": 0.93, "std": 0.05, "sampleSize": 500,
+            "unrelatedMedian": median, "unrelatedSpread": spread, "unrelatedProbes": probes}
+
+
+def test_a_file_with_the_unrelated_figures_sets_its_own_floor():
+    assert relevance_floor(unrelated(0.618, 0.048)) == pytest.approx(0.690)
+    assert relevance_floor(unrelated(0.565, 0.046)) == pytest.approx(0.634)
+
+
+def test_a_file_without_usable_figures_gets_the_fixed_floor():
+    assert relevance_floor(None) == COSINE_MIN
+    assert relevance_floor({"mean": 0.93, "std": 0.05, "sampleSize": 500}) == COSINE_MIN
+    assert relevance_floor(unrelated(0.6, 0.04, probes=3)) == COSINE_MIN          # too few probes to trust
+    assert relevance_floor(unrelated("0.6", 0.04)) == COSINE_MIN                  # not a number
+    assert relevance_floor(unrelated(float("nan"), 0.04)) == COSINE_MIN
+    assert relevance_floor(unrelated(0.6, -0.04)) == COSINE_MIN
+    assert relevance_floor(unrelated(True, 0.04)) == COSINE_MIN
+
+
+def test_a_floor_read_from_a_file_stays_inside_a_sane_range():
+    assert relevance_floor(unrelated(0.05, 0.04)) == COSINE_MIN_LOWEST       # random test vectors
+    assert relevance_floor(unrelated(0.95, 0.10)) == COSINE_MIN_HIGHEST      # every probe on topic
+
+
+def test_search_uses_the_floor_the_file_carries():
+    header = sample_header(calibration=unrelated(0.47, 0.04))                # floor 0.53
+    header["parents"].append(parent_record("cccccccccccccccc"))
+    header["children"] = {"pid": [0, 1, 2], "start": [0, 0, 0], "end": [5, 5, 5]}
+    index = load_container(container_bytes(header, [[1, 0], [0.6, 0.8], [0, 1]]))
+
+    assert index.cosine_min == pytest.approx(0.53)
+    # 0.6 from the first window: under the fixed 0.67, over this file's floor.
+    hits = index.search("anything", lambda text: [0.6, -0.8], k=1)
+    assert [hit.parent["id"] for hit in hits] == ["aaaaaaaaaaaaaaaa"]
 
 
 def test_the_files_calibration_figures_never_hide_a_close_match():

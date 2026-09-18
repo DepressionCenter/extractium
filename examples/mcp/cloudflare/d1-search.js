@@ -38,6 +38,7 @@ import {
     RRF_BM25_WEIGHT,
     RRF_VECTOR_WEIGHT,
     diversify,
+    relevanceFloor,
     rrfFuse,
     tokenize,
 } from '../../../clients/js/extractium-client.js';
@@ -110,9 +111,14 @@ export async function readMeta(db) {
         dtype,
         scale: Number(meta.get('embedding.scale')),
         queryPrefix: meta.get('embedding.queryPrefix') || '',
+        // What an unrelated question scores in this corpus, which the
+        // relevance floor is set from. A database built before the
+        // figures existed has none, and Number(undefined) is NaN, which
+        // relevanceFloor answers with the fixed floor.
         calibration: {
-            mean: Number(meta.get('calibration.mean')),
-            std: Number(meta.get('calibration.std')),
+            unrelatedMedian: Number(meta.get('calibration.unrelatedMedian')),
+            unrelatedSpread: Number(meta.get('calibration.unrelatedSpread')),
+            unrelatedProbes: Number(meta.get('calibration.unrelatedProbes')),
         },
     };
 }
@@ -325,12 +331,11 @@ export class D1Search {
             ], weightOf);
             // Fusion leaves a rank score on each candidate. The client's
             // relevance floor is checked against the raw cosine, so each
-            // candidate carries that too. The database's calibration
-            // figures are not used: they describe how similar the windows
-            // are to each other, which no query reaches.
+            // candidate carries that too. The floor comes from what the
+            // build measured an unrelated question to score in this corpus.
             const cosineOf = new Map(vectorRanked.map((entry) => [entry.i, entry.s]));
             for (const candidate of fused) candidate.cos = cosineOf.get(candidate.i);
-            selected = diversify(fused, vectors, dims, k, sourceKeyOf, false);
+            selected = diversify(fused, vectors, dims, k, sourceKeyOf, false, relevanceFloor(this.meta.calibration));
         }
 
         return selected.map((candidate) => {

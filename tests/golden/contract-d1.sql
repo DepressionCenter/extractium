@@ -110,6 +110,9 @@ INSERT INTO meta (key, value) VALUES
 ('calibration.mean', '0.09650472551584244'),
 ('calibration.std', '0.034223467111587524'),
 ('calibration.sampleSize', '15'),
+('calibration.unrelatedMedian', '0.08259199559688568'),
+('calibration.unrelatedSpread', '0.025694996118545532'),
+('calibration.unrelatedProbes', '64'),
 ('embedding.scale', '127');
 
 INSERT INTO parents (pid, id, t, x, u, host, source_type, content_type, source_label, categories, local, weight, summary, tags, keywords, enriched_at, enrich_ver) VALUES

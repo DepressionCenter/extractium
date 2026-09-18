@@ -319,7 +319,13 @@ def test_dropping_local_parents_leaves_a_valid_compendium(
     filtered = output_compendium(compendium, {})
 
     assert filtered.vectors.shape[0] == len(filtered.children)
-    assert set(filtered.calibration) == {"mean", "std", "sampleSize"}
+    # Both sets of figures are measured again over what remains: the
+    # window-to-window ones, and what an unrelated question scores, from
+    # the probe vectors the build carried along.
+    assert set(filtered.calibration) == {
+        "mean", "std", "sampleSize", "unrelatedMedian", "unrelatedSpread", "unrelatedProbes",
+    }
+    assert filtered.calibration["unrelatedProbes"] == len(compendium.probe_vectors)
 
 
 def test_write_with_gzip_produces_the_same_bytes_compressed(tmp_path, fixtures_dir, fake_embed_chunks_core):

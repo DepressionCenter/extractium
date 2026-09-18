@@ -468,6 +468,9 @@
   "calibration": {
     "mean": 0.04454532265663147,
     "std": 0.014888426288962364,
-    "sampleSize": 3
+    "sampleSize": 3,
+    "unrelatedMedian": 0.04765850678086281,
+    "unrelatedSpread": 0.0371040403842926,
+    "unrelatedProbes": 64
   }
 }

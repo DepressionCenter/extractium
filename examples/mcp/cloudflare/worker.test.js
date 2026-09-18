@@ -10,7 +10,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-12
- * Last Modified: 2026-09-12
+ * Last Modified: 2026-09-17
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -33,7 +33,13 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 
-import { bm25Candidates, loadContainer, tokenize } from '../../../clients/js/extractium-client.js';
+import {
+    COSINE_MIN,
+    bm25Candidates,
+    loadContainer,
+    relevanceFloor,
+    tokenize,
+} from '../../../clients/js/extractium-client.js';
 import {
     D1Search,
     createWorkerServer,
@@ -102,6 +108,19 @@ test('the meta table names the index, the formula constants, and the vector enco
     assert.equal(meta.b, container.bm25.b);
     assert.equal(meta.dims, container.dims);
     assert.equal(meta.queryPrefix, expectations.queryPrefix);
+});
+
+test('the meta table carries what an unrelated question scores, and an older database without it gets the fixed floor', async () => {
+    assert.equal(meta.calibration.unrelatedMedian, container.calibration.unrelatedMedian);
+    assert.equal(meta.calibration.unrelatedSpread, container.calibration.unrelatedSpread);
+    assert.equal(meta.calibration.unrelatedProbes, 64);
+    assert.equal(relevanceFloor(meta.calibration), relevanceFloor(container.calibration));
+
+    // A database exported before the figures existed: the same export without those three rows.
+    const older = D1_SQL.split('\n').filter((line) => !line.startsWith("('calibration.unrelated")).join('\n');
+    const olderMeta = await readMeta(new FakeD1(older));
+    assert.ok(Number.isNaN(olderMeta.calibration.unrelatedMedian));
+    assert.equal(relevanceFloor(olderMeta.calibration), COSINE_MIN);
 });
 
 test('a database that is not an Extractium compendium is refused', async () => {

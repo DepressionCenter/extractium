@@ -205,17 +205,24 @@ Safety note for JavaScript readers: `df` and `postings` are keyed by words taken
 
 ## Calibration
 
-`calibration` says how similar the windows of this compendium are to each other.
+`calibration` holds two sets of figures about the scores in this compendium: how similar its windows are to each other, and what an unrelated question scores in it. A client sets its relevance floor from the second set.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `mean` | number | Mean, over a sample of children, of each child's best cosine similarity to any other child. |
 | `std` | number | Standard deviation of the same values. |
 | `sampleSize` | whole number | Number of children sampled, at most 500. `0` when the corpus has fewer than two children, in which case `mean` and `std` are `0`. |
+| `unrelatedMedian` | number | The build embeds a fixed list of everyday questions that have nothing to do with a compendium's subject, as queries, and finds the best cosine similarity each one reaches against any child. This is the median of those best scores. |
+| `unrelatedSpread` | number | The median absolute deviation of the same scores, multiplied by 1.4826 so it reads like a standard deviation. |
+| `unrelatedProbes` | whole number | How many questions were used, 64. |
 
 The sample is drawn with a fixed seed, so rebuilding an unchanged corpus reproduces the same numbers.
 
-Do not build a relevance threshold from these figures. They compare a window with other windows, and a search compares a window with a query, which scores far lower. Windows of one section overlap and share a heading, so `mean` is about 0.9 in almost any compendium, and 0.93 in a large one. A query's best window scores between 0.70 and 0.90 with the model this format ships with, so a threshold of `mean + margin × std` rejects every result. Earlier versions of both reference clients did exactly that. They now ignore `calibration` and require a window's cosine similarity to the query to reach a fixed floor. See [how to search a compendium](how-to/search-a-compendium.md).
+The three `unrelated` fields are absent from a file written before they existed, and from one whose builder embedded no probes. A reader must not require them.
+
+**Setting a floor from the unrelated figures.** A window is relevant to a query only if its cosine similarity to the query clears what an unrelated question reaches in the same file. The reference clients use `unrelatedMedian + 1.5 × unrelatedSpread`, held between 0.50 and 0.80, and fall back to a fixed 0.67 when the fields are absent, are not numbers, or were measured with fewer than 16 probes. The figure is measured per file because it moves: the best score of an unrelated question rises with the number of children, from about 0.55 at 300 children to 0.62 at 60,000 in testing, and it runs about 0.05 lower against a light file than against a full one. The median and a spread taken from the median are used, not the mean and standard deviation, because a fixed list always holds a few questions that are on topic for some compendium, and those would drag a mean upward.
+
+**Do not build a threshold from `mean` and `std`.** They compare a window with other windows, and a search compares a window with a query, which scores far lower. Windows of one section overlap and share a heading, so `mean` is about 0.9 in almost any compendium, and 0.93 in a large one. A query's best window scores between 0.70 and 0.90 with the model this format ships with, so a threshold of `mean + margin × std` rejects every result. Earlier versions of both reference clients did exactly that. See [how to search a compendium](how-to/search-a-compendium.md).
 
 
 ## Identifiers
@@ -271,7 +278,7 @@ A field that is always present, and that a reader would use if it knew about it,
 5. Refuse the file unless `embedding.model` and `embedding.dims` match the embedder you will use for queries.
 6. Copy the remaining bytes into a fresh buffer and check the length against `len(children.pid) × embedding.dims × width(dtype)`.
 7. Load `bm25.df` and `bm25.postings` into map structures, not plain objects.
-8. Do not threshold on `calibration`. Decide relevance from the cosine similarity between the query and the window, as the reference clients do, and keep that test apart from any fused ranking score.
+8. Decide relevance from the cosine similarity between the query and the window, and keep that test apart from any fused ranking score. Take the floor from `calibration.unrelatedMedian` and `calibration.unrelatedSpread` when the file has them, and never from `calibration.mean` and `calibration.std`.
 9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
 10. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
 

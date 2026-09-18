@@ -18,7 +18,7 @@ tests/test_core_embedding_index.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -37,13 +37,14 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-08-17"
+__date__ = "2026-09-17"
 
 import functools
 import json
 from collections import Counter
 
 import numpy as np
+import pytest
 
 from extractium.core import bm25, calibration, dedup, embed
 
@@ -232,3 +233,64 @@ def pytest_approx(value, tol=1e-12):
         def __eq__(self, other):
             return abs(other - value) <= tol
     return _Approx()
+
+
+# ---------------------------------------------------------------------------
+# What an unrelated question scores
+# ---------------------------------------------------------------------------
+
+def _unit(rows):
+    rows = np.asarray(rows, dtype=np.float32)
+    return rows / np.linalg.norm(rows, axis=1, keepdims=True)
+
+
+def test_probe_chunks_are_queries_so_each_carries_the_query_prefix():
+    chunks = calibration.probe_chunks("PREFIX: ")
+
+    assert len(chunks) == len(calibration.UNRELATED_PROBES) == 64
+    assert len(set(calibration.UNRELATED_PROBES)) == 64
+    assert all(chunk["t"] == "" and chunk["x"].startswith("PREFIX: ") for chunk in chunks)
+    assert chunks[0]["x"] == "PREFIX: " + calibration.UNRELATED_PROBES[0]
+
+
+def test_unrelated_stats_are_the_median_and_scaled_spread_of_each_probes_best_score():
+    windows = _unit([[1, 0], [0, 1]])
+    # Best scores against the two windows: 1.0, 0.8, 0.8, and 0.7071.
+    probes = _unit([[1, 0], [0.8, 0.6], [0.6, 0.8], [1, 1]])
+
+    stats = calibration.unrelated_stats(windows, probes)
+
+    assert stats["unrelatedProbes"] == 4
+    assert stats["unrelatedMedian"] == pytest.approx(0.8)
+    # Deviations from the median are 0.2, 0, 0, and 0.0929; their median is 0.04645.
+    assert stats["unrelatedSpread"] == pytest.approx(0.04645 * calibration.MAD_TO_SIGMA, abs=1e-4)
+
+
+def test_a_few_on_topic_probes_barely_move_the_figures():
+    rng = np.random.default_rng(3)
+    windows = _unit(rng.normal(size=(200, 16)))
+    probes = _unit(rng.normal(size=(60, 16)))
+    clean = calibration.unrelated_stats(windows, probes)
+
+    # Six probes that match a window exactly, as a recipe question would on a cooking site.
+    mixed = calibration.unrelated_stats(windows, np.vstack([probes, windows[:6]]))
+
+    assert mixed["unrelatedMedian"] - clean["unrelatedMedian"] < 0.02
+    assert mixed["unrelatedSpread"] - clean["unrelatedSpread"] < 0.02
+
+
+def test_no_probes_or_no_windows_leave_the_figures_out():
+    windows = _unit([[1, 0], [0, 1], [1, 1]])
+
+    assert calibration.unrelated_stats(windows, None) == {}
+    assert calibration.unrelated_stats(np.zeros((0, 2), dtype=np.float32), _unit([[1, 0]])) == {}
+    assert set(calibration.compute_calibration_stats(windows)) == {"mean", "std", "sampleSize"}
+
+
+def test_calibration_with_probes_carries_both_sets_of_figures():
+    windows = _unit([[1, 0], [0, 1], [1, 1]])
+
+    stats = calibration.compute_calibration_stats(windows, probe_vecs=_unit([[1, 0], [0, 1]]))
+
+    assert stats["sampleSize"] == 3
+    assert stats["unrelatedProbes"] == 2 and stats["unrelatedMedian"] == pytest.approx(1.0)
