@@ -45,6 +45,7 @@ from extractium.search import (
     COSINE_MIN_LOWEST,
     RRF_K,
     SCORE_MIN,
+    SCORE_PLACES,
     SOURCE_CAP,
     ContainerError,
     attach_cosines,
@@ -53,6 +54,7 @@ from extractium.search import (
     load_container,
     relevance_cutoff,
     relevance_floor,
+    round_score,
     rrf_fuse,
     tokenize,
     vector_candidates,
@@ -177,6 +179,35 @@ def test_vector_candidates_handles_an_empty_corpus():
     assert vector_candidates([1, 0], np.zeros((0, 2), dtype=np.float32)) == []
 
 
+def test_vector_candidates_rounds_to_the_shared_precision():
+    vectors = np.array([[0.6, 0.8]], dtype=np.float32)
+
+    (hit,) = vector_candidates([0.28, 0.96], vectors)
+
+    assert hit["s"] == round(hit["s"], SCORE_PLACES)
+
+
+def test_two_windows_scoring_closer_than_the_precision_tie_and_order_by_index():
+    """
+    Two near-copies of one page score a hair apart, and the hair is
+    smaller than the difference between two clients adding up the same
+    products. Rounding puts them on one score so the child index, which
+    every client agrees on, decides their order.
+    """
+    dims = 384
+    first = np.linspace(0.01, 1.0, dims).astype(np.float32)
+    first /= np.linalg.norm(first)
+    second = first.copy()
+    second[7] += 3e-7
+    second /= np.linalg.norm(second)
+    vectors = np.array([second, first], dtype=np.float32)
+
+    ranked = vector_candidates(first, vectors)
+
+    assert ranked[0]["s"] == ranked[1]["s"]
+    assert [entry["i"] for entry in ranked] == [0, 1]
+
+
 # ---------------------------------------------------------------------------
 # Keyword candidates
 # ---------------------------------------------------------------------------
@@ -204,6 +235,28 @@ def test_bm25_candidates_ignores_a_term_the_corpus_does_not_have():
     assert bm25_candidates(["nonexistent"], KEYWORD_STATS, 3) == []
 
 
+def test_bm25_candidates_round_to_the_shared_precision():
+    ranked = bm25_candidates(["crawler", "index"], KEYWORD_STATS, 3)
+
+    assert ranked
+    assert all(entry["s"] == round(entry["s"], SCORE_PLACES) for entry in ranked)
+
+
+# ---------------------------------------------------------------------------
+# Shared precision
+# ---------------------------------------------------------------------------
+
+def test_round_score_keeps_the_places_every_client_shares():
+    assert round_score(0.1234564999) == 0.123456
+    assert round_score(0.12345678) == 0.123457
+    assert round_score(2) == 2.0
+
+
+def test_round_score_leaves_a_score_that_is_already_that_short_alone():
+    assert round_score(0.5) == 0.5
+    assert round_score(0.0) == 0.0
+
+
 # ---------------------------------------------------------------------------
 # Fusion
 # ---------------------------------------------------------------------------
@@ -214,9 +267,9 @@ def test_rrf_fuse_scores_by_rank_alone_not_by_the_incoming_scores():
 
     fused = rrf_fuse([(vector_list, 0.5), (keyword_list, 0.5)])
 
-    expected = 0.5 * (RRF_K / (RRF_K + 1)) + 0.5 * (RRF_K / (RRF_K + 2))
+    expected = round_score(0.5 * (RRF_K / (RRF_K + 1)) + 0.5 * (RRF_K / (RRF_K + 2)))
     assert len(fused) == 2
-    assert all(entry["s"] == pytest.approx(expected) for entry in fused)
+    assert all(entry["s"] == expected for entry in fused)
 
 
 def test_rrf_fuse_applies_the_per_section_weight_after_fusion():
@@ -255,6 +308,7 @@ def test_attach_cosines_records_the_raw_cosine_whatever_the_ranking_score_is():
 
     assert [candidate["cos"] for candidate in candidates] == pytest.approx([0.6, 1.0])
     assert [candidate["s"] for candidate in candidates] == [0.98, 0.49]
+    assert all(candidate["cos"] == round(candidate["cos"], SCORE_PLACES) for candidate in candidates)
 
 
 # Five unit vectors and a pool whose median ranking score is low, so the

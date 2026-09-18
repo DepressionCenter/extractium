@@ -15,7 +15,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-17
+ * Last Modified: 2026-09-18
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -121,6 +121,23 @@ export const TOP_K = 4;
 export const RRF_K = 60;
 export const RRF_VECTOR_WEIGHT = 0.5;
 export const RRF_BM25_WEIGHT = 0.5;
+
+// Decimal places every score is rounded to before anything is ordered or
+// compared. Two clients adding up the same 384 products do not reach the
+// same last digits: this one walks the values in order in double
+// precision, while the Python one hands the work to NumPy, which adds in
+// blocks and in single precision. Scores for one window measured 2e-8
+// apart between them. Windows whose true scores sit closer together than
+// that, which is what near-copies of one page produce, then came back in
+// a different order from each client for the same file and the same
+// question. Rounding here is forty times coarser than that gap, and far
+// finer than any difference a reader could act on, so near-copies land
+// on one value, and the child index decides their order the same way
+// everywhere. Keep this identical in every client.
+export const SCORE_PLACES = 6;
+
+// SCORE_PLACES as the multiplier roundScore works with.
+const SCORE_SCALE = 10 ** SCORE_PLACES;
 
 /** Thrown when a file is not a readable version 4 compendium. */
 export class ContainerError extends Error {
@@ -281,6 +298,18 @@ function cosineSim(a, offsetA, b, offsetB, dims) {
     return dot;
 }
 
+/**
+ * Rounds a score to the precision every client shares, so that two of
+ * them order the same windows the same way. See `SCORE_PLACES`.
+ *
+ * @param {number} value A cosine similarity, keyword score, or fused
+ *     ranking score.
+ * @returns {number} The score, rounded.
+ */
+export function roundScore(value) {
+    return Math.round(value * SCORE_SCALE) / SCORE_SCALE;
+}
+
 /** Sorts candidates best first, breaking ties on the child index so every client agrees. */
 function sortCandidates(candidates) {
     candidates.sort((a, b) => (b.s - a.s) || (a.i - b.i));
@@ -312,7 +341,10 @@ export function rrfFuse(rankedLists, weightOf) {
         });
     }
     const out = Array.from(fused.values());
-    if (weightOf) for (const entry of out) entry.s *= weightOf(entry.i);
+    for (const entry of out) {
+        if (weightOf) entry.s *= weightOf(entry.i);
+        entry.s = roundScore(entry.s);
+    }
     return sortCandidates(out);
 }
 
@@ -341,7 +373,7 @@ export function vectorCandidates(queryVector, vectors, dims, poolSize = CANDIDAT
 
     const scored = new Array(childCount);
     for (let i = 0; i < childCount; i += 1) {
-        scored[i] = { i, s: cosineSim(query, 0, vectors, i * dims, dims) };
+        scored[i] = { i, s: roundScore(cosineSim(query, 0, vectors, i * dims, dims)) };
     }
     return sortCandidates(scored).slice(0, poolSize);
 }
@@ -381,7 +413,7 @@ export function bm25Candidates(terms, bm25, childCount, poolSize = CANDIDATE_POO
         }
     }
     const out = [];
-    for (const [i, s] of scores) out.push({ i, s });
+    for (const [i, s] of scores) out.push({ i, s: roundScore(s) });
     return sortCandidates(out).slice(0, poolSize);
 }
 
@@ -407,7 +439,7 @@ export function attachCosines(candidates, queryVector, vectors, dims) {
     norm = Math.sqrt(norm);
     if (norm > 0) for (let d = 0; d < dims; d += 1) query[d] /= norm;
     for (const candidate of candidates) {
-        candidate.cos = cosineSim(query, 0, vectors, candidate.i * dims, dims);
+        candidate.cos = roundScore(cosineSim(query, 0, vectors, candidate.i * dims, dims));
     }
     return candidates;
 }

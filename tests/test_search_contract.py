@@ -39,7 +39,7 @@ import subprocess
 import numpy as np
 import pytest
 
-from extractium.search import load_container
+from extractium.search import load_container, vector_candidates
 from tests.contract_fixture import (
     CONTAINER_FILE,
     QUERY_FILE,
@@ -138,6 +138,49 @@ def test_the_contract_corpus_spans_several_sections_and_pages(golden_index, expe
 # ---------------------------------------------------------------------------
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node is not installed on this machine")
+def test_both_clients_rank_near_copies_of_one_page_the_same_way(tmp_path):
+    """
+    The two clients add up the same 384 products differently, so their
+    scores for one window sit a hair apart. Windows closer together than
+    that hair, which is what near-copies of a page produce, once came
+    back in a different order from each client. Both round every score to
+    the same precision now, so both must return one order and one set of
+    scores.
+    """
+    rng = np.random.default_rng(3)
+    dims = 384
+    distinct = rng.standard_normal((30, dims)).astype(np.float32)
+    distinct /= np.linalg.norm(distinct, axis=1, keepdims=True)
+
+    rows = []
+    for row in distinct:
+        rows.append(row)
+        for _ in range(4):
+            twin = row.copy()
+            twin[rng.integers(0, dims, size=3)] += rng.standard_normal(3).astype(np.float32) * 3e-7
+            rows.append((twin / np.linalg.norm(twin)).astype(np.float32))
+    vectors = np.asarray(rows, dtype=np.float32)
+    query = distinct[0]
+
+    handoff = tmp_path / "corpus.json"
+    handoff.write_text(json.dumps({
+        "vectors": vectors.reshape(-1).tolist(),
+        "dims": dims,
+        "query": query.tolist(),
+    }), encoding="utf-8")
+    result = subprocess.run(
+        ["node", "tests/reference/rank_vectors.mjs", str(handoff)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=NODE_TEST_TIMEOUT_SECONDS,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    from_python = [[entry["i"], entry["s"]] for entry in vector_candidates(query, vectors, len(rows))]
+    assert from_python == json.loads(result.stdout)
+
+
 def test_javascript_client_passes_its_own_suite_including_the_contract():
     result = subprocess.run(
         ["node", "--test", "clients/js"],

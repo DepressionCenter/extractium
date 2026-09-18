@@ -15,7 +15,7 @@ extractium/search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-18
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +34,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-17"
+__date__ = "2026-09-18"
 
 import gzip
 import json
@@ -138,6 +138,20 @@ TOP_K = 4
 RRF_K = 60
 RRF_VECTOR_WEIGHT = 0.5
 RRF_BM25_WEIGHT = 0.5
+
+# Decimal places every score is rounded to before anything is ordered or
+# compared. Two clients adding up the same 384 products do not reach the
+# same last digits: this one hands the work to NumPy, which adds in
+# blocks and in single precision, while the JavaScript one walks the
+# values in order in double precision. Scores for one window measured
+# 2e-8 apart between them. Windows whose true scores sit closer together
+# than that, which is what near-copies of one page produce, then came
+# back in a different order from each client for the same file and the
+# same question. Rounding here is forty times coarser than that gap, and
+# far finer than any difference a reader could act on, so near-copies
+# land on one value, and the child index below decides their order the
+# same way everywhere. Keep this identical in every client.
+SCORE_PLACES = 6
 
 
 class ContainerError(ValueError):
@@ -314,6 +328,21 @@ def tokenize(text):
     return TOKEN_RE.findall((text or "").lower())
 
 
+def round_score(value):
+    """
+    Rounds a score to the precision every client shares, so that two of
+    them order the same windows the same way. See `SCORE_PLACES`.
+
+    Args:
+        value (float): a cosine similarity, keyword score, or fused
+            ranking score.
+
+    Returns:
+        float: the score, rounded.
+    """
+    return round(float(value), SCORE_PLACES)
+
+
 def rrf_fuse(ranked_lists, weight_of=None):
     """
     Fuses ranked result lists by reciprocal rank.
@@ -343,9 +372,10 @@ def rrf_fuse(ranked_lists, weight_of=None):
             else:
                 fused[index] = {"i": index, "s": contribution}
     out = list(fused.values())
-    if weight_of is not None:
-        for entry in out:
+    for entry in out:
+        if weight_of is not None:
             entry["s"] *= weight_of(entry["i"])
+        entry["s"] = round_score(entry["s"])
     # Ties break on the child index so two clients, and two runs, agree
     # on the order of equally scored windows.
     out.sort(key=lambda entry: (-entry["s"], entry["i"]))
@@ -376,10 +406,16 @@ def vector_candidates(query_vector, vectors, pool_size=CANDIDATE_POOL):
     norm = float(np.linalg.norm(query))
     if norm > 0:
         query = query / norm
-    scores = vectors @ query
+    # Widened before rounding: rounding single-precision values lands on
+    # the nearest float32 to the rounded decimal rather than on the
+    # decimal, which would leave this client's scores a hair from the
+    # JavaScript client's for the same window.
+    scores = np.round(np.asarray(vectors @ query, dtype=np.float64), SCORE_PLACES)
     keep = min(pool_size, scores.shape[0])
-    # A stable sort leaves equally scored windows in child order, so this
-    # client and the JavaScript one return the same pool for the same file.
+    # Rounded first, so that near-copies of one page hold the same score
+    # rather than one a hair above the other, and then sorted stably, so
+    # that equally scored windows stay in child order. Together they make
+    # this client and the JavaScript one return one pool for one file.
     ranked = np.argsort(-scores, kind="stable")[:keep]
     return [{"i": int(i), "s": float(scores[i])} for i in ranked]
 
@@ -428,8 +464,9 @@ def bm25_candidates(terms, bm25, child_count, pool_size=CANDIDATE_POOL):
             gain = idf * (d + term_frequency * (k + 1)) / denominator
             scores[child_index] = scores.get(child_index, 0.0) + gain
 
-    ranked = sorted(scores.items(), key=lambda pair: (-pair[1], pair[0]))
-    return [{"i": int(i), "s": float(s)} for i, s in ranked[:pool_size]]
+    rounded = {index: round_score(score) for index, score in scores.items()}
+    ranked = sorted(rounded.items(), key=lambda pair: (-pair[1], pair[0]))
+    return [{"i": int(i), "s": s} for i, s in ranked[:pool_size]]
 
 
 def attach_cosines(candidates, query_vector, vectors):
@@ -457,7 +494,7 @@ def attach_cosines(candidates, query_vector, vectors):
         query = query / norm
     rows = np.fromiter((candidate["i"] for candidate in candidates), dtype=np.int64, count=len(candidates))
     for candidate, cosine in zip(candidates, vectors[rows] @ query):
-        candidate["cos"] = float(cosine)
+        candidate["cos"] = round_score(cosine)
     return candidates
 
 
