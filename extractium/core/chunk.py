@@ -11,7 +11,7 @@ extractium/core/chunk.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-16
+Last Modified: 2026-09-17
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-17"
 
 import hashlib
 import html
@@ -38,7 +38,7 @@ import re
 from urllib.parse import urljoin, urlparse
 
 import markdown
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, CData, NavigableString, Tag
 
 # Value-imported: normalise is a pure function with no module-level state
 # any test monkeypatches, so (unlike extractium.core.cache from
@@ -62,6 +62,20 @@ CHUNK_MIN_CHARS = 60
 CHILD_CHUNK_MAX_CHARS = 350
 CHILD_CHUNK_MIN_CHARS = 60
 CHILD_OVERLAP_CHARS = 53
+
+# The headings a page is split into sections at.
+SECTION_HEADING_TAGS = frozenset({"h2", "h3"})
+
+# Elements whose text is never page content, wherever they sit.
+UNREAD_TAGS = frozenset({"script", "style", "template", "noscript"})
+
+# A section with no line break to cut at is cut after the last sentence
+# that ends in the final part of the allowed length, so a cut does not
+# throw away most of a section to land on a full stop. Failing that it is
+# cut at the last space, and only a run of characters with no space at
+# all is cut where the limit falls.
+SENTENCE_END_RE = re.compile(r"[.!?][\"')\]]*\s")
+SENTENCE_CUT_MIN_SHARE = 0.5
 
 # A parent id is this many leading hexadecimal characters of a SHA-1
 # digest: 64 bits, enough that two sections in one index will not collide
@@ -174,6 +188,77 @@ def extract_links(soup, base_url):
 
 ### Chunking ###
 
+def cut_position(text, limit=CHUNK_MAX_CHARS):
+    """
+    Where to cut a text that is longer than `limit`, so the first part is
+    as long as it can be and ends at a natural break.
+
+    Tried in order: the last line break, the end of the last sentence in
+    the second half of the allowed length, the last space. A text with
+    none of these inside the limit is cut at the limit itself.
+
+    Args:
+        text (str): text longer than `limit`.
+        limit (int): the most characters the first part may hold.
+
+    Returns:
+        int: how many characters the first part keeps.
+    """
+    cut = text.rfind("\n", 0, limit)
+    if cut >= CHUNK_MIN_CHARS:
+        return cut
+    ends = [match.end() for match in SENTENCE_END_RE.finditer(text, 0, limit)]
+    if ends and ends[-1] >= limit * SENTENCE_CUT_MIN_SHARE:
+        return ends[-1]
+    cut = text.rfind(" ", 0, limit)
+    return cut if cut >= CHUNK_MIN_CHARS else limit
+
+
+def _is_unread(string, node):
+    """Whether a string sits inside a heading, which names a section, or inside an element that holds no page text."""
+    for parent in string.parents:
+        if parent is node:
+            return False
+        if parent.name in SECTION_HEADING_TAGS or parent.name in UNREAD_TAGS:
+            return True
+    return False
+
+
+def sections_of(node):
+    """
+    The text of a content node, divided at its <h2> and <h3> headings, in
+    the order a reader meets it.
+
+    The node is walked in document order, so a heading divides the page
+    wherever it sits: directly under the content node, or inside any
+    number of wrapper elements, which is where most sites put it. Text is
+    gathered string by string and joined with single spaces.
+
+    Args:
+        node (bs4.Tag): the extracted content node.
+
+    Returns:
+        list[tuple[str | None, str]]: (heading, text) pairs. The first
+        pair has heading None and holds whatever comes before the first
+        heading, possibly nothing. Every later pair is one heading and
+        the text up to the next one.
+    """
+    sections = [(None, [])]
+    for element in node.descendants:
+        if isinstance(element, Tag):
+            if element.name in SECTION_HEADING_TAGS:
+                sections.append((element.get_text(" ", strip=True), []))
+            continue
+        if type(element) not in (NavigableString, CData):
+            continue  # a comment, a processing instruction, a doctype
+        if _is_unread(element, node):
+            continue
+        text = element.strip()
+        if text:
+            sections[-1][1].append(text)
+    return [(heading, " ".join(parts)) for heading, parts in sections]
+
+
 def split_into_parents(title, node, url):
     """
     Splits one page's content into "parent" chunks: one per <h2>/<h3>
@@ -181,6 +266,9 @@ def split_into_parents(title, node, url):
     CHUNK_MAX_CHARS if a section runs long. Parents are the full text
     handed to the model at answer time -- see split_parent_into_children
     for the smaller windows actually embedded and searched.
+
+    Every piece of text lands in exactly one parent. The part before the
+    first heading becomes a parent headed by the page title alone.
 
     Args:
         title (str): the page title, used as (part of) each parent's heading.
@@ -200,32 +288,15 @@ def split_into_parents(title, node, url):
         if len(text) < CHUNK_MIN_CHARS:
             return
         while len(text) > CHUNK_MAX_CHARS:
-            cut = text.rfind("\n", 0, CHUNK_MAX_CHARS)
-            if cut < CHUNK_MIN_CHARS:
-                cut = CHUNK_MAX_CHARS
-            chunks.append({"t": heading, "x": text[:cut], "u": url, "host": host, "weight": 1.0})
+            cut = cut_position(text)
+            chunks.append({"t": heading, "x": text[:cut].rstrip(), "u": url, "host": host, "weight": 1.0})
             text = text[cut:].strip()
         if text:
             chunks.append({"t": heading, "x": text, "u": url, "host": host, "weight": 1.0})
 
-    headings = node.find_all(["h2", "h3"])
-    if headings:
-        before = []
-        for el in node.children:
-            if hasattr(el, "name") and el.name in ("h2", "h3"):
-                break
-            if hasattr(el, "get_text"):
-                before.append(el.get_text(" ", strip=True))
-        _make(title, " ".join(before))
-        for h in headings:
-            section_title = f"{title} -- {h.get_text(' ', strip=True)}"
-            parts = []
-            for sib in h.next_siblings:
-                if hasattr(sib, "name") and sib.name in ("h2", "h3"):
-                    break
-                if hasattr(sib, "get_text"):
-                    parts.append(sib.get_text(" ", strip=True))
-            _make(section_title, " ".join(parts))
+    if node.find(list(SECTION_HEADING_TAGS)):
+        for heading, text in sections_of(node):
+            _make(title if heading is None else f"{title} -- {heading}", text)
     else:
         text = node.get_text("\n", strip=True)
         _make(title, text)
