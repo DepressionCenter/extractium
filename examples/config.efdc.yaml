@@ -2,7 +2,7 @@
 # examples/config.efdc.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-09
-# Last Modified: 2026-09-17
+# Last Modified: 2026-09-22
 # Summary: A build configuration for the Eisenberg Family Depression Center at
 # the University of Michigan. It gathers the center's public documentation --
 # the U-M Health Research Resource Library, the Open Source Hub, the GitHub
@@ -284,6 +284,14 @@ transport: auto
 # 429 to the crawler's own name be asked for once more as a browser, and
 # both attempts are printed. Leave it at true for any site you do not own.
 respect_robots_txt: false
+
+# What a build does with a page it did not see this time. Options: full or
+# incremental. full publishes exactly what this build read, so a page that
+# was not reached is left out. incremental carries such a page forward from
+# the last build unless the server said it was gone. full is the default and
+# the right choice here, because the center's pages are read directly from
+# their own servers each time.
+rebuild: full
 
 # Fetched pages, GitHub blobs, and YouTube transcripts between builds. The
 # transcripts are the part a scheduled build cannot fetch for itself; a data
