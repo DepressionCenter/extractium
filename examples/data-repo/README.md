@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-22
 Summary: README for the data-repository template: what the folder is, how
 to turn it into your own repository, how the weekly build runs, what gets
 published, and why the YouTube cache is committed rather than ignored.
@@ -25,7 +25,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-This folder is a template. Copy it into a new repository of your own, change two lines, and you have a compendium, a searchable collection of what you publish, that rebuilds itself every week and publishes to GitHub Pages. Your content and settings live here. The tool that builds them lives in the [Extractium™ repository](https://github.com/DepressionCenter/extractium). Keeping the two apart means you can update either one without disturbing the other.
+This folder is a template. Copy it into a new repository of your own, change two lines, and you have a compendium, a searchable collection of what you publish, that rebuilds itself on a schedule. It holds a pipeline for GitHub, which publishes to GitHub Pages, and one for a GitLab instance with its own runners, which keeps the output as an artifact. Keep the one your platform reads. Your content and settings live here. The tool that builds them lives in the [Extractium™ repository](https://github.com/DepressionCenter/extractium). Keeping the two apart means you can update either one without disturbing the other.
 
 
 ## What is in the template
@@ -33,18 +33,36 @@ This folder is a template. Copy it into a new repository of your own, change two
 | File | What it is |
 |---|---|
 | `config.yaml` | What to crawl and what to write. The one file you edit. |
-| `.github/workflows/build-compendium.yml` | The weekly build. Runs on a schedule and on a button press, and publishes the result. |
+| `.github/workflows/build-compendium.yml` | The weekly build on GitHub. Runs on a schedule and on a button press, and publishes the result to GitHub Pages. |
+| `.gitlab-ci.yml` | The same build on a GitLab instance with its own runners. Runs on a schedule you set in the project and on a button press, and keeps the result as a pipeline artifact. |
 | `kb-cache/` | Content the weekly build cannot fetch for itself, chiefly video captions. Committed on purpose; see [its README](kb-cache/README.md). |
 
 
-## Set it up
+## Set it up on GitHub
 
-1. Make your own repository. Copy the contents of this folder into it. A new empty repository on GitHub is enough.
+GitHub suits a small set of public pages. A large corpus, or one with video, belongs on your own computer or on a runner you control; [how to run a weekly build](../../docs/how-to/run-a-weekly-build.md) says why.
+
+1. Make your own repository. Copy the contents of this folder into it, leaving `.gitlab-ci.yml` out. A new empty repository on GitHub is enough.
 2. Point it at your site. In `config.yaml`, change `seed_url` to the page your documentation starts from, and `name` to your organization's name.
 3. Turn on Pages. In the repository, open **Settings → Pages** and set **Source** to **GitHub Actions**. Nothing is published until you do.
 4. Run it once by hand. Open the **Actions** tab, choose **Build compendium**, and press **Run workflow**. Set *Visit at most this many pages* to `25` for the first run.
 5. Check what it found. When the run finishes, open the published site and read `llms.txt`. It lists your sources, and each entry links to an index file that lists every page indexed from that source, one line each. If pages you did not expect are in there, tighten the patterns in `config.yaml` and run it again.
 6. Let it run weekly. Once the list looks right, remove the page limit and leave the schedule alone. It runs every Monday morning UTC.
+
+
+## Set it up on GitLab
+
+Many institutions run their own GitLab with runners their staff can use without charge. The pipeline in `.gitlab-ci.yml` builds there and keeps the output folder as a pipeline artifact, readable by whoever can read the project.
+
+1. Make a project on your GitLab instance. Copy the contents of this folder into it, leaving the `.github` folder out.
+2. Point it at your site. In `config.yaml`, change `seed_url` and `name`.
+3. Name your runner. In `.gitlab-ci.yml`, change the `tags` lines to the tag your runners carry, or delete them to accept any runner the project may use.
+4. Set the schedule. Open **Build → Pipeline schedules** and create one; the file holds no schedule of its own.
+5. Run it once by hand. Open **Build → Pipelines**, press **New pipeline**, and set the variable `MAX_PAGES` to `25`.
+6. Check what it found. Open the `build` job, browse its artifact, and read `dist/llms.txt`.
+7. Leave the schedule alone. To publish to GitLab Pages as well, set the variable `PUBLISH_PAGES` to `true`, after checking who on your instance can read Pages.
+
+[How to run a weekly build](../../docs/how-to/run-a-weekly-build.md) explains every line of the file.
 
 
 ## What gets published
@@ -58,17 +76,17 @@ The build writes these files and the workflow publishes the folder that holds th
 | `llms.txt` | A short index of your sources, for a language model that browses the web. |
 | `llms/` | One index file per source, listing its pages with a link and a description each. |
 
-They are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/compendium.json.gz`. Both index files are compressed with gzip, and the clients inflate them on their own. Neither holds code analysis from a GitHub source; add a `sqlite` or `okf` output to publish that.
+On GitHub they are served at your Pages URL, for example `https://example-org.github.io/knowledge-base/compendium.json.gz`. On GitLab they are in the `build` job's artifact, at a fixed address such as `<project address>/-/jobs/artifacts/main/raw/dist/compendium.json.gz?job=build`. Both index files are compressed with gzip, and the clients inflate them on their own. Neither holds code analysis from a GitHub source; add a `sqlite` or `okf` output to publish that.
 
 
 ## Choosing the version of the tool
 
-The workflow's `EXTRACTIUM_REF` setting names the release of Extractium™ to build with, as a tag such as `v0.2`. A scheduled build therefore keeps running the same tool until you move the tag forward, and a change in the tool never arrives unannounced. The releases page of the Extractium™ repository lists the tags. Read a release's notes, change the one line, and run the workflow once by hand before leaving it to the schedule.
+Both pipeline files carry an `EXTRACTIUM_REF` setting that names the release of Extractium™ to build with, as a tag such as `v0.2`. A scheduled build therefore keeps running the same tool until you move the tag forward, and a change in the tool never arrives unannounced. The releases page of the Extractium™ repository lists the tags. Read a release's notes, change the one line, and run the pipeline once by hand before leaving it to the schedule.
 
 
 ## Building on your own machine instead
 
-Some sources cannot be reached from a cloud runner: a folder of local files, and YouTube captions. For those, clone the Extractium™ repository, put your `config.yaml` in it, and run `run.sh` (macOS, Linux) or `run.bat` (Windows). The script builds and then prints what to commit. [How to run a weekly build](../../docs/how-to/run-a-weekly-build.md) covers both.
+Some sources cannot be reached from a runner: a folder of local files, and YouTube captions. A large corpus is also better built on a machine with no time limit. For those, clone the Extractium™ repository, put your `config.yaml` in it, and run `run.sh` (macOS, Linux) or `run.bat` (Windows). The script builds and then prints what to commit, and one scheduled task puts it on a timer. [How to run a weekly build](../../docs/how-to/run-a-weekly-build.md) covers all of it.
 
 YouTube is the one source where this is not a preference. YouTube refuses caption requests from cloud-provider addresses, so a scheduled run cannot read a transcript at all. You build once on your own computer, commit `kb-cache/`, and every later build reads the transcripts from there. [The cache README](kb-cache/README.md) explains what to commit and when to refresh it.
 

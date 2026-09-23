@@ -12,7 +12,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-18
+Last Modified: 2026-09-22
 Notes: See README file for documentation and full license information.
 """
 
@@ -494,8 +494,32 @@ def test_the_data_repository_template_holds_what_an_operator_needs():
     template = REPO_ROOT / "examples" / "data-repo"
 
     for name in ("config.yaml", "README.md", ".gitignore",
-                 ".github/workflows/build-compendium.yml"):
+                 ".github/workflows/build-compendium.yml", ".gitlab-ci.yml"):
         assert (template / name).exists(), name
+
+
+def test_the_gitlab_pipeline_pins_the_tool_checks_hashes_and_keeps_the_cache():
+    pipeline = yaml.safe_load(
+        (REPO_ROOT / "examples" / "data-repo" / ".gitlab-ci.yml").read_text(encoding="utf-8"))
+    script = " ".join(pipeline["build"]["script"])
+
+    assert pipeline["variables"]["EXTRACTIUM_REF"].startswith("v")
+    assert '--branch "$EXTRACTIUM_REF"' in script
+    assert "--require-hashes" in script
+    assert "--no-deps" in script
+    assert ".kb_cache/" in pipeline["cache"]["paths"]
+    assert pipeline["cache"]["key"]["files"] == ["config.yaml"]
+    assert pipeline["build"]["artifacts"]["paths"] == ["$OUT_DIR/"]
+    assert "public/" in pipeline["pages"]["artifacts"]["paths"]
+
+
+def test_the_gitlab_pipeline_runs_only_on_a_schedule_or_by_hand():
+    pipeline = yaml.safe_load(
+        (REPO_ROOT / "examples" / "data-repo" / ".gitlab-ci.yml").read_text(encoding="utf-8"))
+
+    for job in ("build", "pages"):
+        sources = {rule["if"] for rule in pipeline[job]["rules"] if rule.get("when") != "never"}
+        assert sources == {'$CI_PIPELINE_SOURCE == "schedule"', '$CI_PIPELINE_SOURCE == "web"'}, job
 
 
 def test_the_template_settings_file_loads_and_names_synthetic_sources():
