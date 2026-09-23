@@ -3,10 +3,11 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
-Summary: How to keep a compendium current: the one-command local
-build with run.sh or run.bat, the scheduled GitHub Actions build, how the
-crawl cache makes a rebuild cheap, and how to choose between the two.
+Last Modified: 2026-09-22
+Summary: How to keep a compendium current: the one-command build with
+run.sh or run.bat on your own computer or a server, how to put it on a
+timer there, the scheduled builds on GitHub Actions and on a GitLab
+runner, how the crawl cache makes a rebuild cheap, and how to choose.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -25,19 +26,24 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-A compendium, the collection a build writes, goes stale as the pages behind it change, so you should rebuild it on a schedule. This page shows you both ways to do that: from your own computer with one command, and from GitHub on a weekly timer. You do not need to write code for either. Pick the one that suits where your content lives.
+A compendium, the collection a build writes, goes stale as the pages behind it change, so you should rebuild it on a schedule. This page shows you three ways to do that: with one command on your own computer or a server, which you can put on a timer; from a GitLab runner your institution provides; and from GitHub on a weekly timer. You do not need to write code for any of them. Pick the one that suits where your content lives and how large it is.
 
 
 ## Which one do you need?
 
 | Build it | When |
 |---|---|
-| On GitHub, weekly | Your sources are public web pages. Nothing to install, nothing to remember. This is the usual choice. |
-| On your own computer | Your sources include a folder of local files, or YouTube captions, which a cloud runner cannot reach. Also useful for a first trial run. |
+| On your own computer or a server | The usual choice. It reaches every source, including a folder of local files and YouTube captions, and it is the only choice for a large corpus. Put the command on a timer and it is as hands-off as the other two. |
+| On a GitLab runner your institution provides | You have a GitLab instance with its own runners, as many universities and hospitals do. The runner is a server you do not have to look after, and the pipeline keeps the output as an artifact behind your sign-in. |
+| On GitHub, weekly | A small set of public web pages, no video, and a build that finishes well inside an hour. Nothing to install, nothing to remember, free on a public repository. |
 
-You can use both. Many groups run the weekly build on GitHub and rebuild by hand after a large content change.
+You can combine them. Many groups run the scheduled build on a runner and rebuild by hand after a large content change.
 
-YouTube needs both, in a set order. YouTube refuses caption requests from cloud-provider addresses, so you build once on your own computer, commit the folder `cache_dir` names, and the weekly build on GitHub reads the transcripts from there without asking YouTube for anything. [The cache README](../../examples/data-repo/kb-cache/README.md) says what to commit and when to refresh it.
+YouTube needs your own computer first, whatever else you use. YouTube refuses caption requests from cloud-provider addresses, so you build once on your own computer, commit the folder `cache_dir` names, and every scheduled build reads the transcripts from there without asking YouTube for anything. [The cache README](../../examples/data-repo/kb-cache/README.md) says what to commit and when to refresh it.
+
+### When a corpus is too large for GitHub
+
+A GitHub-hosted runner has a few processor cores and no graphics card, so it embeds text several times slower than a laptop and transcribes audio far slower still. A job stops after six hours. The crawl cache it restores is capped at 10 GB for the whole repository, and every source's polite delay between requests counts against the clock as much as on your own machine. A corpus of a few hundred pages fits comfortably. One that takes an hour on your own computer will take longer on GitHub and may not finish. For that size, build on your own computer or on a runner you control.
 
 
 ## Build on your own computer
@@ -97,10 +103,53 @@ Anything you pass as an argument goes straight to the build command, and the scr
 
 [Running a build](../usage.md) lists every option.
 
+### Putting it on a timer
+
+The script runs the same way from a scheduler as from your keyboard, so a weekly build on your own computer or on a small server is one scheduled task. The computer has to be on at the time; a laptop that is asleep runs nothing.
+
+On Linux or macOS, add one line to your user's crontab with `crontab -e`. This runs every Monday at 06:17 in the machine's own time zone and keeps a log of every run:
+
+```
+17 6 * * 1  cd /path/to/your/compendium && ./run.sh >> build.log 2>&1
+```
+
+On Windows, create a task from a command prompt opened in the folder that holds your settings file. This runs `run.bat` every Monday at 06:17:
+
+```
+schtasks /Create /TN "Extractium weekly build" /SC WEEKLY /D MON /ST 06:17 /TR "cmd /c cd /d %CD% && run.bat >> build.log 2>&1"
+```
+
+Run the task once by hand, from the Task Scheduler window or with `schtasks /Run /TN "Extractium weekly build"`, and read `build.log` before trusting the schedule. A scheduled run has no one at the keyboard, so the settings file must already be in place. With none, the script would stop waiting for answers to its questions.
+
+The build writes its outputs to `dist/`, or wherever `out_dir` points. To publish them, add the copy step your host needs to the same line, after the script, as [how to deploy](deploy.md) describes for a static host.
+
+
+## Build on a GitLab runner
+
+Many institutions run their own GitLab, with runners on servers they own, and let their staff use both without charge. The pipeline at [examples/data-repo/.gitlab-ci.yml](../../examples/data-repo/.gitlab-ci.yml) builds there. It clones Extractium™ at a pinned version, installs the locked dependencies with every hash checked, keeps the crawl cache and the embedding model between runs, and keeps the output folder as a pipeline artifact. The artifact sits behind your GitLab sign-in, so the outputs are not public unless you publish them.
+
+1. Create a project on your GitLab instance for your content and copy the [data repository template](../../examples/data-repo/README.md) into it. The GitHub workflow folder can be left out.
+2. Change `seed_url` and `name` in `config.yaml`.
+3. Open `.gitlab-ci.yml` and change the `tags` lines to the tag your runners carry, or delete those lines to accept any runner the project may use. Ask whoever runs the instance which tag to use if you are not sure.
+4. Open **Build → Pipeline schedules**, press **New schedule**, and set the day and time. The file itself holds no schedule, and a push to the project starts no build.
+5. Run it once by hand. Open **Build → Pipelines**, press **New pipeline**, and set the variable `MAX_PAGES` to `25`.
+6. When it finishes, open the `build` job, browse its artifact, and read `dist/llms.txt` and the page lists under `dist/llms/`. Tighten the patterns in `config.yaml` if pages you did not expect are there.
+7. Leave the schedule alone.
+
+What to know about the file:
+
+- The runner needs to reach github.com to clone the tool. If yours cannot, mirror the Extractium™ repository on your instance and set `EXTRACTIUM_REPO` to the mirror's address.
+- A runner that runs jobs in containers uses the `image` line, a standard Python image. A runner that runs jobs on the host itself ignores it and needs Python 3.10 or newer, git, and pip installed there. A runner with a graphics card embeds faster; nothing in the file needs changing for it.
+- The job's `timeout` is four hours. The instance may set a lower ceiling, and the lower one wins.
+- The artifact expires after three weeks, long enough that the last good build is still there when the next one fails. The newest artifact has a fixed address, for example `<project address>/-/jobs/artifacts/main/raw/dist/compendium.json.gz?job=build`, which a client can read with a sign-in or a project access token.
+- Set the variable `PUBLISH_PAGES` to `true`, in the schedule or in **Settings → CI/CD → Variables**, to publish the output folder to GitLab Pages as well. That makes it readable by anyone the instance lets read Pages, which on some instances is everyone. Ask before you turn it on.
+
+The crawl cache behaves as it does on GitHub: it is keyed on the settings file, and a change to that file starts the next run from an empty cache.
+
 
 ## Build on GitHub, weekly
 
-The workflow lives at `.github/workflows/build-compendium.yml`. The version to copy into your own repository, with a matching settings file and README, is in [examples/data-repo/](../../examples/data-repo/README.md).
+The workflow lives at `.github/workflows/build-compendium.yml`. The version to copy into your own repository, with a matching settings file and README, is in [examples/data-repo/](../../examples/data-repo/README.md). Read "When a corpus is too large for GitHub" above first. This path suits a small public site.
 
 1. Create a repository for your content and copy the template into it.
 2. Change `seed_url` and `name` in `config.yaml`.
@@ -141,14 +190,15 @@ Deleting the cache is always safe. It costs time, never correctness.
 
 ## Checking that it worked
 
-- The **Actions** tab shows a green check mark and, in the log, the same summary the local build prints: how many sections, how many windows, how many pages, and every file written.
-- Your published `llms.txt` starts with the build time. If that time is old, the last run failed or the schedule is off.
-- A failed run sends an email to the person who owns the repository. [Troubleshooting](../troubleshooting.md) lists the known failures.
+- On your own computer or a server, `build.log` ends with the summary: how many sections, how many windows, how many pages, and every file written. A run that stopped early ends with the error instead, and the script's exit code is not zero.
+- On GitLab, the **Pipelines** page shows a green check mark, the `build` job's log holds the same summary, and the job's artifact holds the files.
+- On GitHub, the **Actions** tab shows a green check mark and the log holds the summary. A failed run sends an email to the person who owns the repository.
+- Wherever the files are published, `llms.txt` starts with the build time. If that time is old, the last run failed or the schedule is off. [Troubleshooting](../troubleshooting.md) lists the known failures.
 
 
 ## Conclusion
 
-You can now rebuild your compendium on demand from your own computer, or leave it to a weekly run on GitHub. Next, set up publishing with [how to publish to GitHub Pages](publish-to-github-pages.md), or read [how to search a compendium](search-a-compendium.md) to use the file you just built.
+You can now rebuild your compendium on demand from your own computer, put that command on a timer, or leave it to a scheduled run on a GitLab runner or on GitHub. Next, set up publishing with [how to publish to GitHub Pages](publish-to-github-pages.md), or read [how to search a compendium](search-a-compendium.md) to use the file you just built.
 
 
 ## Additional Resources
@@ -163,6 +213,9 @@ You can now rebuild your compendium on demand from your own computer, or leave i
 * [Data repository template](../../examples/data-repo/README.md): the files to copy into your own content repository.
 * [Troubleshooting](../troubleshooting.md): known failures, causes, and fixes.
 * [POSIX cron expressions on GitHub](https://docs.github.com/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule): the schedule syntax and its limits.
+* [GitHub Actions limits](https://docs.github.com/actions/reference/actions-limits): the job time limit and the cache size on a hosted runner.
+* [GitLab pipeline schedules](https://docs.gitlab.com/ci/pipelines/schedules/): setting the day and time of a scheduled pipeline.
+* [GitLab job artifacts](https://docs.gitlab.com/ci/jobs/job_artifacts/): where the output folder goes and how to download it by address.
 
 
 [← Back to README](../../README.md)

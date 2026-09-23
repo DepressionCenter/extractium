@@ -1,0 +1,125 @@
+# This file is part of Extractium™
+# examples/data-repo/.gitlab-ci.yml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-22
+# Last Modified: 2026-09-22
+# Summary: Scheduled build for an organization's data repository on a GitLab
+# instance with its own runners, such as an institution's self-hosted
+# GitLab. Checks out Extractium at a pinned version, installs its pinned
+# dependencies, keeps the crawl cache and the embedding model between
+# runs, and keeps the output folder as a pipeline artifact. An optional
+# job publishes the folder to GitLab Pages where the instance has Pages
+# turned on.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# The schedule is not in this file. GitLab keeps it under the project's
+# "Build > Pipeline schedules" page, where you pick the day and time and
+# can start a run by hand. The rules below run the build for a schedule,
+# for a pipeline started from the web page, and for nothing else, so a
+# push to the repository does not start an hour-long build.
+
+variables:
+  CONFIG_FILE: config.yaml
+  OUT_DIR: dist
+  # The version of the tool this repository builds with. Raise it
+  # deliberately, so a change in the tool never arrives unannounced in a
+  # scheduled run. Any tag or branch of the Extractium repository works.
+  EXTRACTIUM_REF: v0.2
+  # Where the tool is cloned from. A runner that cannot reach github.com
+  # can clone a mirror of the repository on the GitLab instance instead.
+  EXTRACTIUM_REPO: https://github.com/DepressionCenter/extractium
+  # Set on a run started from the web page to visit at most this many
+  # pages, as a first run should. Blank uses the settings file.
+  MAX_PAGES: ""
+  # Set to "true" to publish the output folder to GitLab Pages as well as
+  # keeping it as an artifact. The instance must have Pages turned on.
+  PUBLISH_PAGES: "false"
+  # The embedding model and the packages pip downloads go under the
+  # working directory so the cache below can keep them between runs.
+  HF_HOME: $CI_PROJECT_DIR/.hf_cache
+  PIP_CACHE_DIR: $CI_PROJECT_DIR/.pip_cache
+
+# The image used when the runner runs jobs in containers. A runner that
+# runs jobs on the host itself ignores this line and needs Python 3.10 or
+# newer, git, and pip installed there.
+image: python:3.12
+
+# Kept between runs, keyed on the settings file: change what is crawled
+# and the run starts from a clean crawl cache. Pages already fetched keep
+# their entry, so a scheduled rebuild downloads only what changed. The
+# model and the pip downloads are keyed the same way and cost nothing
+# when the key changes but the packages did not.
+cache:
+  key:
+    files:
+      - config.yaml
+    prefix: extractium
+  paths:
+    - .kb_cache/
+    - .hf_cache/
+    - .pip_cache/
+
+stages:
+  - build
+  - publish
+
+build:
+  stage: build
+  # Every runner on the instance that carries this tag can take the job.
+  # Change it to the tag your runners carry, or remove it to accept any
+  # runner the project can use.
+  tags:
+    - extractium
+  # A large corpus can take over an hour. The instance's own ceiling
+  # still applies when it is lower.
+  timeout: 4h
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$EXTRACTIUM_REF" "$EXTRACTIUM_REPO" .extractium
+    # Every package in the lock file carries a hash, so pip refuses
+    # anything whose contents do not match what was locked.
+    - python -m pip install --upgrade pip
+    - python -m pip install --require-hashes -r .extractium/requirements-lock.txt
+    - python -m pip install --no-deps ./.extractium
+    - extractium build --config "$CONFIG_FILE" --out-dir "$OUT_DIR" ${MAX_PAGES:+--max-pages "$MAX_PAGES"}
+  artifacts:
+    name: "compendium-$CI_PIPELINE_ID"
+    paths:
+      - $OUT_DIR/
+    # Long enough that the last good build is still there when the next
+    # one fails. Raise it if the artifact is the only copy anyone reads.
+    expire_in: 3 weeks
+
+# GitLab publishes the "public" folder of a job named "pages" when the
+# instance has Pages turned on. Nothing else about the job is special.
+pages:
+  stage: publish
+  needs:
+    - build
+  tags:
+    - extractium
+  rules:
+    - if: $PUBLISH_PAGES != "true"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - rm -rf public
+    - mv "$OUT_DIR" public
+  artifacts:
+    paths:
+      - public/
