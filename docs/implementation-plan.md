@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-23
 Summary: The phased plan for building Extractium™: why the project is
 worth building, the design decisions the plan relies on, and the
 phases of about one week each, with deliverables, tests, documentation,
@@ -611,6 +611,8 @@ What is left is listed here so a reader of this page knows what was deferred and
 **A relevance floor measured for each compendium.** Finished 2026-09-17 on branch `per-compendium-relevance-floor`. The fixed 0.67 floor suits the center's files and not every file. The best score an unrelated question reaches rises with the size of a corpus, from 0.548 at 300 windows to 0.618 at 59,251 in random subsets of the center's full container, and it runs about 0.05 lower against a light container. On the light container of a 28-page build the fixed floor answered 6 of 25 answerable test queries. The build now embeds 64 fixed, everyday, unrelated questions as queries, once, and records in `calibration` the median and the scaled median absolute deviation of the best cosine each reaches: `unrelatedMedian`, `unrelatedSpread`, `unrelatedProbes`. The probe vectors travel on the `Compendium`, so the light compendium and any output that drops sections measure their own figures without the embedding model. They are never written to a file. The median was chosen over the mean because a fixed list always holds a few questions that are on topic for some corpus: with a tenth of the probes on topic, a mean-based floor on the center's full container moved from 0.694 to 0.763, and the median-based one from 0.708 to 0.723. Both clients and the Cloudflare example set the floor at the median plus 1.5 spreads, held between 0.50 and 0.80, and keep 0.67 for a file without usable figures. Measured by rewriting the center's containers of 2026-09-16 with the figures and running the changed Python client: the full container's floor is 0.689 and the light one's 0.633. At 1.5 spreads the full container answered 40 of 40 answerable queries and 25 of 25 exact terms and returned nothing for 30 held-out unrelated questions; the light one answered 40 of 40 and 22 of the 23 exact terms it holds, and returned a section for 1 of the 30. Two spreads was tried first and lost three single-word queries on the full container whose best window scored just under 0.712. The layout version stays 4: the three fields are ones a reader can ignore, and the SQLite output carries them as three `meta` rows.
 
 #### Still open
+
+**A local page for setup, builds, search, and plug-ins.** Planned in stages on its own page, the [user interface implementation plan](ui-implementation-plan.md), because it is the next release's work and larger than one phase. It answers issues #42 and #98.
 
 Not scheduled, kept in the specification as future work: an enrichment pass with a local language model; clients in other languages; optical character recognition for image-only deposits. Migrating Field Station AI to the JavaScript client and the current container version is a task for that repository, not this one. Each of these is an open issue in the repository.
 

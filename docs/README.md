@@ -70,6 +70,7 @@ These pages are about working on the repository rather than using the tool.
 
 * [Branding and Media Pack](branding.md): logos, colors, image files, and accessibility guidance.
 * [Implementation Plan](implementation-plan.md): the order in which the tool was built, kept as a project record.
+* [User Interface Implementation Plan](ui-implementation-plan.md): the staged plan for the local page that sets up, builds, schedules, searches, and installs plug-ins, and for connecting an AI assistant.
 * [Page Template](doc-template.md): the layout new pages in this folder follow.
 * [Session Prompt Template](session-prompt-template.md): the fixed opening to paste into a new coding session.
 * [Skill Authoring Examples](skill-examples.md): starter recipes for writing a small agent skill under `skills/`.
