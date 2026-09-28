@@ -284,7 +284,8 @@ A local folder can hold content that must never be published. The rules:
 | Language | Notes |
 |---|---|
 | JavaScript | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, a relevance floor on the raw cosine, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
-| Python | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
+| Python | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. `cross_encoder_reranker` wraps a sentence-transformers cross-encoder for the optional reranking step. |
+| Both | An optional reranking step: `search` takes a function that scores the question against a list of passages, selects a shortlist three times the number of results kept through the ordinary relevance and diversity passes, and returns the best by that score, ties broken on the window's position. The committed contract holds both clients to one reranked order for a model-free scorer. |
 | Both | A keyword-only entry point, `search_keywords` and `searchKeywords`, that ranks by the file's BM25 statistics with no model, narrows by `#word` filters over a section's tags, keywords, and categories, and returns each section once; and `suggest`, a prefix filter over the file's tags, page titles, and vocabulary for a search box. The committed contract holds both clients to the same answers for these as for the hybrid search. |
 | Others | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). |
 

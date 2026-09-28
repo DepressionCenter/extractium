@@ -412,6 +412,18 @@
     "f1c70290315ca8c0",
     "c796e5dd9fb3d977"
   ],
+  "rerankedParentIds": [
+    "f1c70290315ca8c0",
+    "c796e5dd9fb3d977",
+    "2327ecf867c7436d",
+    "f6a4301a17f6de1b"
+  ],
+  "rerankScores": [
+    6.0,
+    3.0,
+    2.0,
+    2.0
+  ],
   "keywordQuery": "standard disclaimer",
   "keywordParentIds": [
     "f1c70290315ca8c0"

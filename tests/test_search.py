@@ -47,6 +47,8 @@ from extractium.search import (
     SCORE_MIN,
     SCORE_PLACES,
     SOURCE_CAP,
+    cross_encoder_reranker,
+    rerank_hits,
     ContainerError,
     attach_cosines,
     bm25_candidates,
@@ -522,6 +524,89 @@ def test_search_adds_the_query_prefix_the_file_records_before_embedding():
     assert seen == [
         "Represent this sentence for searching relevant passages: how do I rebuild"
     ]
+
+
+# ---------------------------------------------------------------------------
+# Reranking
+# ---------------------------------------------------------------------------
+
+def test_search_with_a_reranker_orders_a_shortlist_by_its_scores_and_keeps_k():
+    index = load_container(container_bytes(sample_header(), [[1, 0], [0, 1]]))
+    seen = []
+
+    def rerank(query, passages):
+        seen.append((query, list(passages)))
+        # The section the vector search put second is the reranker's first.
+        return [0.1, 2.5]
+
+    (hit,) = index.search("alpha", lambda text: [1, 0], k=1, no_threshold=True, rerank=rerank)
+
+    assert hit.parent["id"] == "bbbbbbbbbbbbbbbb"
+    assert hit.rerank == 2.5
+    # The shortlist held both sections although only one was kept, and
+    # each passage is the section's heading, a line break, and its text.
+    assert seen == [("alpha", ["Section aaaaaaaaaaaaaaaa\nAlpha section text.", "Section bbbbbbbbbbbbbbbb\nSynthetic section text for the client tests."])]
+
+
+def test_a_search_without_a_reranker_leaves_the_rerank_score_empty():
+    index = load_container(container_bytes(sample_header(), [[1, 0], [0, 1]]))
+
+    hits = index.search("alpha", lambda text: [1, 0], no_threshold=True)
+
+    assert hits and all(hit.rerank is None for hit in hits)
+
+
+def test_the_reranker_is_not_called_when_nothing_is_relevant():
+    index = load_container(container_bytes(sample_header(), [[1, 0], [0, 1]]))
+    calls = []
+
+    hits = index.search("alpha", lambda text: [0.1, 0.1], rerank=lambda q, p: calls.append(p) or [])
+
+    assert hits == [] and calls == []
+
+
+def test_rerank_hits_rounds_scores_and_breaks_ties_on_the_child_index():
+    index = load_container(container_bytes(sample_header(), [[1, 0], [0, 1]]))
+    hits = index.search("alpha", lambda text: [0, 1], k=2, no_threshold=True)
+    assert [hit.child_index for hit in hits] == [1, 0]
+
+    reranked = rerank_hits("alpha", hits, lambda q, p: [0.30000000001, 0.3], k=2)
+
+    assert [hit.child_index for hit in reranked] == [0, 1]
+    assert [hit.rerank for hit in reranked] == [0.3, 0.3]
+    assert rerank_hits("alpha", [], lambda q, p: [], k=2) == []
+
+
+@pytest.mark.parametrize("scores", ([1.0], [1.0, "high"], [1.0, float("nan")], [True, 0.0]))
+def test_rerank_hits_refuses_a_score_list_of_the_wrong_shape(scores):
+    index = load_container(container_bytes(sample_header(), [[1, 0], [0, 1]]))
+    hits = index.search("alpha", lambda text: [1, 0], k=2, no_threshold=True)
+
+    with pytest.raises(ValueError, match="reranker"):
+        rerank_hits("alpha", hits, lambda q, p: scores, k=2)
+
+
+def test_cross_encoder_reranker_scores_query_passage_pairs_without_a_softmax(monkeypatch):
+    """The library is loaded on call, the model once, and the pairs are (query, passage)."""
+    import sys, types
+
+    class FakeCrossEncoder:
+        loaded = []
+
+        def __init__(self, name):
+            self.loaded.append(name)
+
+        def predict(self, pairs, batch_size, apply_softmax):
+            assert apply_softmax is False and batch_size == 8
+            return np.array([len(passage) - len(query) for query, passage in pairs], dtype=np.float32)
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(CrossEncoder=FakeCrossEncoder))
+
+    rerank = cross_encoder_reranker("example/cross-encoder", batch_size=8)
+
+    assert rerank("ab", ["abcd", "abcdef"]) == [2.0, 4.0]
+    assert rerank("ab", []) == []
+    assert FakeCrossEncoder.loaded == ["example/cross-encoder"]
 
 
 # ---------------------------------------------------------------------------

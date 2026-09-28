@@ -40,6 +40,7 @@ __license__ = "GPLv3 or later"
 __date__ = "2026-09-28"
 
 import bisect
+import dataclasses
 import gzip
 import json
 import math
@@ -135,6 +136,18 @@ SOURCE_CAP = 1
 
 # Sections returned per search when the caller names no other number.
 TOP_K = 4
+
+# How many sections a reranker is given for each one the caller keeps.
+# A reranker over a list of exactly k sections can only reorder them;
+# over a longer shortlist it can also replace one. The shortlist comes
+# out of the same relevance tests and diversity pass as an ordinary
+# result, so the reranker never sees a section the search found
+# irrelevant, and the selection is still capped by MMR_POOL_CAP.
+RERANK_SHORTLIST_FACTOR = 3
+
+# The cross-encoder `cross_encoder_reranker` loads when the caller names
+# none: small, English, trained on web search, and one output label.
+DEFAULT_RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # Reciprocal rank fusion. 60 is the constant from the literature, and
 # the two weights are the trust split between the vector list and the
@@ -313,6 +326,9 @@ class Hit:
             section text, in UTF-16 code units; None when the file keeps
             no offsets.
         end (int | None): exclusive end of the matched window.
+        rerank (float | None): the reranker's score for the section when
+            a search was given one, which is then what the list is
+            ordered by; None otherwise. Comparable within one list only.
     """
 
     parent: dict
@@ -321,6 +337,7 @@ class Hit:
     start: object = None
     end: object = None
     cosine: object = None
+    rerank: object = None
 
     @property
     def window_text(self):
@@ -727,6 +744,85 @@ def diversify(candidates, vectors, k, source_key_of, no_threshold=False, cosine_
     return selected
 
 
+### Reranking ###
+
+def rerank_passage(parent):
+    """The text a reranker scores for one section: its heading, a line break, and its text."""
+    return f"{parent.get('t', '')}\n{parent.get('x', '')}"
+
+
+def rerank_hits(query, hits, rerank, k):
+    """
+    Orders a shortlist of hits by a reranker's scores and keeps the best.
+
+    Args:
+        query (str): what the user asked, unprefixed.
+        hits (Sequence[Hit]): the shortlist, as `search` selected it.
+        rerank (Callable[[str, list[str]], Sequence[float]]): scores the
+            query against each passage, one number per passage, higher
+            meaning more relevant. The numbers need share no scale with
+            anything else; a cross-encoder's raw logits are fine.
+        k (int): how many hits to keep.
+
+    Returns:
+        list[Hit]: at most k hits, best first by the reranker, ties
+        broken on the child index, each carrying its `rerank` score.
+
+    Raises:
+        ValueError: if the reranker returns a different number of scores
+            than it was given passages, or a score that is not a number.
+    """
+    hits = list(hits)
+    if not hits:
+        return []
+    scores = list(rerank(query, [rerank_passage(hit.parent) for hit in hits]))
+    if len(scores) != len(hits):
+        raise ValueError(f"the reranker returned {len(scores)} score(s) for {len(hits)} passage(s).")
+    reranked = []
+    for hit, score in zip(hits, scores):
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or math.isnan(score):
+            raise ValueError(f"the reranker returned a score that is not a number: {score!r}.")
+        reranked.append(dataclasses.replace(hit, rerank=round_score(float(score))))
+    reranked.sort(key=lambda hit: (-hit.rerank, hit.child_index))
+    return reranked[:k]
+
+
+def cross_encoder_reranker(model_name=DEFAULT_RERANK_MODEL, batch_size=32):
+    """
+    A reranker for `search` built on a sentence-transformers cross-encoder.
+
+    The library is imported here and not at the top of the module, so a
+    program that never reranks never loads it. The model is loaded once,
+    when this function is called, and downloaded on first use.
+
+    The scores are the model's own output for each (query, passage)
+    pair, with no softmax: a one-label model put through a softmax scores
+    every passage 1.0 and the order never changes. The library's default
+    activation for a one-label model keeps the order the logits give.
+
+    Args:
+        model_name (str): a cross-encoder model id or path.
+        batch_size (int): pairs scored per batch.
+
+    Returns:
+        Callable[[str, list[str]], list[float]]: what `search` takes as
+        its `rerank` argument.
+    """
+    from sentence_transformers import CrossEncoder
+
+    model = CrossEncoder(model_name)
+
+    def rerank(query, passages):
+        if not passages:
+            return []
+        scores = model.predict(
+            [(query, passage) for passage in passages], batch_size=batch_size, apply_softmax=False,
+        )
+        return [float(score) for score in scores]
+
+    return rerank
+
+
 ### Index ###
 
 class SearchIndex:
@@ -848,7 +944,7 @@ class SearchIndex:
         )
         return attach_cosines(fused, query_vector, self.vectors)
 
-    def search(self, query, embed_query, k=TOP_K, no_threshold=False):
+    def search(self, query, embed_query, k=TOP_K, no_threshold=False, rerank=None):
         """
         Searches the compendium and returns whole sections.
 
@@ -866,6 +962,14 @@ class SearchIndex:
             no_threshold (bool): return the closest sections even when
                 none passes the relevance tests. Use it to show a reader
                 what was nearest, never to answer from.
+            rerank (Callable[[str, list[str]], Sequence[float]] | None):
+                scores the query against a list of passages, higher
+                meaning more relevant, as `cross_encoder_reranker`
+                returns. When given, the search selects a shortlist of
+                RERANK_SHORTLIST_FACTOR times k sections the ordinary
+                way, scores them, and returns the k best by that score.
+                The relevance tests are unchanged: the reranker orders
+                what was found relevant and never adds to it.
 
         Returns:
             list[Hit]: the selected sections, best first. Empty when
@@ -873,10 +977,14 @@ class SearchIndex:
         """
         query_vector = embed_query(self.query_prefix + query)
         pool = self.candidates(query, query_vector)
+        shortlist = k * RERANK_SHORTLIST_FACTOR if rerank is not None else k
         selected = diversify(
-            pool, self.vectors, k, self._source_key_of, no_threshold, self.cosine_min
+            pool, self.vectors, shortlist, self._source_key_of, no_threshold, self.cosine_min
         )
-        return [self._hit_of(candidate) for candidate in selected]
+        hits = [self._hit_of(candidate) for candidate in selected]
+        if rerank is None:
+            return hits
+        return rerank_hits(query, hits, rerank, k)
 
     def _hit_of(self, candidate):
         """Resolves one selected window to the section that contains it."""

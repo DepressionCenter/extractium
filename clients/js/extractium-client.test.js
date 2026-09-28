@@ -55,6 +55,7 @@ import {
     parseQuery,
     relevanceCutoff,
     relevanceFloor,
+    rerankHits,
     roundScore,
     rrfFuse,
     tokenize,
@@ -488,6 +489,62 @@ test('searchWithVector returns whole sections, not the matched window', async ()
     assert.equal(hit.childIndex, 0);
 });
 
+test('search with a reranker orders a shortlist by its scores and keeps k', async () => {
+    const index = loadContainer(containerBytes(sampleHeader(), [1, 0, 0, 1]));
+    const seen = [];
+    const rerank = (query, passages) => {
+        seen.push([query, passages]);
+        return [0.1, 2.5]; // the section the vector search put second is the reranker's first
+    };
+
+    const [hit] = await index.search('alpha', () => [1, 0], { k: 1, noThreshold: true, rerank });
+
+    assert.equal(hit.parent.id, 'bbbbbbbbbbbbbbbb');
+    assert.equal(hit.rerank, 2.5);
+    // The shortlist held both sections although only one was kept, and
+    // each passage is the section's heading, a line break, and its text.
+    assert.deepEqual(seen, [['alpha', ['Section aaaaaaaaaaaaaaaa\nAlpha section text.', 'Section bbbbbbbbbbbbbbbb\nSynthetic section text for the client tests.']]]);
+});
+
+test('a search without a reranker leaves the rerank score empty', async () => {
+    const index = loadContainer(containerBytes(sampleHeader(), [1, 0, 0, 1]));
+
+    const hits = await index.search('alpha', () => [1, 0], { noThreshold: true });
+
+    assert.ok(hits.length && hits.every((hit) => hit.rerank === null));
+});
+
+test('the reranker is not called when nothing is relevant', async () => {
+    const index = loadContainer(containerBytes(sampleHeader(), [1, 0, 0, 1]));
+    const calls = [];
+
+    const hits = await index.search('alpha', () => [0.1, 0.1], { rerank: (q, p) => { calls.push(p); return []; } });
+
+    assert.deepEqual(hits, []);
+    assert.deepEqual(calls, []);
+});
+
+test('rerankHits rounds scores, breaks ties on the child index, and accepts a promise', async () => {
+    const index = loadContainer(containerBytes(sampleHeader(), [1, 0, 0, 1]));
+    const hits = index.searchWithVector('alpha', [0, 1], { k: 2, noThreshold: true });
+    assert.deepEqual(hits.map((hit) => hit.childIndex), [1, 0]);
+
+    const reranked = await rerankHits('alpha', hits, async () => [0.30000000001, 0.3], 2);
+
+    assert.deepEqual(reranked.map((hit) => hit.childIndex), [0, 1]);
+    assert.deepEqual(reranked.map((hit) => hit.rerank), [0.3, 0.3]);
+    assert.deepEqual(await rerankHits('alpha', [], () => [], 2), []);
+});
+
+test('rerankHits refuses a score list of the wrong shape', async () => {
+    const index = loadContainer(containerBytes(sampleHeader(), [1, 0, 0, 1]));
+    const hits = index.searchWithVector('alpha', [1, 0], { k: 2, noThreshold: true });
+
+    for (const scores of [[1], [1, 'high'], [1, NaN], [true, 0]]) {
+        await assert.rejects(rerankHits('alpha', hits, () => scores, 2), /reranker/);
+    }
+});
+
 test('search adds the query prefix the file records before embedding', async () => {
     const index = loadContainer(containerBytes(sampleHeader(), [1, 0, 0, 1]));
     const seen = [];
@@ -605,6 +662,25 @@ test('the ranking matches the one recorded for the Python client', () => {
     );
     assert.deepEqual(closest.map((hit) => hit.parent.id), expected.closestParentIds);
     assert.deepEqual(relevant.map((hit) => hit.parent.id), expected.relevantParentIds);
+});
+
+test('the reranked sections match the ones recorded for the Python client', async () => {
+    const container = fs.readFileSync(path.join(GOLDEN, 'contract-container.json'));
+    const expected = JSON.parse(fs.readFileSync(path.join(GOLDEN, 'contract-query.json'), 'utf-8'));
+    const index = loadContainer(new Uint8Array(container));
+    // The same model-free reranker tests/contract_fixture.py runs: how
+    // many of the query's distinct words each passage holds.
+    const overlap = (query, passages) => {
+        const words = new Set(tokenize(query));
+        return passages.map((passage) => new Set(tokenize(passage).filter((word) => words.has(word))).size);
+    };
+
+    const reranked = await index.search(
+        expected.query, () => expected.queryVector, { k: expected.k, noThreshold: true, rerank: overlap }
+    );
+
+    assert.deepEqual(reranked.map((hit) => hit.parent.id), expected.rerankedParentIds);
+    assert.deepEqual(reranked.map((hit) => hit.rerank), expected.rerankScores);
 });
 
 test('the golden container carries the query prefix the contract expects', () => {

@@ -162,13 +162,38 @@ Both clients run the same six steps. You do not have to configure any of them.
 The floor in step 3 comes from the file. The build asks 64 everyday questions that have nothing to do with your content, such as how to bake bread, and records how well the best window in your compendium matches each one. The floor sits just above those scores, so it fits this compendium: a larger one gets a higher floor, and the light container gets a lower one than the full container. `index.cosine_min` in Python and `index.cosineMin` in JavaScript tell you the value. A file built before this existed gets a fixed 0.67, which suits the embedding model, `BAAI/bge-small-en-v1.5` with its query prefix: the best window for a question a compendium answers scored 0.70 and higher in testing, and the best window for an unrelated question mostly stayed under 0.67. It is not a perfect line. A question close to the compendium's subject that it does not answer can still pass, so an assistant should read what comes back before it answers from it. To use another floor, call the selection step yourself: `diversify` takes the floor as its last argument in both clients. An application can offer that as a setting, so a reader can ask for stricter or looser matches.
 
 
-## Adding a reranker
+## Reranking the results
 
-Neither client reranks. A cross-encoder that scores each question and passage together can sharpen the order of the sections that come back, and it is a few lines with the `sentence_transformers.CrossEncoder` class in Python. The JavaScript client leaves it out because it would add a second model download to every page that uses it. If you add one, keep to three rules:
+A cross-encoder reads the question and a passage together and scores how well the passage answers it. That is slower than the vector search, so it runs only over a shortlist, but it is sharper. Both clients can run one: you hand `search` a function, the way you hand it the embedder, and the client does the rest.
 
-- Rerank a shortlist larger than the number of results you keep. Over a list of exactly that size a reranker can only reorder, never replace. Ask the client for more sections than you show, or take its candidate pool, and keep the best after reranking.
-- Score a one-label cross-encoder from its raw logit. A text-classification pipeline applies a softmax over the labels, and a softmax over one label is 1.0 for every passage, so every passage ties and nothing moves. A sigmoid over the logit keeps the order; a softmax over one label does not.
-- Keep the relevance floor. A reranker orders what the client found relevant; it does not decide whether a question was answered.
+```python
+from extractium.search import cross_encoder_reranker, load_container
+
+index = load_container("dist/compendium-full.json.gz")
+rerank = cross_encoder_reranker()       # cross-encoder/ms-marco-MiniLM-L-6-v2, loaded once
+
+hits = index.search("how do I request a data extract", embed_query, rerank=rerank)
+for hit in hits:
+    print(round(hit.rerank, 3), hit.parent["t"])
+```
+
+`cross_encoder_reranker` wraps the `sentence-transformers` package that Extractium™ already installs, and downloads the model on first use. Name another model with `cross_encoder_reranker("your-org/your-model")`. Any function that takes the question and a list of passages and returns one number per passage, higher meaning better, works in its place.
+
+```javascript
+const rerank = async (query, passages) => scoresFromYourModel(query, passages);   // one number per passage
+
+const hits = await index.search('how do I request a data extract', embedQuery, { rerank });
+```
+
+The JavaScript client ships no reranker of its own, because a second model download is a decision for the page that uses it. In a browser, transformers.js can load the same model; take its raw score per pair, as described below.
+
+What the client does with your function:
+
+- It selects a shortlist three times as long as the number of results you asked for, through the same relevance tests and diversity pass as an ordinary search. Over a list of exactly that size a reranker could only reorder, never replace, so the shortlist is longer than the answer.
+- It scores each section as its heading, a line break, and its text, orders the shortlist by your scores, and returns the best. Ties are broken on the window's position in the file, as everywhere else in the clients. Each hit carries the score as `rerank` (`rerank` in JavaScript too), and `null` or `None` when no reranker ran.
+- The relevance floor stays. A reranker orders what the client found relevant; it never decides whether the question was answered, and it is not called when nothing was.
+
+One trap, if you score a cross-encoder yourself: score a one-label model from its raw output. A text-classification pipeline applies a softmax over the labels, and a softmax over one label is 1.0 for every passage, so every passage ties and nothing moves. A sigmoid keeps the order; a softmax over one label does not. `cross_encoder_reranker` asks the library for the raw scores.
 
 
 ## Keeping the two clients in agreement

@@ -45,6 +45,7 @@ from tests.contract_fixture import (
     CONTAINER_FILE,
     QUERY_FILE,
     build_contract_compendium,
+    overlap_reranker,
     write_contract_container,
     write_contract_files,
 )
@@ -118,6 +119,21 @@ def test_python_client_reproduces_the_recorded_relevant_sections(golden_index, e
     )
 
     assert [hit.parent["id"] for hit in hits] == expectations["relevantParentIds"]
+
+
+def test_python_client_reproduces_the_recorded_reranked_sections(golden_index, expectations):
+    hits = golden_index.search(
+        expectations["query"], lambda text: expectations["queryVector"], k=expectations["k"],
+        no_threshold=True, rerank=overlap_reranker,
+    )
+
+    assert [hit.parent["id"] for hit in hits] == expectations["rerankedParentIds"]
+    assert [hit.rerank for hit in hits] == expectations["rerankScores"]
+
+
+def test_the_contract_reranker_changes_the_order_it_is_given(expectations):
+    """A reranker that agreed with the vector search would prove nothing about either client."""
+    assert expectations["rerankedParentIds"] != expectations["closestParentIds"]
 
 
 def test_python_client_reproduces_the_recorded_keyword_and_tag_answers(golden_index, expectations):
