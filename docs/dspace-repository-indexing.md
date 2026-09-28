@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/dspace-repository-indexing.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-09
-Last Modified: 2026-09-14
+Last Modified: 2026-09-28
 Summary: Why a DSpace repository such as the University of Michigan
 Library's Deep Blue cannot be crawled, what its own interface holds
 instead, and how the dspace source reads a collection's deposits: the
@@ -124,7 +124,7 @@ That answers "index the content of those files" without adding a single dependen
 
 | Bundle | What is in it | Used |
 |---|---|---|
-| `ORIGINAL` | The deposited files themselves | Recorded: name, size, type, and download address |
+| `ORIGINAL` | The deposited files themselves | Recorded: each file's name, as a tag on the deposit |
 | `TEXT` | Text already extracted from those files | Indexed |
 | `THUMBNAIL` | Preview images | No |
 | `LICENSE`, `CC-LICENSE` | Deposit agreements and license files | No. Boilerplate, identical across deposits |

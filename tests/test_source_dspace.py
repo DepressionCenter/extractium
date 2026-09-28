@@ -14,7 +14,7 @@ tests/test_source_dspace.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -416,7 +416,9 @@ def test_the_abstract_is_the_deposits_summary_and_its_subjects_are_its_tags(fixt
     documents, _ = read(fixture)
 
     assert documents[0].summary.startswith("A synthetic abstract")
-    assert documents[0].tags == ("sleep-research", "wearables", "example-topic")
+    assert documents[0].tags == (
+        "sleep-research", "wearables", "example-topic", "Wearable Sleep Tracking in Practice.pdf",
+    )
 
 
 def test_a_long_abstract_gives_only_its_opening_paragraphs_as_the_summary():
@@ -429,10 +431,21 @@ def test_a_long_abstract_gives_only_its_opening_paragraphs_as_the_summary():
     assert deposit_summary({"metadata": {}}) == ""
 
 
-def test_the_deposited_files_are_named_with_their_sizes(fixture):
+def test_the_deposited_files_are_tags_and_never_body_text(fixture):
+    """A section that opens with a file name is what a model quotes; the tags still say what is attached."""
     documents, _ = read(fixture)
 
-    assert "Files: Wearable Sleep Tracking in Practice.pdf (134.9 KB)" in documents[0].content
+    assert documents[0].tags[-1] == "Wearable Sleep Tracking in Practice.pdf"
+    assert all("Files:" not in document.content for document in documents)
+    assert all("134.9 KB" not in document.content for document in documents)
+
+
+def test_deposit_tags_are_the_subjects_then_each_file_name_once():
+    from extractium.sources.dspace import deposit_tags
+    deposit = {"metadata": {"dc.subject": [{"value": "sleep"}]}}
+
+    assert deposit_tags(deposit, ("a.pdf", "b.pdf", "a.pdf")) == ("sleep", "a.pdf", "b.pdf")
+    assert deposit_tags(deposit, ()) == ("sleep",)
 
 
 def test_who_submitted_a_deposit_is_never_indexed(fixture):
@@ -508,7 +521,9 @@ def test_a_deposit_whose_files_hold_no_readable_text_says_so(fixture):
     body = body_of(read(fixture)[0], "Poster: Example Study Findings")
 
     assert "No text could be read out of the file(s) deposited here" in body
-    assert "Files: Example_Poster_2025.png (2.7 MB)" in body
+    assert "Files:" not in body
+    poster = next(d for d in read(fixture)[0] if d.title == "Poster: Example Study Findings")
+    assert "Example_Poster_2025.png" in poster.tags
 
 
 def test_an_extracted_text_file_over_the_ceiling_is_named_and_skipped(fixture):
