@@ -1,9 +1,10 @@
 """
 Summary: Turns one document into parent (full-section) and child (small
 overlapping window) chunks for small-to-big retrieval, gives every parent
-a stable identifier, and holds the host-independent helpers the crawl
-needs around chunking: link discovery and Markdown or plain-text to HTML
-conversion. Reading a page's title and content node is the site
+a stable identifier, gives a
+section made mostly of link text a lower weight, and holds the
+host-independent helpers the crawl needs around chunking: link discovery
+and Markdown or plain-text to HTML conversion. Reading a page's title and content node is the site
 handlers' job (extractium.sources); nothing here branches on a host.
 
 This file is part of Extractium™
@@ -65,6 +66,17 @@ CHILD_OVERLAP_CHARS = 53
 
 # The headings a page is split into sections at.
 SECTION_HEADING_TAGS = frozenset({"h2", "h3"})
+
+# A section made mostly of link text is a list of links to other pages:
+# a resources page, a navigation block, a table of contents. Its words
+# match any question about the pages it links to, so by rank it can beat
+# the page that holds the answer while saying nothing itself. Such a
+# section keeps its place and its text and takes a lower weight, the
+# same knob the build turns for text repeated across pages, so it loses
+# every tie with content and stays citable. The share is measured over
+# the characters of the section's text that sit inside an <a> element.
+LINK_LIST_MIN_SHARE = 0.6
+LINK_LIST_WEIGHT = 0.5
 
 
 # Elements whose text is never page content, wherever they sit.
@@ -215,14 +227,37 @@ def cut_position(text, limit=CHUNK_MAX_CHARS):
     return cut if cut >= CHUNK_MIN_CHARS else limit
 
 
-def _is_unread(string, node):
-    """Whether a string sits inside a heading, which names a section, or inside an element that holds no page text."""
+def _string_context(string, node):
+    """
+    Where one string sits below the content node: whether it is unread
+    (inside a heading, which names a section, or inside an element that
+    holds no page text) and whether it is link text.
+
+    Returns:
+        tuple[bool, bool]: (unread, linked).
+    """
+    linked = False
     for parent in string.parents:
         if parent is node:
-            return False
+            break
         if parent.name in SECTION_HEADING_TAGS or parent.name in UNREAD_TAGS:
-            return True
-    return False
+            return True, linked
+        if parent.name == "a":
+            linked = True
+    return False, linked
+
+
+def _link_share(parts):
+    """The share of a section's characters that are link text; 0.0 for an empty section."""
+    total = sum(len(text) for text, _linked in parts)
+    if not total:
+        return 0.0
+    return sum(len(text) for text, linked in parts if linked) / total
+
+
+def section_weight(link_share):
+    """The weight a section takes from its link share: LINK_LIST_WEIGHT for a list of links, 1.0 otherwise."""
+    return LINK_LIST_WEIGHT if link_share >= LINK_LIST_MIN_SHARE else 1.0
 
 
 def sections_of(node):
@@ -233,16 +268,19 @@ def sections_of(node):
     The node is walked in document order, so a heading divides the page
     wherever it sits: directly under the content node, or inside any
     number of wrapper elements, which is where most sites put it. Text is
-    gathered string by string and joined with single spaces.
+    gathered string by string and joined with single spaces, and each
+    section is measured for how much of its text is link text.
 
     Args:
         node (bs4.Tag): the extracted content node.
 
     Returns:
-        list[tuple[str | None, str]]: (heading, text) pairs. The first
-        pair has heading None and holds whatever comes before the first
-        heading, possibly nothing. Every later pair is one heading and
-        the text up to the next one.
+        list[tuple[str | None, str, float]]: (heading, text, link share)
+        triples. The first has heading None and holds whatever comes
+        before the first heading, possibly nothing. Every later one is
+        one heading and the text up to the next. The link share is the
+        fraction of the text's characters that sit inside a link, 0.0
+        to 1.0.
     """
     sections = [(None, [])]
     for element in node.descendants:
@@ -252,12 +290,16 @@ def sections_of(node):
             continue
         if type(element) not in (NavigableString, CData):
             continue  # a comment, a processing instruction, a doctype
-        if _is_unread(element, node):
+        unread, linked = _string_context(element, node)
+        if unread:
             continue
         text = element.strip()
         if text:
-            sections[-1][1].append(text)
-    return [(heading, " ".join(parts)) for heading, parts in sections]
+            sections[-1][1].append((text, linked))
+    return [
+        (heading, " ".join(text for text, _linked in parts), _link_share(parts))
+        for heading, parts in sections
+    ]
 
 
 def split_into_parents(title, node, url):
@@ -269,7 +311,9 @@ def split_into_parents(title, node, url):
     for the smaller windows actually embedded and searched.
 
     Every piece of text lands in exactly one parent. The part before the
-    first heading becomes a parent headed by the page title alone.
+    first heading becomes a parent headed by the page title alone. A
+    section whose text is mostly link text takes LINK_LIST_WEIGHT; every
+    other parent takes 1.0. A long section's pieces share its weight.
 
     Args:
         title (str): the page title, used as (part of) each parent's heading.
@@ -284,23 +328,27 @@ def split_into_parents(title, node, url):
     chunks = []
     host = urlparse(url).netloc.lower()
 
-    def _make(heading, text):
+    def _make(heading, text, link_share):
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
         if len(text) < CHUNK_MIN_CHARS:
             return
+        weight = section_weight(link_share)
         while len(text) > CHUNK_MAX_CHARS:
             cut = cut_position(text)
-            chunks.append({"t": heading, "x": text[:cut].rstrip(), "u": url, "host": host, "weight": 1.0})
+            chunks.append({"t": heading, "x": text[:cut].rstrip(), "u": url, "host": host, "weight": weight})
             text = text[cut:].strip()
         if text:
-            chunks.append({"t": heading, "x": text, "u": url, "host": host, "weight": 1.0})
+            chunks.append({"t": heading, "x": text, "u": url, "host": host, "weight": weight})
 
     if node.find(list(SECTION_HEADING_TAGS)):
-        for heading, text in sections_of(node):
-            _make(title if heading is None else f"{title}{HEADING_SEPARATOR}{heading}", text)
+        for heading, text, link_share in sections_of(node):
+            _make(title if heading is None else f"{title}{HEADING_SEPARATOR}{heading}", text, link_share)
     else:
+        # A page without headings keeps its line breaks, so its text is
+        # read whole; its link share comes from the same walk as above.
         text = node.get_text("\n", strip=True)
-        _make(title, text)
+        (_heading, _text, link_share), = sections_of(node)
+        _make(title, text, link_share)
 
     return assign_parent_ids(chunks)
 
@@ -415,7 +463,9 @@ def chunk_document(document):
         dict holds id, t, x, u, host, source_type, content_type,
         source_label, categories, local, weight, and the enrichment
         fields, the summary and tags as the document carries them and the
-        rest None until a pass fills them; every child is a copy of its
+        rest None until a pass fills them; the weight is the document's
+        multiplied by the section's own, which is below 1.0 for a list of
+        links; every child is a copy of its
         parent with its own `x`, its `start` and `end` offsets into the
         parent's text, and a page-local `pid`.
     """
@@ -429,7 +479,7 @@ def chunk_document(document):
         parent["source_label"] = document.source_label
         parent["categories"] = tuple(document.categories)
         parent["local"] = document.local
-        parent["weight"] = document.weight
+        parent["weight"] = document.weight * parent["weight"]
         for field in ENRICHMENT_FIELDS:
             parent[field] = None
         # What the source itself knows about the page. The keyword step

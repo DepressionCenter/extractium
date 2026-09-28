@@ -73,7 +73,7 @@ The client adds the file's query prefix for you before calling your function, so
 | Field | What it holds |
 |---|---|
 | `parent` | The whole section: its heading (`t`), text (`x`), URL (`u`), categories, and the rest of the fields the [container format](../container-format.md) lists. This is what you show a reader or hand to a language model. |
-| `score` | How strong the match was, multiplied by the section's `weight`. Useful for ordering and for comparing hits inside one result list. It is not a percentage, and it is rounded to six decimal places. A weight below 1.0 means the build found the section's text on three or more pages, such as an author's bio or a licence notice, and let it lose ties with real content. |
+| `score` | How strong the match was, multiplied by the section's `weight`. Useful for ordering and for comparing hits inside one result list. It is not a percentage, and it is rounded to six decimal places. A weight below 1.0 means the build found the section's text on three or more pages, such as an author's bio or a licence notice, or found it to be mostly links, such as a resources page, and let it lose ties with real content. |
 | `cosine` | How close the matched window is to your question, as a cosine similarity between 0 and 1. This is the number the relevance floor is checked against. |
 | `child_index` | Which search window matched. |
 | `start`, `end` | Where that window sits inside the section text, in UTF-16 code units. |

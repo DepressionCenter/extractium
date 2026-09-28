@@ -15,7 +15,7 @@ tests/test_core_chunking.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -157,6 +157,78 @@ def test_heading_text_scripts_and_comments_are_not_section_text():
 
     assert parent["t"] == "Page -- First part"
     assert parent["x"] == f"Alpha. {SECTION_BODY}"
+
+
+def _linked_page(share_of_links):
+    """A page with two sections: one of prose, one of a list of links whose text is the given share."""
+    prose = "Synthetic prose sentence about the study design, long enough to be a section. " * 2
+    links = "".join(f'<li><a href="/p{i}">Synthetic linked article title {i}</a></li>' for i in range(6))
+    padding = "" if share_of_links >= 1 else " ".join(["filler"] * int(120 * (1 - share_of_links) / share_of_links))
+    html = (
+        f"<div><p>{prose}</p><h2>Prose</h2><p>{prose}</p>"
+        f"<h2>Reading list</h2><p>{padding}</p><ul>{links}</ul></div>"
+    )
+    return BeautifulSoup(html, "html.parser").div
+
+
+def test_sections_of_measures_the_share_of_each_sections_text_that_is_link_text():
+    node = BeautifulSoup(
+        '<div><p>Twelve chars</p><h2>Mixed</h2><p>six c <a href="/a">linked</a></p>'
+        '<h2>Links</h2><a href="/b">all <em>linked</em></a><h2>Empty</h2></div>', "html.parser",
+    ).div
+
+    sections = chunk.sections_of(node)
+
+    assert [(heading, text) for heading, text, _share in sections] == [
+        (None, "Twelve chars"), ("Mixed", "six c linked"), ("Links", "all linked"), ("Empty", ""),
+    ]
+    assert [round(share, 3) for _heading, _text, share in sections] == [0.0, 0.545, 1.0, 0.0]
+
+
+def test_a_section_that_is_mostly_link_text_takes_the_link_list_weight():
+    parents = chunk.split_into_parents("Page", _linked_page(1.0), "https://example.org/links")
+
+    assert [(parent["t"], parent["weight"]) for parent in parents] == [
+        ("Page", 1.0), ("Page -- Prose", 1.0), ("Page -- Reading list", chunk.LINK_LIST_WEIGHT),
+    ]
+
+
+def test_a_section_with_links_inside_prose_keeps_the_full_weight():
+    parents = chunk.split_into_parents("Page", _linked_page(0.3), "https://example.org/links")
+
+    assert all(parent["weight"] == 1.0 for parent in parents)
+
+
+def test_a_page_without_headings_made_of_links_takes_the_link_list_weight():
+    links = "".join(f'<p><a href="/p{i}">Synthetic linked article title {i}</a></p>' for i in range(6))
+    node = BeautifulSoup(f"<div>{links}</div>", "html.parser").div
+
+    (parent,) = chunk.split_into_parents("Navigation", node, "https://example.org/nav")
+
+    assert parent["weight"] == chunk.LINK_LIST_WEIGHT
+    assert parent["x"].count("\n") == 5
+
+
+def test_every_piece_of_a_long_link_list_shares_its_weight():
+    links = "".join(f'<li><a href="/p{i}">Synthetic linked article title number {i} in a long list</a></li>' for i in range(40))
+    node = BeautifulSoup(f"<div><h2>List</h2><ul>{links}</ul></div>", "html.parser").div
+
+    parents = chunk.split_into_parents("Page", node, "https://example.org/long")
+
+    assert len(parents) > 1
+    assert all(parent["weight"] == chunk.LINK_LIST_WEIGHT for parent in parents)
+
+
+def test_chunk_document_multiplies_the_documents_weight_by_the_sections():
+    from extractium.core.models import Document
+
+    document = Document(url="https://example.org/links", title="Page", content=_linked_page(1.0),
+                        source_type="web", content_type="page", weight=2.0)
+
+    parents, children = chunk.chunk_document(document)
+
+    assert [parent["weight"] for parent in parents] == [2.0, 2.0, 1.0]
+    assert [child["weight"] for child in children][-1] == 1.0
 
 
 def test_cut_position_prefers_a_line_break_then_a_sentence_end_then_a_space():
