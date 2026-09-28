@@ -5,8 +5,9 @@ portal's content selectors (#divMainContent, #questionsContent), the
 "Article - " and "Question Detail - " title prefix stripping, breadcrumb
 categories, and the portal's exclude patterns (login, print, file,
 person, tag, and category views, and narrowed question listings). It
-also names where the portal lists an article's attachments and the
-address a document reader fetches each one from. It is not a
+keeps the portal's tag strip and its feedback widget out of the indexed
+text, and names where the portal lists an article's attachments and
+the address a document reader fetches each one from. It is not a
 crawler: link discovery stays in extractium.sources.web. See
 docs/extractium-spec.md section 5.
 
@@ -15,7 +16,7 @@ extractium/sources/tdx.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -70,10 +71,24 @@ TDX_TITLE_TRUNCATION_MARKERS = ("...", "…")
 # <h1> is the visible heading. Both are read before the body is stripped.
 TDX_FULL_TITLE_META = "og:title"
 
-# The links in the tag strip the portal shows under an article's title,
-# one per tag the article's author chose. The element's id carries the
-# portal's control prefix, so only its ending is matched.
-TDX_TAG_LINKS_SELECTOR = 'div[id$="_divTags"] a'
+# The tag strip the portal shows under an article's title, and the links
+# in it, one per tag the article's author chose. The element's id carries
+# the portal's control prefix, so only its ending is matched.
+TDX_TAG_STRIP_SELECTOR = 'div[id$="_divTags"]'
+TDX_TAG_LINKS_SELECTOR = f"{TDX_TAG_STRIP_SELECTOR} a"
+
+# Page furniture the portal places inside the article's content node,
+# removed before the node is sectioned. The tag strip travels in the
+# `tags` field, so left in place it would also open the article's first
+# section as a line of tag words. The feedback widget under the article
+# is a sign-in prompt, a review count, and two hidden postback links
+# whose text is "Blank"; every article's last section would otherwise
+# end with it.
+TDX_FURNITURE_SELECTORS = (
+    TDX_TAG_STRIP_SELECTOR,
+    'div[id$="_divFeedback2"]',
+    'div[id$="_upFeedbackGrid"]',
+)
 
 # The breadcrumb trail above an article: "Knowledge Base > Category >
 # Article". Linked crumbs are the hierarchy; the unlinked last crumb is
@@ -246,6 +261,24 @@ def article_tags(soup):
     return tuple(tags)
 
 
+def strip_furniture(node):
+    """
+    Removes the portal's tag strip and feedback widget from a content
+    node, in place, and returns the node.
+
+    Args:
+        node (bs4.Tag): the article's content node, after the tags have
+            been read from it.
+
+    Returns:
+        bs4.Tag: the same node.
+    """
+    for selector in TDX_FURNITURE_SELECTORS:
+        for element in node.select(selector):
+            element.decompose()
+    return node
+
+
 def breadcrumb_categories(soup):
     """
     The linked crumbs of the page's breadcrumb trail, outermost first.
@@ -373,7 +406,9 @@ class TdxHandler:
         The categories, the title, the tags, and the summary are all
         read before the body is stripped, because the breadcrumb trail,
         the article heading, and the tag strip can sit inside elements
-        the stripper removes, and the summary sits in the head.
+        the stripper removes, and the summary sits in the head. The tag
+        strip and the feedback widget are then removed from the body,
+        so neither reaches a section's text.
         """
         categories = breadcrumb_categories(soup)
         title = article_title(soup)
@@ -384,6 +419,7 @@ class TdxHandler:
         node = select_content(soup, TDX_CONTENT_SELECTORS, require_text=True)
         if node is None:
             return None
+        strip_furniture(node)
         return Extraction(title=title, node=node, categories=categories, summary=summary, tags=tags)
 
     def content_type(self, url):

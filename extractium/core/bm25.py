@@ -1,13 +1,15 @@
 """
 Summary: Builds BM25 corpus statistics (postings, document frequency,
 document lengths) over the final child-chunk list for hybrid retrieval.
+A window's tokens are its section heading and its text; the page title
+is counted once per page, on the page's first window.
 
 This file is part of Extractium™
 extractium/core/bm25.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-08-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,6 +33,8 @@ __date__ = "2026-08-17"
 import re
 from collections import Counter
 
+from extractium.core.models import HEADING_SEPARATOR
+
 ### Constants ###
 
 # Formula and default constants (k, b, d) read from oramasearch/orama's
@@ -50,12 +54,49 @@ BM25_D = 0.5
 # with one tokenization rule can't be looked up correctly with another.
 TOKEN_RE = re.compile(r"[a-z0-9]{3,}")
 
+# A window's heading reads "Page title -- Section heading". The section
+# heading is indexed with every window, because it says what the window
+# is about. The page title is indexed once per page, on the page's first
+# window, and not with every window: a title repeated in every window
+# adds nothing for choosing between the sections of one page, and BM25's
+# length normalization then favours the shortest windows that carry it,
+# such as a tag line or an author's bio, over the sections that answer.
+# One window per page keeps the page findable by its title. A title that
+# itself holds the separator is split at its first occurrence, which is
+# the rule every reader of a heading applies.
+PAGE_KEY_FIELD = "u"
+
 
 ### Tokenization ###
 
 def tokenize(text):
     """Lowercases text and returns all runs of 3+ alphanumeric characters."""
     return TOKEN_RE.findall(text.lower())
+
+
+### Indexed Text ###
+
+def window_text_for_index(child, titled_pages):
+    """
+    The text one window is tokenized from: its section heading and its
+    text, and the page title as well when this is the page's first
+    window.
+
+    Args:
+        child (dict): the window, with "t", "x", and optionally "u".
+        titled_pages (set): the pages whose title has already been
+            indexed; the window's page is added when it is not there.
+
+    Returns:
+        str: the text to tokenize.
+    """
+    title, _, section = (child.get("t") or "").partition(HEADING_SEPARATOR)
+    page = child.get(PAGE_KEY_FIELD)
+    if page is None or page not in titled_pages:
+        if page is not None:
+            titled_pages.add(page)
+        return f"{title} {section} {child['x']}"
+    return f"{section} {child['x']}"
 
 
 ### BM25 Index ###
@@ -68,9 +109,17 @@ def build_bm25_index(children):
     building this against a pre-dedup list would point at chunks that no
     longer exist (or the wrong ones) once dedup runs afterward.
 
+    The tokens of a window are the section heading (the part of its "t"
+    after the first separator, or nothing when there is none) and its
+    text. The page title (the part before the separator, or the whole
+    "t") is added to the first window of each page in list order, where
+    a page is the window's "u". A window with no "u" counts as a page
+    of its own.
+
     Args:
         children (list[dict]): the final child chunk list, each with "t"
-            (heading, optional) and "x" (body text).
+            (heading, optional), "x" (body text), and "u" (the address
+            of the page it belongs to, optional).
 
     Returns:
         dict: BM25 parameters (k, b, d), avgDocLen, per-document token
@@ -80,8 +129,9 @@ def build_bm25_index(children):
     doc_len = []
     df = {}
     postings = {}
+    titled_pages = set()
     for i, c in enumerate(children):
-        tokens = tokenize((c.get("t") or "") + " " + c["x"])
+        tokens = tokenize(window_text_for_index(c, titled_pages))
         doc_len.append(len(tokens))
         for term, tf in Counter(tokens).items():
             df[term] = df.get(term, 0) + 1

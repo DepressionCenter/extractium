@@ -14,7 +14,7 @@ tests/test_site_handlers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -214,6 +214,42 @@ def test_tdx_article_tags_and_summary_are_read_from_the_tag_strip_and_the_page_d
 
     assert extraction.tags == ("sleep-research", "wearables")
     assert extraction.summary == "Which sleep numbers from a wearable are fit for research."
+
+
+def test_tdx_tag_strip_and_feedback_widget_stay_out_of_the_indexed_text(fixtures_dir):
+    """
+    The portal places the tag strip and the feedback widget inside the
+    content node. Left there, every article's first section would open
+    with a line of tag words and its last section would end with a
+    sign-in prompt, a review count, and two hidden links reading Blank.
+    """
+    soup = _soup_from_fixture(fixtures_dir, "tdx_article_with_furniture.html")
+
+    extraction = tdx.TdxHandler().extract(soup, TDX_URL)
+
+    assert extraction.tags == ("sleep-research", "wearables")
+    text = extraction.node.get_text(" ", strip=True)
+    for furniture in ("Tags", "Sign in to leave feedback", "0 reviews", "Blank"):
+        assert furniture not in text
+    assert "Sleep Duration" in text and "Synthetic author biography" in text
+
+
+def test_tdx_furniture_reaches_no_section(fixtures_dir):
+    from extractium.core.models import Document
+
+    soup = _soup_from_fixture(fixtures_dir, "tdx_article_with_furniture.html")
+    extraction = tdx.TdxHandler().extract(soup, TDX_URL)
+    document = Document(url=TDX_URL, title=extraction.title, content=extraction.node,
+                        source_type="kb", content_type="article", tags=extraction.tags)
+
+    parents, _ = chunk.chunk_document(document)
+
+    assert "Synthetic opening paragraph" in parents[0]["x"]
+    assert "sleep-research" not in parents[0]["x"]
+    for parent in parents:
+        for furniture in ("Tags ", "Sign in to leave feedback", "0 reviews", "Blank"):
+            assert furniture not in parent["x"]
+    assert parents[-1]["x"].endswith("by one author.")
 
 
 def test_tdx_article_without_tags_or_a_description_carries_neither():

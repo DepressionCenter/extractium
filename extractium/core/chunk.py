@@ -11,7 +11,7 @@ extractium/core/chunk.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -44,7 +44,7 @@ from bs4 import BeautifulSoup, CData, NavigableString, Tag
 # any test monkeypatches, so (unlike extractium.core.cache from
 # extractium.core.fetch) a direct value import is safe here.
 from extractium.core.fetch import normalise
-from extractium.core.models import ENRICHMENT_FIELDS
+from extractium.core.models import ENRICHMENT_FIELDS, HEADING_SEPARATOR
 
 ### Constants ###
 
@@ -65,6 +65,7 @@ CHILD_OVERLAP_CHARS = 53
 
 # The headings a page is split into sections at.
 SECTION_HEADING_TAGS = frozenset({"h2", "h3"})
+
 
 # Elements whose text is never page content, wherever they sit.
 UNREAD_TAGS = frozenset({"script", "style", "template", "noscript"})
@@ -296,7 +297,7 @@ def split_into_parents(title, node, url):
 
     if node.find(list(SECTION_HEADING_TAGS)):
         for heading, text in sections_of(node):
-            _make(title if heading is None else f"{title} -- {heading}", text)
+            _make(title if heading is None else f"{title}{HEADING_SEPARATOR}{heading}", text)
     else:
         text = node.get_text("\n", strip=True)
         _make(title, text)

@@ -3,7 +3,8 @@ Summary: The DSpace source: indexes the scholarly deposits held in named
 collections of a DSpace 7 repository, such as the University of Michigan
 Library's Deep Blue. One document per deposit, carrying its abstract,
 authors, date, subjects, rights, permanent identifiers, and the plain
-text the repository already extracted from the deposited files. A deposit
+text the repository already extracted from the deposited files, with
+the deposited files' names as tags after the subjects. A deposit
 whose file holds no readable text is still indexed and says so, and a
 collection nobody has changed re-reads nothing.
 See docs/dspace-repository-indexing.md.
@@ -13,7 +14,7 @@ extractium/sources/dspace.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-10
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -319,7 +320,7 @@ class DSpaceSource:
             content_type="article",
             categories=(collection["name"],),
             summary=deposit_summary(deposit),
-            tags=deposit_subjects(deposit),
+            tags=deposit_tags(deposit, files),
         ), bool(text)
 
     def _text_for(self, client, deposit, uuid, progress):
@@ -492,17 +493,18 @@ def text_files(deposit):
 
 def original_files(deposit):
     """
-    The files as they were deposited, with the name and size of each.
+    The names of the files as they were deposited, each once, in the
+    order the repository lists them.
 
-    Recorded on the document rather than downloaded: a reader who finds a
-    deposit should be able to see what is attached to it.
+    Recorded on the document as tags rather than downloaded: a reader who
+    finds a deposit should be able to see what is attached to it.
     """
-    files = []
+    names = []
     for entry in bundle_files(deposit, ORIGINAL_BUNDLE):
         name = (entry.get("name") or "").strip()
         if name:
-            files.append((name, entry.get("sizeBytes")))
-    return files
+            names.append(name)
+    return tuple(dict.fromkeys(names))
 
 
 def _embedded_list(record, key):
@@ -611,6 +613,27 @@ def deposit_subjects(deposit):
     return tuple(dict.fromkeys(subjects))
 
 
+def deposit_tags(deposit, files):
+    """
+    A deposit's tags: the subjects it was catalogued under, then the
+    names of its deposited files.
+
+    File names are tags rather than body text so that the body opens
+    with the abstract and no section can begin with a file name, while
+    the deposit still says what is attached to it. A name longer than the
+    tag limit, or past the count of tags a page keeps, is dropped by the
+    rules every source's tags go through.
+
+    Args:
+        deposit (Mapping): the deposit record from the interface.
+        files (Sequence[str]): the deposited files' names.
+
+    Returns:
+        tuple[str, ...]: the tags, each once, subjects first.
+    """
+    return tuple(dict.fromkeys((*deposit_subjects(deposit), *files)))
+
+
 def deposit_body(deposit, collection, files, text):
     """
     One deposit as the text that gets indexed.
@@ -628,7 +651,9 @@ def deposit_body(deposit, collection, files, text):
     Args:
         deposit (Mapping): the deposit record from the interface.
         collection (Mapping): the collection it sits in, with its name.
-        files (Sequence): the deposited files, as (name, size in bytes).
+        files (Sequence[str]): the deposited files' names, which decide
+            whether a deposit with no text says so. The names themselves
+            are tags, never body text.
         text (str): the extracted text, blank when there is none.
 
     Returns:
@@ -653,7 +678,6 @@ def deposit_body(deposit, collection, files, text):
         ("Permanent address", " ".join(handles)),
         ("DOI", " ".join(dois)),
         ("Also published at", " ".join(others)),
-        ("Files", ", ".join(_file_description(name, size) for name, size in files)),
     ]
     lines += [f"{label}: {value}" for label, value in facts if value]
 
@@ -663,24 +687,6 @@ def deposit_body(deposit, collection, files, text):
         lines += ["", "No text could be read out of the file(s) deposited here, so this "
                       "record is its description only."]
     return "\n".join(lines)
-
-
-def _file_description(name, size):
-    """One deposited file, named with its size when the repository reported one."""
-    if not isinstance(size, int) or size < 0:
-        return name
-    return f"{name} ({_human_bytes(size)})"
-
-
-def _human_bytes(size):
-    """A file size in the units a person reads, one decimal place from kilobytes up."""
-    if size < 1024:
-        return f"{size} bytes"
-    for unit in ("KB", "MB", "GB"):
-        size /= 1024
-        if size < 1024 or unit == "GB":
-            return f"{size:.1f} {unit}"
-    return f"{size:.1f} GB"
 
 
 def _as_written(selector):

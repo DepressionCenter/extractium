@@ -108,12 +108,22 @@ export const MMR_POOL_CAP = 20;
 // relevance, which lets several near-copies of one page fill the answer.
 export const MMR_LAMBDA = 0.7;
 
-// Most windows kept from any one section, so a long article cannot take
-// every slot.
-export const SOURCE_CAP = 2;
+// Windows kept from any one section. A hit is a section, and a section
+// appears at most once in a result list: two windows of one section
+// would resolve to the same text twice and hand a reader one answer in
+// two slots.
+export const SOURCE_CAP = 1;
 
 // Sections returned per search when the caller names no other number.
 export const TOP_K = 4;
+
+// How many sections a reranker is given for each one the caller keeps.
+// A reranker over a list of exactly k sections can only reorder them;
+// over a longer shortlist it can also replace one. The shortlist comes
+// out of the same relevance tests and diversity pass as an ordinary
+// result, so the reranker never sees a section the search found
+// irrelevant, and the selection is still capped by MMR_POOL_CAP.
+export const RERANK_SHORTLIST_FACTOR = 3;
 
 // Reciprocal rank fusion. 60 is the constant from the literature, and
 // the two weights are the trust split between the vector list and the
@@ -660,6 +670,52 @@ export function diversify(candidates, vectors, dims, k, sourceKeyOf, noThreshold
     return selected;
 }
 
+/* ### Reranking ### */
+
+/**
+ * The text a reranker scores for one section: its heading, a line break,
+ * and its text.
+ *
+ * @param {Object} parent The section record.
+ * @returns {string}
+ */
+export function rerankPassage(parent) {
+    return `${parent.t || ''}\n${parent.x || ''}`;
+}
+
+/**
+ * Orders a shortlist of hits by a reranker's scores and keeps the best.
+ *
+ * @param {string} query What the user asked, unprefixed.
+ * @param {Array<Object>} hits The shortlist, as `search` selected it.
+ * @param {(query: string, passages: string[]) => (ArrayLike<number>|Promise<ArrayLike<number>>)} rerank
+ *     Scores the query against each passage, one number per passage,
+ *     higher meaning more relevant. The numbers need share no scale with
+ *     anything else; a cross-encoder's raw logits are fine.
+ * @param {number} k How many hits to keep.
+ * @returns {Promise<Array<Object>>} At most k hits, best first by the
+ *     reranker, ties broken on the child index, each carrying its
+ *     `rerank` score.
+ * @throws {Error} If the reranker returns a different number of scores
+ *     than it was given passages, or a score that is not a number.
+ */
+export async function rerankHits(query, hits, rerank, k) {
+    if (!hits.length) return [];
+    const scores = Array.from(await rerank(query, hits.map((hit) => rerankPassage(hit.parent))));
+    if (scores.length !== hits.length) {
+        throw new Error(`the reranker returned ${scores.length} score(s) for ${hits.length} passage(s).`);
+    }
+    const reranked = hits.map((hit, position) => {
+        const score = Number(scores[position]);
+        if (typeof scores[position] === 'boolean' || !Number.isFinite(score)) {
+            throw new Error(`the reranker returned a score that is not a number: ${String(scores[position])}.`);
+        }
+        return { ...hit, rerank: roundScore(score) };
+    });
+    reranked.sort((a, b) => (b.rerank - a.rerank) || (a.childIndex - b.childIndex));
+    return reranked.slice(0, k);
+}
+
 /* ### Index ### */
 
 /**
@@ -820,17 +876,31 @@ export class SearchIndex {
     /**
      * Searches the compendium and returns whole sections.
      *
+     * With a `rerank` function, the search selects a shortlist of
+     * RERANK_SHORTLIST_FACTOR times k sections the ordinary way, scores
+     * them, and returns the k best by that score. The relevance tests are
+     * unchanged: the reranker orders what was found relevant and never
+     * adds to it. Each hit then carries `rerank`, the reranker's score.
+     *
      * @param {string} query What the user asked, unprefixed. The query
      *     prefix this file records is added before embedding.
      * @param {(text: string) => (ArrayLike<number>|Promise<ArrayLike<number>>)} embedQuery
      *     Embeds one string with the model named in the file's `embedding`
      *     object. Called once per search.
-     * @param {{k?: number, noThreshold?: boolean}} [options] As above.
+     * @param {{k?: number, noThreshold?: boolean,
+     *     rerank?: (query: string, passages: string[]) => (ArrayLike<number>|Promise<ArrayLike<number>>)}} [options]
+     *     As above, plus the optional reranker, which scores the query
+     *     against a list of passages, higher meaning more relevant.
      * @returns {Promise<Array<Object>>} The selected sections, best first.
      */
     async search(query, embedQuery, options = {}) {
         const queryVector = await embedQuery(this.queryPrefix + query);
-        return this.searchWithVector(query, queryVector, options);
+        if (typeof options.rerank !== 'function') {
+            return this.searchWithVector(query, queryVector, options);
+        }
+        const k = options.k || TOP_K;
+        const shortlist = this.searchWithVector(query, queryVector, { ...options, k: k * RERANK_SHORTLIST_FACTOR });
+        return rerankHits(query, shortlist, options.rerank, k);
     }
 
     /* ### Search Without A Model ### */
@@ -1004,6 +1074,8 @@ export class SearchIndex {
             // Offsets are UTF-16 code units, which is how a JavaScript
             // string indexes, so a plain slice is already correct.
             windowText: (start === null || end === null) ? text : text.slice(start, end),
+            // The reranker's score when a search was given one; see rerankHits.
+            rerank: null,
         };
     }
 }

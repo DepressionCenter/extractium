@@ -18,7 +18,7 @@ tests/test_core_embedding_index.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -63,9 +63,21 @@ def test_tokenize_lowercases_and_drops_short_or_non_alnum_runs():
 # ---------------------------------------------------------------------------
 
 def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
+    """
+    A window's tokens are its section heading and its text. The page
+    title is counted once per page, on the page's first window.
+    """
     children = [
-        {"t": "Sleep", "x": "sleep hygiene tips for better sleep"},
-        {"t": "Screen", "x": "reduce screen time before bed"},
+        {"t": "Sleep Guide -- Hygiene", "x": "sleep hygiene tips for better sleep", "u": "https://example.org/a"},
+        {"t": "Sleep Guide -- Hygiene", "x": "keep the bedroom dark and cool", "u": "https://example.org/a"},
+        {"t": "Sleep Guide -- Screens", "x": "reduce screen time before bed", "u": "https://example.org/a"},
+        {"t": "Screens", "x": "another page about screens", "u": "https://example.org/b"},
+    ]
+    indexed = [
+        "Sleep Guide Hygiene sleep hygiene tips for better sleep",
+        "Hygiene keep the bedroom dark and cool",
+        "Screens reduce screen time before bed",
+        "Screens another page about screens",
     ]
     result = bm25.build_bm25_index(children)
 
@@ -76,8 +88,8 @@ def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
     expected_doc_len = []
     expected_df = {}
     expected_postings = {}
-    for i, c in enumerate(children):
-        tokens = bm25.tokenize((c.get("t") or "") + " " + c["x"])
+    for i, text in enumerate(indexed):
+        tokens = bm25.tokenize(text)
         expected_doc_len.append(len(tokens))
         for term, tf in Counter(tokens).items():
             expected_df[term] = expected_df.get(term, 0) + 1
@@ -87,6 +99,31 @@ def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
     assert result["df"] == expected_df
     assert result["postings"] == expected_postings
     assert result["avgDocLen"] == sum(expected_doc_len) / len(expected_doc_len)
+    # "guide" is a title word: on the page's first window and nowhere else.
+    assert result["postings"]["guide"] == [[0, 1]]
+
+
+def test_the_page_title_is_indexed_once_per_page_and_the_section_heading_on_every_window():
+    children = [
+        {"t": "Alpha Page", "x": "text before the first heading", "u": "https://example.org/alpha"},
+        {"t": "Alpha Page -- Details", "x": "more words here", "u": "https://example.org/alpha"},
+        {"t": "Alpha Page", "x": "a second page with the same title", "u": "https://example.org/beta"},
+    ]
+
+    result = bm25.build_bm25_index(children)
+
+    assert result["postings"]["alpha"] == [[0, 1], [2, 1]]
+    assert result["postings"]["details"] == [[1, 1]]
+    assert result["docLen"] == [7, 4, 8]
+
+
+def test_a_window_without_an_address_counts_as_its_own_page():
+    children = [{"t": "Title -- Part", "x": "one"}, {"t": "Title -- Part", "x": "two"}]
+
+    result = bm25.build_bm25_index(children)
+
+    assert result["postings"]["title"] == [[0, 1], [1, 1]]
+    assert result["postings"]["part"] == [[0, 1], [1, 1]]
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +220,64 @@ def test_drop_near_duplicates_collapses_boilerplate_across_many_pages(fake_embed
 
     assert dropped == 4
     assert [c["u"] for c in kept_chunks] == ["https://example.org/0"]
+
+
+# ---------------------------------------------------------------------------
+# downweight_repeated_sections
+# ---------------------------------------------------------------------------
+
+BIO = "Dr. Example writes about sleep, wearables, and study technology for the center."
+
+
+def section(url, text, weight=1.0):
+    return {"t": f"{url[-1].upper()} page -- About the Author", "x": text, "u": url, "weight": weight}
+
+
+def test_a_section_repeated_on_three_pages_takes_the_repeated_weight():
+    parents = [section(f"https://example.org/{n}", BIO) for n in "abc"]
+    parents.append(section("https://example.org/d", "A section with words of its own."))
+
+    changed, texts = dedup.downweight_repeated_sections(parents)
+
+    assert (changed, texts) == (3, 1)
+    assert [p["weight"] for p in parents] == [dedup.REPEATED_SECTION_WEIGHT] * 3 + [1.0]
+
+
+def test_a_section_on_two_pages_is_not_repeated_enough():
+    parents = [section(f"https://example.org/{n}", BIO) for n in "ab"]
+
+    assert dedup.downweight_repeated_sections(parents) == (0, 0)
+    assert all(p["weight"] == 1.0 for p in parents)
+
+
+def test_a_pages_own_repetitions_count_as_one_page():
+    parents = [section("https://example.org/a", BIO) for _ in range(3)]
+    parents.append(section("https://example.org/a#part-2", BIO))
+
+    assert dedup.downweight_repeated_sections(parents) == (0, 0)
+
+
+def test_case_punctuation_and_spacing_do_not_tell_two_copies_apart():
+    parents = [
+        section("https://example.org/a", BIO),
+        section("https://example.org/b", BIO.upper().replace(",", " ;")),
+        section("https://example.org/c", "  " + BIO.replace(" ", "\n\n") + "\n"),
+    ]
+
+    assert dedup.downweight_repeated_sections(parents) == (3, 1)
+
+
+def test_the_repeated_weight_is_assigned_once_and_never_raised():
+    parents = [section(f"https://example.org/{n}", BIO) for n in "abc"]
+    parents[0]["weight"] = 0.25
+
+    assert dedup.downweight_repeated_sections(parents) == (2, 1)
+    assert dedup.downweight_repeated_sections(parents) == (0, 0)
+    assert [p["weight"] for p in parents] == [0.25, 0.5, 0.5]
+
+
+def test_downweight_repeated_sections_empty_input():
+    assert dedup.downweight_repeated_sections([]) == (0, 0)
 
 
 def test_drop_near_duplicates_empty_input():

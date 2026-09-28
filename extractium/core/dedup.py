@@ -1,13 +1,14 @@
 """
-Summary: Collapses near-duplicate embedded chunks and compacts the parent
-list to drop parents orphaned by that collapse.
+Summary: Collapses near-duplicate embedded chunks, compacts the parent
+list to drop parents orphaned by that collapse, and lowers the weight of
+sections whose text repeats across many pages.
 
 This file is part of Extractium™
 extractium/core/dedup.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-10
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -28,6 +29,9 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-08-17"
 
+import hashlib
+import re
+
 import numpy as np
 
 ### Constants ###
@@ -37,6 +41,21 @@ import numpy as np
 # embedding; collapsing them here means every query-time retrieval benefits,
 # instead of filtering the same boilerplate out of every top-k result forever.
 NEAR_DUP_COSINE_THRESHOLD = 0.95
+
+# A section whose text appears on this many pages or more is boilerplate
+# a site repeats under a heading: an author's bio, a licence notice, a
+# contact block, a citation. The near-duplicate collapse does not see it,
+# because it compares the heading followed by the passage and the heading
+# carries the page title, so the same bio under many titles never reaches
+# the threshold. Such a section keeps its place and its text, and takes
+# this weight, so it loses every tie with real content but stays citable.
+REPEATED_SECTION_MIN_PAGES = 3
+REPEATED_SECTION_WEIGHT = 0.5
+
+# Runs of anything but letters and digits, folded to one space before two
+# sections' texts are compared, so punctuation, spacing, and case do not
+# tell two copies of one text apart.
+_NOT_ALNUM_RE = re.compile(r"[^0-9a-z]+")
 
 
 ### Near-Duplicate Collapse ###
@@ -122,6 +141,55 @@ def drop_near_duplicates(chunks, vecs, threshold=NEAR_DUP_COSINE_THRESHOLD):
     kept_chunks = [chunks[i] for i in kept_rows]
     kept_vecs = vecs[kept_rows]
     return kept_chunks, kept_vecs, dropped
+
+
+### Repeated Sections ###
+
+def _repeat_key(text):
+    """The digest two copies of one section's text share, whatever their spacing, punctuation, or case."""
+    folded = _NOT_ALNUM_RE.sub(" ", text.lower()).strip()
+    return hashlib.sha1(folded.encode("utf-8")).hexdigest()
+
+
+def downweight_repeated_sections(parents, min_pages=REPEATED_SECTION_MIN_PAGES,
+                                 weight=REPEATED_SECTION_WEIGHT):
+    """
+    Lowers the weight of every section whose text appears on `min_pages`
+    or more pages, in place.
+
+    The comparison is on the text alone, never the heading, and exact
+    after folding case, punctuation, and spacing, which is what a site
+    that repeats a block under a heading produces. A page's own
+    repetitions count as one page. The weight is assigned, not
+    multiplied, and never raised, so running the step over sections that
+    already carry it changes nothing, including sections carried forward
+    from an earlier build with the weight already applied.
+
+    Args:
+        parents (list[dict]): the compacted parent list, each with "x",
+            "u", and "weight". Mutated in place.
+        min_pages (int): the fewest distinct pages a text must appear on
+            to count as repeated.
+        weight (float): the weight a repeated section takes, unless its
+            own is already lower.
+
+    Returns:
+        tuple[int, int]: how many sections were changed, and how many
+        distinct texts they hold.
+    """
+    pages_of_text = {}
+    for parent in parents:
+        pages_of_text.setdefault(_repeat_key(parent["x"]), set()).add(_page_key(parent["u"]))
+    repeated = {key for key, pages in pages_of_text.items() if len(pages) >= min_pages}
+    changed = 0
+    changed_texts = set()
+    for parent in parents:
+        key = _repeat_key(parent["x"])
+        if key in repeated and parent["weight"] > weight:
+            parent["weight"] = weight
+            changed += 1
+            changed_texts.add(key)
+    return changed, len(changed_texts)
 
 
 ### Parent Compaction ###

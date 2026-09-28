@@ -170,7 +170,11 @@ One page is indexed once, however many sources reach it. Documents are compared 
 
 Searching children and returning parents is "small-to-big" retrieval: precise matches, enough context to answer.
 
+The keyword statistics count a child's section heading and text, and the page title once per page on the page's first child; the [container format](container-format.md) page states the rule under "What a child's text was at build time".
+
 Near-duplicate collapse removes a child that is near-identical to one already kept from another page. Children of one page are never collapsed into each other. The step exists to remove boilerplate many pages share, and two passages of one article are not that. The rule also removes a dependence on heading length: a child is embedded as its parent's heading followed by its own text, so an article with a long title gives every one of its children a long identical prefix, and comparing them without this rule discards real content as duplication. Measured on the Depression Center portal, recovering 119 truncated article titles cost 86 sections without it, of which only 14 were duplicates by their text alone.
+
+A section whose text, compared without its heading, appears on three or more pages is boilerplate the collapse cannot see, because the heading it compares carries the page title: the same author's bio under 79 article titles never reaches the threshold. Such a section keeps its place and its text and takes a `weight` of 0.5, so it loses every tie with real content and stays citable. The build summary counts the sections it weighted this way.
 
 ### 3.3 Stable identifiers
 
@@ -185,7 +189,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest`, `repo_map`, `code_file`, `code_symbol` |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
-| `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
+| `weight` | Per-section multiplier applied after rank fusion; `1.0` by default, `0.5` for a section whose text repeats on three or more pages (section 3.2). |
 | Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section. A source sets `summary` and `tags` from what the page says about itself (a video's description and tags, a repository's description and topics, an article's summary and tag list, a page's meta description and keywords); the keyword step (section 10) fills `keywords` on every section, adds to every page's `tags` the keywords its sections share after whatever the source gave, and leaves `summary` null where the source gave none. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list; the `llms/` index files describe a page by its keywords when it has no summary of its own. |
 
 ### 3.5 Embeddings
@@ -280,7 +284,8 @@ A local folder can hold content that must never be published. The rules:
 | Language | Notes |
 |---|---|
 | JavaScript | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, a relevance floor on the raw cosine, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
-| Python | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
+| Python | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. `cross_encoder_reranker` wraps a sentence-transformers cross-encoder for the optional reranking step. |
+| Both | An optional reranking step: `search` takes a function that scores the question against a list of passages, selects a shortlist three times the number of results kept through the ordinary relevance and diversity passes, and returns the best by that score, ties broken on the window's position. The committed contract holds both clients to one reranked order for a model-free scorer. |
 | Both | A keyword-only entry point, `search_keywords` and `searchKeywords`, that ranks by the file's BM25 statistics with no model, narrows by `#word` filters over a section's tags, keywords, and categories, and returns each section once; and `suggest`, a prefix filter over the file's tags, page titles, and vocabulary for a search box. The committed contract holds both clients to the same answers for these as for the hybrid search. |
 | Others | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). |
 

@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -149,6 +149,12 @@ MAX_TAG_CHARS = 80
 
 # Collapses any run of whitespace, including newlines, into one space.
 _WHITESPACE_RUN = re.compile(r"\s+")
+
+# How a parent's heading joins the page title and the section heading:
+# "Page title -- Section heading". Text before a page's first heading is
+# headed by the page title alone. Everything that takes a heading apart
+# again splits at the first occurrence.
+HEADING_SEPARATOR = " -- "
 
 # A parent id is the first 16 hexadecimal characters of a SHA-1 digest.
 PARENT_ID_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -594,6 +600,10 @@ class Compendium:
             an output that drops sections, or the light compendium, can
             measure its own figures without the embedding model. Never
             written to a file. None when the build embedded no probes.
+        notes (tuple[str, ...]): lines about how the build went that the
+            build summary prints and the run record keeps, such as how
+            many sections were down-weighted for repeating across pages.
+            Never written to an output file.
 
     Raises:
         ValueError: if the vectors, children, and parents disagree in
@@ -610,9 +620,13 @@ class Compendium:
     bm25: Mapping
     calibration: Mapping
     probe_vectors: object = None
+    notes: tuple = ()
 
     def __post_init__(self):
         _require_text(self.name, "name")
+        if isinstance(self.notes, str) or not all(isinstance(note, str) for note in self.notes):
+            raise ValueError(f"notes must be a list of text values; got {self.notes!r}.")
+        object.__setattr__(self, "notes", tuple(self.notes))
         if not isinstance(self.built_at, str) or not UTC_TIMESTAMP_RE.match(self.built_at):
             raise ValueError(f"built_at must be a UTC ISO 8601 timestamp ending in Z; got {self.built_at!r}.")
         parents = tuple(self.parents)

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-18
+Last Modified: 2026-09-28
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -123,7 +123,7 @@ A parent is one section of a page: the text a language model is shown when a sea
 | `content_type` | text | What the record is. One of: `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest` (a project or build file, such as a `pyproject.toml`), `repo_map` (a synthetic summary of one repository or one account), `code_file` (what one source file defines, imports, and is reached by), `code_symbol` (one definition: its signature, its documentation, and a link to its lines). A `code_file` and every `code_symbol` in it share one address and differ by the lines they point at. Neither ever holds a source body. |
 | `categories` | list of text | Hierarchy taken from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when the source has none. |
 | `local` | true or false | `true` when the parent came from a local-filesystem source. |
-| `weight` | number | Per-document multiplier applied after rank fusion. `1.0` unless a source or plugin sets otherwise. |
+| `weight` | number | Per-section multiplier applied after rank fusion. `1.0` unless a source or plugin sets otherwise, or the build lowered it to `0.5` because the section's text, compared without its heading, appears on three or more pages: an author's bio, a licence notice, a contact block. Such a section stays in the file and stays citable; it loses every tie with a section that is not repeated. |
 | `summary` | text | The page's own description as its source gave it (a video's description, a repository's description, an article's summary, a page's meta description), or one an enrichment pass wrote. Present only when something has. |
 | `tags` | list of text | The page's tags: its categories, then its own tags as its source gave them (a video's tags, a repository's topics, an article's tag list, a page's meta keywords), then the ones the keyword step found in its text. Present only when something has. |
 | `keywords` | list of text | The phrases an enrichment pass found the section to be about, most telling first. Present only when one has. |
@@ -165,7 +165,7 @@ Most text has no characters outside the Basic Multilingual Plane, in which case 
 Two build steps see a child's text, and any client that re-implements them must use the same text:
 
 - **Embedding input**: the parent heading, a newline, then the window text.
-- **BM25 tokens**: the parent heading, a space, then the window text, lowercased, split on the token rule in "BM25 statistics".
+- **BM25 tokens**: the section heading (the part of the parent heading after the first ` -- `, or nothing when there is none), a space, then the window text, lowercased, split on the token rule in "BM25 statistics". The page title (the part of the heading before the first ` -- `, or the whole heading) is counted once per page, on the page's first window in child order, and on no other window. That keeps a page findable by its title while a page's short sections, such as a tag line or an author's bio, no longer outrank its longer ones for a query that names the page.
 
 
 ## Vector bytes
@@ -189,7 +189,7 @@ For `int8`, each stored value `q` becomes `q / scale`. Vectors are unit length b
 | `df` | object | Term to the number of children containing it. |
 | `postings` | object | Term to a list of `[childIndex, termFrequency]` pairs. |
 
-Token rule: lowercase the text and take every run of three or more ASCII letters or digits, which is the regular expression `[a-z0-9]{3,}`. A query must be tokenized the same way or nothing will match.
+Token rule: lowercase the text and take every run of three or more ASCII letters or digits, which is the regular expression `[a-z0-9]{3,}`. A query must be tokenized the same way or nothing will match. What text each window contributes is under "What a child's text was at build time" above; a reader never recomputes it, since the file carries the result.
 
 Score: for a query with terms `T`, over `N` children, the score of child `i` is the sum over `t` in `T` found in `postings`:
 
@@ -282,6 +282,8 @@ A field that is always present, and that a reader would use if it knew about it,
 9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
 10. Round every score to six decimal places before you sort on it or compare it. Two clients adding up the same list of products do not reach the same last digits, so windows that score very close together, which is what near-copies of one page produce, otherwise come back in a different order from each client. Break the ties that rounding creates on the child index, lowest first.
 11. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
+12. A hit is a section. Windows are what you score, and several windows of one section can score well, but return each section at most once, at its best window. The reference clients cap the selection at one window per section for this reason.
+13. Reranking is optional, and it has two traps. Run a reranker over a shortlist larger than the number of results you keep, because over a list of exactly that size it can only reorder and never replace. And score a one-label cross-encoder, such as `cross-encoder/ms-marco-MiniLM-L-6-v2`, from its raw logit, never through a text-classification pipeline: such a pipeline applies a softmax over the labels, a softmax over one label is 1.0 for every passage, and the order never changes. A sigmoid over the logit keeps the order; a softmax over one label does not. Both reference clients rerank this way when the caller hands `search` a scoring function, over a shortlist three times the number of results kept, and the Python client's `cross_encoder_reranker` wraps a sentence-transformers cross-encoder with no softmax.
 
 
 ## Conclusion

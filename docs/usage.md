@@ -163,6 +163,7 @@ Built 'Example Org Knowledge Base' at 2026-09-08T14:30:00Z
 - Windows are the smaller pieces that are searched. There are usually more windows than sections.
 - Sources is how many pages contributed at least one section. Pages that were visited but held nothing to index do not count.
 - Each `wrote` line names a file and its size. An output that writes a folder of files, such as the Open Knowledge Format output, is named once as a folder with a count.
+- A `coverage` line reports something about how the build went: how completely a GitHub account was read, which transport served a host, and how many sections were given a lower weight because their text repeats on three or more pages, such as `297 section(s) whose text repeats on 3 or more pages were given weight 0.5 (37 distinct text(s))`. Those sections stay in the index; they rank below a section that is not repeated when the two would otherwise tie.
 
 While the build runs, it prints progress to the error stream and the summary to the output stream, so you can save the summary and still watch the run:
 

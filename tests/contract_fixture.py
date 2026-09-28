@@ -39,6 +39,7 @@ import numpy as np
 
 from extractium.adapters.container import ContainerAdapter
 from extractium.core import build
+from extractium.core.bm25 import tokenize
 from extractium.search import CANDIDATE_POOL, TOP_K, load_container
 from tests.test_build import document_from_fixture
 
@@ -85,6 +86,15 @@ CONTRACT_KEYWORD_QUERY = "standard disclaimer"
 CONTRACT_TAG_QUERY = "#disclaimer synthetic"
 CONTRACT_ABSENT_TAG_QUERY = "#nosuchtag disclaimer"
 CONTRACT_SUGGEST_PREFIX = "te"
+
+# The reranker both clients run over the contract query's shortlist: the
+# number of distinct query words a passage holds. It needs no model, and
+# both clients tokenize alike, so both must produce one order.
+def overlap_reranker(query, passages):
+    """Scores each passage by how many of the query's distinct words it holds."""
+    words = set(tokenize(query))
+    return [len(words & set(tokenize(passage))) for passage in passages]
+
 
 # How many candidates the committed ranking records. Small enough to read
 # in a diff, long enough to catch a client that fuses or sorts differently.
@@ -157,6 +167,9 @@ def contract_expectations(container_path):
         CONTRACT_QUERY, lambda _text: query_vector, k=TOP_K, no_threshold=True
     )
     relevant = index.search(CONTRACT_QUERY, lambda _text: query_vector, k=TOP_K)
+    reranked = index.search(
+        CONTRACT_QUERY, lambda _text: query_vector, k=TOP_K, no_threshold=True, rerank=overlap_reranker
+    )
 
     return {
         "_comment": (
@@ -171,6 +184,8 @@ def contract_expectations(container_path):
         "candidateChildren": [entry["i"] for entry in pool[:CONTRACT_POOL_RECORDED]],
         "closestParentIds": [hit.parent["id"] for hit in closest],
         "relevantParentIds": [hit.parent["id"] for hit in relevant],
+        "rerankedParentIds": [hit.parent["id"] for hit in reranked],
+        "rerankScores": [hit.rerank for hit in reranked],
         "keywordQuery": CONTRACT_KEYWORD_QUERY,
         "keywordParentIds": [hit.parent["id"] for hit in index.search_keywords(CONTRACT_KEYWORD_QUERY)],
         "tagQuery": CONTRACT_TAG_QUERY,

@@ -73,7 +73,7 @@ The client adds the file's query prefix for you before calling your function, so
 | Field | What it holds |
 |---|---|
 | `parent` | The whole section: its heading (`t`), text (`x`), URL (`u`), categories, and the rest of the fields the [container format](../container-format.md) lists. This is what you show a reader or hand to a language model. |
-| `score` | How strong the match was. Useful for ordering and for comparing hits inside one result list. It is not a percentage, and it is rounded to six decimal places. |
+| `score` | How strong the match was, multiplied by the section's `weight`. Useful for ordering and for comparing hits inside one result list. It is not a percentage, and it is rounded to six decimal places. A weight below 1.0 means the build found the section's text on three or more pages, such as an author's bio or a licence notice, and let it lose ties with real content. |
 | `cosine` | How close the matched window is to your question, as a cosine similarity between 0 and 1. This is the number the relevance floor is checked against. |
 | `child_index` | Which search window matched. |
 | `start`, `end` | Where that window sits inside the section text, in UTF-16 code units. |
@@ -141,6 +141,7 @@ How the query is read:
 - A word that starts with `#` is a filter. `#research` keeps only the sections whose tags, keywords, or categories hold that word, compared without regard to case. The word may be a whole entry or one word of a longer one, so `#sleep` matches a page tagged `Sleep Research`, and `#peer-to-peer` matches one tagged `Peer-to-Peer`. Give several `#words` and every one of them has to match.
 - A query of `#words` alone lists the matching sections in the order they sit in the file, with a score of zero.
 - Each section comes back once, at its best window. In the light file a section is a page, so the result is a list of pages.
+- A page's title counts once, on the page's first window, so a query that names a page finds it, and the page's shortest sections do not all carry the title's words. A section heading counts on every window of its section.
 
 A hit has the same fields as a hit from `search`. Its `score` is the keyword score times the section's weight, and `cosine` is empty, because no vector was involved. An empty list means nothing was typed, no word matched, or no section holds every `#word`.
 
@@ -155,10 +156,44 @@ Both clients run the same six steps. You do not have to configure any of them.
 2. Fusing the two lists. The two rankings are merged by reciprocal rank fusion, which uses each result's position in its own list and ignores the raw scores. That is what makes two scores on completely different scales comparable.
 3. Deciding what counts as relevant. A result must pass two tests. Its place in the merged ranking must be well above the middle of this query's own results. And the window itself must be close enough to the question: its cosine similarity must reach the floor for this file. The second test is the one that returns nothing for a question the compendium cannot answer, because a merged ranking always has a first place, whatever was asked.
 4. Keeping the answers varied. Near-identical windows are pushed down so that four results say four things rather than one thing four times.
-5. Limiting any one section. At most two windows from the same section survive, so a long article cannot fill the whole answer.
+5. Limiting any one section. Each section is returned at most once, at its best window, so a long article cannot fill the whole answer and no section comes back twice.
 6. Returning whole sections. Small windows are searched, and whole sections are returned. The match is precise, and the text you get back still has enough around it to answer from.
 
 The floor in step 3 comes from the file. The build asks 64 everyday questions that have nothing to do with your content, such as how to bake bread, and records how well the best window in your compendium matches each one. The floor sits just above those scores, so it fits this compendium: a larger one gets a higher floor, and the light container gets a lower one than the full container. `index.cosine_min` in Python and `index.cosineMin` in JavaScript tell you the value. A file built before this existed gets a fixed 0.67, which suits the embedding model, `BAAI/bge-small-en-v1.5` with its query prefix: the best window for a question a compendium answers scored 0.70 and higher in testing, and the best window for an unrelated question mostly stayed under 0.67. It is not a perfect line. A question close to the compendium's subject that it does not answer can still pass, so an assistant should read what comes back before it answers from it. To use another floor, call the selection step yourself: `diversify` takes the floor as its last argument in both clients. An application can offer that as a setting, so a reader can ask for stricter or looser matches.
+
+
+## Reranking the results
+
+A cross-encoder reads the question and a passage together and scores how well the passage answers it. That is slower than the vector search, so it runs only over a shortlist, but it is sharper. Both clients can run one: you hand `search` a function, the way you hand it the embedder, and the client does the rest.
+
+```python
+from extractium.search import cross_encoder_reranker, load_container
+
+index = load_container("dist/compendium-full.json.gz")
+rerank = cross_encoder_reranker()       # cross-encoder/ms-marco-MiniLM-L-6-v2, loaded once
+
+hits = index.search("how do I request a data extract", embed_query, rerank=rerank)
+for hit in hits:
+    print(round(hit.rerank, 3), hit.parent["t"])
+```
+
+`cross_encoder_reranker` wraps the `sentence-transformers` package that Extractium™ already installs, and downloads the model on first use. Name another model with `cross_encoder_reranker("your-org/your-model")`. Any function that takes the question and a list of passages and returns one number per passage, higher meaning better, works in its place.
+
+```javascript
+const rerank = async (query, passages) => scoresFromYourModel(query, passages);   // one number per passage
+
+const hits = await index.search('how do I request a data extract', embedQuery, { rerank });
+```
+
+The JavaScript client ships no reranker of its own, because a second model download is a decision for the page that uses it. In a browser, transformers.js can load the same model; take its raw score per pair, as described below.
+
+What the client does with your function:
+
+- It selects a shortlist three times as long as the number of results you asked for, through the same relevance tests and diversity pass as an ordinary search. Over a list of exactly that size a reranker could only reorder, never replace, so the shortlist is longer than the answer.
+- It scores each section as its heading, a line break, and its text, orders the shortlist by your scores, and returns the best. Ties are broken on the window's position in the file, as everywhere else in the clients. Each hit carries the score as `rerank` (`rerank` in JavaScript too), and `null` or `None` when no reranker ran.
+- The relevance floor stays. A reranker orders what the client found relevant; it never decides whether the question was answered, and it is not called when nothing was.
+
+One trap, if you score a cross-encoder yourself: score a one-label model from its raw output. A text-classification pipeline applies a softmax over the labels, and a softmax over one label is 1.0 for every passage, so every passage ties and nothing moves. A sigmoid keeps the order; a softmax over one label does not. `cross_encoder_reranker` asks the library for the raw scores.
 
 
 ## Keeping the two clients in agreement

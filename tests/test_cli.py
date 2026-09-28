@@ -93,6 +93,23 @@ class CodeSource:
                        source_type="github", content_type="code_file")
 
 
+class RepeatingSource:
+    name = "repeating"
+
+    def __init__(self, options):
+        self.options = options
+
+    def fetch(self, session, cache, progress):
+        bio = "Dr. Example writes about sleep, wearables, and study technology for the center."
+        for name, spelling in zip(("alpha", "beta", "gamma"), (bio, bio.upper(), bio.replace(",", ";"))):
+            body = "\\n\\n".join([
+                "Opening words about " + name + ", different on every page so the section stands on its own.",
+                "## About the Author", spelling,
+            ])
+            yield Document(url="https://example.org/" + name + ".md", title=name.title() + " Page",
+                           content=body, source_type="web", content_type="page")
+
+
 class EmptySource:
     name = "empty"
 
@@ -107,6 +124,7 @@ def register(registry):
     registry.register_source(FixedSource)
     registry.register_source(EmptySource)
     registry.register_source(CodeSource)
+    registry.register_source(RepeatingSource)
 '''
 
 # The tests never load the real embedding model. This replacement gives
@@ -1146,6 +1164,22 @@ def summary_of_code_build(build_workspace, capsys, source, outputs):
     config = write_config(build_workspace, CODE_BUILD.format(source=source, outputs=listed))
     assert cli.main(["build", "--config", config]) == cli.EXIT_OK
     return capsys.readouterr().out
+
+
+def test_the_summary_and_the_run_record_count_the_repeated_sections(build_workspace, capsys):
+    config = write_config(build_workspace, """
+        sources:
+          - type: repeating
+            label: Repeating
+        outputs:
+          - type: container
+    """)
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    line = "3 section(s) whose text repeats on 3 or more pages were given weight 0.5 (1 distinct text(s))"
+    assert f"  coverage : {line}" in capsys.readouterr().out
+    (record,) = list((build_workspace / "runs").glob("*.json"))
+    assert line in json.loads(record.read_text(encoding="utf-8"))["notes"]
 
 
 def test_the_summary_says_which_output_holds_the_code_records(build_workspace, capsys):

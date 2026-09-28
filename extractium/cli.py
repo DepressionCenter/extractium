@@ -725,6 +725,7 @@ def _run_build(args, recorder):
             "Check the seed URL and the include and exclude patterns.",
             EXIT_NO_CONTENT,
         )
+    notes.extend(compendium.notes)
     recorder.note_compendium(compendium, name=config.name)
     try:
         retain.save_manifest(compendium, previous, [key for key, _, _, _ in kept])

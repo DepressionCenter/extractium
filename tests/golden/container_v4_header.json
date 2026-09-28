@@ -80,15 +80,15 @@
     "k": 1.2,
     "b": 0.75,
     "d": 0.5,
-    "avgDocLen": 24.0,
+    "avgDocLen": 23.333333333333332,
     "docLen": [
       23,
-      30,
+      28,
       19
     ],
     "df": {
-      "team": 2,
-      "directory": 2,
+      "team": 1,
+      "directory": 1,
       "members": 1,
       "synthetic": 3,
       "unique": 2,
@@ -135,19 +135,11 @@
         [
           0,
           2
-        ],
-        [
-          1,
-          1
         ]
       ],
       "directory": [
         [
           0,
-          1
-        ],
-        [
-          1,
           1
         ]
       ],

@@ -9,7 +9,7 @@ extractium/core/light.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -74,8 +74,11 @@ def light_parents(compendium):
     Grain: one section per page. Code records contribute none. A page of
     several sections is represented by its first one, which gives the
     light section its identifier, source, content type, categories,
-    weight, tags, and whether it is local. The heading is the page's
-    title, the address is the page's, and the text is light_text.
+    tags, and whether it is local. Its weight is the highest of the
+    page's sections: a page is at least as important as its best
+    section, so a page that opens with a block the site repeats is not
+    down-weighted as a whole. The heading is the page's title, the
+    address is the page's, and the text is light_text.
 
     These sections are not chunked the way a fetched page is. A
     description shorter than the chunker's minimum is still the whole of
@@ -90,14 +93,18 @@ def light_parents(compendium):
     """
     parents = prose_parents(compendium.parents)
     first = {}
+    weight = {}
     for parent in parents:
-        first.setdefault(page_address(parent), parent)
+        address = page_address(parent)
+        first.setdefault(address, parent)
+        weight[address] = max(weight.get(address, 0.0), parent.weight)
     return tuple(
         dataclasses.replace(
             first[page["url"]],
             t=page["title"],
             x=light_text(page),
             u=page["url"],
+            weight=weight[page["url"]],
             # The description is already the text, so carrying it again
             # as the summary would store it twice.
             summary=None,
@@ -138,7 +145,9 @@ def build_light_compendium(compendium, embedder=None, progress=None):
     ### Windows ###
     windows = []
     for pid, parent in enumerate(parents):
-        for window in split_parent_into_children({"t": parent.t, "x": parent.x}):
+        # The address rides along so the keyword statistics count the
+        # page title once per page, as they do in the full compendium.
+        for window in split_parent_into_children({"t": parent.t, "x": parent.x, "u": parent.u}):
             windows.append({**window, "pid": pid})
     report(f"Light container: describing {len(parents)} page(s) in {len(windows)} search window(s).")
 

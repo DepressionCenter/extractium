@@ -8,7 +8,7 @@ tests/test_core_light.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -83,6 +83,23 @@ def test_a_light_section_is_one_per_page_and_holds_the_description_and_keywords(
     assert section.id == compendium.parents[0].id
 
 
+def test_a_light_page_takes_the_best_weight_of_its_sections(fake_embed_chunks_core):
+    """A page that opens with a block the site repeats is still a page worth finding."""
+    shared = "The same opening block that a site repeats on every page it publishes here."
+    spellings = (shared, shared.upper(), shared.replace(" ", "  "))
+    documents = [
+        page(f"https://example.org/{name}.md", f"{name.title()} Page",
+             f"{spelling}\n\n## Own\n\n{SECTION.replace('Sleep', name.title())}\n")
+        for name, spelling in zip(("alpha", "beta", "gamma"), spellings)
+    ]
+    compendium = built(fake_embed_chunks_core, documents)
+    assert compendium.parents[0].weight == 0.5 and compendium.parents[1].weight == 1.0
+
+    sections = light.light_parents(compendium)
+
+    assert [section.weight for section in sections] == [1.0, 1.0, 1.0]
+
+
 def test_a_page_described_by_its_keywords_does_not_repeat_them(fake_embed_chunks_core):
     compendium = built(fake_embed_chunks_core, [page("https://example.org/a", "Page A")],
                        keywords=("sleep", "wearables"))
@@ -129,6 +146,22 @@ def test_short_and_identical_descriptions_each_keep_their_page(fake_embed_chunks
 
     assert [parent.u for parent in result.parents] == ["https://example.org/a", "https://example.org/b"]
     assert [parent.x for parent in result.parents] == ["Keywords: sleep.", "Keywords: sleep."]
+
+
+def test_the_light_statistics_count_a_page_title_once_per_page(fake_embed_chunks_core):
+    """A light page is found by its title through its first window, like a page in the full file."""
+    documents = [
+        page("https://example.org/a", "Zebra Guide", summary="How the nightly summary is made from the device."),
+        page("https://example.org/b", "Zebra Guide", summary="Where the figures in the summary come from."),
+    ]
+    compendium = built(fake_embed_chunks_core, documents, keywords=("summary", "figures"))
+
+    light_compendium = light.build_light_compendium(compendium, embedder=fake_embed_chunks_core)
+
+    first_window_of_page = {}
+    for child_index, pid in enumerate(light_compendium.children.pid):
+        first_window_of_page.setdefault(pid, child_index)
+    assert light_compendium.bm25["postings"]["zebra"] == [[i, 1] for i in sorted(first_window_of_page.values())]
 
 
 def test_every_window_reads_back_out_of_its_section(fake_embed_chunks_core):

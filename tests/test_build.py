@@ -35,7 +35,7 @@ import numpy as np
 import pytest
 from bs4 import BeautifulSoup
 
-from extractium.core import build
+from extractium.core import bm25, build
 from extractium.core.calibration import UNRELATED_PROBES
 from extractium.core.models import Document
 from extractium.sources.generic import GenericHandler
@@ -177,6 +177,50 @@ def test_build_compendium_collapses_the_shared_boilerplate_section(
     assert len(compendium.parents) == 3
 
 
+def test_build_compendium_lowers_the_weight_of_a_section_repeated_across_pages(fake_embed_chunks_core):
+    """
+    The same bio under three page titles never collapses as a near
+    duplicate, because the heading carries the title. It is boilerplate
+    all the same, so it keeps its place and loses its weight.
+    """
+    # Three spellings of one bio: the test embedder keys on the exact
+    # text, and the real model keeps the copies apart by their headings.
+    bios = (
+        "Dr. Example writes about sleep, wearables, and study technology for the center.",
+        "Dr Example writes about sleep, wearables and study technology for the center",
+        "DR. EXAMPLE WRITES ABOUT SLEEP, WEARABLES, AND STUDY TECHNOLOGY FOR THE CENTER.",
+    )
+    documents = [
+        Document(
+            url=f"https://example.org/{name}.md", title=f"{name.title()} Page",
+            content=f"# {name}\n\nOpening words about {name}, different on every page so the "
+                    f"section stands on its own.\n\n## About the Author\n\n{bio}\n",
+            source_type="web", content_type="page",
+        )
+        for name, bio in zip(("alpha", "beta", "gamma"), bios)
+    ]
+    lines = []
+
+    compendium = build.build_compendium(documents, embedder=fake_embed_chunks_core, progress=lines.append)
+
+    bios = [p for p in compendium.parents if p.t.endswith("About the Author")]
+    assert len(bios) == 3 and all(p.weight == 0.5 for p in bios)
+    assert all(p.weight == 1.0 for p in compendium.parents if p not in bios)
+    assert compendium.notes == (
+        "3 section(s) whose text repeats on 3 or more pages were given weight 0.5 (1 distinct text(s))",
+    )
+    assert any("3 repeated section(s)" in line for line in lines)
+
+
+def test_build_compendium_carries_no_note_when_nothing_repeats(fixtures_dir, fake_embed_chunks_core):
+    document = document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team")
+
+    compendium = build.build_compendium([document], embedder=fake_embed_chunks_core)
+
+    assert compendium.notes == ()
+    assert all(parent.weight == 1.0 for parent in compendium.parents)
+
+
 def test_build_compendium_matches_the_reference_pipeline_on_the_same_fixtures(
     reference, fixtures_dir, fake_embed_chunks, fake_embed_chunks_core
 ):
@@ -190,6 +234,11 @@ def test_build_compendium_matches_the_reference_pipeline_on_the_same_fixtures(
     the step is for. They diverge on a page that repeats itself: the port
     keeps such passages and the frozen script discards them. See
     extractium.core.dedup.drop_near_duplicates.
+
+    The keyword statistics diverge on purpose in one way: the frozen
+    script indexes the page title with every window, and the port indexes
+    it once per page. Every other term's postings are identical, and a
+    title term appears in the port's statistics at most as often.
     """
     urls = ("https://example.org/team", "https://example.org/project")
     names = ("page_boilerplate_a.html", "page_boilerplate_b.html")
@@ -213,7 +262,15 @@ def test_build_compendium_matches_the_reference_pipeline_on_the_same_fixtures(
     assert [p.t for p in compendium.parents] == [p["t"] for p in ref_parents]
     assert [p.x for p in compendium.parents] == [p["x"] for p in ref_parents]
     assert list(compendium.children.pid) == [c["pid"] for c in ref_children]
-    assert compendium.bm25 == reference.build_bm25_index(ref_children)
+    ref_bm25 = reference.build_bm25_index(ref_children)
+    title_terms = {term for p in ref_parents for term in bm25.tokenize(p["t"].split(" -- ")[0])}
+    assert set(compendium.bm25["df"]) == set(ref_bm25["df"])
+    for term, postings in ref_bm25["postings"].items():
+        if term in title_terms:
+            assert compendium.bm25["df"][term] <= ref_bm25["df"][term]
+        else:
+            assert compendium.bm25["postings"][term] == postings, term
+    assert {k: compendium.bm25[k] for k in ("k", "b", "d")} == {k: ref_bm25[k] for k in ("k", "b", "d")}
     # The reference knows the window-to-window figures only; the figures for
     # unrelated questions are an addition it never had.
     reference_stats = reference.compute_calibration_stats(ref_vecs)

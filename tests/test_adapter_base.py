@@ -9,7 +9,7 @@ tests/test_adapter_base.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -209,6 +209,14 @@ def test_without_code_drops_code_sections_and_everything_derived_from_them(fake_
     assert after.vectors.shape[0] == len(after.children)
     assert max(after.children.pid) == len(after.parents) - 1
     assert posting_count(after) < posting_count(before)
+
+
+def test_without_code_rebuilds_the_statistics_with_the_page_title_once_per_page(fake_embed_chunks_core):
+    after = base.without_code(compendium_of(fake_embed_chunks_core, with_code=True))
+
+    pages_of_page_word = [after.children.pid[i] for i, _ in after.bm25["postings"]["page"]]
+    assert sorted(pages_of_page_word) == sorted(set(pages_of_page_word))
+    assert len(pages_of_page_word) == len({parent.u for parent in after.parents})
 
 
 def test_without_code_returns_the_same_object_when_there_is_no_code(fake_embed_chunks_core):
