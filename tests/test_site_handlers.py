@@ -252,6 +252,73 @@ def test_tdx_furniture_reaches_no_section(fixtures_dir):
     assert parents[-1]["x"].endswith("by one author.")
 
 
+QUESTION_FURNITURE = (
+    "Tags", "Asked by", "Example Asker", "Example Answerer", "2/13/26", "Last edited",
+    "Show all comments", "Sign In", "contribute an answer", "No feedback",
+    "Enter comment", "Follow", "Email me", "Save", "Cancel",
+)
+
+
+def test_tdx_question_furniture_stays_out_of_the_indexed_text(fixtures_dir):
+    """
+    A question page carries its tag links loose in the body, a byline
+    with the asker's name and timestamps, a sign-in prompt, comment
+    controls under the question and each answer, and a hidden comment
+    form. The tags are read; none of the rest reaches the text, and a
+    person linked from inside the answer's own paragraphs stays.
+    """
+    soup = _soup_from_fixture(fixtures_dir, "tdx_question_with_furniture.html")
+
+    extraction = tdx.TdxHandler().extract(soup, TDX_URL)
+
+    assert extraction.title == "Which pedometers are approved for a sleep study?"
+    assert extraction.tags == ("pedometer", "sleep-research")
+    text = extraction.node.get_text(" ", strip=True)
+    for furniture in QUESTION_FURNITURE:
+        assert furniture not in text, furniture
+    assert "Synthetic question body" in text
+    assert "Answer (1)" in text and "Synthetic answer" in text
+    assert "Example Contact can confirm" in text
+    assert text.endswith("submit a synthetic help ticket.")
+
+
+def test_tdx_question_furniture_reaches_no_section(fixtures_dir):
+    from extractium.core.models import Document
+
+    soup = _soup_from_fixture(fixtures_dir, "tdx_question_with_furniture.html")
+    extraction = tdx.TdxHandler().extract(soup, TDX_URL)
+    document = Document(url=TDX_URL, title=extraction.title, content=extraction.node,
+                        source_type="kb", content_type="article", tags=extraction.tags)
+
+    parents, _ = chunk.chunk_document(document)
+
+    assert [parent["t"] for parent in parents] == [
+        "Which pedometers are approved for a sleep study?",
+        "Which pedometers are approved for a sleep study? -- Answer (1)",
+    ]
+    # The <h1> is not a section heading, so the page title opens the first section.
+    assert "Synthetic question body" in parents[0]["x"]
+    assert parents[1]["x"].startswith("Synthetic answer")
+    for parent in parents:
+        for furniture in QUESTION_FURNITURE:
+            assert furniture not in parent["x"], furniture
+
+
+def test_tdx_strip_furniture_keeps_a_person_link_inside_body_text():
+    """A block that holds a paragraph is body text, whoever it links."""
+    html = (
+        '<div id="questionsContent"><div class="gutter-top wrap-text">'
+        '<p>Synthetic body text naming <a href="/TDClient/210/Org/People/Details?ID=1">Example Person</a> '
+        "as the contact for the synthetic study.</p></div>"
+        '<div>Asked by <a href="/TDClient/210/Org/People/Details?ID=2">Example Asker</a> on Fri 2/13/26</div></div>'
+    )
+    node = BeautifulSoup(html, "html.parser").select_one("#questionsContent")
+
+    text = tdx.strip_furniture(node).get_text(" ", strip=True)
+
+    assert text == "Synthetic body text naming Example Person as the contact for the synthetic study."
+
+
 def test_tdx_article_without_tags_or_a_description_carries_neither():
     html = (
         "<html><head><title>Article - Plain</title></head><body>"
