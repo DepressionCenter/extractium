@@ -3,8 +3,11 @@ Summary: The Python client for a version 4 compendium: reads the binary
 container back, checks it against the reader checklist, and runs the
 hybrid search over it -- cosine similarity, BM25, reciprocal rank fusion,
 a corpus-relative relevance threshold, diversity selection, and
-resolution of each matched window to the section that contains it. The
-caller supplies the query embedder, so this module never loads a model.
+resolution of each matched window to the section that contains it. It
+also answers without any model: a keyword-only search over the posting
+lists the file carries, narrowed by `#tag` words, and a suggestion list
+for a search box. The caller supplies the query embedder, so this module
+never loads a model.
 The JavaScript client in clients/js/extractium-client.js implements the
 same algorithm with the same constants; tests/test_search_contract.py
 holds them to the same ranking. See docs/container-format.md and
@@ -15,7 +18,7 @@ extractium/search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-18
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,8 +37,9 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-18"
+__date__ = "2026-09-28"
 
+import bisect
 import gzip
 import json
 import math
@@ -138,6 +142,24 @@ TOP_K = 4
 RRF_K = 60
 RRF_VECTOR_WEIGHT = 0.5
 RRF_BM25_WEIGHT = 0.5
+
+# The mark that turns a query word into a filter: `#sleep` keeps only the
+# sections whose tags, keywords, or categories hold that word, and the
+# rest of the query ranks them. A search box shows tags with this mark, so
+# what a person sees on a result is what they type to narrow by it.
+TAG_MARK = "#"
+
+# Suggestions returned when the caller names no other number.
+SUGGEST_LIMIT = 10
+
+# How a section heading joins the page title and the section heading, as
+# the chunker writes it. Suggestions offer the page title alone.
+HEADING_SEPARATOR = " -- "
+
+# A run of letters and digits inside a tag, keyword, or category, so a
+# `#word` filter matches one word of a longer entry. Python's \w covers
+# Unicode letters and digits; the underscore is left out so it splits.
+_LABEL_WORD_RE = re.compile(r"[^\W_]+")
 
 # Decimal places every score is rounded to before anything is ordered or
 # compared. Two clients adding up the same 384 products do not reach the
@@ -328,6 +350,61 @@ def tokenize(text):
     return TOKEN_RE.findall((text or "").lower())
 
 
+def parse_query(query):
+    """
+    Splits a query into the words to rank by and the tag words to narrow by.
+
+    A token that begins with TAG_MARK and carries more than the mark is a
+    tag word: `#sleep` keeps only the sections whose tags, keywords, or
+    categories hold "sleep". Every other token is keyword text.
+
+    Args:
+        query (str): what the user typed.
+
+    Returns:
+        tuple[list[str], list[str]]: the keyword terms, from `tokenize`,
+        and the tag words, lowercased without the mark, each once, in
+        the order typed.
+    """
+    keyword_text = []
+    tags = {}
+    for token in (query or "").split():
+        if token.startswith(TAG_MARK) and len(token) > len(TAG_MARK):
+            tags.setdefault(token[len(TAG_MARK):].lower(), None)
+        else:
+            keyword_text.append(token)
+    return tokenize(" ".join(keyword_text)), list(tags)
+
+
+def label_words(parent):
+    """
+    The words a `#tag` filter can match on one section.
+
+    Every tag, keyword, and category the section carries counts, compared
+    without regard to case, both as a whole and as each run of letters
+    and digits inside it. So `#sleep` matches a page tagged "Sleep
+    Research", and `#peer-to-peer` matches one tagged "Peer-to-Peer".
+
+    Args:
+        parent (Mapping): the section record from the container header.
+
+    Returns:
+        frozenset[str]: the lowercase words.
+    """
+    words = set()
+    for field in ("tags", "keywords", "categories"):
+        values = parent.get(field) or ()
+        if isinstance(values, str):
+            values = (values,)
+        for value in values:
+            if not isinstance(value, str):
+                continue
+            lowered = value.lower()
+            words.add(lowered)
+            words.update(_LABEL_WORD_RE.findall(lowered))
+    return frozenset(words)
+
+
 def round_score(value):
     """
     Rounds a score to the precision every client shares, so that two of
@@ -420,12 +497,12 @@ def vector_candidates(query_vector, vectors, pool_size=CANDIDATE_POOL):
     return [{"i": int(i), "s": float(scores[i])} for i in ranked]
 
 
-def bm25_candidates(terms, bm25, child_count, pool_size=CANDIDATE_POOL):
+def bm25_scores(terms, bm25, child_count):
     """
-    Ranks windows by keyword match, walking only the postings lists of
-    terms the query actually contains. The cost follows the query, not
-    the size of the corpus, which is what makes this practical to run in
-    a browser on every keystroke.
+    The keyword score of every window a query term appears in, walking
+    only the postings lists of the terms the query holds. The cost follows
+    the query, not the size of the corpus, which is what makes this
+    practical to run in a browser on every keystroke.
 
     The formula and its constants come from the file itself, so an index
     rebuilt with different tuning needs no client change.
@@ -434,13 +511,14 @@ def bm25_candidates(terms, bm25, child_count, pool_size=CANDIDATE_POOL):
         terms (Iterable[str]): query terms from `tokenize`.
         bm25 (Mapping | None): the container's keyword statistics.
         child_count (int): number of windows in the corpus.
-        pool_size (int): how many candidates to keep.
 
     Returns:
-        list[dict]: `{"i": child index, "s": BM25 score}`, best first.
+        dict[int, float]: child index to its unrounded BM25 score, for
+        the windows that hold at least one term. Empty without statistics
+        or terms.
     """
     if not bm25 or not terms:
-        return []
+        return {}
     k = bm25.get("k", 1.2)
     b = bm25.get("b", 0.75)
     d = bm25.get("d", 0.5)
@@ -463,7 +541,24 @@ def bm25_candidates(terms, bm25, child_count, pool_size=CANDIDATE_POOL):
                 continue
             gain = idf * (d + term_frequency * (k + 1)) / denominator
             scores[child_index] = scores.get(child_index, 0.0) + gain
+    return scores
 
+
+def bm25_candidates(terms, bm25, child_count, pool_size=CANDIDATE_POOL):
+    """
+    Ranks windows by keyword match, best first, keeping a pool of the
+    strongest. See `bm25_scores` for the scoring.
+
+    Args:
+        terms (Iterable[str]): query terms from `tokenize`.
+        bm25 (Mapping | None): the container's keyword statistics.
+        child_count (int): number of windows in the corpus.
+        pool_size (int): how many candidates to keep.
+
+    Returns:
+        list[dict]: `{"i": child index, "s": BM25 score}`, best first.
+    """
+    scores = bm25_scores(terms, bm25, child_count)
     rounded = {index: round_score(score) for index, score in scores.items()}
     ranked = sorted(rounded.items(), key=lambda pair: (-pair[1], pair[0]))
     return [{"i": int(i), "s": s} for i, s in ranked[:pool_size]]
@@ -654,6 +749,11 @@ class SearchIndex:
         self.embedding = header["embedding"]
         self.bm25 = header.get("bm25")
         self.calibration = header.get("calibration")
+        # Built on first use, because a caller that only runs the hybrid
+        # search never needs them: the `#tag` words of each section, and
+        # the three sorted lists suggestions are drawn from.
+        self._label_words = [None] * len(self.parents)
+        self._suggestions = None
 
     @property
     def name(self):
@@ -789,6 +889,163 @@ class SearchIndex:
             end=ends[child_index] if child_index < len(ends) else None,
             cosine=candidate.get("cos"),
         )
+
+
+    ### Search Without A Model ###
+
+    def _label_words_of(self, parent_index):
+        """The `#tag` words of one section, computed once."""
+        words = self._label_words[parent_index]
+        if words is None:
+            words = self._label_words[parent_index] = label_words(self.parents[parent_index])
+        return words
+
+    def search_keywords(self, query, k=TOP_K):
+        """
+        Searches by keywords alone, with no model and no query vector.
+
+        The words of the query rank windows through the keyword statistics
+        the file carries. A `#word` in the query keeps only the sections
+        whose tags, keywords, or categories hold that word, compared
+        without regard to case, and every `#word` given has to match. Each
+        section is returned once, at its best window, so a list of results
+        is a list of pages in the light file and of sections in the full
+        one.
+
+        Args:
+            query (str): what the user typed, `#tags` included.
+            k (int): how many sections to return.
+
+        Returns:
+            list[Hit]: best first, with `score` the keyword score times
+            the section's weight, or 0 when only tags were given and the
+            matching sections are listed in file order; `cosine` is None.
+            Empty when nothing was typed, no section holds every tag, the
+            words match nothing, or the file carries no keyword
+            statistics to rank words with.
+        """
+        terms, tags = parse_query(query)
+        if not terms and not tags:
+            return []
+        pids = self.children["pid"]
+        allowed = None
+        if tags:
+            allowed = {
+                parent_index for parent_index in range(len(self.parents))
+                if all(tag in self._label_words_of(parent_index) for tag in tags)
+            }
+            if not allowed:
+                return []
+        if terms:
+            if not self.bm25:
+                return []
+            scores = bm25_scores(terms, self.bm25, len(self))
+            ranked = sorted(
+                (
+                    (round_score(score * self._weight_of(index)), index)
+                    for index, score in scores.items()
+                    if allowed is None or pids[index] in allowed
+                ),
+                key=lambda pair: (-pair[0], pair[1]),
+            )
+        else:
+            ranked = [(0.0, index) for index, pid in enumerate(pids) if pid in allowed]
+
+        hits = []
+        seen = set()
+        for score, index in ranked:
+            if len(hits) >= k:
+                break
+            if pids[index] in seen:
+                continue
+            seen.add(pids[index])
+            hits.append(self._hit_of({"i": int(index), "s": score}))
+        return hits
+
+    def _suggestion_lists(self):
+        """
+        The three sorted lists suggestions come from, built once: the
+        distinct tags and the distinct page titles, each as (lowercase,
+        first spelling seen) pairs sorted by the lowercase form, and the
+        posting-list vocabulary, already lowercase.
+        """
+        if self._suggestions is None:
+            tags = {}
+            titles = {}
+            for parent in self.parents:
+                for tag in parent.get("tags") or ():
+                    if isinstance(tag, str) and tag.strip():
+                        tags.setdefault(tag.lower(), tag)
+                heading = parent.get("t") or ""
+                title = heading.split(HEADING_SEPARATOR, 1)[0].strip()
+                if title:
+                    titles.setdefault(title.lower(), title)
+            words = sorted(self.bm25.get("postings") or ()) if self.bm25 else []
+            self._suggestions = (sorted(tags.items()), sorted(titles.items()), words)
+        return self._suggestions
+
+    def suggest(self, prefix, limit=SUGGEST_LIMIT):
+        """
+        Words a search box can offer for what has been typed so far.
+
+        Three lists are searched, each sorted and compared without regard
+        to case: the tags of the compendium, returned with their `#`; the
+        page titles; and the words of the keyword vocabulary. They are
+        merged one from each in turn, so a short prefix does not fill the
+        list from one kind alone. A prefix that begins with `#` searches
+        the tags only. Everything is a prefix filter over lists already in
+        memory, so it answers between keystrokes.
+
+        Args:
+            prefix (str): what has been typed. Blank returns nothing.
+            limit (int): the most suggestions to return.
+
+        Returns:
+            list[str]: the suggestions, in the order described.
+        """
+        wanted = (prefix or "").strip()
+        if not wanted or limit <= 0:
+            return []
+        tags, titles, words = self._suggestion_lists()
+        if wanted.startswith(TAG_MARK):
+            rest = wanted[len(TAG_MARK):].lower()
+            return [TAG_MARK + tag for key, tag in tags if key.startswith(rest)][:limit]
+        low = wanted.lower()
+        return _round_robin(
+            [
+                [TAG_MARK + tag for key, tag in tags if key.startswith(low)],
+                [title for key, title in titles if key.startswith(low)],
+                _prefix_range(words, low),
+            ],
+            limit,
+        )
+
+
+def _prefix_range(sorted_words, prefix):
+    """The entries of a sorted list that begin with prefix, in order."""
+    start = bisect.bisect_left(sorted_words, prefix)
+    end = start
+    while end < len(sorted_words) and sorted_words[end].startswith(prefix):
+        end += 1
+    return sorted_words[start:end]
+
+
+def _round_robin(lists, limit):
+    """At most limit items, taken one from each list in turn while any has more."""
+    out = []
+    positions = [0] * len(lists)
+    while len(out) < limit:
+        added = False
+        for n, items in enumerate(lists):
+            if positions[n] < len(items):
+                out.append(items[positions[n]])
+                positions[n] += 1
+                added = True
+                if len(out) >= limit:
+                    break
+        if not added:
+            break
+    return out
 
 
 ### Loading ###
