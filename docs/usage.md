@@ -3,10 +3,10 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
-summary tells you, what each exit code means, and how to try a small run
+summary tells you, the record every build leaves behind, what each exit code means, and how to try a small run
 before a full one.
 Notes: See README file for documentation and full license information.
 
@@ -181,6 +181,42 @@ Set `parallel_sources: 1` in the settings file to run the sources one after anot
 
 If any output contains content read from a local folder, the summary says so on its own line. That only happens when you set `include_local: true` on that output.
 
+### The run record
+
+Every build also writes the same figures to a file, so a history of builds can be read without keeping the terminal output. The file goes into the `runs` folder beside the output folder, or the folder `runs_dir` names in the settings file, and is named after the moment the build started, in UTC: `runs/2026-09-28T14-05-33Z.json`. A build that fails leaves one too, with the exit code and the message the terminal showed, and so does a build whose settings file could not be read at all.
+
+```json
+{
+  "version": 1,
+  "tool_version": "0.2",
+  "started_at": "2026-09-28T14:05:33Z",
+  "ended_at": "2026-09-28T14:11:02Z",
+  "duration_seconds": 329,
+  "config_path": "config.yaml",
+  "config_sha256": "3f1a...c9e2",
+  "max_pages": 10000,
+  "exit_code": 0,
+  "status": "succeeded",
+  "name": "Example Org Knowledge Base",
+  "built_at": "2026-09-28T14:10:40Z",
+  "totals": {"pages": 233, "sections": 812, "windows": 1944},
+  "sources": [{"label": "Example Org Website", "pages": 233, "sections": 812, "windows": 1944}],
+  "outputs": [
+    {"type": "container", "include_local": false,
+     "files": [{"path": "dist/compendium.json.gz", "bytes": 125829},
+               {"path": "dist/compendium-full.json.gz", "bytes": 880803}]},
+    {"type": "okf", "include_local": false, "folder": "dist/okf", "file_count": 235, "bytes": 1237319}
+  ],
+  "notices": [],
+  "notes": [],
+  "errors": []
+}
+```
+
+Every time is UTC. `config_sha256` is a digest of the settings file as it was when the build ran, so two records can be compared to see whether the settings changed between them; it is null when the file could not be read. `max_pages` is the ceiling in force, whether it came from the file or from `--max-pages`. `sources` has one entry per source label, in the order the labels first appear. An output that wrote a handful of files names each one with its size; one that wrote a folder of them is recorded as the folder with a count, the same rule the summary follows. `notices` holds the lines about outputs that include local content, `notes` the coverage and transport lines, and `errors` the reason a build stopped.
+
+The record holds counts, names from your settings file, output paths, and messages. It never holds a page's text, a list of addresses, a token, or a name taken from a local file. A record that cannot be written is reported on the error stream and does not change the exit code.
+
 
 ## Indexing a folder on your own computer
 
@@ -216,7 +252,7 @@ The exit code tells a scheduled build what went wrong without anyone reading the
 
 Extractium™ keeps fetched pages in a cache folder, `.kb_cache` unless you change it. A second run asks each site whether its pages changed and downloads only the ones that did, so a weekly rebuild is much faster than the first one.
 
-Add `.kb_cache/` to your `.gitignore`. Deleting the folder is safe. The next build downloads everything again.
+Add `.kb_cache/` and `runs/` to your `.gitignore`. Deleting the cache folder is safe; the next build downloads everything again. Deleting the runs folder loses only the history of past builds.
 
 The one exception is a build that reads YouTube. Captions are stored under `<cache_dir>/youtube/`, and a scheduled build cannot fetch them again, because YouTube refuses caption requests from cloud-provider addresses. Such a build names a visible folder as its `cache_dir` and commits it. See the `youtube` section of the [configuration reference](configuration.md).
 

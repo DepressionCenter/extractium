@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/configuration.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: Reference for the Extractium build configuration file: the
 global settings, the sources list, the outputs list, the options each
 built-in type accepts, how the URL pattern lists interact, and the error
@@ -79,6 +79,7 @@ Every source also needs a `label`. See "Naming your sources" below.
 | `slug` | text | `compendium` | The short name this compendium goes by. It names the output files that give no `file` of their own: `<slug>.json.gz` and `<slug>-full.json.gz` for the containers and `<slug>.sqlite` for the database, so `slug: example-compendium` publishes `example-compendium.json.gz`, `example-compendium-full.json.gz`, and `example-compendium.sqlite`. Lowercase letters, digits, and hyphens, up to 64 characters, because the name ends up in a web address. |
 | `out_dir` | text | `dist` | Folder every output is written under. |
 | `cache_dir` | text | `.kb_cache` | Folder for fetched content between builds. Name a visible folder, such as `kb-cache`, if your build reads YouTube: part of that folder has to be committed. See the `youtube` source below. |
+| `runs_dir` | text | `runs` | Folder where every build leaves its run record: one JSON file per build, on success and on failure, holding what the summary printed. [Running a build](usage.md) describes the record under "The run record". Add the folder to your `.gitignore`; it is a history for the machine that built, not for the repository. |
 | `max_pages` | whole number | `10000` | The most a source may read, counted in the source's own unit: pages for a `web` crawl (document files included), videos for `youtube`, deposits for `dspace`, files for `local`, and concept files for `okf`. Each source counts its own against it, so two sources may read twice as many between them. A source that stops here says so in the log. Must be 1 or more. A `github_api` source has two ceilings of its own, `max_repositories` and `max_files_per_repository`, and meets `max_pages` only when it falls back to crawling a repository's documentation pages. |
 | `delay_seconds` | number | `0.5` | The least time, in seconds, between two requests to the same site. It holds across every source and every worker in the build. Use `0` for no wait. |
 | `parallel_sources` | whole number | `4` | How many sources run at the same time. `1` runs them one after another. See "Reading sources at the same time" below. |

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/extractium-spec.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: The design of Extractium™: what the tool is for, how its parts
 fit together, what it reads, what it writes, and what it will never do.
 Written for developers and plug-in authors.
@@ -281,6 +281,7 @@ A local folder can hold content that must never be published. The rules:
 |---|---|
 | JavaScript | One file, no dependencies, no build step. Parses the container, runs hybrid search (cosine, BM25, reciprocal rank fusion, a relevance floor on the raw cosine, diversity selection), resolves hits to parents. The caller supplies the query embedding, so the same file runs in a browser, in Node, and on edge runtimes. |
 | Python | The same algorithm in `extractium.search`, with an injected query embedder. Used by the tests and the local Python MCP server. |
+| Both | A keyword-only entry point, `search_keywords` and `searchKeywords`, that ranks by the file's BM25 statistics with no model, narrows by `#word` filters over a section's tags, keywords, and categories, and returns each section once; and `suggest`, a prefix filter over the file's tags, page titles, and vocabulary for a search box. The committed contract holds both clients to the same answers for these as for the hybrid search. |
 | Others | Go, PowerShell, R, Lua, Julia are welcome as contributed clients against the [container format](container-format.md). |
 
 ### 9.2 Access tiers
@@ -319,6 +320,7 @@ Every section carries five enrichment fields (section 3.4). The keyword step fil
 - Two rebuild modes, chosen by the `rebuild` setting. `full`, the default, publishes exactly what the build read. `incremental` also carries forward a web page the last build published and this one did not reach, unless the server confirmed it gone with a 404 or 410 or its source left the settings file; every other source is authoritative about its own content. Full is the default because a page taken down on purpose must leave the published index on the next build. The Open Knowledge Format folder mirrors the compendium in both modes, removing only files this tool wrote.
 - A build runs up to `parallel_sources` sources at once, each in a thread over the one session, and collects their documents in file order, so the rule that the first source to reach a page keeps it does not depend on which thread finished first. Progress lines are prefixed with the source label while more than one source runs. A failure in one source, or Ctrl+C, stops the others at their next progress line. Within a crawl, up to `parallel_pages` fetches are in flight while pages are taken, followed, and yielded in the one-at-a-time order, and each page's own progress lines are replayed under its line.
 - Local run: `run.bat` or `run.sh` creates a virtual environment, installs pinned dependencies from a committed lock file, builds, and prints what to commit. This is the primary path for sources a cloud runner cannot reach (local folders, YouTube).
+- Every build leaves a run record: one JSON file under `runs_dir` (`runs` by default), named after the start time in UTC, written on success and on every failure path including a settings file that could not be read. It holds what the summary printed (times, duration, tool version, a digest of the settings file, the exit code, pages, sections, and windows per source, outputs with sizes, notes, errors) and never a page's text, an address list, a token, or a name derived from a local file. A history of builds is read from that folder.
 - Data and configuration are kept apart from the tool. The tool repository holds the engine. Each organization keeps a small data repository with its `config.yaml`, its transcript cache when it uses YouTube, and the published output folder. A template for that repository ships under `examples/data-repo/`.
 
 
@@ -342,6 +344,7 @@ name: Example Org Knowledge Base   # default: title of the first crawled page
 slug: compendium                    # names the output files: <slug>.json, <slug>.sqlite
 out_dir: dist                       # every adapter writes under here
 cache_dir: .kb_cache
+runs_dir: runs                      # one record per build, succeeded or failed
 delay_seconds: 0.5                  # least time between two requests to one host
 max_pages: 10000
 parallel_sources: 4                 # sources run at once; 1 = one after another
@@ -465,7 +468,7 @@ Documentation serves four audiences: people building an index, core developers, 
 
 ## 14. History
 
-The design has had three revisions: v0.1 on 2026-08-16, v0.2 on 2026-09-04, and v0.3 on 2026-09-12. The git history of this page records each change. The largest were the move from three crawlers to one crawler with site handlers (v0.2), the required source `label` and container version 4 (v0.3), the optional hooks on the site-handler and source protocols (v0.3), and the `rebuild` setting (v0.3).
+The design has had three revisions: v0.1 on 2026-08-16, v0.2 on 2026-09-04, and v0.3 on 2026-09-12. The git history of this page records each change. The largest were the move from three crawlers to one crawler with site handlers (v0.2), the required source `label` and container version 4 (v0.3), the optional hooks on the site-handler and source protocols (v0.3), and the `rebuild` setting (v0.3). On 2026-09-28 the clients gained the keyword-only search and the suggestions of section 9.1, and every build began leaving the run record of section 11, the first stage of the [user interface plan](ui-implementation-plan.md).
 
 
 ## Conclusion

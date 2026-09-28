@@ -2,7 +2,7 @@
 # examples/config.example.yaml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-04
-# Last Modified: 2026-09-22
+# Last Modified: 2026-09-28
 # Summary: Example Extractium build configuration. Copy it next to your own
 # project as config.yaml, change the seed URL, and delete anything you do
 # not need -- every setting except the sources list has a working default.
@@ -265,6 +265,11 @@ sources:
 # Folder for fetched pages between builds, so a rerun only downloads what
 # changed.
 #cache_dir: .kb_cache
+
+# Folder where every build leaves its record: one JSON file per build,
+# named after its start time, on success and on failure, holding what the
+# summary printed. A history for this machine; keep it out of git.
+#runs_dir: runs
 
 # The most a source may read: web pages for a crawl, videos, deposits, or
 # files for the other kinds. This is a safety net: if an include pattern
