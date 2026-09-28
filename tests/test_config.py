@@ -12,7 +12,7 @@ tests/test_config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -215,6 +215,16 @@ def test_boolean_is_not_accepted_as_a_number():
 def test_blank_out_dir_is_rejected():
     with pytest.raises(config.ConfigError, match="out_dir cannot be blank"):
         config.config_from_mapping(minimal(out_dir=" "))
+
+
+def test_runs_dir_defaults_to_runs_and_takes_a_folder():
+    assert config.config_from_mapping(minimal()).runs_dir == config.DEFAULT_RUNS_DIR == "runs"
+    assert config.config_from_mapping(minimal(runs_dir="history/builds")).runs_dir == "history/builds"
+
+
+def test_blank_runs_dir_is_rejected():
+    with pytest.raises(config.ConfigError, match="runs_dir cannot be blank"):
+        config.config_from_mapping(minimal(runs_dir=" "))
 
 
 def test_respect_robots_txt_must_be_a_boolean():

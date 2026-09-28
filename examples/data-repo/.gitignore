@@ -2,7 +2,7 @@
 # examples/data-repo/.gitignore
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-08
+# Last Modified: 2026-09-28
 # Summary: What a data repository must not commit: the crawl cache, the
 # local virtual environment, and the build output when it is published by
 # the workflow rather than committed.
@@ -22,6 +22,10 @@
 
 # Fetched pages. Only saves time on the next run; deleting it is safe.
 .kb_cache/
+
+# One record per build, succeeded or failed, holding what the summary
+# printed. A history for the machine that built, not for the repository.
+runs/
 
 # A local build environment, when you build on your own machine.
 .venv/

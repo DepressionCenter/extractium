@@ -12,7 +12,7 @@ extractium/config.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +31,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-17"
+__date__ = "2026-09-28"
 
 import pathlib
 import re
@@ -66,6 +66,11 @@ DEFAULT_OUT_DIR = "dist"
 
 # Folder for fetched pages and their validators between builds.
 DEFAULT_CACHE_DIR = ".kb_cache"
+
+# Folder every build leaves its run record in: one JSON file per build,
+# succeeded or failed, holding what the summary printed. Resolved from the
+# working directory like out_dir and cache_dir.
+DEFAULT_RUNS_DIR = "runs"
 
 # Safety ceiling for one crawl, so an over-broad include pattern cannot
 # walk an entire public website.
@@ -275,6 +280,7 @@ KNOWN_KEYS = frozenset({
     "slug",
     "out_dir",
     "cache_dir",
+    "runs_dir",
     "max_pages",
     "delay_seconds",
     "parallel_sources",
@@ -413,6 +419,7 @@ class Config:
         slug (str): the short name the output files are named after.
         out_dir (str): folder every adapter writes under.
         cache_dir (str): folder for the fetch cache.
+        runs_dir (str): folder every build writes its run record to.
         max_pages (int): hard ceiling on what one source reads, in its
             own unit: pages for a crawl, videos, deposits, files, or
             concept files for the other kinds; 1 or more.
@@ -443,6 +450,7 @@ class Config:
     slug: str = DEFAULT_SLUG
     out_dir: str = DEFAULT_OUT_DIR
     cache_dir: str = DEFAULT_CACHE_DIR
+    runs_dir: str = DEFAULT_RUNS_DIR
     max_pages: int = DEFAULT_MAX_PAGES
     delay_seconds: float = DEFAULT_DELAY_SECONDS
     parallel_sources: int = DEFAULT_PARALLEL_SOURCES
@@ -1299,6 +1307,7 @@ def config_from_mapping(data, source="configuration"):
         slug=slug,
         out_dir=_read_text(data, "out_dir", DEFAULT_OUT_DIR, source),
         cache_dir=_read_text(data, "cache_dir", DEFAULT_CACHE_DIR, source),
+        runs_dir=_read_text(data, "runs_dir", DEFAULT_RUNS_DIR, source),
         max_pages=_read_positive_int(data, "max_pages", DEFAULT_MAX_PAGES, source),
         delay_seconds=_read_non_negative_number(
             data, "delay_seconds", DEFAULT_DELAY_SECONDS, source

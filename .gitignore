@@ -55,6 +55,7 @@ __pycache__/
 
 # Ignore Extractium build/test artifacts
 .kb_cache/
+runs/
 dist/
 build/
 *.egg-info/
