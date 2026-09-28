@@ -90,6 +90,7 @@ If your client speaks the Model Context Protocol, you do not have to write eithe
 ### Reading the results
 
 - Each hit's `parent` is a whole section, which is the unit to quote and cite. Its `u` field is the source URL and its `t` field is the heading.
+- Give the model the section's text (`x`). Keep the heading and the URL for the source list you show the reader. A small model copies the first line it is given, and a heading there comes back as the answer: in one test, three models under a billion parameters answered "why do CGMs read low values at night?" with the heading `CGM Is Reading Low Values at Night -- Summary` when the heading led each excerpt, and with content when the excerpts were text alone. Placing the heading after the text still leaked it into the answer in two runs of nine.
 - An empty result list means nothing cleared the relevance test. Say that. Do not fall back to the closest miss and present it as an answer.
 - Results are ordered, not scored on a scale you can explain to a user. Do not report the score as a confidence or a percentage.
 

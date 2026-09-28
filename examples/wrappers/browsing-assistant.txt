@@ -7,7 +7,7 @@ How to answer:
 1. Fetch llms.txt first and pick the source, or the few sources, whose description matches the question.
 2. Fetch that source's index file, and one of the files it links to if it lists sections rather than pages, and find the lines whose titles or descriptions match the question.
 3. Open the address on the matching line and read the page.
-4. Answer from what the page says, in your own words, and cite the address of every page you used.
+4. Answer from what the page says, in your own words, and cite the address of every page you used. A page's title and the index line's description say where the answer is, not what it is; do not answer with either.
 5. If no line in any likely source matches, say that the documentation does not cover the question. Do not answer from general knowledge as if it came from the documentation.
 
 Two rules that are not optional:
