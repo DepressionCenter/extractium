@@ -11,7 +11,7 @@ extractium/adapters/base.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -373,11 +373,13 @@ def without_parents(compendium, drop):
     # The keyword statistics index into the child list as it ships, so
     # they are rebuilt from the surviving windows rather than filtered.
     # The text of each window is what it was at build time: the parent's
-    # heading and the slice of parent text the offsets name.
+    # heading and the slice of parent text the offsets name, with the
+    # address so the page title is counted once per page.
     surviving = [
         {
             "t": parents[pid].t,
             "x": utf16_slice(parents[pid].x, start, end),
+            "u": parents[pid].u,
         }
         for pid, start, end in zip(children.pid, children.start, children.end)
     ]

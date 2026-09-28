@@ -165,7 +165,7 @@ Most text has no characters outside the Basic Multilingual Plane, in which case 
 Two build steps see a child's text, and any client that re-implements them must use the same text:
 
 - **Embedding input**: the parent heading, a newline, then the window text.
-- **BM25 tokens**: the parent heading, a space, then the window text, lowercased, split on the token rule in "BM25 statistics".
+- **BM25 tokens**: the section heading (the part of the parent heading after the first ` -- `, or nothing when there is none), a space, then the window text, lowercased, split on the token rule in "BM25 statistics". The page title (the part of the heading before the first ` -- `, or the whole heading) is counted once per page, on the page's first window in child order, and on no other window. That keeps a page findable by its title while a page's short sections, such as a tag line or an author's bio, no longer outrank its longer ones for a query that names the page.
 
 
 ## Vector bytes
@@ -189,7 +189,7 @@ For `int8`, each stored value `q` becomes `q / scale`. Vectors are unit length b
 | `df` | object | Term to the number of children containing it. |
 | `postings` | object | Term to a list of `[childIndex, termFrequency]` pairs. |
 
-Token rule: lowercase the text and take every run of three or more ASCII letters or digits, which is the regular expression `[a-z0-9]{3,}`. A query must be tokenized the same way or nothing will match.
+Token rule: lowercase the text and take every run of three or more ASCII letters or digits, which is the regular expression `[a-z0-9]{3,}`. A query must be tokenized the same way or nothing will match. What text each window contributes is under "What a child's text was at build time" above; a reader never recomputes it, since the file carries the result.
 
 Score: for a query with terms `T`, over `N` children, the score of child `i` is the sum over `t` in `T` found in `postings`:
 

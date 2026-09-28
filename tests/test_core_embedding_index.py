@@ -18,7 +18,7 @@ tests/test_core_embedding_index.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -63,9 +63,21 @@ def test_tokenize_lowercases_and_drops_short_or_non_alnum_runs():
 # ---------------------------------------------------------------------------
 
 def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
+    """
+    A window's tokens are its section heading and its text. The page
+    title is counted once per page, on the page's first window.
+    """
     children = [
-        {"t": "Sleep", "x": "sleep hygiene tips for better sleep"},
-        {"t": "Screen", "x": "reduce screen time before bed"},
+        {"t": "Sleep Guide -- Hygiene", "x": "sleep hygiene tips for better sleep", "u": "https://example.org/a"},
+        {"t": "Sleep Guide -- Hygiene", "x": "keep the bedroom dark and cool", "u": "https://example.org/a"},
+        {"t": "Sleep Guide -- Screens", "x": "reduce screen time before bed", "u": "https://example.org/a"},
+        {"t": "Screens", "x": "another page about screens", "u": "https://example.org/b"},
+    ]
+    indexed = [
+        "Sleep Guide Hygiene sleep hygiene tips for better sleep",
+        "Hygiene keep the bedroom dark and cool",
+        "Screens reduce screen time before bed",
+        "Screens another page about screens",
     ]
     result = bm25.build_bm25_index(children)
 
@@ -76,8 +88,8 @@ def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
     expected_doc_len = []
     expected_df = {}
     expected_postings = {}
-    for i, c in enumerate(children):
-        tokens = bm25.tokenize((c.get("t") or "") + " " + c["x"])
+    for i, text in enumerate(indexed):
+        tokens = bm25.tokenize(text)
         expected_doc_len.append(len(tokens))
         for term, tf in Counter(tokens).items():
             expected_df[term] = expected_df.get(term, 0) + 1
@@ -87,6 +99,31 @@ def test_build_bm25_index_matches_manual_aggregation_over_tokenize():
     assert result["df"] == expected_df
     assert result["postings"] == expected_postings
     assert result["avgDocLen"] == sum(expected_doc_len) / len(expected_doc_len)
+    # "guide" is a title word: on the page's first window and nowhere else.
+    assert result["postings"]["guide"] == [[0, 1]]
+
+
+def test_the_page_title_is_indexed_once_per_page_and_the_section_heading_on_every_window():
+    children = [
+        {"t": "Alpha Page", "x": "text before the first heading", "u": "https://example.org/alpha"},
+        {"t": "Alpha Page -- Details", "x": "more words here", "u": "https://example.org/alpha"},
+        {"t": "Alpha Page", "x": "a second page with the same title", "u": "https://example.org/beta"},
+    ]
+
+    result = bm25.build_bm25_index(children)
+
+    assert result["postings"]["alpha"] == [[0, 1], [2, 1]]
+    assert result["postings"]["details"] == [[1, 1]]
+    assert result["docLen"] == [7, 4, 8]
+
+
+def test_a_window_without_an_address_counts_as_its_own_page():
+    children = [{"t": "Title -- Part", "x": "one"}, {"t": "Title -- Part", "x": "two"}]
+
+    result = bm25.build_bm25_index(children)
+
+    assert result["postings"]["title"] == [[0, 1], [1, 1]]
+    assert result["postings"]["part"] == [[0, 1], [1, 1]]
 
 
 # ---------------------------------------------------------------------------

@@ -170,6 +170,8 @@ One page is indexed once, however many sources reach it. Documents are compared 
 
 Searching children and returning parents is "small-to-big" retrieval: precise matches, enough context to answer.
 
+The keyword statistics count a child's section heading and text, and the page title once per page on the page's first child; the [container format](container-format.md) page states the rule under "What a child's text was at build time".
+
 Near-duplicate collapse removes a child that is near-identical to one already kept from another page. Children of one page are never collapsed into each other. The step exists to remove boilerplate many pages share, and two passages of one article are not that. The rule also removes a dependence on heading length: a child is embedded as its parent's heading followed by its own text, so an article with a long title gives every one of its children a long identical prefix, and comparing them without this rule discards real content as duplication. Measured on the Depression Center portal, recovering 119 truncated article titles cost 86 sections without it, of which only 14 were duplicates by their text alone.
 
 ### 3.3 Stable identifiers

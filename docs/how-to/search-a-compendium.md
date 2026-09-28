@@ -141,6 +141,7 @@ How the query is read:
 - A word that starts with `#` is a filter. `#research` keeps only the sections whose tags, keywords, or categories hold that word, compared without regard to case. The word may be a whole entry or one word of a longer one, so `#sleep` matches a page tagged `Sleep Research`, and `#peer-to-peer` matches one tagged `Peer-to-Peer`. Give several `#words` and every one of them has to match.
 - A query of `#words` alone lists the matching sections in the order they sit in the file, with a score of zero.
 - Each section comes back once, at its best window. In the light file a section is a page, so the result is a list of pages.
+- A page's title counts once, on the page's first window, so a query that names a page finds it, and the page's shortest sections do not all carry the title's words. A section heading counts on every window of its section.
 
 A hit has the same fields as a hit from `search`. Its `score` is the keyword score times the section's weight, and `cosine` is empty, because no vector was involved. An empty list means nothing was typed, no word matched, or no section holds every `#word`.
 

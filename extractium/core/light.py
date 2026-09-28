@@ -9,7 +9,7 @@ extractium/core/light.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -138,7 +138,9 @@ def build_light_compendium(compendium, embedder=None, progress=None):
     ### Windows ###
     windows = []
     for pid, parent in enumerate(parents):
-        for window in split_parent_into_children({"t": parent.t, "x": parent.x}):
+        # The address rides along so the keyword statistics count the
+        # page title once per page, as they do in the full compendium.
+        for window in split_parent_into_children({"t": parent.t, "x": parent.x, "u": parent.u}):
             windows.append({**window, "pid": pid})
     report(f"Light container: describing {len(parents)} page(s) in {len(windows)} search window(s).")
 

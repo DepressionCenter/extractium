@@ -13,7 +13,7 @@ extractium/core/models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -149,6 +149,12 @@ MAX_TAG_CHARS = 80
 
 # Collapses any run of whitespace, including newlines, into one space.
 _WHITESPACE_RUN = re.compile(r"\s+")
+
+# How a parent's heading joins the page title and the section heading:
+# "Page title -- Section heading". Text before a page's first heading is
+# headed by the page title alone. Everything that takes a heading apart
+# again splits at the first occurrence.
+HEADING_SEPARATOR = " -- "
 
 # A parent id is the first 16 hexadecimal characters of a SHA-1 digest.
 PARENT_ID_RE = re.compile(r"^[0-9a-f]{16}$")
