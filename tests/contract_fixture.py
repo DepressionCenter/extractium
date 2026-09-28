@@ -2,7 +2,8 @@
 Summary: Builds the small compendium the two clients are held to. One
 deterministic build over the HTML fixtures produces tests/golden/
 contract-container.json, and one fixed query vector plus the ranking both
-clients must return produces tests/golden/contract-query.json. The Python
+clients must return, with the keyword, tag, and suggestion answers that
+need no vector, produces tests/golden/contract-query.json. The Python
 contract test regenerates both and compares; the Node test reads them.
 
 This file is part of Extractium™
@@ -10,7 +11,7 @@ tests/contract_fixture.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-17"
+__date__ = "2026-09-28"
 
 import json
 import pathlib
@@ -52,11 +53,15 @@ CONTRACT_SITE_NAME = "Example Org"
 
 # The synthetic pages that make up the corpus, each under its own URL so
 # the per-section cap and the source counts have something to work with.
+# Two pages carry tags and one a category, so the keyword-only search
+# has something to narrow by and the suggestions have a tag to offer.
 CONTRACT_PAGES = (
-    ("page_boilerplate_a.html", "https://example.org/team", "web", "page"),
-    ("page_boilerplate_b.html", "https://example.org/project", "web", "page"),
-    ("page_long_section.html", "https://example.org/handbook", "web", "page"),
-    ("generic_page_with_main.html", "https://example.org/about", "web", "page"),
+    ("page_boilerplate_a.html", "https://example.org/team", "web", "page",
+     {"tags": ("Disclaimer", "Team Directory")}),
+    ("page_boilerplate_b.html", "https://example.org/project", "web", "page", {}),
+    ("page_long_section.html", "https://example.org/handbook", "web", "page",
+     {"tags": ("Disclaimer",), "categories": ("Handbook",)}),
+    ("generic_page_with_main.html", "https://example.org/about", "web", "page", {}),
 )
 
 # The query both clients run. Its words appear in the corpus, so the
@@ -72,6 +77,14 @@ CONTRACT_QUERY = "standard disclaimer for the fictional test site"
 # floor and the rest of the pool below it, which is what holds both
 # clients to the same relevance rule and not only to the same ranking.
 CONTRACT_QUERY_CHILDREN = (1, 14)
+
+# The queries the keyword-only search answers with no vector at all: one
+# of plain words, one narrowed by a tag two pages carry, one narrowed by
+# a tag no page carries, and a prefix the suggestions complete.
+CONTRACT_KEYWORD_QUERY = "standard disclaimer"
+CONTRACT_TAG_QUERY = "#disclaimer synthetic"
+CONTRACT_ABSENT_TAG_QUERY = "#nosuchtag disclaimer"
+CONTRACT_SUGGEST_PREFIX = "te"
 
 # How many candidates the committed ranking records. Small enough to read
 # in a diff, long enough to catch a client that fuses or sorts differently.
@@ -97,8 +110,8 @@ def build_contract_compendium(fixtures_dir, embedder):
     """
     documents = [
         document_from_fixture(fixtures_dir, name, url, source_type=source_type,
-                              content_type=content_type)
-        for name, url, source_type, content_type in CONTRACT_PAGES
+                              content_type=content_type, **fields)
+        for name, url, source_type, content_type, fields in CONTRACT_PAGES
     ]
     return build.build_compendium(
         documents,
@@ -158,6 +171,13 @@ def contract_expectations(container_path):
         "candidateChildren": [entry["i"] for entry in pool[:CONTRACT_POOL_RECORDED]],
         "closestParentIds": [hit.parent["id"] for hit in closest],
         "relevantParentIds": [hit.parent["id"] for hit in relevant],
+        "keywordQuery": CONTRACT_KEYWORD_QUERY,
+        "keywordParentIds": [hit.parent["id"] for hit in index.search_keywords(CONTRACT_KEYWORD_QUERY)],
+        "tagQuery": CONTRACT_TAG_QUERY,
+        "tagParentIds": [hit.parent["id"] for hit in index.search_keywords(CONTRACT_TAG_QUERY)],
+        "absentTagQuery": CONTRACT_ABSENT_TAG_QUERY,
+        "suggestPrefix": CONTRACT_SUGGEST_PREFIX,
+        "suggestions": index.suggest(CONTRACT_SUGGEST_PREFIX),
     }
 
 
