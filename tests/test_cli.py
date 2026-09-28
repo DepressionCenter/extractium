@@ -11,7 +11,7 @@ tests/test_cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,17 +30,21 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-17"
+__date__ = "2026-09-28"
 
 import gzip
+import hashlib
 import json
+import pathlib
 import struct
 import textwrap
 
 import pytest
 
-from extractium import cli
-from extractium.config import load_config
+from extractium import __version__, cli
+from extractium.config import OutputConfig, load_config
+from extractium.core import runs
+from extractium.core.models import UTC_TIMESTAMP_RE
 from extractium.core import phi_lint
 from extractium.sources.github import accounts_named_by
 
@@ -1163,3 +1167,224 @@ def test_the_summary_says_when_no_output_keeps_the_code_records(build_workspace,
 def test_a_build_with_no_code_says_nothing_about_code(build_workspace, capsys):
     out = summary_of_code_build(build_workspace, capsys, "fixed", ["container", "sqlite"])
     assert "code record" not in out
+
+
+# ---------------------------------------------------------------------------
+# The run record
+# ---------------------------------------------------------------------------
+
+def only_record(folder):
+    """The one record in a runs folder, parsed."""
+    records = sorted(folder.glob("*.json"))
+    assert len(records) == 1, [record.name for record in records]
+    return json.loads(records[0].read_text(encoding="utf-8"))
+
+
+def test_a_finished_build_leaves_one_record_holding_what_the_summary_printed(build_workspace):
+    config = write_config(build_workspace, """
+        name: Example Org
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+        outputs:
+          - type: container
+          - type: llmstxt
+    """)
+
+    assert cli.main(["build", "--config", config, "--max-pages", "25"]) == cli.EXIT_OK
+
+    record = only_record(build_workspace / "runs")
+    assert record["version"] == 1
+    assert record["tool_version"] == __version__
+    assert record["status"] == "succeeded" and record["exit_code"] == 0
+    assert UTC_TIMESTAMP_RE.match(record["started_at"]) and UTC_TIMESTAMP_RE.match(record["ended_at"])
+    assert record["ended_at"] >= record["started_at"]
+    assert record["duration_seconds"] >= 0
+    assert record["config_path"] == config
+    assert record["config_sha256"] == hashlib.sha256(pathlib.Path(config).read_bytes()).hexdigest()
+    assert record["max_pages"] == 25
+    assert record["name"] == "Example Org"
+    assert UTC_TIMESTAMP_RE.match(record["built_at"])
+    assert record["totals"] == {"pages": 2, "sections": 2, "windows": 2}
+    assert record["sources"] == [{"label": "Fixed Source", "pages": 2, "sections": 2, "windows": 2}]
+    assert [output["type"] for output in record["outputs"]] == ["container", "llmstxt"]
+    for output in record["outputs"]:
+        assert output["include_local"] is False
+        for file in output["files"]:
+            assert file["bytes"] == pathlib.Path(file["path"]).stat().st_size > 0
+    assert record["errors"] == [] and record["notices"] == []
+    assert record["_license"].startswith("This file was produced by Extractium")
+
+
+def test_a_build_that_finds_nothing_leaves_a_failed_record_with_the_reason(build_workspace):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: empty
+            label: Empty Source
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_NO_CONTENT
+
+    record = only_record(build_workspace / "runs")
+    assert record["status"] == "failed" and record["exit_code"] == cli.EXIT_NO_CONTENT
+    assert record["errors"] == [
+        "the sources produced no indexable content, so no output was written. "
+        "Check the seed URL and the include and exclude patterns."
+    ]
+    assert record["outputs"] == [] and record["totals"] is None and record["name"] is None
+    assert record["config_sha256"] is not None
+
+
+def test_an_unexpected_failure_leaves_a_record_in_the_words_the_terminal_showed(
+    build_workspace, monkeypatch, capsys
+):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+    monkeypatch.setattr(cli, "build_compendium", lambda *a, **k: 1 / 0)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_FAILED
+
+    record = only_record(build_workspace / "runs")
+    assert record["exit_code"] == cli.EXIT_FAILED
+    (error,) = record["errors"]
+    assert error.startswith("the build failed: ZeroDivisionError")
+    assert error in capsys.readouterr().err
+    assert "Traceback" not in error
+
+
+def test_a_stopped_build_leaves_a_record_saying_so(build_workspace, monkeypatch):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+
+    def interrupt(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "build_compendium", interrupt)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_FAILED
+
+    assert only_record(build_workspace / "runs")["errors"] == ["stopped at your request."]
+
+
+def test_a_missing_settings_file_still_leaves_a_record_in_the_default_folder(build_workspace):
+    assert cli.main(["build", "--config", "absent.yaml"]) == cli.EXIT_CONFIG
+
+    record = only_record(build_workspace / "runs")
+    assert record["exit_code"] == cli.EXIT_CONFIG
+    assert record["config_path"] == "absent.yaml"
+    assert record["config_sha256"] is None
+    assert record["max_pages"] is None
+    assert "cannot be read" in record["errors"][0]
+
+
+def test_the_runs_dir_setting_names_the_folder(build_workspace):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        runs_dir: history/builds
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    assert only_record(build_workspace / "history" / "builds")["status"] == "succeeded"
+    assert not (build_workspace / "runs").exists()
+
+
+def test_a_record_holds_no_text_read_from_a_local_folder(build_workspace):
+    workspace_with_a_local_folder(build_workspace)
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: local
+            label: Internal Notes
+            path: notes
+        outputs:
+          - type: sqlite
+            include_local: true
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    (path,) = list((build_workspace / "runs").glob("*.json"))
+    text = path.read_text(encoding="utf-8")
+    assert "AB123456" not in text and "Intake Notes" not in text and "intake.md" not in text
+    record = json.loads(text)
+    assert record["sources"] == [{"label": "Internal Notes", "pages": 1, "sections": 1, "windows": 1}]
+    assert record["outputs"][0]["include_local"] is True
+    assert record["notices"] == ["output 'sqlite' includes local content; check before publishing."]
+
+
+def test_a_handful_of_files_from_one_output_are_named_one_by_one(build_workspace):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        sources:
+          - type: fixed
+            label: Fixed Source
+        outputs:
+          - type: okf
+    """)
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    (output,) = only_record(build_workspace / "runs")["outputs"]
+    # The Open Knowledge Format output writes two reserved files and one per page.
+    assert output["type"] == "okf"
+    assert len(output["files"]) == 4 and "folder" not in output
+
+
+def test_a_record_that_cannot_be_written_changes_nothing_but_says_so(build_workspace, capsys):
+    config = write_config(build_workspace, """
+        cache_dir: .cache
+        runs_dir: blocked
+        sources:
+          - type: fixed
+            label: Fixed Source
+    """)
+    (build_workspace / "blocked").write_text("a file where the folder should be", encoding="utf-8")
+
+    assert cli.main(["build", "--config", config]) == cli.EXIT_OK
+
+    err = capsys.readouterr().err
+    assert "the run record could not be written" in err
+    assert (build_workspace / "dist" / "compendium-full.json.gz").exists()
+
+
+def test_two_builds_started_in_one_second_get_distinct_record_names():
+    first = runs.record_file_name("2026-09-28T14:05:33Z")
+
+    assert first == "2026-09-28T14-05-33Z.json"
+    assert runs.record_file_name("2026-09-28T14:05:33Z", [first]) == "2026-09-28T14-05-33Z-2.json"
+    assert runs.record_file_name("2026-09-28T14:05:33Z", [first, "2026-09-28T14-05-33Z-2.json"]) == (
+        "2026-09-28T14-05-33Z-3.json"
+    )
+
+
+def test_a_large_output_is_recorded_as_a_folder_with_a_count(tmp_path):
+    folder = tmp_path / "dist" / "okf"
+    folder.mkdir(parents=True)
+    paths = []
+    for n in range(runs.FILES_NAMED + 1):
+        path = folder / f"page-{n}.md"
+        path.write_text("x" * (n + 1), encoding="utf-8")
+        paths.append(path)
+    recorder = runs.RunRecorder(tmp_path / "runs", started_at="2026-09-28T14:05:33Z")
+
+    recorder.note_outputs([(OutputConfig(type="okf", include_local=False, options={}), paths)])
+
+    (output,) = recorder.outputs
+    assert output == {
+        "type": "okf", "include_local": False, "folder": str(folder),
+        "file_count": runs.FILES_NAMED + 1, "bytes": sum(range(1, runs.FILES_NAMED + 2)),
+    }

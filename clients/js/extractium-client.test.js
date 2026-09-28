@@ -5,14 +5,15 @@
  * to its section), every refusal in the container format's reader
  * checklist, and the cross-language contract: the ranking recorded in
  * tests/golden/contract-query.json, which extractium/search.py must
- * produce from the same file. Run with `node --test clients/js`.
+ * produce from the same file, and the keyword-only search and the
+ * suggestions that need no model. Run with `node --test clients/js`.
  *
  * This file is part of Extractium™
  * clients/js/extractium-client.test.js
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-18
+ * Last Modified: 2026-09-28
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -49,7 +50,9 @@ import {
     bm25Candidates,
     diversify,
     inflateContainer,
+    labelWords,
     loadContainer,
+    parseQuery,
     relevanceCutoff,
     relevanceFloor,
     roundScore,
@@ -628,4 +631,181 @@ test('loadContainer names the step a caller skipped when handed a compressed fil
 
 test('inflateContainer refuses bytes that begin like gzip but are not', async () => {
     await assert.rejects(inflateContainer(new Uint8Array([0x1f, 0x8b, 1, 2, 3, 4])), { name: 'ContainerError' });
+});
+
+/* ### Search Without A Model ### */
+
+/**
+ * Three tagged windows with keyword statistics, as plain JSON the way a
+ * file carries them: one page about a crawler, one about the index, and
+ * one about both, with tags, a keyword, and a category to narrow by.
+ */
+function taggedHeader(overrides = {}) {
+    const parents = [
+        parent('aaaaaaaaaaaaaaaa', { t: 'Crawler Guide -- Overview', x: 'crawler page' }),
+        parent('bbbbbbbbbbbbbbbb', { t: 'Index Guide', x: 'index page' }),
+        parent('cccccccccccccccc', { t: 'Both Guide', x: 'both page' }),
+    ];
+    parents[0].tags = ['Sleep Research', 'Peer-to-Peer'];
+    parents[1].keywords = ['index tuning'];
+    parents[1].categories = ['Guides'];
+    parents[2].tags = ['sleep'];
+    return sampleHeader({
+        parents,
+        children: { pid: [0, 1, 2], start: [0, 0, 0], end: [5, 5, 4] },
+        bm25: {
+            k: 1.2, b: 0.75, d: 0.5, avgDocLen: 10, docLen: [10, 10, 10],
+            df: { crawler: 1, index: 3 },
+            postings: { crawler: [[2, 3]], index: [[0, 1], [1, 1], [2, 1]] },
+        },
+        ...overrides,
+    });
+}
+
+function taggedIndex(overrides = {}) {
+    return loadContainer(containerBytes(taggedHeader(overrides), [1, 0, 0, 1, 0.6, 0.8]));
+}
+
+const ids = (hits) => hits.map((hit) => hit.parent.id);
+
+test('parseQuery separates tag words from keyword terms', () => {
+    assert.deepEqual(parseQuery('Sleep #Data #data # research'), { terms: ['sleep', 'research'], tags: ['data'] });
+    assert.deepEqual(parseQuery(''), { terms: [], tags: [] });
+    assert.deepEqual(parseQuery(null), { terms: [], tags: [] });
+    assert.deepEqual(parseQuery('#Peer-to-Peer'), { terms: [], tags: ['peer-to-peer'] });
+});
+
+test('labelWords hold each entry whole and word by word in lowercase', () => {
+    const words = labelWords({ tags: ['Sleep Research', 'Peer-to-Peer'], keywords: null, categories: ['AI'] });
+
+    assert.deepEqual(
+        Array.from(words).sort(),
+        ['ai', 'peer', 'peer-to-peer', 'research', 'sleep', 'sleep research', 'to']
+    );
+});
+
+test('searchKeywords ranks by keyword score and carries no cosine', () => {
+    const hits = taggedIndex().searchKeywords('crawler');
+
+    assert.deepEqual(ids(hits), ['cccccccccccccccc']);
+    assert.ok(hits[0].score > 0);
+    assert.equal(hits[0].score, roundScore(hits[0].score));
+    assert.equal(hits[0].cosine, null);
+    assert.equal(hits[0].childIndex, 2);
+});
+
+test('a tag narrows the keyword results to the sections that hold it', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(ids(index.searchKeywords('index')), ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb', 'cccccccccccccccc']);
+    assert.deepEqual(ids(index.searchKeywords('index #sleep')), ['aaaaaaaaaaaaaaaa', 'cccccccccccccccc']);
+});
+
+test('a tag matches tags, keywords, and categories without regard to case', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(ids(index.searchKeywords('index #SLEEP')), ['aaaaaaaaaaaaaaaa', 'cccccccccccccccc']);
+    assert.deepEqual(ids(index.searchKeywords('index #tuning')), ['bbbbbbbbbbbbbbbb']);
+    assert.deepEqual(ids(index.searchKeywords('index #guides')), ['bbbbbbbbbbbbbbbb']);
+    assert.deepEqual(ids(index.searchKeywords('index #peer-to-peer')), ['aaaaaaaaaaaaaaaa']);
+});
+
+test('every tag given has to match', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(ids(index.searchKeywords('index #sleep #research')), ['aaaaaaaaaaaaaaaa']);
+    assert.deepEqual(index.searchKeywords('index #sleep #guides'), []);
+});
+
+test('a tag no section carries returns nothing', () => {
+    assert.deepEqual(taggedIndex().searchKeywords('index #nosuchtag'), []);
+    assert.deepEqual(taggedIndex().searchKeywords('#nosuchtag'), []);
+});
+
+test('tags alone list the matching sections in file order with no score', () => {
+    const hits = taggedIndex().searchKeywords('#sleep');
+
+    assert.deepEqual(ids(hits), ['aaaaaaaaaaaaaaaa', 'cccccccccccccccc']);
+    assert.deepEqual(hits.map((hit) => hit.score), [0, 0]);
+});
+
+test('searchKeywords returns nothing for an empty query or words the corpus lacks', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(index.searchKeywords(''), []);
+    assert.deepEqual(index.searchKeywords('   '), []);
+    assert.deepEqual(index.searchKeywords('nowhere'), []);
+});
+
+test('searchKeywords needs the keyword statistics to rank words', () => {
+    const index = taggedIndex({ bm25: null });
+
+    assert.deepEqual(index.searchKeywords('index'), []);
+    // Tags alone still list, because they need no statistics.
+    assert.deepEqual(ids(index.searchKeywords('#sleep')), ['aaaaaaaaaaaaaaaa', 'cccccccccccccccc']);
+});
+
+test('searchKeywords returns each section once at its best window', () => {
+    const header = taggedHeader();
+    // Two windows of one section both hold "index"; the section is one hit.
+    header.children = { pid: [0, 0, 2], start: [0, 0, 0], end: [5, 5, 4] };
+    const index = loadContainer(containerBytes(header, [1, 0, 0, 1, 0.6, 0.8]));
+
+    const hits = index.searchKeywords('index', { k: 5 });
+
+    assert.deepEqual(ids(hits), ['aaaaaaaaaaaaaaaa', 'cccccccccccccccc']);
+    assert.equal(hits[0].childIndex, 0);
+});
+
+test('searchKeywords honors k and the per-section weight', () => {
+    const header = taggedHeader();
+    header.parents[1].weight = 50;
+    const index = loadContainer(containerBytes(header, [1, 0, 0, 1, 0.6, 0.8]));
+
+    assert.deepEqual(ids(index.searchKeywords('crawler index', { k: 2 })), ['bbbbbbbbbbbbbbbb', 'cccccccccccccccc']);
+});
+
+test('suggest matches a word, a title, and a tag, one from each in turn', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(index.suggest('in'), ['Index Guide', 'index']);
+    assert.deepEqual(index.suggest('s'), ['#sleep', '#Sleep Research']);
+    assert.deepEqual(index.suggest('c'), ['Crawler Guide', 'crawler']);
+});
+
+test('suggest honors the limit and the tag mark', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(index.suggest('s', 1), ['#sleep']);
+    assert.deepEqual(index.suggest('#'), ['#Peer-to-Peer', '#sleep', '#Sleep Research']);
+    assert.deepEqual(index.suggest('#SL'), ['#sleep', '#Sleep Research']);
+    assert.deepEqual(index.suggest('#x'), []);
+});
+
+test('suggest returns nothing for a blank prefix or no room', () => {
+    const index = taggedIndex();
+
+    assert.deepEqual(index.suggest(''), []);
+    assert.deepEqual(index.suggest('   '), []);
+    assert.deepEqual(index.suggest(null), []);
+    assert.deepEqual(index.suggest('in', 0), []);
+});
+
+test('suggest offers page titles without their section headings', () => {
+    assert.deepEqual(taggedIndex().suggest('crawler guide'), ['Crawler Guide']);
+});
+
+test('suggest works without keyword statistics', () => {
+    assert.deepEqual(taggedIndex({ bm25: null }).suggest('in'), ['Index Guide']);
+});
+
+test('the keyword, tag, and suggestion answers match the ones recorded for the Python client', () => {
+    const container = fs.readFileSync(path.join(GOLDEN, 'contract-container.json'));
+    const expected = JSON.parse(fs.readFileSync(path.join(GOLDEN, 'contract-query.json'), 'utf-8'));
+    const index = loadContainer(new Uint8Array(container));
+
+    assert.deepEqual(ids(index.searchKeywords(expected.keywordQuery)), expected.keywordParentIds);
+    assert.deepEqual(ids(index.searchKeywords(expected.tagQuery)), expected.tagParentIds);
+    assert.deepEqual(index.searchKeywords(expected.absentTagQuery), []);
+    assert.deepEqual(index.suggest(expected.suggestPrefix), expected.suggestions);
 });

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/using-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: How an AI agent uses a published Extractium compendium: which
 file to read for which job, how to search the index with the bundled
 clients, how to cite what it finds, and the rules it must follow about
@@ -75,7 +75,7 @@ const index = loadContainer(await (await fetch(indexUrl)).arrayBuffer());
 const hits = await index.search('how do I request a data extract', embedQuery);
 ```
 
-[How to Search a Compendium](how-to/search-a-compendium.md) has the full recipe, including how to build an embedder in each language.
+Both clients also answer with no model at all: `index.search_keywords("sleep data #research")` in Python and `index.searchKeywords(...)` in JavaScript rank by keywords alone and narrow by `#tag`, and `index.suggest("sle")` completes what has been typed. [How to Search a Compendium](how-to/search-a-compendium.md) has the full recipe, including how to build an embedder in each language.
 
 ### Through the local tool
 

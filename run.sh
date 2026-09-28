@@ -3,7 +3,7 @@
 # run.sh
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-17
+# Last Modified: 2026-09-28
 # Summary: One-command build for macOS and Linux. Downloads Extractium when
 # this script is on its own, creates a virtual environment beside the
 # checkout, installs the pinned dependencies, installs Extractium into it,
@@ -302,5 +302,6 @@ echo "  1. Add those files to git:   git add <output folder>"
 echo "  2. Commit them:              git commit -m \"Rebuild the knowledge index\""
 echo "  3. Push:                     git push"
 echo
-echo "Do not commit the .venv folder or the .kb_cache folder. The cache only"
-echo "saves time on the next run; deleting it is always safe."
+echo "Do not commit the .venv folder, the .kb_cache folder, or the runs folder."
+echo "The cache only saves time on the next run, and the runs folder is this"
+echo "machine's history of builds; deleting either is always safe."

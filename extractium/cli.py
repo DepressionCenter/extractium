@@ -6,7 +6,9 @@ through the registry, runs every source once, hands the documents to the
 core build step, and lets each adapter write its own output format. Along
 the way it scans what the sources produced for likely protected health
 information and writes the review reports.
-Progress goes to standard error; the summary goes to standard output.
+Progress goes to standard error; the summary goes to standard output,
+and the same figures go to a run record under the `runs_dir` folder, on
+success and on failure, so a history of builds can be read from disk.
 The `init` subcommand, in extractium/init.py, writes a first settings
 file so a person can start without editing YAML.
 
@@ -15,7 +17,7 @@ extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +36,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-17"
+__date__ = "2026-09-28"
 
 import argparse
 import dataclasses
@@ -45,11 +47,12 @@ from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 
 from extractium import __version__
 from extractium import init as init_command
-from extractium.config import ConfigError, load_config, source_descriptors
+from extractium.config import DEFAULT_RUNS_DIR, ConfigError, load_config, source_descriptors
 from extractium.core import cache as caching
 from extractium.core import keywords as keywording
 from extractium.core import phi_lint
 from extractium.core import retain
+from extractium.core import runs
 from extractium.core.build import page_key_of
 from extractium.core.build import build_compendium
 from extractium.core.light import build_light_compendium
@@ -122,6 +125,21 @@ def fail(message, code):
     """Prints one actionable line to standard error and returns the exit code."""
     write_line(f"extractium: {message}", sys.stderr)
     return code
+
+
+def interrupted_message():
+    """What a build stopped by Ctrl+C reports, on the terminal and in its record."""
+    return "stopped at your request."
+
+
+def failure_message(error):
+    """
+    What an unexpected failure reports, on the terminal and in its record.
+
+    The message reaches the user; the traceback does not, because an
+    internal path is not something a user can act on.
+    """
+    return f"the build failed: {type(error).__name__}: {error}"
 
 
 ### Sources ###
@@ -588,7 +606,13 @@ def keyword_pass_for(config, progress):
 
 def run_build(args):
     """
-    Runs one build from a configuration file.
+    Runs one build from a configuration file and leaves a run record.
+
+    The record is written whatever happens: after a build that finished,
+    after one that stopped with an exit code, and after one that raised,
+    which is recorded in the words the terminal shows and then raised
+    again so `main` reports it as before. A record that cannot be
+    written is said once on standard error and changes nothing else.
 
     Args:
         args (argparse.Namespace): the parsed `build` arguments.
@@ -596,19 +620,62 @@ def run_build(args):
     Returns:
         int: one of the EXIT_ constants.
     """
+    recorder = runs.RunRecorder(DEFAULT_RUNS_DIR)
+    try:
+        code = _run_build(args, recorder)
+    except KeyboardInterrupt:
+        recorder.note_error(interrupted_message())
+        write_run_record(recorder, EXIT_FAILED)
+        raise
+    except Exception as error:
+        recorder.note_error(failure_message(error))
+        write_run_record(recorder, EXIT_FAILED)
+        raise
+    write_run_record(recorder, code)
+    return code
+
+
+def write_run_record(recorder, code):
+    """Writes the run record, reporting a failure to write it without changing the outcome."""
+    try:
+        recorder.finish(code)
+    except OSError as error:
+        progress_to_stderr(f"  the run record could not be written ({error})")
+
+
+def _run_build(args, recorder):
+    """
+    The build itself, reporting each figure to the recorder as it is known.
+
+    Args:
+        args (argparse.Namespace): the parsed `build` arguments.
+        recorder (extractium.core.runs.RunRecorder): collects the record.
+
+    Returns:
+        int: one of the EXIT_ constants.
+    """
+    def stop(message, code):
+        recorder.note_error(message)
+        return fail(message, code)
+
     overrides = {
         "out_dir": args.out_dir,
         "max_pages": args.max_pages,
     }
+    # The digest is taken before the file is read as settings, so a file
+    # the loader refuses is still identified in the record.
+    recorder.note_config(args.config)
     try:
         config = load_config(args.config, overrides=overrides)
     except ConfigError as e:
-        return fail(str(e), EXIT_CONFIG)
+        return stop(str(e), EXIT_CONFIG)
+    recorder.point_at(config.runs_dir)
+    recorder.note_config(args.config, max_pages=config.max_pages)
 
     try:
         registry = build_registry()
     except RegistryError as e:
-        return fail(f"plugins could not be loaded: {e}", EXIT_CONFIG)
+        return stop(f"plugins could not be loaded: {e}", EXIT_CONFIG)
 
     caching.use_cache_dir(config.cache_dir)
     cache = caching.load_cache_meta()
@@ -622,25 +689,27 @@ def run_build(args):
         if hasattr(session, "summary_lines"):
             notes.extend(session.summary_lines())
     except RegistryError as e:
-        return fail(str(e), EXIT_CONFIG)
+        return stop(str(e), EXIT_CONFIG)
     except GitHubSourceError as e:
         # The operator asked for something that is not there. Falling back
         # would turn a misspelled account name into a strange, empty
         # result, so the build stops and says what was wrong.
-        return fail(str(e), EXIT_CONFIG)
+        return stop(str(e), EXIT_CONFIG)
     finally:
         # Saved whatever happened, so a run interrupted halfway still
         # leaves the pages it did fetch usable by the next run.
         caching.save_cache_meta(cache)
         session.close()
+    recorder.note_lines(notes)
 
     try:
         run_phi_lint(config, documents, progress_to_stderr)
     except OSError as e:
-        return fail(f"the review report could not be written: {e}", EXIT_OUTPUT)
+        return stop(f"the review report could not be written: {e}", EXIT_OUTPUT)
 
     previous, kept = carry_forward_pages(config, documents, gone, progress_to_stderr)
     notes.extend(retain.summary_lines(kept, len(gone)))
+    recorder.note_lines(notes)
 
     compendium = build_compendium(
         documents,
@@ -651,11 +720,12 @@ def run_build(args):
         keywords=keyword_pass_for(config, progress_to_stderr),
     )
     if compendium is None:
-        return fail(
+        return stop(
             "the sources produced no indexable content, so no output was written. "
             "Check the seed URL and the include and exclude patterns.",
             EXIT_NO_CONTENT,
         )
+    recorder.note_compendium(compendium, name=config.name)
     try:
         retain.save_manifest(compendium, previous, [key for key, _, _, _ in kept])
     except OSError as e:
@@ -665,13 +735,15 @@ def run_build(args):
         light = light_compendium_for(config, compendium, progress_to_stderr)
         written = run_outputs(config, registry, compendium, progress_to_stderr, light=light)
     except RegistryError as e:
-        return fail(str(e), EXIT_CONFIG)
+        return stop(str(e), EXIT_CONFIG)
     except OSError as e:
-        return fail(f"an output could not be written: {e}", EXIT_OUTPUT)
+        return stop(f"an output could not be written: {e}", EXIT_OUTPUT)
+    recorder.note_outputs(written, local_content=bool(compendium.local_parents()))
 
     note = code_note(config, compendium)
     if note:
         notes.append(note)
+    recorder.note_lines(notes)
     print_summary(compendium, written, notes)
     return EXIT_OK
 
@@ -728,11 +800,9 @@ def main(argv=None):
     try:
         return args.handler(args)
     except KeyboardInterrupt:
-        return fail("stopped at your request.", EXIT_FAILED)
+        return fail(interrupted_message(), EXIT_FAILED)
     except Exception as e:
-        # The message reaches the user; the type and traceback do not,
-        # because an internal path is not something a user can act on.
-        return fail(f"the build failed: {type(e).__name__}: {e}", EXIT_FAILED)
+        return fail(failure_message(e), EXIT_FAILED)
 
 
 if __name__ == "__main__":

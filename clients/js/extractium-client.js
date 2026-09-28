@@ -3,10 +3,12 @@
  * binary container back, checks it against the reader checklist, and runs
  * the hybrid search over it -- cosine similarity, BM25, reciprocal rank
  * fusion, a corpus-relative relevance threshold, diversity selection, and
- * resolution of each matched window to the section that contains it. One
- * file, no dependencies, no build step: it runs in a browser, in Node, and
- * on an edge runtime. The caller supplies the query embedder, so this file
- * never loads a model. extractium/search.py implements the same algorithm
+ * resolution of each matched window to the section that contains it. It
+ * also answers without any model: a keyword-only search over the posting
+ * lists the file carries, narrowed by `#tag` words, and a suggestion list
+ * for a search box. One file, no dependencies, no build step: it runs in a
+ * browser, in Node, and on an edge runtime. The caller supplies the query
+ * embedder, so this file never loads a model. extractium/search.py implements the same algorithm
  * with the same constants. See docs/container-format.md and
  * docs/how-to/search-a-compendium.md.
  *
@@ -15,7 +17,7 @@
  *
  * Author(s): Gabriel Mongefranco.
  * Created: 2026-09-08
- * Last Modified: 2026-09-18
+ * Last Modified: 2026-09-28
  * Notes: See README file for documentation and full license information.
  *
  * Copyright © 2026 The Regents of the University of Michigan
@@ -121,6 +123,23 @@ export const TOP_K = 4;
 export const RRF_K = 60;
 export const RRF_VECTOR_WEIGHT = 0.5;
 export const RRF_BM25_WEIGHT = 0.5;
+
+// The mark that turns a query word into a filter: `#sleep` keeps only the
+// sections whose tags, keywords, or categories hold that word, and the
+// rest of the query ranks them. A search box shows tags with this mark, so
+// what a person sees on a result is what they type to narrow by it.
+export const TAG_MARK = '#';
+
+// Suggestions returned when the caller names no other number.
+export const SUGGEST_LIMIT = 10;
+
+// How a section heading joins the page title and the section heading, as
+// the chunker writes it. Suggestions offer the page title alone.
+const HEADING_SEPARATOR = ' -- ';
+
+// A run of letters and digits inside a tag, keyword, or category, so a
+// `#word` filter matches one word of a longer entry.
+const LABEL_WORD_RE = /[\p{L}\p{N}]+/gu;
 
 // Decimal places every score is rounded to before anything is ordered or
 // compared. Two clients adding up the same 384 products do not reach the
@@ -291,6 +310,67 @@ export function tokenize(text) {
     return String(text || '').toLowerCase().match(TOKEN_RE) || [];
 }
 
+/**
+ * Splits a query into the words to rank by and the tag words to narrow by.
+ *
+ * A token that begins with TAG_MARK and carries more than the mark is a
+ * tag word: `#sleep` keeps only the sections whose tags, keywords, or
+ * categories hold "sleep". Every other token is keyword text.
+ *
+ * @param {string} query What the user typed.
+ * @returns {{terms: string[], tags: string[]}} The keyword terms, from
+ *     `tokenize`, and the tag words, lowercased without the mark, each
+ *     once, in the order typed.
+ */
+export function parseQuery(query) {
+    const keywordText = [];
+    const tags = new Set();
+    for (const token of String(query || '').split(/\s+/)) {
+        if (!token) continue;
+        if (token.startsWith(TAG_MARK) && token.length > TAG_MARK.length) {
+            tags.add(token.slice(TAG_MARK.length).toLowerCase());
+        } else {
+            keywordText.push(token);
+        }
+    }
+    return { terms: tokenize(keywordText.join(' ')), tags: Array.from(tags) };
+}
+
+/**
+ * The words a `#tag` filter can match on one section.
+ *
+ * Every tag, keyword, and category the section carries counts, compared
+ * without regard to case, both as a whole and as each run of letters and
+ * digits inside it. So `#sleep` matches a page tagged "Sleep Research",
+ * and `#peer-to-peer` matches one tagged "Peer-to-Peer". A Set, never a
+ * plain object, because the words come from crawled pages.
+ *
+ * @param {Object} parent The section record from the container header.
+ * @returns {Set<string>} The lowercase words.
+ */
+export function labelWords(parent) {
+    const words = new Set();
+    for (const field of ['tags', 'keywords', 'categories']) {
+        let values = parent[field] || [];
+        if (typeof values === 'string') values = [values];
+        if (!Array.isArray(values)) continue;
+        for (const value of values) {
+            if (typeof value !== 'string') continue;
+            const lowered = value.toLowerCase();
+            words.add(lowered);
+            for (const word of lowered.match(LABEL_WORD_RE) || []) words.add(word);
+        }
+    }
+    return words;
+}
+
+/** Orders strings by code unit, the way every client sorts, never by locale. */
+function compareStrings(a, b) {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+}
+
 /** Cosine similarity of two rows of a flat vector array; both are unit length. */
 function cosineSim(a, offsetA, b, offsetB, dims) {
     let dot = 0;
@@ -379,10 +459,10 @@ export function vectorCandidates(queryVector, vectors, dims, poolSize = CANDIDAT
 }
 
 /**
- * Ranks windows by keyword match, walking only the postings lists of
- * terms the query actually contains. The cost follows the query, not the
- * size of the corpus, which is what makes this practical to run in a
- * browser on every keystroke.
+ * The keyword score of every window a query term appears in, walking
+ * only the postings lists of the terms the query holds. The cost follows
+ * the query, not the size of the corpus, which is what makes this
+ * practical to run in a browser on every keystroke.
  *
  * The formula and its constants come from the file itself, so an index
  * rebuilt with different tuning needs no client change.
@@ -390,15 +470,16 @@ export function vectorCandidates(queryVector, vectors, dims, poolSize = CANDIDAT
  * @param {Iterable<string>} terms Query terms from `tokenize`.
  * @param {Object|null} bm25 The keyword statistics, Map-backed.
  * @param {number} childCount Number of windows in the corpus.
- * @param {number} [poolSize] How many candidates to keep.
- * @returns {Array<{i: number, s: number}>} Best first.
+ * @returns {Map<number, number>} Child index to its unrounded BM25 score,
+ *     for the windows that hold at least one term. Empty without
+ *     statistics or terms.
  */
-export function bm25Candidates(terms, bm25, childCount, poolSize = CANDIDATE_POOL) {
+export function bm25Scores(terms, bm25, childCount) {
     const unique = new Set(terms || []);
-    if (!bm25 || !unique.size) return [];
+    const scores = new Map();
+    if (!bm25 || !unique.size) return scores;
     const { k, b, d, avgDocLen, docLen, df, postings } = bm25;
     const average = avgDocLen || 1;
-    const scores = new Map();
     for (const term of unique) {
         const posting = postings.get(term);
         if (!posting) continue;
@@ -412,8 +493,22 @@ export function bm25Candidates(terms, bm25, childCount, poolSize = CANDIDATE_POO
             scores.set(childIndex, (scores.get(childIndex) || 0) + gain);
         }
     }
+    return scores;
+}
+
+/**
+ * Ranks windows by keyword match, best first, keeping a pool of the
+ * strongest. See `bm25Scores` for the scoring.
+ *
+ * @param {Iterable<string>} terms Query terms from `tokenize`.
+ * @param {Object|null} bm25 The keyword statistics, Map-backed.
+ * @param {number} childCount Number of windows in the corpus.
+ * @param {number} [poolSize] How many candidates to keep.
+ * @returns {Array<{i: number, s: number}>} Best first.
+ */
+export function bm25Candidates(terms, bm25, childCount, poolSize = CANDIDATE_POOL) {
     const out = [];
-    for (const [i, s] of scores) out.push({ i, s: roundScore(s) });
+    for (const [i, s] of bm25Scores(terms, bm25, childCount)) out.push({ i, s: roundScore(s) });
     return sortCandidates(out).slice(0, poolSize);
 }
 
@@ -590,6 +685,11 @@ export class SearchIndex {
         this.calibration = header.calibration || null;
         this.sourceKeyOf = this.sourceKeyOf.bind(this);
         this.weightOf = this.weightOf.bind(this);
+        // Built on first use, because a caller that only runs the hybrid
+        // search never needs them: the `#tag` words of each section, and
+        // the three sorted lists suggestions are drawn from.
+        this.labelWordsCache = new Array(this.parents.length).fill(null);
+        this.suggestions = null;
     }
 
     /** Display name of the knowledge base. */
@@ -733,6 +833,149 @@ export class SearchIndex {
         return this.searchWithVector(query, queryVector, options);
     }
 
+    /* ### Search Without A Model ### */
+
+    /**
+     * The `#tag` words of one section, computed once.
+     *
+     * @param {number} parentIndex Position in `parents`.
+     * @returns {Set<string>}
+     */
+    labelWordsOf(parentIndex) {
+        let words = this.labelWordsCache[parentIndex];
+        if (words === null) {
+            words = labelWords(this.parents[parentIndex]);
+            this.labelWordsCache[parentIndex] = words;
+        }
+        return words;
+    }
+
+    /**
+     * Searches by keywords alone, with no model and no query vector.
+     *
+     * The words of the query rank windows through the keyword statistics
+     * the file carries. A `#word` in the query keeps only the sections
+     * whose tags, keywords, or categories hold that word, compared without
+     * regard to case, and every `#word` given has to match. Each section
+     * is returned once, at its best window, so a list of results is a
+     * list of pages in the light file and of sections in the full one.
+     *
+     * @param {string} query What the user typed, `#tags` included.
+     * @param {{k?: number}} [options] How many sections to return.
+     * @returns {Array<Object>} Hits as `hitOf` shapes them, best first,
+     *     with `score` the keyword score times the section's weight, or 0
+     *     when only tags were given and the matching sections are listed
+     *     in file order; `cosine` is null. Empty when nothing was typed,
+     *     no section holds every tag, the words match nothing, or the
+     *     file carries no keyword statistics to rank words with.
+     */
+    searchKeywords(query, options = {}) {
+        const k = options.k || TOP_K;
+        const { terms, tags } = parseQuery(query);
+        if (!terms.length && !tags.length) return [];
+        const pids = this.children.pid;
+        let allowed = null;
+        if (tags.length) {
+            allowed = new Set();
+            for (let parentIndex = 0; parentIndex < this.parents.length; parentIndex += 1) {
+                const words = this.labelWordsOf(parentIndex);
+                if (tags.every((tag) => words.has(tag))) allowed.add(parentIndex);
+            }
+            if (!allowed.size) return [];
+        }
+        let ranked;
+        if (terms.length) {
+            if (!this.bm25) return [];
+            ranked = [];
+            for (const [i, score] of bm25Scores(terms, this.bm25, this.size)) {
+                if (allowed === null || allowed.has(pids[i])) {
+                    ranked.push({ i, s: roundScore(score * this.weightOf(i)) });
+                }
+            }
+            sortCandidates(ranked);
+        } else {
+            ranked = [];
+            pids.forEach((pid, i) => { if (allowed.has(pid)) ranked.push({ i, s: 0 }); });
+        }
+        const hits = [];
+        const seen = new Set();
+        for (const candidate of ranked) {
+            if (hits.length >= k) break;
+            const pid = pids[candidate.i];
+            if (seen.has(pid)) continue;
+            seen.add(pid);
+            hits.push(this.hitOf(candidate));
+        }
+        return hits;
+    }
+
+    /**
+     * The three sorted lists suggestions come from, built once: the
+     * distinct tags and the distinct page titles, each as [lowercase,
+     * first spelling seen] pairs sorted by the lowercase form, and the
+     * posting-list vocabulary, already lowercase.
+     *
+     * @returns {{tags: Array<[string, string]>, titles: Array<[string, string]>, words: string[]}}
+     */
+    suggestionLists() {
+        if (this.suggestions === null) {
+            const tags = new Map();
+            const titles = new Map();
+            for (const parent of this.parents) {
+                for (const tag of Array.isArray(parent.tags) ? parent.tags : []) {
+                    if (typeof tag === 'string' && tag.trim()) {
+                        const key = tag.toLowerCase();
+                        if (!tags.has(key)) tags.set(key, tag);
+                    }
+                }
+                const heading = typeof parent.t === 'string' ? parent.t : '';
+                const title = heading.split(HEADING_SEPARATOR, 1)[0].trim();
+                if (title) {
+                    const key = title.toLowerCase();
+                    if (!titles.has(key)) titles.set(key, title);
+                }
+            }
+            const byKey = (a, b) => compareStrings(a[0], b[0]);
+            this.suggestions = {
+                tags: Array.from(tags.entries()).sort(byKey),
+                titles: Array.from(titles.entries()).sort(byKey),
+                words: this.bm25 ? Array.from(this.bm25.postings.keys()).sort(compareStrings) : [],
+            };
+        }
+        return this.suggestions;
+    }
+
+    /**
+     * Words a search box can offer for what has been typed so far.
+     *
+     * Three lists are searched, each sorted and compared without regard
+     * to case: the tags of the compendium, returned with their `#`; the
+     * page titles; and the words of the keyword vocabulary. They are
+     * merged one from each in turn, so a short prefix does not fill the
+     * list from one kind alone. A prefix that begins with `#` searches
+     * the tags only. Everything is a prefix filter over lists already in
+     * memory, so it answers between keystrokes.
+     *
+     * @param {string} prefix What has been typed. Blank returns nothing.
+     * @param {number} [limit] The most suggestions to return.
+     * @returns {string[]} The suggestions, in the order described.
+     */
+    suggest(prefix, limit = SUGGEST_LIMIT) {
+        const wanted = String(prefix || '').trim();
+        if (!wanted || !(limit > 0)) return [];
+        const { tags, titles, words } = this.suggestionLists();
+        if (wanted.startsWith(TAG_MARK)) {
+            const rest = wanted.slice(TAG_MARK.length).toLowerCase();
+            return tags.filter(([key]) => key.startsWith(rest)).map(([, tag]) => TAG_MARK + tag).slice(0, limit);
+        }
+        const low = wanted.toLowerCase();
+        return roundRobin([
+            tags.filter(([key]) => key.startsWith(low)).map(([, tag]) => TAG_MARK + tag),
+            titles.filter(([key]) => key.startsWith(low)).map(([, title]) => title),
+            prefixRange(words, low),
+        ], limit);
+    }
+
     /**
      * Resolves one selected window to the section that contains it.
      *
@@ -763,6 +1006,39 @@ export class SearchIndex {
             windowText: (start === null || end === null) ? text : text.slice(start, end),
         };
     }
+}
+
+/** The entries of a sorted list that begin with prefix, in order. */
+function prefixRange(sortedWords, prefix) {
+    let low = 0;
+    let high = sortedWords.length;
+    while (low < high) {
+        const middle = (low + high) >> 1;
+        if (sortedWords[middle] < prefix) low = middle + 1;
+        else high = middle;
+    }
+    let end = low;
+    while (end < sortedWords.length && sortedWords[end].startsWith(prefix)) end += 1;
+    return sortedWords.slice(low, end);
+}
+
+/** At most limit items, taken one from each list in turn while any has more. */
+function roundRobin(lists, limit) {
+    const out = [];
+    const positions = lists.map(() => 0);
+    while (out.length < limit) {
+        let added = false;
+        for (let n = 0; n < lists.length; n += 1) {
+            if (positions[n] < lists[n].length) {
+                out.push(lists[n][positions[n]]);
+                positions[n] += 1;
+                added = true;
+                if (out.length >= limit) break;
+            }
+        }
+        if (!added) break;
+    }
+    return out;
 }
 
 /* ### Loading ### */

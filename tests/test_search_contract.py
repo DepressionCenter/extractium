@@ -1,16 +1,17 @@
 """
 Summary: The cross-language contract. Rebuilds the committed compendium
 in tests/golden/ and checks it has not drifted, checks that the Python
-client reproduces the ranking recorded beside it, and runs the Node test
-suite for the JavaScript client so both clients are held to the same
-ranking for the same file and the same query vector.
+client reproduces the ranking recorded beside it and the keyword, tag,
+and suggestion answers that need no model, and runs the Node test suite
+for the JavaScript client so both clients are held to the same answers
+for the same file and the same queries.
 
 This file is part of Extractium™
 tests/test_search_contract.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-08
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,7 +30,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-08"
+__date__ = "2026-09-28"
 
 import json
 import pathlib
@@ -117,6 +118,28 @@ def test_python_client_reproduces_the_recorded_relevant_sections(golden_index, e
     )
 
     assert [hit.parent["id"] for hit in hits] == expectations["relevantParentIds"]
+
+
+def test_python_client_reproduces_the_recorded_keyword_and_tag_answers(golden_index, expectations):
+    """The searches that need no model, held to the same answers as the JavaScript client."""
+    keyword = golden_index.search_keywords(expectations["keywordQuery"])
+    tagged = golden_index.search_keywords(expectations["tagQuery"])
+
+    assert [hit.parent["id"] for hit in keyword] == expectations["keywordParentIds"]
+    assert [hit.parent["id"] for hit in tagged] == expectations["tagParentIds"]
+    assert golden_index.search_keywords(expectations["absentTagQuery"]) == []
+    assert all(hit.cosine is None for hit in keyword + tagged)
+
+
+def test_python_client_reproduces_the_recorded_suggestions(golden_index, expectations):
+    assert golden_index.suggest(expectations["suggestPrefix"]) == expectations["suggestions"]
+
+
+def test_the_contract_corpus_carries_a_tag_two_pages_share(golden_index):
+    """A tag only one page carried would not show that both clients narrow rather than pick."""
+    tagged = {parent["u"] for parent in golden_index.parents if "Disclaimer" in (parent.get("tags") or ())}
+
+    assert len(tagged) == 2
 
 
 def test_the_contract_query_vector_is_one_the_file_could_have_produced(golden_index, expectations):

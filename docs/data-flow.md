@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/data-flow.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: What happens to content between the site it is read from and the
 files a build writes: the stages, the shape of the data at each one, the
 units and time zones every field uses, and the two places where content
@@ -137,6 +137,10 @@ See [Running a Build](usage.md) for what each file is. Adapters never fetch a UR
 
 The Open Knowledge Format output writes a folder, `okf/`, rather than a single file. Names inside it are built from an allowlist of lowercase letters, digits, and hyphens, plus a short digest of the page address, so a page title cannot decide where a file lands. The block at the top of each file is written by a YAML library rather than assembled by hand, because a title holding a colon or a quotation mark would otherwise stop the file parsing.
 
+### 10. The run record
+
+When the build ends, however it ends, one JSON file goes into the `runs` folder, or the folder `runs_dir` names. It holds the figures the summary printed: when the build started and ended, how long it took, the tool version, a digest of the settings file, the exit code, the pages, sections, and windows per source, what each output wrote and how large it is, and the notes and errors. It is written whole under a temporary name and then moved into place, so a reader never meets a half-written record. It holds no page text, no address list, no token, and no name derived from a local file, so it can sit beside the settings file on any machine. [Running a build](usage.md) shows one.
+
 
 ## Where private content could reach a published file
 
@@ -169,6 +173,7 @@ So: assume any folder you point a local source at may hold protected health info
 | Thing | Rule |
 |---|---|
 | Build time | UTC, ISO 8601, with a `Z` suffix. Never a local time. |
+| Run record times | `started_at`, `ended_at`, and `built_at` in the record are UTC, ISO 8601, with a `Z` suffix; the record's file name is `started_at` with colons replaced by hyphens. `duration_seconds` is whole seconds. |
 | Window offsets | UTF-16 code units, counted from the start of the section's text. |
 | Section length | At most 1,200 characters. Windows: at most 350, overlapping by 53. |
 | Text indexed whole | A crawled page, a repository file, or a page inside a repository whose text runs past 200,000 characters is indexed as a compact record (title, opening, headings, most frequent terms) rather than chunked in full. The log names each one. |

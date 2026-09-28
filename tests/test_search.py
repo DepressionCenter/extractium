@@ -11,7 +11,7 @@ tests/test_search.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -51,7 +51,9 @@ from extractium.search import (
     attach_cosines,
     bm25_candidates,
     diversify,
+    label_words,
     load_container,
+    parse_query,
     relevance_cutoff,
     relevance_floor,
     round_score,
@@ -650,3 +652,171 @@ def test_load_container_inflates_a_gzip_compressed_file(tmp_path):
 def test_load_container_refuses_bytes_that_begin_like_gzip_but_are_not():
     with pytest.raises(ContainerError, match="cannot be inflated"):
         load_container(b"\x1f\x8b" + b"not a gzip stream at all")
+
+
+# ---------------------------------------------------------------------------
+# Search without a model
+# ---------------------------------------------------------------------------
+
+def keyword_header(**overrides):
+    """
+    Three tagged windows with keyword statistics, as plain JSON the way a
+    file carries them: one page about a crawler, one about the index, and
+    one about both, with tags, a keyword, and a category to narrow by.
+    """
+    parents = [
+        parent_record("aaaaaaaaaaaaaaaa", t="Crawler Guide -- Overview", x="crawler page"),
+        parent_record("bbbbbbbbbbbbbbbb", t="Index Guide", x="index page"),
+        parent_record("cccccccccccccccc", t="Both Guide", x="both page"),
+    ]
+    parents[0]["tags"] = ["Sleep Research", "Peer-to-Peer"]
+    parents[1]["keywords"] = ["index tuning"]
+    parents[1]["categories"] = ["Guides"]
+    parents[2]["tags"] = ["sleep"]
+    return sample_header(**{
+        "parents": parents,
+        "children": {"pid": [0, 1, 2], "start": [0, 0, 0], "end": [5, 5, 4]},
+        "bm25": KEYWORD_STATS,
+        **overrides,
+    })
+
+
+def keyword_index(**overrides):
+    return load_container(container_bytes(keyword_header(**overrides), [[1, 0], [0, 1], [0.6, 0.8]]))
+
+
+def test_parse_query_separates_tag_words_from_keyword_terms():
+    assert parse_query("Sleep #Data #data # research") == (["sleep", "research"], ["data"])
+    assert parse_query("") == ([], [])
+    assert parse_query(None) == ([], [])
+    assert parse_query("#Peer-to-Peer") == ([], ["peer-to-peer"])
+
+
+def test_label_words_hold_each_entry_whole_and_word_by_word_in_lowercase():
+    words = label_words({"tags": ["Sleep Research", "Peer-to-Peer"], "keywords": None, "categories": ["AI"]})
+
+    assert words == frozenset({"sleep research", "sleep", "research", "peer-to-peer", "peer", "to", "ai"})
+
+
+def test_search_keywords_ranks_by_keyword_score_and_carries_no_cosine():
+    hits = keyword_index().search_keywords("crawler")
+
+    assert [hit.parent["id"] for hit in hits] == ["cccccccccccccccc"]
+    assert hits[0].score > 0
+    assert hits[0].score == round_score(hits[0].score)
+    assert hits[0].cosine is None
+    assert hits[0].child_index == 2
+
+
+def test_a_tag_narrows_the_keyword_results_to_the_sections_that_hold_it():
+    index = keyword_index()
+
+    assert [hit.parent["id"] for hit in index.search_keywords("index")] == [
+        "aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", "cccccccccccccccc",
+    ]
+    assert [hit.parent["id"] for hit in index.search_keywords("index #sleep")] == [
+        "aaaaaaaaaaaaaaaa", "cccccccccccccccc",
+    ]
+
+
+def test_a_tag_matches_tags_keywords_and_categories_without_regard_to_case():
+    index = keyword_index()
+
+    assert [hit.parent["id"] for hit in index.search_keywords("index #SLEEP")] == [
+        "aaaaaaaaaaaaaaaa", "cccccccccccccccc",
+    ]
+    assert [hit.parent["id"] for hit in index.search_keywords("index #tuning")] == ["bbbbbbbbbbbbbbbb"]
+    assert [hit.parent["id"] for hit in index.search_keywords("index #guides")] == ["bbbbbbbbbbbbbbbb"]
+    assert [hit.parent["id"] for hit in index.search_keywords("index #peer-to-peer")] == ["aaaaaaaaaaaaaaaa"]
+
+
+def test_every_tag_given_has_to_match():
+    index = keyword_index()
+
+    assert [hit.parent["id"] for hit in index.search_keywords("index #sleep #research")] == ["aaaaaaaaaaaaaaaa"]
+    assert index.search_keywords("index #sleep #guides") == []
+
+
+def test_a_tag_no_section_carries_returns_nothing():
+    assert keyword_index().search_keywords("index #nosuchtag") == []
+    assert keyword_index().search_keywords("#nosuchtag") == []
+
+
+def test_tags_alone_list_the_matching_sections_in_file_order_with_no_score():
+    hits = keyword_index().search_keywords("#sleep")
+
+    assert [hit.parent["id"] for hit in hits] == ["aaaaaaaaaaaaaaaa", "cccccccccccccccc"]
+    assert [hit.score for hit in hits] == [0.0, 0.0]
+
+
+def test_search_keywords_returns_nothing_for_an_empty_query_or_words_the_corpus_lacks():
+    index = keyword_index()
+
+    assert index.search_keywords("") == []
+    assert index.search_keywords("   ") == []
+    assert index.search_keywords("nowhere") == []
+
+
+def test_search_keywords_needs_the_keyword_statistics_to_rank_words():
+    index = keyword_index(bm25=None)
+
+    assert index.search_keywords("index") == []
+    # Tags alone still list, because they need no statistics.
+    assert [hit.parent["id"] for hit in index.search_keywords("#sleep")] == ["aaaaaaaaaaaaaaaa", "cccccccccccccccc"]
+
+
+def test_search_keywords_returns_each_section_once_at_its_best_window():
+    header = keyword_header()
+    # Two windows of one section both hold "index"; the section is one hit.
+    header["children"] = {"pid": [0, 0, 2], "start": [0, 0, 0], "end": [5, 5, 4]}
+    index = load_container(container_bytes(header, [[1, 0], [0, 1], [0.6, 0.8]]))
+
+    hits = index.search_keywords("index", k=5)
+
+    assert [hit.parent["id"] for hit in hits] == ["aaaaaaaaaaaaaaaa", "cccccccccccccccc"]
+    assert hits[0].child_index == 0
+
+
+def test_search_keywords_honors_k_and_the_per_section_weight():
+    header = keyword_header()
+    header["parents"][1]["weight"] = 50.0
+    index = load_container(container_bytes(header, [[1, 0], [0, 1], [0.6, 0.8]]))
+
+    hits = index.search_keywords("crawler index", k=2)
+
+    assert [hit.parent["id"] for hit in hits] == ["bbbbbbbbbbbbbbbb", "cccccccccccccccc"]
+
+
+def test_suggest_matches_a_word_a_title_and_a_tag_one_from_each_in_turn():
+    index = keyword_index()
+
+    assert index.suggest("in") == ["Index Guide", "index"]
+    assert index.suggest("s") == ["#sleep", "#Sleep Research"]
+    assert index.suggest("c") == ["Crawler Guide", "crawler"]
+
+
+def test_suggest_honors_the_limit_and_the_tag_mark():
+    index = keyword_index()
+
+    assert index.suggest("s", limit=1) == ["#sleep"]
+    assert index.suggest("#") == ["#Peer-to-Peer", "#sleep", "#Sleep Research"]
+    assert index.suggest("#SL") == ["#sleep", "#Sleep Research"]
+    assert index.suggest("#x") == []
+
+
+def test_suggest_returns_nothing_for_a_blank_prefix_or_no_room():
+    index = keyword_index()
+
+    assert index.suggest("") == []
+    assert index.suggest("   ") == []
+    assert index.suggest(None) == []
+    assert index.suggest("in", limit=0) == []
+
+
+def test_suggest_offers_page_titles_without_their_section_headings():
+    assert "Crawler Guide -- Overview" not in keyword_index().suggest("crawler guide")
+    assert keyword_index().suggest("crawler guide") == ["Crawler Guide"]
+
+
+def test_suggest_works_without_keyword_statistics():
+    assert keyword_index(bm25=None).suggest("in") == ["Index Guide"]

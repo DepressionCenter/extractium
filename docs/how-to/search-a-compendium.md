@@ -3,11 +3,11 @@ This file is part of Extractium™
 docs/how-to/search-a-compendium.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-18
+Last Modified: 2026-09-28
 Summary: How to search a built compendium with the two client libraries:
 loading the container in Python and in JavaScript, supplying a query
-embedder, reading the results, and what the search does behind the two
-calls.
+embedder, reading the results, what the search does behind the two
+calls, and the keyword-only search and suggestions that need no model.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -26,7 +26,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-A build writes two index files. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords. `compendium-full.json.gz` is the full one: the text of every section. Each also holds its vectors and keyword statistics. This page shows you how to search either file from Python and from JavaScript. Both clients ship with Extractium™, need no server and no database, and give the same answers for the same question. Read it if you are writing a tool, a script, or a web page over a published index.
+A build writes two index files. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords. `compendium-full.json.gz` is the full one: the text of every section. Each also holds its vectors and keyword statistics. This page shows you how to search either file from Python and from JavaScript, with an embedding model for search by meaning, and without one for an instant keyword search with `#tag` filters and suggestions as you type. Both clients ship with Extractium™, need no server and no database, and give the same answers for the same question. Read it if you are writing a tool, a script, or a web page over a published index.
 
 
 ## What you need
@@ -121,6 +121,32 @@ Let the library pick the precision, as above, or name `q8`, `q4`, or `fp32`. Do 
 A hit carries the same fields as in Python, with JavaScript names: `parent`, `score`, `cosine`, `childIndex`, `start`, `end`, and `windowText`. When you already have a query vector, call `index.searchWithVector(query, vector)` and skip the promise.
 
 
+## Search without a model
+
+Both clients can also answer with no embedding model at all, from the keyword statistics the file already carries. That is instant, it works on every keystroke, and it is what a search box uses while the meaning search is still loading or when a machine has no model. The results are keyword matches only: a page that says the same thing in other words is not found this way.
+
+```python
+hits = index.search_keywords("sleep data #research", k=10)
+suggestions = index.suggest("sle")          # ['#Sleep Research', 'Sleep Data Automation', 'sleep', ...]
+```
+
+```javascript
+const hits = index.searchKeywords('sleep data #research', { k: 10 });
+const suggestions = index.suggest('sle');
+```
+
+How the query is read:
+
+- The plain words rank sections by keyword score, the same BM25 score the hybrid search uses for its keyword half. Words are matched exactly, without regard to case, and a word under three letters is ignored, as in every keyword search over these files.
+- A word that starts with `#` is a filter. `#research` keeps only the sections whose tags, keywords, or categories hold that word, compared without regard to case. The word may be a whole entry or one word of a longer one, so `#sleep` matches a page tagged `Sleep Research`, and `#peer-to-peer` matches one tagged `Peer-to-Peer`. Give several `#words` and every one of them has to match.
+- A query of `#words` alone lists the matching sections in the order they sit in the file, with a score of zero.
+- Each section comes back once, at its best window. In the light file a section is a page, so the result is a list of pages.
+
+A hit has the same fields as a hit from `search`. Its `score` is the keyword score times the section's weight, and `cosine` is empty, because no vector was involved. An empty list means nothing was typed, no word matched, or no section holds every `#word`.
+
+`suggest` completes what has been typed so far from three lists the client builds once: the tags of the compendium, returned with their `#` so a person can put one straight into the box; the page titles; and the words of the keyword vocabulary. They are compared without regard to case and merged one from each list in turn, so a short prefix gives a mix rather than ten words from the vocabulary. A prefix that begins with `#` searches the tags only. It returns ten suggestions unless you ask for another number, and nothing for a blank prefix.
+
+
 ## What the search does
 
 Both clients run the same six steps. You do not have to configure any of them.
@@ -137,7 +163,7 @@ The floor in step 3 comes from the file. The build asks 64 everyday questions th
 
 ## Keeping the two clients in agreement
 
-The repository keeps a small committed compendium in `tests/golden/` and, beside it, a fixed query vector and the ranking both clients must return for it. The Python suite rebuilds that file, checks it has not drifted, checks its own ranking, and then runs the Node suite, which ranks the same file. If a change makes the two clients disagree, those tests fail.
+The repository keeps a small committed compendium in `tests/golden/` and, beside it, a fixed query vector and the ranking both clients must return for it, together with a keyword query, a `#tag` query, a `#tag` no page carries, and a prefix with the suggestions it must produce. The Python suite rebuilds that file, checks it has not drifted, checks its own answers, and then runs the Node suite, which answers from the same file. If a change makes the two clients disagree, those tests fail.
 
 One difference between them cannot be tested away, so both clients work around it. Adding up the same 384 numbers gives slightly different answers depending on the order and the precision you add them in, and the two clients do that differently. Their scores for the same window came out about two hundred-millionths apart. That is far too small to matter on its own, but two near-copies of one page can score closer together than that, and then each client put them in a different order. Both clients now round every score to six decimal places before sorting, which is coarse enough to hide the difference and far finer than anything you would act on. Windows that land on the same rounded score are ordered by their position in the file, which every client agrees on. If you write your own client, do the same.
 

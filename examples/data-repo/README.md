@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/data-repo/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-22
+Last Modified: 2026-09-28
 Summary: README for the data-repository template: what the folder is, how
 to turn it into your own repository, how the weekly build runs, what gets
 published, and why the YouTube cache is committed rather than ignored.
@@ -86,7 +86,7 @@ Both pipeline files carry an `EXTRACTIUM_REF` setting that names the release of 
 
 ## Building on your own machine instead
 
-Some sources cannot be reached from a runner: a folder of local files, and YouTube captions. A large corpus is also better built on a machine with no time limit. For those, clone the Extractium™ repository, put your `config.yaml` in it, and run `run.sh` (macOS, Linux) or `run.bat` (Windows). The script builds and then prints what to commit, and one scheduled task puts it on a timer. [How to run a weekly build](../../docs/how-to/run-a-weekly-build.md) covers all of it.
+Some sources cannot be reached from a runner: a folder of local files, and YouTube captions. A large corpus is also better built on a machine with no time limit. For those, clone the Extractium™ repository, put your `config.yaml` in it, and run `run.sh` (macOS, Linux) or `run.bat` (Windows). The script builds and then prints what to commit, and one scheduled task puts it on a timer. Every build also leaves a record of what it did in a `runs/` folder, which the template's `.gitignore` keeps out of the repository. [How to run a weekly build](../../docs/how-to/run-a-weekly-build.md) covers all of it.
 
 YouTube is the one source where this is not a preference. YouTube refuses caption requests from cloud-provider addresses, so a scheduled run cannot read a transcript at all. You build once on your own computer, commit `kb-cache/`, and every later build reads the transcripts from there. [The cache README](kb-cache/README.md) explains what to commit and when to refresh it.
 
