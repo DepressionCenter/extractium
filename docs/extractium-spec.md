@@ -174,6 +174,8 @@ The keyword statistics count a child's section heading and text, and the page ti
 
 Near-duplicate collapse removes a child that is near-identical to one already kept from another page. Children of one page are never collapsed into each other. The step exists to remove boilerplate many pages share, and two passages of one article are not that. The rule also removes a dependence on heading length: a child is embedded as its parent's heading followed by its own text, so an article with a long title gives every one of its children a long identical prefix, and comparing them without this rule discards real content as duplication. Measured on the Depression Center portal, recovering 119 truncated article titles cost 86 sections without it, of which only 14 were duplicates by their text alone.
 
+A section whose text, compared without its heading, appears on three or more pages is boilerplate the collapse cannot see, because the heading it compares carries the page title: the same author's bio under 79 article titles never reaches the threshold. Such a section keeps its place and its text and takes a `weight` of 0.5, so it loses every tie with real content and stays citable. The build summary counts the sections it weighted this way.
+
 ### 3.3 Stable identifiers
 
 A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url + NUL + heading + NUL + ordinal)`, where the ordinal counts parents on the same page that share a heading. The ordinal exists because a long section is cut into several parents with one heading. A child's id is derived, never stored: parent id, a hyphen, and the child's ordinal within its parent. Ids survive a rebuild when the page URL and heading are unchanged.
@@ -187,7 +189,7 @@ A parent's `id` is the first 16 hexadecimal characters of `sha1(normalized_url +
 | `content_type` | `article`, `readme`, `wiki`, `release_notes`, `page`, `text`, `video_transcript`, `manifest`, `repo_map`, `code_file`, `code_symbol` |
 | `categories` | Hierarchy from the source, outermost first: TeamDynamix breadcrumbs, repository paths. Empty when none. |
 | `local` | `true` for local-filesystem sources (section 7). |
-| `weight` | Per-document multiplier applied after rank fusion; `1.0` by default. |
+| `weight` | Per-section multiplier applied after rank fusion; `1.0` by default, `0.5` for a section whose text repeats on three or more pages (section 3.2). |
 | Enrichment fields | `summary`, `tags`, `keywords`, `enriched_at`, `enrich_ver`: carried by every section. A source sets `summary` and `tags` from what the page says about itself (a video's description and tags, a repository's description and topics, an article's summary and tag list, a page's meta description and keywords); the keyword step (section 10) fills `keywords` on every section, adds to every page's `tags` the keywords its sections share after whatever the source gave, and leaves `summary` null where the source gave none. The container writes a field only when it is set, so a file with no enrichment is laid out as before; the SQLite `parents` table holds them as nullable columns, the lists as JSON arrays; the Open Knowledge Format front matter takes the summary as the description, the tags into its tag list, and the keywords as a `keywords` list; the `llms/` index files describe a page by its keywords when it has no summary of its own. |
 
 ### 3.5 Embeddings

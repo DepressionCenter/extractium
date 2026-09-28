@@ -177,6 +177,50 @@ def test_build_compendium_collapses_the_shared_boilerplate_section(
     assert len(compendium.parents) == 3
 
 
+def test_build_compendium_lowers_the_weight_of_a_section_repeated_across_pages(fake_embed_chunks_core):
+    """
+    The same bio under three page titles never collapses as a near
+    duplicate, because the heading carries the title. It is boilerplate
+    all the same, so it keeps its place and loses its weight.
+    """
+    # Three spellings of one bio: the test embedder keys on the exact
+    # text, and the real model keeps the copies apart by their headings.
+    bios = (
+        "Dr. Example writes about sleep, wearables, and study technology for the center.",
+        "Dr Example writes about sleep, wearables and study technology for the center",
+        "DR. EXAMPLE WRITES ABOUT SLEEP, WEARABLES, AND STUDY TECHNOLOGY FOR THE CENTER.",
+    )
+    documents = [
+        Document(
+            url=f"https://example.org/{name}.md", title=f"{name.title()} Page",
+            content=f"# {name}\n\nOpening words about {name}, different on every page so the "
+                    f"section stands on its own.\n\n## About the Author\n\n{bio}\n",
+            source_type="web", content_type="page",
+        )
+        for name, bio in zip(("alpha", "beta", "gamma"), bios)
+    ]
+    lines = []
+
+    compendium = build.build_compendium(documents, embedder=fake_embed_chunks_core, progress=lines.append)
+
+    bios = [p for p in compendium.parents if p.t.endswith("About the Author")]
+    assert len(bios) == 3 and all(p.weight == 0.5 for p in bios)
+    assert all(p.weight == 1.0 for p in compendium.parents if p not in bios)
+    assert compendium.notes == (
+        "3 section(s) whose text repeats on 3 or more pages were given weight 0.5 (1 distinct text(s))",
+    )
+    assert any("3 repeated section(s)" in line for line in lines)
+
+
+def test_build_compendium_carries_no_note_when_nothing_repeats(fixtures_dir, fake_embed_chunks_core):
+    document = document_from_fixture(fixtures_dir, "page_boilerplate_a.html", "https://example.org/team")
+
+    compendium = build.build_compendium([document], embedder=fake_embed_chunks_core)
+
+    assert compendium.notes == ()
+    assert all(parent.weight == 1.0 for parent in compendium.parents)
+
+
 def test_build_compendium_matches_the_reference_pipeline_on_the_same_fixtures(
     reference, fixtures_dir, fake_embed_chunks, fake_embed_chunks_core
 ):

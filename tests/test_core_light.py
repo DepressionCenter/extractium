@@ -83,6 +83,23 @@ def test_a_light_section_is_one_per_page_and_holds_the_description_and_keywords(
     assert section.id == compendium.parents[0].id
 
 
+def test_a_light_page_takes_the_best_weight_of_its_sections(fake_embed_chunks_core):
+    """A page that opens with a block the site repeats is still a page worth finding."""
+    shared = "The same opening block that a site repeats on every page it publishes here."
+    spellings = (shared, shared.upper(), shared.replace(" ", "  "))
+    documents = [
+        page(f"https://example.org/{name}.md", f"{name.title()} Page",
+             f"{spelling}\n\n## Own\n\n{SECTION.replace('Sleep', name.title())}\n")
+        for name, spelling in zip(("alpha", "beta", "gamma"), spellings)
+    ]
+    compendium = built(fake_embed_chunks_core, documents)
+    assert compendium.parents[0].weight == 0.5 and compendium.parents[1].weight == 1.0
+
+    sections = light.light_parents(compendium)
+
+    assert [section.weight for section in sections] == [1.0, 1.0, 1.0]
+
+
 def test_a_page_described_by_its_keywords_does_not_repeat_them(fake_embed_chunks_core):
     compendium = built(fake_embed_chunks_core, [page("https://example.org/a", "Page A")],
                        keywords=("sleep", "wearables"))

@@ -11,7 +11,7 @@ tests/test_models.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-04
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -324,6 +324,13 @@ def test_compendium_source_count_counts_distinct_urls():
     other = make_parent(id="fedcba9876543210", u="https://example.edu/other")
     compendium = make_compendium(parents=(make_parent(), other))
     assert compendium.source_count == 2
+
+
+def test_compendium_notes_default_to_none_and_are_kept_as_a_tuple():
+    assert make_compendium().notes == ()
+    assert make_compendium(notes=["one line"]).notes == ("one line",)
+    with pytest.raises(ValueError, match="notes"):
+        make_compendium(notes="one line")
 
 
 def test_compendium_local_parents_are_listed():

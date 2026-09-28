@@ -600,6 +600,10 @@ class Compendium:
             an output that drops sections, or the light compendium, can
             measure its own figures without the embedding model. Never
             written to a file. None when the build embedded no probes.
+        notes (tuple[str, ...]): lines about how the build went that the
+            build summary prints and the run record keeps, such as how
+            many sections were down-weighted for repeating across pages.
+            Never written to an output file.
 
     Raises:
         ValueError: if the vectors, children, and parents disagree in
@@ -616,9 +620,13 @@ class Compendium:
     bm25: Mapping
     calibration: Mapping
     probe_vectors: object = None
+    notes: tuple = ()
 
     def __post_init__(self):
         _require_text(self.name, "name")
+        if isinstance(self.notes, str) or not all(isinstance(note, str) for note in self.notes):
+            raise ValueError(f"notes must be a list of text values; got {self.notes!r}.")
+        object.__setattr__(self, "notes", tuple(self.notes))
         if not isinstance(self.built_at, str) or not UTC_TIMESTAMP_RE.match(self.built_at):
             raise ValueError(f"built_at must be a UTC ISO 8601 timestamp ending in Z; got {self.built_at!r}.")
         parents = tuple(self.parents)

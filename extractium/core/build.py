@@ -1,8 +1,9 @@
 """
 Summary: The one build step. Turns the documents every source produced
 into a single scored Compendium: chunk into parents and children, embed
-the children once, drop near-duplicates, compact orphaned parents, name
-each parent with keywords and each page with tags when a keyword step
+the children once, drop near-duplicates, compact orphaned parents, lower
+the weight of sections whose text repeats across pages, name each
+parent with keywords and each page with tags when a keyword step
 is given, build the BM25 keyword statistics, compute the calibration
 statistics, and quantize the vectors. Every adapter serializes the record this returns,
 so one crawl and one embedding pass feed every output format. See
@@ -13,7 +14,7 @@ extractium/core/build.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -40,7 +41,13 @@ from extractium.core.bm25 import build_bm25_index
 from extractium.core.calibration import compute_calibration_stats, probe_chunks
 from extractium.core.chunk import chunk_document
 from extractium.core.fetch import normalise
-from extractium.core.dedup import drop_near_duplicates, remap_parents_after_dedup
+from extractium.core.dedup import (
+    REPEATED_SECTION_MIN_PAGES,
+    REPEATED_SECTION_WEIGHT,
+    downweight_repeated_sections,
+    drop_near_duplicates,
+    remap_parents_after_dedup,
+)
 from extractium.core.embed import QUERY_PREFIX, quantize_int8
 from extractium.core.models import ENRICHMENT_FIELDS, Children, Compendium, EmbeddingInfo, Parent
 
@@ -236,9 +243,10 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
     the BM25 statistics, because the postings index into the child list as
     it is finally shipped; parent compaction must follow the collapse,
     because a section whose every window was a duplicate has no content
-    left to cite; the keyword step follows compaction, so it names only
-    sections that will be published, and uses the windows' vectors
-    before they are quantized.
+    left to cite; the repeated-section weighting follows compaction, so
+    it compares only sections that will be published; the keyword step
+    follows that, so it names only sections that will be published, and
+    uses the windows' vectors before they are quantized.
 
     Args:
         documents (Iterable[extractium.core.models.Document]): what the
@@ -301,6 +309,18 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
     parents, children = remap_parents_after_dedup(parents, children)
     report(f"Kept {len(parents)} section(s) and {len(children)} search window(s).")
 
+    ### Weight Repeated Sections ###
+    # After compaction, so only sections that will be published are
+    # compared, and before the keyword step, which reads nothing of it.
+    notes = []
+    repeated, texts = downweight_repeated_sections(parents)
+    if repeated:
+        notes.append(
+            f"{repeated} section(s) whose text repeats on {REPEATED_SECTION_MIN_PAGES} or more "
+            f"pages were given weight {REPEATED_SECTION_WEIGHT} ({texts} distinct text(s))"
+        )
+        report(f"Gave weight {REPEATED_SECTION_WEIGHT} to {repeated} repeated section(s).")
+
     ### Name ###
     built_at = built_at or utc_now()
     if keywords is not None:
@@ -334,4 +354,5 @@ def build_compendium(documents, name=None, embedder=None, float32_vecs=False,
         bm25=bm25,
         calibration=calibration,
         probe_vectors=probe_vecs,
+        notes=tuple(notes),
     )

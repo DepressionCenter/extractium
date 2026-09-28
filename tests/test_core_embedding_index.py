@@ -222,6 +222,64 @@ def test_drop_near_duplicates_collapses_boilerplate_across_many_pages(fake_embed
     assert [c["u"] for c in kept_chunks] == ["https://example.org/0"]
 
 
+# ---------------------------------------------------------------------------
+# downweight_repeated_sections
+# ---------------------------------------------------------------------------
+
+BIO = "Dr. Example writes about sleep, wearables, and study technology for the center."
+
+
+def section(url, text, weight=1.0):
+    return {"t": f"{url[-1].upper()} page -- About the Author", "x": text, "u": url, "weight": weight}
+
+
+def test_a_section_repeated_on_three_pages_takes_the_repeated_weight():
+    parents = [section(f"https://example.org/{n}", BIO) for n in "abc"]
+    parents.append(section("https://example.org/d", "A section with words of its own."))
+
+    changed, texts = dedup.downweight_repeated_sections(parents)
+
+    assert (changed, texts) == (3, 1)
+    assert [p["weight"] for p in parents] == [dedup.REPEATED_SECTION_WEIGHT] * 3 + [1.0]
+
+
+def test_a_section_on_two_pages_is_not_repeated_enough():
+    parents = [section(f"https://example.org/{n}", BIO) for n in "ab"]
+
+    assert dedup.downweight_repeated_sections(parents) == (0, 0)
+    assert all(p["weight"] == 1.0 for p in parents)
+
+
+def test_a_pages_own_repetitions_count_as_one_page():
+    parents = [section("https://example.org/a", BIO) for _ in range(3)]
+    parents.append(section("https://example.org/a#part-2", BIO))
+
+    assert dedup.downweight_repeated_sections(parents) == (0, 0)
+
+
+def test_case_punctuation_and_spacing_do_not_tell_two_copies_apart():
+    parents = [
+        section("https://example.org/a", BIO),
+        section("https://example.org/b", BIO.upper().replace(",", " ;")),
+        section("https://example.org/c", "  " + BIO.replace(" ", "\n\n") + "\n"),
+    ]
+
+    assert dedup.downweight_repeated_sections(parents) == (3, 1)
+
+
+def test_the_repeated_weight_is_assigned_once_and_never_raised():
+    parents = [section(f"https://example.org/{n}", BIO) for n in "abc"]
+    parents[0]["weight"] = 0.25
+
+    assert dedup.downweight_repeated_sections(parents) == (2, 1)
+    assert dedup.downweight_repeated_sections(parents) == (0, 0)
+    assert [p["weight"] for p in parents] == [0.25, 0.5, 0.5]
+
+
+def test_downweight_repeated_sections_empty_input():
+    assert dedup.downweight_repeated_sections([]) == (0, 0)
+
+
 def test_drop_near_duplicates_empty_input():
     kept_chunks, kept_vecs, dropped = dedup.drop_near_duplicates([], np.zeros((0, embed.DIMS)))
     assert kept_chunks == []
