@@ -378,6 +378,8 @@ def test_diversify_caps_how_many_windows_one_section_contributes():
 
     assert sum(1 for entry in selected if sections[entry["i"]] == "one") == SOURCE_CAP
     assert any(sections[entry["i"]] == "two" for entry in selected)
+    # A section is one hit, so no section key appears twice.
+    assert len({sections[entry["i"]] for entry in selected}) == len(selected)
 
 
 def test_diversify_prefers_a_different_window_over_a_near_copy_of_the_one_already_chosen():

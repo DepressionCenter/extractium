@@ -127,9 +127,11 @@ MMR_POOL_CAP = 20
 # relevance, which lets several near-copies of one page fill the answer.
 MMR_LAMBDA = 0.7
 
-# Most windows kept from any one section, so a long article cannot take
-# every slot.
-SOURCE_CAP = 2
+# Windows kept from any one section. A hit is a section, and a section
+# appears at most once in a result list: two windows of one section
+# would resolve to the same text twice and hand a reader one answer in
+# two slots.
+SOURCE_CAP = 1
 
 # Sections returned per search when the caller names no other number.
 TOP_K = 4

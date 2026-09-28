@@ -362,6 +362,8 @@ test('diversify caps how many windows one section contributes', () => {
 
     assert.equal(selected.filter((entry) => sections[entry.i] === 'one').length, SOURCE_CAP);
     assert.ok(selected.some((entry) => sections[entry.i] === 'two'));
+    // A section is one hit, so no section key appears twice.
+    assert.equal(new Set(selected.map((entry) => sections[entry.i])).size, selected.length);
 });
 
 test('diversify prefers a different window over a near-copy of the one already chosen', () => {

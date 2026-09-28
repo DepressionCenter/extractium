@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/container-format.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-18
+Last Modified: 2026-09-28
 Summary: Specification of the Extractium™ binary container (version 4):
 byte layout, header fields, parent and child records, vector bytes, BM25
 statistics, calibration, identifiers, versioning rule, and a checklist
@@ -282,6 +282,8 @@ A field that is always present, and that a reader would use if it knew about it,
 9. Prefix every query with `embedding.queryPrefix` before embedding it. Never prefix a passage.
 10. Round every score to six decimal places before you sort on it or compare it. Two clients adding up the same list of products do not reach the same last digits, so windows that score very close together, which is what near-copies of one page produce, otherwise come back in a different order from each client. Break the ties that rounding creates on the child index, lowest first.
 11. Treat `source_type` and `content_type` as text you show, not as a set you switch on. New values are added to both without a new format version, and a client that branches on them breaks on a file written by a newer build. Neither reference client branches on either field.
+12. A hit is a section. Windows are what you score, and several windows of one section can score well, but return each section at most once, at its best window. The reference clients cap the selection at one window per section for this reason.
+13. Reranking is optional, and it has two traps. Run a reranker over a shortlist larger than the number of results you keep, because over a list of exactly that size it can only reorder and never replace. And score a one-label cross-encoder, such as `cross-encoder/ms-marco-MiniLM-L-6-v2`, from its raw logit, never through a text-classification pipeline: such a pipeline applies a softmax over the labels, a softmax over one label is 1.0 for every passage, and the order never changes. A sigmoid over the logit keeps the order; a softmax over one label does not. Neither reference client reranks.
 
 
 ## Conclusion

@@ -155,10 +155,19 @@ Both clients run the same six steps. You do not have to configure any of them.
 2. Fusing the two lists. The two rankings are merged by reciprocal rank fusion, which uses each result's position in its own list and ignores the raw scores. That is what makes two scores on completely different scales comparable.
 3. Deciding what counts as relevant. A result must pass two tests. Its place in the merged ranking must be well above the middle of this query's own results. And the window itself must be close enough to the question: its cosine similarity must reach the floor for this file. The second test is the one that returns nothing for a question the compendium cannot answer, because a merged ranking always has a first place, whatever was asked.
 4. Keeping the answers varied. Near-identical windows are pushed down so that four results say four things rather than one thing four times.
-5. Limiting any one section. At most two windows from the same section survive, so a long article cannot fill the whole answer.
+5. Limiting any one section. Each section is returned at most once, at its best window, so a long article cannot fill the whole answer and no section comes back twice.
 6. Returning whole sections. Small windows are searched, and whole sections are returned. The match is precise, and the text you get back still has enough around it to answer from.
 
 The floor in step 3 comes from the file. The build asks 64 everyday questions that have nothing to do with your content, such as how to bake bread, and records how well the best window in your compendium matches each one. The floor sits just above those scores, so it fits this compendium: a larger one gets a higher floor, and the light container gets a lower one than the full container. `index.cosine_min` in Python and `index.cosineMin` in JavaScript tell you the value. A file built before this existed gets a fixed 0.67, which suits the embedding model, `BAAI/bge-small-en-v1.5` with its query prefix: the best window for a question a compendium answers scored 0.70 and higher in testing, and the best window for an unrelated question mostly stayed under 0.67. It is not a perfect line. A question close to the compendium's subject that it does not answer can still pass, so an assistant should read what comes back before it answers from it. To use another floor, call the selection step yourself: `diversify` takes the floor as its last argument in both clients. An application can offer that as a setting, so a reader can ask for stricter or looser matches.
+
+
+## Adding a reranker
+
+Neither client reranks. A cross-encoder that scores each question and passage together can sharpen the order of the sections that come back, and it is a few lines with the `sentence_transformers.CrossEncoder` class in Python. The JavaScript client leaves it out because it would add a second model download to every page that uses it. If you add one, keep to three rules:
+
+- Rerank a shortlist larger than the number of results you keep. Over a list of exactly that size a reranker can only reorder, never replace. Ask the client for more sections than you show, or take its candidate pool, and keep the best after reranking.
+- Score a one-label cross-encoder from its raw logit. A text-classification pipeline applies a softmax over the labels, and a softmax over one label is 1.0 for every passage, so every passage ties and nothing moves. A sigmoid over the logit keeps the order; a softmax over one label does not.
+- Keep the relevance floor. A reranker orders what the client found relevant; it does not decide whether a question was answered.
 
 
 ## Keeping the two clients in agreement
