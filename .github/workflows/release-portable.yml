@@ -1,0 +1,113 @@
+# This file is part of Extractium™
+# .github/workflows/release-portable.yml
+# Author(s): Gabriel Mongefranco.
+# Created: 2026-09-30
+# Last Modified: 2026-09-30
+# Summary: Builds the portable Windows zip for a release and attaches it.
+# Runs when a release is published, or by hand with a tag. On a Windows
+# runner it runs the same installer a person runs, with --portable, so
+# the zip holds the Extractium folder the installer builds: uv, a Python,
+# the pinned packages, the tool, and the model cache warmed with the three
+# models. It packs the folder with run.bat and install.bat, uploads the
+# zip and its SHA-256 to the release, and adds the hash to the release
+# notes. The tool's Python and every package come from the hash-pinned
+# lock file; nothing else is downloaded.
+# Notes: See README file for documentation and full license information.
+#
+# Copyright © 2026 The Regents of the University of Michigan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License along
+# with this program. If not, see <https://www.gnu.org/licenses/>.
+
+name: Release portable zip
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release tag to build the zip for, such as v0.5"
+        required: true
+
+# Least privilege by default. Only the job that attaches the zip writes,
+# and only to the release.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-portable-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  build:
+    name: Build and attach the Windows zip
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.TAG }}
+
+      # The same installer a person runs, in portable mode, so the zip
+      # holds exactly what the installer builds: uv at its pinned version
+      # and hash, the managed Python, the lock with every hash checked,
+      # and the tool as a plain copy. Beside the checkout it sees
+      # pyproject.toml and installs from it.
+      - name: Build the Extractium folder with the installer
+        shell: cmd
+        run: install.bat --portable --version %TAG%
+
+      # The three models go into the folder's own cache, so a person
+      # who unzips it downloads nothing before the first build.
+      - name: Warm the model cache
+        shell: pwsh
+        run: |
+          $python = Get-ChildItem -Path Extractium\python -Recurse -Filter python.exe | Select-Object -First 1
+          $env:HF_HOME = "$PWD\Extractium\cache"
+          & $python.FullName -I tools\warm_model_cache.py
+
+      - name: Pack the zip and its hash
+        id: pack
+        shell: pwsh
+        run: |
+          $python = Get-ChildItem -Path Extractium\python -Recurse -Filter python.exe | Select-Object -First 1
+          & $python.FullName -I tools\pack_portable.py --where . --out release --stem "extractium-$env:TAG-windows-portable" | Tee-Object -FilePath release\pack.txt
+          "lines<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Get-Content release\pack.txt | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # The runner's own token attaches the files; no third-party action
+      # is given it.
+      - name: Attach the zip to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload $env:TAG (Get-ChildItem release\*.zip, release\*.sha256 | ForEach-Object { $_.FullName }) --clobber
+
+      - name: Add the hash to the release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACK_LINES: ${{ steps.pack.outputs.lines }}
+        run: |
+          $notes = gh release view $env:TAG --json body --jq .body
+          if ($notes -notmatch "## Portable zip") {
+            $indented = ($env:PACK_LINES -split "`n" | ForEach-Object { "    $_" }) -join "`n"
+            $section = "`n`n## Portable zip`n`nSHA-256 of each file, as pack_portable.py printed it (name, hash, size):`n`n" + $indented
+            Set-Content -Path release\notes.md -Value ($notes + $section) -NoNewline
+            gh release edit $env:TAG --notes-file release\notes.md
+          }

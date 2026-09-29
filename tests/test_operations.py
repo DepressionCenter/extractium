@@ -38,6 +38,7 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-30"
 
+import os
 import pathlib
 import re
 import shutil
@@ -716,3 +717,136 @@ def test_the_test_workflow_pins_every_action_to_a_commit_digest():
     assert references
     for reference in references:
         assert PINNED_ACTION_RE.match(reference), reference
+
+
+# ---------------------------------------------------------------------------
+# The release workflow and the two tools it runs
+# ---------------------------------------------------------------------------
+
+RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "release-portable.yml"
+
+
+@pytest.fixture(scope="module")
+def release_workflow():
+    return yaml.safe_load(RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+
+def test_the_release_workflow_runs_when_a_release_is_published_or_by_hand_with_a_tag(release_workflow):
+    triggers = release_workflow[True]
+
+    assert triggers["release"]["types"] == ["published"]
+    assert triggers["workflow_dispatch"]["inputs"]["tag"]["required"] is True
+
+
+def test_the_release_workflow_reads_by_default_and_writes_only_from_the_job_that_attaches(release_workflow):
+    assert release_workflow["permissions"] == {"contents": "read"}
+    (job,) = release_workflow["jobs"].values()
+    assert job["permissions"] == {"contents": "write"}
+    assert job["runs-on"].startswith("windows-")
+
+
+def test_the_release_workflow_builds_with_the_installer_warms_the_cache_and_packs(release_workflow):
+    (job,) = release_workflow["jobs"].values()
+    runs = "\n".join(str(step.get("run", "")) for step in job["steps"])
+
+    assert "install.bat --portable --version" in runs
+    assert "warm_model_cache.py" in runs and "HF_HOME" in runs
+    assert "pack_portable.py" in runs and "--stem" in runs
+    # The runner's own token attaches the files; no third-party action
+    # is given it.
+    assert "gh release upload" in runs and "gh release edit" in runs
+    used = re.findall(r"uses:\s*([^\s@]+)@", RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8"))
+    assert used == ["actions/checkout"]
+
+
+def test_the_release_workflow_pins_every_action_to_a_commit_digest():
+    references = re.findall(r"^\s*uses:.*$", RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8"), re.M)
+
+    assert references
+    for reference in references:
+        assert PINNED_ACTION_RE.match(reference), reference
+
+
+def _load_tool(name):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "tools" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _portable_layout(where, cache_bytes):
+    folder = where / "Extractium"
+    (folder / "bin").mkdir(parents=True)
+    (folder / "bin" / "extractium.cmd").write_text("@echo off\r\n", encoding="utf-8")
+    (folder / "cache" / "models").mkdir(parents=True)
+    # Random bytes, so the cache does not deflate away in the size test.
+    (folder / "cache" / "models" / "weights.bin").write_bytes(os.urandom(cache_bytes))
+    (folder / "installed-version.txt").write_text("v9.9\n", encoding="utf-8")
+    (where / "run.bat").write_text("@echo off\r\n", encoding="utf-8")
+    (where / "install.bat").write_text("@echo off\r\n", encoding="utf-8")
+    return folder
+
+
+def test_the_packer_writes_one_deflated_zip_with_its_hash_when_it_fits(tmp_path):
+    import zipfile
+
+    pack = _load_tool("pack_portable")
+    _portable_layout(tmp_path, 4096)
+
+    written = pack.pack(tmp_path, tmp_path / "out", "extractium-v9.9-windows-portable")
+
+    ((path, digest, size),) = written
+    assert path.name == "extractium-v9.9-windows-portable.zip" and size == path.stat().st_size
+    assert digest == pack.sha256_of(path)
+    assert (tmp_path / "out" / "extractium-v9.9-windows-portable.zip.sha256").read_text(encoding="utf-8") \
+        == f"{digest}  {path.name}\n"
+    with zipfile.ZipFile(path) as archive:
+        names = sorted(archive.namelist())
+        assert names == ["Extractium/bin/extractium.cmd", "Extractium/cache/models/weights.bin",
+                         "Extractium/installed-version.txt", "install.bat", "run.bat"]
+        assert all(info.compress_type == zipfile.ZIP_DEFLATED for info in archive.infolist())
+
+
+def test_the_packer_moves_the_cache_to_a_second_zip_past_the_limit(tmp_path):
+    import zipfile
+
+    pack = _load_tool("pack_portable")
+    _portable_layout(tmp_path, 64 * 1024)
+
+    written = pack.pack(tmp_path, tmp_path / "out", "portable", limit=2048)
+
+    (main_path, _, main_size), (models_path, models_digest, _) = written
+    assert models_path.name == "portable-models.zip"
+    assert main_size <= 2048
+    with zipfile.ZipFile(main_path) as archive:
+        assert not any(name.startswith("Extractium/cache/") for name in archive.namelist())
+        assert "Extractium/bin/extractium.cmd" in archive.namelist()
+    with zipfile.ZipFile(models_path) as archive:
+        assert archive.namelist() == ["Extractium/cache/models/weights.bin"]
+    assert models_digest == pack.sha256_of(models_path)
+
+
+def test_the_packer_refuses_a_missing_folder_or_script(tmp_path, capsys):
+    pack = _load_tool("pack_portable")
+
+    assert pack.main(["--where", str(tmp_path), "--out", str(tmp_path), "--stem", "x"]) == 1
+    assert "is not a folder" in capsys.readouterr().err
+
+
+def test_the_cache_warmer_names_the_tools_own_models_and_loads_each_once():
+    warm = _load_tool("warm_model_cache")
+    from extractium.core.embed import EMBED_MODEL
+    from extractium.search import DEFAULT_RERANK_MODEL
+    from extractium.sources.youtube_audio import WHISPER_MODEL
+
+    names = warm.model_names()
+    assert names == {"embedding": EMBED_MODEL, "reranker": DEFAULT_RERANK_MODEL, "whisper": WHISPER_MODEL}
+
+    loaded = []
+    said = []
+    warm.warm(names, {kind: (lambda name, kind=kind: loaded.append((kind, name))) for kind in names}, say=said.append)
+    assert loaded == list(names.items())
+    assert len(said) >= 3
+    assert warm.main(["--dry-run"]) == 0
