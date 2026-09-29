@@ -361,12 +361,15 @@ def test_each_installer_pins_uv_by_version_and_hash(script):
 def test_each_installer_keeps_uv_inside_the_folder_and_trusts_the_machines_certificates(script):
     text = script_text(script)
 
-    assert "UV_NATIVE_TLS=1" in text
+    assert "UV_SYSTEM_CERTS=1" in text
     assert "UV_LINK_MODE=copy" in text
     assert "UV_PYTHON_INSTALL_DIR=" in text
     assert "UV_CACHE_DIR=" in text
     assert re.search(r'PYTHON_VERSION="?3\.\d+\.\d+"?', text)
-    assert "python install" in text and "--install-dir" in text
+    # The Python lands in the folder and nowhere else.
+    assert "python install" in text and "--install-dir" in text and "--no-bin" in text
+    if script == "install.bat":
+        assert "--no-registry" in text
 
 
 @pytest.mark.parametrize("script", INSTALLERS)

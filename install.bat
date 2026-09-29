@@ -114,7 +114,7 @@ REM Every uv call trusts the certificates this computer trusts, so a
 REM corporate proxy that inspects traffic does not stop the download,
 REM keeps its cache outside the folder, and copies files into the folder
 REM rather than linking them, so the folder can move.
-set "UV_NATIVE_TLS=1"
+set "UV_SYSTEM_CERTS=1"
 set "UV_LINK_MODE=copy"
 set "UV_CACHE_DIR=%TEMP%\extractium-uv-cache"
 set "UV_PYTHON_INSTALL_DIR=%HOME_DIR%\python"
@@ -156,8 +156,10 @@ if errorlevel 1 goto :step_3
 
 REM ### Step 2: a Python that uv manages ###
 
+REM The Python goes into the folder and nowhere else: no launcher in the
+REM profile's bin folder, and no entry in the Windows registry.
 echo Installing Python %PYTHON_VERSION% into %HOME_DIR%\python ...
-"%UV%" python install "%PYTHON_VERSION%" --install-dir "%HOME_DIR%\python"
+"%UV%" python install "%PYTHON_VERSION%" --install-dir "%HOME_DIR%\python" --no-bin --no-registry
 if errorlevel 1 (
     echo The managed Python could not be downloaded. Looking for a Python already on this computer for uv to use.
     call :uv_with_machine_python

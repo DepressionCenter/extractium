@@ -154,9 +154,10 @@ def test_the_packages_come_from_the_lock_with_hashes_and_the_tool_without_depend
     install.install_packages(run, python, lock, tmp_path / "src", uv=tmp_path / "uv.exe")
 
     first, second = run.commands
-    assert first[:5] == [str(tmp_path / "uv.exe"), "pip", "install", "--python", str(python)]
-    assert first[5:] == ["--require-hashes", "-r", str(lock)]
-    assert second[5:] == ["--no-deps", str(tmp_path / "src")]
+    assert first[:6] == [str(tmp_path / "uv.exe"), "pip", "install", "--python", str(python),
+                         "--break-system-packages"]
+    assert first[6:] == ["--require-hashes", "-r", str(lock)]
+    assert second[6:] == ["--no-deps", str(tmp_path / "src")]
     # Every command is a list; nothing was joined into a string.
     assert all(isinstance(command, list) for command in run.commands)
 
@@ -498,7 +499,8 @@ def test_update_reinstalls_into_the_folders_own_interpreter_with_its_uv(tmp_path
     lines = install.update(home, source, source / "requirements-lock.txt", version="v9.10", run=run,
                            platform=install.WINDOWS)
 
-    assert run.commands[0][:5] == [str(home / "uv.exe"), "pip", "install", "--python", str(python)]
+    assert run.commands[0][:6] == [str(home / "uv.exe"), "pip", "install", "--python", str(python),
+                                   "--break-system-packages"]
     assert (home / install.VERSION_FILE).read_text(encoding="utf-8") == "v9.10\n"
     assert any("v9.10" in line for line in lines)
 

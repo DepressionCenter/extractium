@@ -178,7 +178,12 @@ def install_packages(run, python, lock, source, uv=None, editable=False):
             ties the install to the source folder.
     """
     if uv is not None:
-        installer = [uv, "pip", "install", "--python", python]
+        # The managed Python is marked as uv's own, and uv refuses to
+        # install into it unless told that this is what is wanted. It
+        # is: the whole folder is private to the tool, and a virtual
+        # environment would record where it was made and break when
+        # the folder moves.
+        installer = [uv, "pip", "install", "--python", python, "--break-system-packages"]
     else:
         installer = [python, "-m", "pip", "install"]
     run(installer + ["--require-hashes", "-r", lock])

@@ -120,7 +120,7 @@ fi
 # corporate proxy that inspects traffic does not stop the download,
 # keeps its cache outside the folder, and copies files into the folder
 # rather than linking them, so the folder can move.
-export UV_NATIVE_TLS=1
+export UV_SYSTEM_CERTS=1
 export UV_LINK_MODE=copy
 export UV_CACHE_DIR="${TMPDIR:-/tmp}/extractium-uv-cache"
 export UV_PYTHON_INSTALL_DIR="$HOME_DIR/python"
@@ -288,7 +288,9 @@ get_uv() {
 
 managed_python() {
     echo "Installing Python $PYTHON_VERSION into $HOME_DIR/python ..."
-    if "$UV" python install "$PYTHON_VERSION" --install-dir "$HOME_DIR/python"; then
+    # The Python goes into the folder and nowhere else: no launcher in
+    # the profile's bin folder.
+    if "$UV" python install "$PYTHON_VERSION" --install-dir "$HOME_DIR/python" --no-bin; then
         PYTHON="$(python_in "$HOME_DIR")"
         [ -n "$PYTHON" ] && return 0
         echo "uv installed Python but no interpreter was found under $HOME_DIR/python." >&2
