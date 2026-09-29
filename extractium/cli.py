@@ -14,7 +14,9 @@ file so a person can start without editing YAML. The `mcp` subcommand,
 in extractium/mcp/server.py, serves one compendium to an AI assistant
 as a search tool, and the `connect` subcommand, in
 extractium/mcp/connect.py, writes the card that tells an assistant how
-to reach it.
+to reach it. The `ui` subcommand, in extractium/ui/server.py, serves
+the local page on this machine for setting up and changing the
+settings file in a browser.
 
 This file is part of Extractium™
 extractium/cli.py
@@ -68,6 +70,7 @@ from extractium.mcp import server as mcp_command
 from extractium.sources.github import accounts_named_by
 from extractium.sources.github_api import GitHubSourceError
 from extractium.sources.web import CrawlSettings
+from extractium.ui import server as ui_command
 
 ### Exit Codes ###
 
@@ -810,6 +813,18 @@ def build_parser():
     connect.add_argument("--url", metavar="URL",
                          help="An address on this machine where a program serves the same tool over HTTP.")
     connect.set_defaults(handler=connect_command.run_connect)
+
+    ui = subcommands.add_parser(
+        "ui", help="Open the local page in your browser, for setting up and changing the settings file."
+    )
+    ui.add_argument("--config", default=ui_command.DEFAULT_CONFIG, metavar="FILE",
+                    help=f"The settings file the page reads and writes. Defaults to {ui_command.DEFAULT_CONFIG} "
+                         "in the current folder; it need not exist yet.")
+    ui.add_argument("--port", type=int, default=0, metavar="N",
+                    help="Listen on this port of 127.0.0.1. A free port is taken when omitted.")
+    ui.add_argument("--no-browser", action="store_true",
+                    help="Print the page's address without opening a browser.")
+    ui.set_defaults(handler=ui_command.run_ui)
     return parser
 
 

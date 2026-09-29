@@ -7,8 +7,9 @@ REM Last Modified: 2026-09-28
 REM Summary: One-command build for Windows. Downloads Extractium when this
 REM script is on its own, creates a virtual environment beside the checkout,
 REM installs the pinned dependencies, installs Extractium into it, writes a
-REM first settings file by asking three questions when there is none, runs
-REM the build, and prints what to commit afterwards.
+REM first settings file by asking three questions when there is none, in
+REM the browser or in the terminal, runs the build, and prints what to
+REM commit afterwards. "run.bat ui" opens the local page instead of building.
 REM Notes: See README file for documentation and full license information.
 REM
 REM Copyright (c) 2026 The Regents of the University of Michigan
@@ -240,19 +241,52 @@ REM "extractium" sitting there is imported in place of the installed
 REM package and the build stops before it starts.
 set "VENV_EXTRACTIUM=%VENV_DIR%\Scripts\extractium.exe"
 
+REM ### The local page ###
+
+REM "ui" as the only argument starts the local page instead of a build: a
+REM settings form in the browser, served on this computer only. The page
+REM quits on its own once its tab has been closed for a while.
+if /i "%~1"=="ui" goto :page
+
 REM ### Write a first settings file ###
 
-REM With no settings file and no arguments, this is a first run: ask for
-REM the name, the short name, and the website, then build with a page
-REM limit so a pattern broader than intended costs seconds.
+REM With no settings file and no arguments, this is a first run. The
+REM person chooses where to answer the three questions: on the page in
+REM the browser, which is the default, or here in the terminal. The
+REM terminal path asks, writes the file, and builds with a page limit so
+REM a pattern broader than intended costs seconds. The browser path
+REM writes the file from the page and ends; the next run builds.
 set "FIRST_RUN=0"
-if "%~1"=="" if not exist "%CONFIG%" (
+if not "%~1"=="" goto :build
+if exist "%CONFIG%" goto :build
+echo.
+echo There is no %CONFIG% yet.
+set "SETUP=browser"
+set /p "SETUP=Set up in the browser or in the terminal? [browser]: "
+if /i "%SETUP:~0,1%"=="t" goto :terminal_setup
+echo.
+echo Opening the page in your browser. Answer its three questions there, then
+echo run this script again to build.
+goto :page
+
+:terminal_setup
+echo.
+echo A few questions first.
+"%VENV_EXTRACTIUM%" init --output "%CONFIG%"
+if errorlevel 1 exit /b %errorlevel%
+set "FIRST_RUN=1"
+goto :build
+
+:page
+"%VENV_EXTRACTIUM%" ui --config "%CONFIG%"
+if errorlevel 1 exit /b %errorlevel%
+if exist "%CONFIG%" (
     echo.
-    echo There is no %CONFIG% yet, so a few questions first.
-    "%VENV_EXTRACTIUM%" init --output "%CONFIG%"
-    if errorlevel 1 exit /b %errorlevel%
-    set "FIRST_RUN=1"
+    echo Run this script again to build from %CONFIG%.
 )
+exit /b 0
+
+:build
 
 REM ### Run the build ###
 

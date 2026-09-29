@@ -8,7 +8,9 @@
 # this script is on its own, creates a virtual environment beside the
 # checkout, installs the pinned dependencies, installs Extractium into it,
 # writes a first settings file by asking three questions when there is
-# none, runs the build, and prints what to commit afterwards.
+# none, in the browser or in the terminal, runs the build, and prints what
+# to commit afterwards. "./run.sh ui" opens the local page instead of
+# building.
 # Notes: See README file for documentation and full license information.
 #
 # Copyright © 2026 The Regents of the University of Michigan
@@ -259,17 +261,55 @@ else
     VENV_EXTRACTIUM="$VENV_DIR/Scripts/extractium.exe"
 fi
 
+### The local page ###
+
+# "ui" as the only argument starts the local page instead of a build: a
+# settings form in the browser, served on this computer only. The page
+# quits on its own once its tab has been closed for a while.
+open_page() {
+    "$VENV_EXTRACTIUM" ui --config "$CONFIG"
+    if [ -f "$CONFIG" ]; then
+        echo
+        echo "Run this script again to build from $CONFIG."
+    fi
+    exit 0
+}
+if [ "${1:-}" = "ui" ]; then
+    open_page
+fi
+
 ### Write a first settings file ###
 
-# With no settings file and no arguments, this is a first run: ask for
-# the name, the short name, and the website, then build with a page
-# limit so a pattern broader than intended costs seconds.
+# With no settings file and no arguments, this is a first run. The person
+# chooses where to answer the three questions: on the page in the
+# browser, which is the default when a terminal is attached, or here. The
+# terminal path asks, writes the file, and builds with a page limit so a
+# pattern broader than intended costs seconds. The browser path writes
+# the file from the page and ends; the next run builds. With no terminal
+# attached, as on a scheduled run, the questions are asked here and fail
+# fast rather than waiting for a browser nobody will open.
 FIRST_RUN=0
 if [ "$#" -eq 0 ] && [ ! -f "$CONFIG" ]; then
     echo
-    echo "There is no $CONFIG yet, so a few questions first."
-    "$VENV_EXTRACTIUM" init --output "$CONFIG"
-    FIRST_RUN=1
+    echo "There is no $CONFIG yet."
+    SETUP="terminal"
+    if [ -t 0 ]; then
+        read -r -p "Set up in the browser or in the terminal? [browser]: " SETUP || SETUP=""
+        SETUP="${SETUP:-browser}"
+    fi
+    case "$SETUP" in
+        [Tt]*)
+            echo "A few questions first."
+            "$VENV_EXTRACTIUM" init --output "$CONFIG"
+            FIRST_RUN=1
+            ;;
+        *)
+            echo
+            echo "Opening the page in your browser. Answer its three questions there, then"
+            echo "run this script again to build."
+            open_page
+            ;;
+    esac
 fi
 
 ### Run the build ###

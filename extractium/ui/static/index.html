@@ -1,0 +1,137 @@
+<!doctype html>
+<!--
+This file is part of Extractium™
+extractium/ui/static/index.html
+Author(s): Gabriel Mongefranco.
+Created: 2026-09-28
+Last Modified: 2026-09-28
+Summary: The local page. One document with three views the script shows
+one at a time: a notice when the page was opened without its session
+token, the welcome screen that writes a first settings file, and the
+settings view with a form and the file's own text. Everything the form
+holds is built by app.js from the description the server sends.
+Notes: See README file for documentation and full license information.
+
+Copyright © 2026 The Regents of the University of Michigan
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+You should have received a copy of the GNU General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Extractium</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the main content</a>
+
+  <header class="page-header">
+    <div class="page-title">
+      <h1>Extractium</h1>
+      <p class="tagline">The local page for your compendium, on this computer only.</p>
+    </div>
+    <nav aria-label="Page actions">
+      <button type="button" id="quit-button" class="secondary">Quit</button>
+    </nav>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <p id="status" role="status" class="message" hidden></p>
+    <p id="error" role="alert" class="message error" hidden></p>
+
+    <section id="no-token" hidden aria-labelledby="no-token-heading">
+      <h2 id="no-token-heading" tabindex="-1">This page has no session token</h2>
+      <p>The page works only from the address the terminal printed when it started, which ends in
+        <code>#token=…</code>. Go back to that window and open that address, or start the page again
+        with <code>extractium ui</code>.</p>
+    </section>
+
+    <section id="welcome" hidden aria-labelledby="welcome-heading">
+      <h2 id="welcome-heading" tabindex="-1">Set up your first build</h2>
+      <p>There is no settings file in <span id="welcome-folder"></span> yet. Answer these three
+        questions and the page writes one. You can change every setting afterwards.</p>
+      <form id="welcome-form" novalidate>
+        <div class="field">
+          <label for="welcome-name">Name of your compendium</label>
+          <input id="welcome-name" name="name" type="text" autocomplete="off" aria-describedby="welcome-name-help">
+          <p id="welcome-name-help" class="help">The display name, recorded in every output. Leave it empty for "Compendium".</p>
+        </div>
+        <div class="field">
+          <label for="welcome-slug">Short name for the output files</label>
+          <input id="welcome-slug" name="slug" type="text" autocomplete="off" aria-describedby="welcome-slug-help">
+          <p id="welcome-slug-help" class="help">Lowercase letters, digits, and hyphens. Leave it empty to derive it from the name.</p>
+        </div>
+        <div class="field">
+          <label for="welcome-seed">Website to start crawling from</label>
+          <input id="welcome-seed" name="seed_url" type="url" autocomplete="off" required aria-describedby="welcome-seed-help" placeholder="https://example.edu/docs/">
+          <p id="welcome-seed-help" class="help">The page the crawl starts from. It stays inside that site.</p>
+        </div>
+        <p class="help">The terminal does the same with this command, run in the same folder:</p>
+        <pre class="command" aria-live="polite"><code id="welcome-command">extractium init</code></pre>
+        <div class="actions">
+          <button type="submit" id="welcome-submit">Write the settings file</button>
+        </div>
+      </form>
+      <p>The file switches on three outputs: the compressed search index, the llms.txt files, and
+        the Markdown folder the page shows results from. The
+        <a id="welcome-docs" href="#">documentation for this page</a> explains each one.</p>
+    </section>
+
+    <section id="settings" hidden aria-labelledby="settings-heading">
+      <h2 id="settings-heading" tabindex="-1">Settings</h2>
+      <p>The file is <code id="settings-path"></code>. Every setting is explained beside its field,
+        and in the <a id="settings-docs" href="#">configuration reference</a>.</p>
+      <p id="settings-problem" class="message error" hidden></p>
+
+      <div class="view-switch" role="group" aria-label="How to edit the settings">
+        <button type="button" id="show-form" aria-pressed="true">Form</button>
+        <button type="button" id="show-text" aria-pressed="false">Advanced: the file's text</button>
+      </div>
+
+      <div id="form-panel">
+        <form id="settings-form" novalidate>
+          <div id="form-fields"></div>
+          <p class="note">Saving the form writes the file afresh, without any comment you added by
+            hand. The previous file is kept beside it with a date stamp. To keep your comments,
+            change the text in the advanced view instead.</p>
+          <div class="actions">
+            <button type="submit" id="save-form">Save the settings</button>
+            <button type="button" id="reload-form" class="secondary">Discard changes</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="text-panel" hidden>
+        <form id="text-form" novalidate>
+          <div class="field">
+            <label for="settings-text">The settings file</label>
+            <textarea id="settings-text" rows="24" spellcheck="false" autocomplete="off" aria-describedby="settings-text-help"></textarea>
+            <p id="settings-text-help" class="help">Saved exactly as written, once the settings loader accepts it. Comments are kept.</p>
+          </div>
+          <div class="actions">
+            <button type="submit" id="save-text">Save the file</button>
+            <button type="button" id="reload-text" class="secondary">Discard changes</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <p>Extractium <span id="version"></span>. <a id="footer-docs" href="#">How to use this page</a>.
+      This page listens on this computer only and stops when it has been closed for a while.</p>
+    <p>Copyright © 2026 The Regents of the University of Michigan. Free software under the GNU GPL v3 or later.</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

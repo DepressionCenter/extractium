@@ -6,8 +6,8 @@ Created: 2026-09-08
 Last Modified: 2026-09-28
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
-scripts, the crawl, the scheduled build, publishing, and the search
-clients.
+scripts, the crawl, the scheduled build, publishing, the search
+clients, and the local page.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -460,6 +460,51 @@ That line is not an error. It is telling you the index has that repository's doc
 **Cause.** The file is truncated or was altered in transit. A common way to cause it is downloading the container with a tool that treats it as text.
 
 **Fix.** Download it again as binary. In a browser, use `response.arrayBuffer()`, never `response.text()`.
+
+
+## The local page
+
+### The terminal prints an address but no browser opens
+
+**Cause.** The computer has no default browser the standard library can find, or the page was started with `--no-browser`, or it is running on a machine you reach over a remote shell.
+
+**Fix.** Copy the whole address the terminal printed, including the part after `#`, into a browser on the same computer. The page works only on the computer that runs it.
+
+### The page says it has no session token
+
+**Cause.** The page was opened without the token, which travels after the `#` in the address the terminal prints. A bookmark of the bare address, or an address typed by hand, has none, and each start makes a new token.
+
+**Fix.** Open the address the terminal printed for this start, or start the page again and let it open the browser itself.
+
+### `the page could not listen on port`
+
+**Cause.** The port given with `--port` is in use, or is one your account may not open.
+
+**Fix.** Leave `--port` out and the page takes a free port, or give another one.
+
+### Windows asks whether to allow Python through the firewall
+
+**Cause.** Windows shows the prompt for any program that starts listening, even on the loopback address.
+
+**Fix.** Either answer works. The page listens on `127.0.0.1` only, and Windows does not filter traffic to that address, so the page runs whether you allow it or not. Allowing it opens nothing to the network, because the page never listens on a network address.
+
+### The page stopped on its own
+
+**Cause.** No tab of the page has checked in for ten minutes. The page stops itself so a forgotten tab does not leave a program running for days.
+
+**Fix.** Start it again with `run.bat ui`, `./run.sh ui`, or `python -m extractium.cli ui`.
+
+### Saving says a build would refuse the file
+
+**Cause.** The message is the settings loader's own, the same one a build prints. The field it names holds a value a build cannot act on: a short name with capitals, a page limit below 1, a pattern that is not a valid regular expression.
+
+**Fix.** Change the field the message names and save again. Nothing was written, and the file is as it was.
+
+### The form is empty and only the advanced view works
+
+**Cause.** The file is not valid YAML, so the form cannot show it. The message above the views names the line.
+
+**Fix.** Fix the text in the advanced view and save. The form returns once the file loads.
 
 
 ## A local search server

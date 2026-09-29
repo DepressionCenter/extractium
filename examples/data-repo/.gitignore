@@ -30,6 +30,10 @@ runs/
 # A local build environment, when you build on your own machine.
 .venv/
 
+# The previous settings file, kept with a date stamp each time the local
+# page saves a new one. Delete these copies whenever you like.
+config.yaml.*.bak
+
 # The build output. The workflow publishes it straight to Pages, so it
 # does not need to be committed. Remove this line if you build locally and
 # want the files in the repository.

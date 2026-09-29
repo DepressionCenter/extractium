@@ -1,0 +1,313 @@
+/*
+This file is part of Extractium™
+extractium/ui/static/style.css
+Author(s): Gabriel Mongefranco.
+Created: 2026-09-28
+Last Modified: 2026-09-28
+Summary: The local page's styles: a system font, generous line height,
+left-aligned text on a narrow measure, visible focus, pointer targets
+of at least 24 by 24 pixels, and colors that keep 4.5:1 contrast. No
+color carries a meaning on its own; every state is also words.
+Notes: See README file for documentation and full license information.
+
+Copyright © 2026 The Regents of the University of Michigan
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+You should have received a copy of the GNU General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+:root {
+  --text: #1f1f1f;
+  --muted: #4a4a4a;
+  --background: #ffffff;
+  --panel: #f4f6f8;
+  --border: #8a8f96;
+  --accent: #00274c;
+  --accent-text: #ffffff;
+  --focus: #b3470a;
+  --error: #8a1c1c;
+  --error-background: #fbeaea;
+  --status-background: #e8f1e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 100%;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  padding: 0 1rem;
+  max-width: 44rem;
+  margin-inline: auto;
+  text-align: left;
+  /* A file path or an address has no space to break at, so a long one
+     breaks rather than widening the page past a narrow screen. */
+  overflow-wrap: anywhere;
+}
+
+h1, h2, h3 {
+  line-height: 1.25;
+  margin: 1.5rem 0 0.5rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+}
+
+h2 {
+  font-size: 1.4rem;
+}
+
+h3 {
+  font-size: 1.15rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+code, pre {
+  font-family: ui-monospace, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.95em;
+}
+
+pre.command {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.skip-link {
+  position: absolute;
+  left: -100vw;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  padding: 0.5rem 1rem;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  z-index: 10;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-header h1 {
+  margin-top: 0.5rem;
+}
+
+.tagline {
+  color: var(--muted);
+}
+
+.page-footer {
+  margin-top: 3rem;
+  padding: 1rem 0 2rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+main:focus {
+  outline: none;
+}
+
+/* Fields */
+
+.field {
+  margin: 0 0 1.25rem;
+}
+
+.field label,
+.field .checkbox-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.field .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.field .checkbox-label input {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0.1rem 0 0;
+  flex: none;
+}
+
+.field input[type="text"],
+.field input[type="url"],
+.field input[type="number"],
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+}
+
+.field textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.help {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0;
+}
+
+.note {
+  background: var(--panel);
+  border-left: 0.25rem solid var(--border);
+  padding: 0.75rem 1rem;
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem 0.25rem;
+  margin: 0 0 1.5rem;
+  min-width: 0;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0.5rem;
+}
+
+.entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.entry-head .field {
+  flex: 1 1 14rem;
+  margin: 0;
+}
+
+/* Buttons */
+
+button {
+  font: inherit;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--background);
+  color: var(--accent);
+}
+
+button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+button[aria-pressed="false"] {
+  background: var(--background);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 1.5rem;
+}
+
+/* Messages */
+
+.message {
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+  background: var(--status-background);
+  border: 1px solid var(--border);
+}
+
+.message.error {
+  background: var(--error-background);
+  color: var(--error);
+  border-color: var(--error);
+  white-space: pre-wrap;
+}
+
+/* Focus, always visible */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto;
+  }
+}

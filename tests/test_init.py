@@ -2,15 +2,15 @@
 Summary: Tests for the `extractium init` command: the values it accepts
 and refuses, the questions it asks when a flag is missing, the file it
 writes from the commented example and from the fallback template, the
-refusal to replace an existing file, and that a hostile name cannot turn
-into a setting.
+refusal to replace an existing file, the outputs list a caller may add,
+and that a hostile name cannot turn into a setting.
 
 This file is part of Extractium™
 tests/test_init.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-14
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -29,7 +29,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-28"
 
 import argparse
 import pathlib
@@ -180,6 +180,24 @@ def test_the_fallback_is_also_used_when_the_example_no_longer_holds_the_placehol
     path = init.write_settings(VALUES, tmp_path / "config.yaml", example_path=changed)
 
     assert load_config(path).sources[0].options["seed_url"] == "https://example.edu/docs/"
+
+
+def test_an_outputs_list_is_written_at_the_end_when_asked(tmp_path):
+    outputs = [{"type": "container", "gzip": True}, {"type": "llmstxt"}, {"type": "okf"}]
+
+    path = init.write_settings(VALUES, tmp_path / "config.yaml", outputs=outputs)
+
+    text = path.read_text(encoding="utf-8")
+    assert "Writing patterns safely" in text, "the commented example still travels with the file"
+    assert text.rstrip().endswith("- type: okf")
+    assert init.OUTPUTS_NOTE.strip() in text
+    config = load_config(path)
+    assert [output.type for output in config.outputs] == ["container", "llmstxt", "okf"]
+    assert config.outputs[0].options["gzip"] is True
+
+    # And the fallback template takes the same list.
+    fallback = init.write_settings(VALUES, tmp_path / "fallback.yaml", example_path=tmp_path / "absent.yaml", outputs=outputs)
+    assert [output.type for output in load_config(fallback).outputs] == ["container", "llmstxt", "okf"]
 
 
 def test_an_existing_file_is_kept_unless_force_is_given(tmp_path):
