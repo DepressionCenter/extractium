@@ -6,14 +6,15 @@ name its output files are named after, and the website to crawl. Each
 value comes from a command-line flag or, when the flag is absent, from a
 question asked in the terminal. The written file is checked through the
 configuration loader before it is saved, so what this command writes is
-always a file a build accepts.
+always a file a build accepts. The local page writes its first file
+through the same functions, with an outputs list added at the end.
 
 This file is part of Extractium™
 extractium/init.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-14
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-17"
+__date__ = "2026-09-28"
 
 import json
 import pathlib
@@ -91,6 +92,17 @@ sources:
   - type: web
     label: {label}
     seed_url: {seed_url}
+"""
+
+# Written above an outputs list a caller asks for, at the end of the
+# file, so the person knows why the list is there when the example's
+# own outputs block above it is still commented out.
+OUTPUTS_NOTE = """
+# The outputs every build writes. Remove this list to write the defaults,
+# the container files and the llms.txt files. The compressed container is
+# what the search clients and Field Station AI read; the okf folder holds
+# one Markdown file per page, which the local page shows when you open a
+# search result.
 """
 
 
@@ -248,7 +260,7 @@ def gather(args, ask_line=input, say=print):
 
 ### Writing ###
 
-def render(values, example_path=EXAMPLE_CONFIG):
+def render(values, example_path=EXAMPLE_CONFIG, outputs=None):
     """
     The settings file text for one set of values.
 
@@ -260,6 +272,9 @@ def render(values, example_path=EXAMPLE_CONFIG):
     Args:
         values (dict): `name`, `slug`, and `seed_url`, already checked.
         example_path (pathlib.Path): where the example file is looked for.
+        outputs (Sequence[Mapping] | None): an outputs list to write at
+            the end of the file, each entry a mapping with a `type`. None
+            leaves the loader's default outputs in force.
 
     Returns:
         str: the file text.
@@ -268,16 +283,23 @@ def render(values, example_path=EXAMPLE_CONFIG):
         text = pathlib.Path(example_path).read_text(encoding="utf-8")
     except OSError:
         text = None
+    rendered = None
     if text is not None:
         filled, counts = _fill_example(text, values)
         if all(count == 1 for count in counts):
-            return filled
-    return FALLBACK_TEMPLATE.format(
-        name=yaml_text(values["name"]),
-        slug=values["slug"],
-        label=WEBSITE_LABEL,
-        seed_url=yaml_text(values["seed_url"]),
-    )
+            rendered = filled
+    if rendered is None:
+        rendered = FALLBACK_TEMPLATE.format(
+            name=yaml_text(values["name"]),
+            slug=values["slug"],
+            label=WEBSITE_LABEL,
+            seed_url=yaml_text(values["seed_url"]),
+        )
+    if outputs:
+        rendered = rendered.rstrip("\n") + "\n" + OUTPUTS_NOTE + yaml.safe_dump(
+            {"outputs": [dict(entry) for entry in outputs]}, sort_keys=False, default_flow_style=False
+        )
+    return rendered
 
 
 def _fill_example(text, values):
@@ -309,7 +331,7 @@ def checked_settings_text(text, source):
     return text
 
 
-def write_settings(values, output, force=False, example_path=EXAMPLE_CONFIG):
+def write_settings(values, output, force=False, example_path=EXAMPLE_CONFIG, outputs=None):
     """
     Writes the settings file.
 
@@ -318,6 +340,8 @@ def write_settings(values, output, force=False, example_path=EXAMPLE_CONFIG):
         output (str): the path to write.
         force (bool): whether an existing file may be replaced.
         example_path (pathlib.Path): where the example file is looked for.
+        outputs (Sequence[Mapping] | None): an outputs list to write at
+            the end of the file; see `render`.
 
     Returns:
         pathlib.Path: the path written.
@@ -330,7 +354,7 @@ def write_settings(values, output, force=False, example_path=EXAMPLE_CONFIG):
     path = pathlib.Path(output)
     if path.exists() and not force:
         raise InitError(f"{path} already exists. Edit it, or pass --force to replace it.")
-    text = checked_settings_text(render(values, example_path), str(path))
+    text = checked_settings_text(render(values, example_path, outputs), str(path))
     path.write_text(text, encoding="utf-8")
     return path
 
