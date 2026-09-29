@@ -3,7 +3,7 @@ This file is part of Extractium™
 examples/mcp/local-node/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: README for the local Node MCP server example: what it does, how
 to run it, the settings it reads, the one package it installs, and its
 limits.
@@ -27,7 +27,7 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 This folder holds one file, `server.js`, over the protocol core in [`../shared/`](../shared/). It lets an AI assistant on your computer search a published Extractium™ compendium, the collection a build writes. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your computer. The index is a static file, and the question is turned into a vector by a model that runs locally through transformers.js.
 
-The Model Context Protocol (MCP) is the standard that assistants use to call tools. This server exposes exactly one tool, `search_kb`. It is the same tool, with the same arguments and the same answers, as the [Python version](../local-python/README.md).
+The Model Context Protocol (MCP) is the standard that assistants use to call tools. This server exposes exactly one tool, `search_kb`. It is the same tool, with the same arguments and the same answers, as the `extractium mcp` command in the package, which [the Python folder](../local-python/README.md) points at.
 
 
 ## What you need
@@ -111,7 +111,7 @@ You can now run a local search server over any published compendium from a JavaS
 
 * [Extractium™ README](../../../README.md): project overview and quick start.
 * [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md): the client configuration, step by step.
-* [Local Python MCP Server](../local-python/README.md): the same tool in Python.
+* [Local Python MCP Server](../local-python/README.md): where the Python version went, and the `extractium mcp` command that replaced it.
 * [How to Search a Compendium](../../../docs/how-to/search-a-compendium.md): the client library this server is built on.
 * [Using a Published Compendium](../../../docs/using-a-compendium.md): how an AI agent should use what it gets back.
 * [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol this server speaks.

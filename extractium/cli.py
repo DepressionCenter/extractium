@@ -10,7 +10,11 @@ Progress goes to standard error; the summary goes to standard output,
 and the same figures go to a run record under the `runs_dir` folder, on
 success and on failure, so a history of builds can be read from disk.
 The `init` subcommand, in extractium/init.py, writes a first settings
-file so a person can start without editing YAML.
+file so a person can start without editing YAML. The `mcp` subcommand,
+in extractium/mcp/server.py, serves one compendium to an AI assistant
+as a search tool, and the `connect` subcommand, in
+extractium/mcp/connect.py, writes the card that tells an assistant how
+to reach it.
 
 This file is part of Extractium™
 extractium/cli.py
@@ -59,6 +63,8 @@ from extractium.core.light import build_light_compendium
 from extractium.core.models import CODE_CONTENT_TYPES
 from extractium.core.registry import RegistryError, build_registry
 from extractium.core.transport import make_session
+from extractium.mcp import connect as connect_command
+from extractium.mcp import server as mcp_command
 from extractium.sources.github import accounts_named_by
 from extractium.sources.github_api import GitHubSourceError
 from extractium.sources.web import CrawlSettings
@@ -783,6 +789,27 @@ def build_parser():
     init.add_argument("--force", action="store_true",
                       help="Replace the file if it already exists.")
     init.set_defaults(handler=init_command.run_init)
+
+    mcp = subcommands.add_parser(
+        "mcp", help="Serve one compendium to an AI assistant as a search tool, over standard input and output."
+    )
+    mcp.add_argument("--index", metavar="PATH_OR_URL",
+                     help="A compendium file on this machine, or its published https:// address. "
+                          "Without it, EXTRACTIUM_INDEX_PATH or EXTRACTIUM_INDEX_URL is read.")
+    mcp.add_argument("--cache-dir", metavar="DIR",
+                     help="Where a downloaded compendium is kept. Defaults to ~/.cache/extractium-mcp.")
+    mcp.set_defaults(handler=mcp_command.run_mcp)
+
+    connect = subcommands.add_parser(
+        "connect", help="Write the card that tells an AI assistant how to connect to the search tool."
+    )
+    connect.add_argument("--index", required=True, metavar="FILE",
+                         help="The compendium file the card names, such as dist/compendium-full.json.gz.")
+    connect.add_argument("--out", default=connect_command.SKILL_NAME, metavar="DIR",
+                         help=f"The skill folder to write SKILL.md into. Defaults to {connect_command.SKILL_NAME}.")
+    connect.add_argument("--url", metavar="URL",
+                         help="An address on this machine where a program serves the same tool over HTTP.")
+    connect.set_defaults(handler=connect_command.run_connect)
     return parser
 
 

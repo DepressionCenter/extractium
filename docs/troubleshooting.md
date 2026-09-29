@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: Failures seen while building and publishing with Extractium:
 what each looks like, what causes it, and how to fix it. Covers the run
 scripts, the crawl, the scheduled build, publishing, and the search
@@ -472,21 +472,21 @@ That line is not an error. It is telling you the index has that repository's doc
 
 ### The server exits at once with code 2
 
-**Cause.** Neither `EXTRACTIUM_INDEX_URL` nor `EXTRACTIUM_INDEX_PATH` is set, so the server does not know which index to search. A client that starts the server with its own environment often does not pass yours through.
+**Cause.** Nothing named a compendium. `extractium mcp` was started without `--index`, and neither `EXTRACTIUM_INDEX_PATH` nor `EXTRACTIUM_INDEX_URL` is set. A client that starts the server with its own environment often does not pass yours through.
 
-**Fix.** Set one of them in the client's own configuration, in the `env` block beside the command.
+**Fix.** Give `--index` the full path of the compendium file, or its published address, in the client's configuration. `extractium connect` writes that entry for you.
 
-### `EXTRACTIUM_INDEX_URL must be an https:// address`
+### `the index address must be https://`
 
-**Cause.** The address is plain HTTP somewhere other than this machine, or is not an address at all. An index fetched over an open connection can be replaced in transit, and the assistant would read the replacement as your organization's documentation.
+**Cause.** The address is plain HTTP somewhere other than this machine, or is not an address at all. A compendium fetched over an open connection can be replaced in transit, and the assistant would read the replacement as your organization's documentation.
 
 **Fix.** Publish over HTTPS and use that address. While testing a build you are serving yourself, `http://localhost:...` is accepted.
 
 ### The assistant lists no tools
 
-**Cause.** The client could not start the command. A relative path is the usual reason: the client starts the server from a folder you did not choose.
+**Cause.** The client could not start the command. A relative path is the usual reason: the client starts the server from a folder you did not choose. The other is that the `extractium` command is not on the path the client uses, because it lives inside the environment the package was installed into.
 
-**Fix.** Use a full path to `server.py` or `server.js` in the client configuration, and check the same command runs in a terminal.
+**Fix.** Use the full path of the compendium in `--index`, and check the same command runs in a terminal. If the client cannot find `extractium`, give the full path of the command inside that environment, or use `python` with `-m extractium.cli mcp` as the arguments. For the Node example, use a full path to `server.js`.
 
 ### The first search takes minutes
 
