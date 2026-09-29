@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -56,19 +56,19 @@ Unlike a vector database, Extractium™ needs no server, no database, and no API
 Extractium™ grew out of the indexing engine in [Field Station AI™](https://github.com/DepressionCenter/FieldStationAI), which remains an [example front-end](https://code.depressioncenter.org/FieldStationAI) implementation for how to access the JSON output in JavaScript.
 
 ## Quick Start Guide
-+ Install Python 3.10 or newer.
-+ Save the build script for your operating system into an empty folder: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone this repository instead and run the script from the clone.
-+ Run the script. It downloads the latest release of Extractium™ (with git if you have it, otherwise as a plain download), installs everything it needs into a virtual environment, and asks whether to set up in the browser or in the terminal. Either way it asks you for the name of your compendium, a short name for its files, and the website to crawl. The terminal path then builds a first index limited to 25 pages; the browser path writes the settings file from the page, and the next run builds:
++ On Windows, download `extractium-<version>-windows-portable.zip` from the [releases page](https://github.com/DepressionCenter/extractium/releases), unblock it in its Properties, unzip it into the folder where your compendium should live, and double-click `run.bat`. Nothing else is downloaded, and you need no admin rights and no Python.
++ On macOS or Linux, or on Windows without the zip, download the installer, [install.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/install.sh) or [install.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/install.bat), and run it. It installs Extractium™ for your account, with an `extractium` command and an entry in the Start menu or its equivalent, and asks IT for nothing:
 
   ```bash
-  ./run.sh       # macOS and Linux
-  run.bat        # Windows
+  bash install.sh       # macOS and Linux
+  install.bat           # Windows
   ```
 
-+ Open `dist/llms.txt`, then the file it links to under `dist/llms/`, to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`, or run `run.bat ui` (`./run.sh ui`) to change it from a page in your browser. See `examples/config.efdc.yaml` for a complete example that uses every source type.
-+ To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube,whisper,pdf,keywords]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
++ Run `extractium` in the folder where your compendium should live, or open Extractium from the menu. It asks whether to set up in the browser or in the terminal. Either way it asks for the name of your compendium, a short name for its files, and the website to crawl; the browser also asks where the compendium should live. The terminal path then builds a first index limited to 25 pages; the browser path writes the settings file from the page, and the next `extractium` builds.
++ Open `dist/llms.txt`, then the file it links to under `dist/llms/`, to see which pages were indexed. When the list looks right, run `extractium` again to build the whole site. To change what is crawled, edit `config.yaml`, or run `extractium ui` to change it from a page in your browser. See `examples/config.efdc.yaml` for a complete example that uses every source type.
++ To use a Python development environment instead, clone the repository, run `pip install -e ".[dev,code,youtube,whisper,pdf,keywords]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
 
-The first build downloads the embedding model, about 130 MB. Later builds reuse it.
+The zip carries the three models a build and a search use. Every other install downloads the embedding model, about 130 MB, on the first build, and later builds reuse it. [How to install](docs/how-to/install.md) has the details, including what the installer does when your computer stops it.
 
 
 ## Documentation

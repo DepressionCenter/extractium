@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/usage.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
 summary tells you, the record every build leaves behind, what each exit code means, how to try a small run
@@ -33,11 +33,19 @@ This page shows you how to build your compendium, the searchable collection of e
 
 You need three things:
 
-1. Python 3.10 or newer.
-2. Extractium™ installed. The [installation guide](how-to/install.md) covers both options: the build scripts `run.sh` and `run.bat`, which install and build in one step, and `pip install -e .` in a Python development environment. It also explains the optional extras, `dev`, `code`, and `youtube`.
-3. A settings file. The `init` command below writes one for you. You can also copy [examples/config.example.yaml](../examples/config.example.yaml), name it `config.yaml`, and change `seed_url` to your own site.
+1. Extractium™ installed. The [installation guide](how-to/install.md) covers the release zip, the installer, and `pip install -e .` in a Python development environment. The first two bring their own Python; the third needs Python 3.10 or newer. It also explains the optional extras.
+2. A settings file. The `init` command below writes one for you, and so does the first run of `extractium`. You can also copy [examples/config.example.yaml](../examples/config.example.yaml), name it `config.yaml`, and change `seed_url` to your own site.
 
-The first build downloads the embedding model, about 130 MB. Later builds reuse it.
+After the installer, the command is `extractium`. In a development environment it is `python -m extractium.cli`, and this page writes it that way; the two are the same program. The first build downloads the embedding model, about 130 MB, unless the install came from the Windows zip, which carries it. Later builds reuse it.
+
+
+## One command
+
+```
+extractium
+```
+
+With no arguments, or as `extractium start`, the command does what a first run needs. When `config.yaml` is in the current folder it builds from it and then prints what to commit. When there is no settings file it asks whether to set up in the browser or in the terminal. The browser answer opens the local page, described below, and the next run builds; the terminal answer asks the three `init` questions here and then builds with a limit of 25 pages. With no terminal attached, as on a scheduled run, it sets up in the terminal without asking, so a run with no settings file fails fast rather than waiting for a browser. `--config FILE` names another settings file. The run scripts `run.bat` and `run.sh` run this command when given no argument.
 
 
 ## Writing a first settings file
@@ -61,7 +69,7 @@ Next: python -m extractium.cli build --config config.yaml --max-pages 25
 
 The file it writes is the commented example that ships with the project, with those three values filled in, so every other setting is explained where you would change it. The one web source is labelled `Website`. Rename it in the file if you like.
 
-The build scripts `run.sh` and `run.bat` run this command for you when there is no `config.yaml` and you choose the terminal, then build with a page limit. The local page, below, asks the same three questions in your browser and writes the same file, with three outputs switched on at the end.
+`extractium` with no arguments runs this command for you when there is no `config.yaml` and you choose the terminal, then builds with a page limit. The local page, below, asks the same three questions in your browser, plus where the compendium should live, and writes the same file, with three outputs switched on at the end.
 
 | Option | What it does |
 |---|---|
@@ -80,11 +88,12 @@ Give all three values as flags and the command asks nothing, which is the form f
 python -m extractium.cli ui
 ```
 
-This starts a small web page on your own computer, prints its address, and opens your browser at it. With no settings file in the folder, the page asks the three questions above and writes `config.yaml`. With one, it shows every setting as a form, and the file's own text in an advanced view, and saves either through the same checks a build applies. The build scripts start it with `./run.sh ui` or `run.bat ui`. The page does not run a build yet; you build from the terminal as below. [How to use the local page](how-to/use-the-local-page.md) walks through it.
+This starts a small web page on your own computer, prints its address, and opens your browser at it. The page works in one compendium folder: the one `--folder` names, else the current folder when it holds a settings file, else the folder the page used last, when the tool was installed by the installer and remembers it. With none of those, the page asks four questions, the three above and where the compendium should live, and writes `config.yaml` there. With a settings file, it shows every setting as a form, and the file's own text in an advanced view, and saves either through the same checks a build applies. The menu entry the installer makes opens this page, and so do `run.bat ui` and `./run.sh ui`. The page does not run a build yet; you build from the terminal as below. [How to use the local page](how-to/use-the-local-page.md) walks through it.
 
 | Option | What it does |
 |---|---|
-| `--config FILE` | The settings file the page reads and writes. `config.yaml` by default. It need not exist yet. |
+| `--folder DIR` | The compendium folder the page works in. It is created if it does not exist. |
+| `--config FILE` | The settings file the page reads and writes. `config.yaml` in the folder by default. It need not exist yet. |
 | `--port N` | Listen on this port of `127.0.0.1`. A free port is taken when omitted. |
 | `--no-browser` | Print the address without opening a browser. |
 
@@ -99,13 +108,13 @@ python -m extractium.cli build --config config.yaml
 
 This reads the settings file, visits your sources, and writes every output into the folder the file names (`dist` unless you change it).
 
-There is a shorter form:
+After the installer the form is shorter:
 
 ```
 extractium build --config config.yaml
 ```
 
-It needs Python's scripts folder on your `PATH`, which it often is not after a user install. The module form above always works, so this page uses it. See [Troubleshooting](troubleshooting.md) for how to add the folder if you want the short form.
+The installer puts that command on your `PATH`; a terminal opened before the install does not see it yet, and [Troubleshooting](troubleshooting.md) covers a command that is not found. The module form above is the one for a development environment.
 
 ### Options
 
@@ -128,7 +137,7 @@ Two settings are read from the environment and never from the settings file. Bot
 
 Neither value reaches a log line, an error message, a cache file, or an output. See [how to crawl a site](how-to/crawl-a-site.md) for when each one is worth setting.
 
-The run scripts read three more, which choose which copy of Extractium™ a script saved on its own downloads: `EXTRACTIUM_REF` (a release tag, or a branch such as `main` for unreleased work), `EXTRACTIUM_REPO`, and `EXTRACTIUM_DIR`. The build itself never reads them. [How to run a weekly build](how-to/run-a-weekly-build.md) explains each under "Building with a branch instead of a release".
+The installer and the run scripts read one more, `EXTRACTIUM_REPO`, which names the repository the release is downloaded from, for a fork. The installer's `--version` flag picks a release. The build itself never reads either. The `extractium` command the installer writes sets `EXTRACTIUM_HOME`, the folder it lives in, and `HF_HOME`, the model cache inside that folder, for the tool it starts; a tool started any other way leaves both alone.
 
 
 ## Try a small run first

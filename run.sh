@@ -33,6 +33,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Where the installer is fetched from when nothing is installed yet.
 EXTRACTIUM_REPO="${EXTRACTIUM_REPO:-https://github.com/DepressionCenter/extractium}"
+EXTRACTIUM_RAW="${EXTRACTIUM_RAW:-https://raw.githubusercontent.com/DepressionCenter/extractium/main}"
 
 # The per-user install, used by its full path so this works before a
 # new terminal has picked PATH up, and when PATH could not be changed.
@@ -54,11 +55,21 @@ else
     else
         staging="$(mktemp -d)"
         echo "Downloading the Extractium installer ..."
-        address="$EXTRACTIUM_REPO/releases/latest/download/install.sh"
-        if command -v curl >/dev/null 2>&1; then
-            curl -fsSL "$address" -o "$staging/install.sh"
-        else
-            wget -q -O "$staging/install.sh" "$address"
+        # The newest release's own copy first; the repository's current
+        # copy when no release carries one yet.
+        fetched=""
+        for address in "$EXTRACTIUM_REPO/releases/latest/download/install.sh" "$EXTRACTIUM_RAW/install.sh"; do
+            if command -v curl >/dev/null 2>&1; then
+                curl -fsSL "$address" -o "$staging/install.sh" && fetched=1 && break
+            else
+                wget -q -O "$staging/install.sh" "$address" && fetched=1 && break
+            fi
+        done
+        if [ -z "$fetched" ]; then
+            echo "The installer could not be downloaded. Check the network, or save install.sh from the" >&2
+            echo "releases page beside this script and run this script again." >&2
+            rm -rf "$staging"
+            exit 1
         fi
         bash "$staging/install.sh"
         rm -rf "$staging"

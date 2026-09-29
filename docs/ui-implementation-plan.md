@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/ui-implementation-plan.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-23
-Last Modified: 2026-09-29
+Last Modified: 2026-09-30
 Summary: The staged plan for the local page: a small web page, served by
 the tool itself, for setting up, building, scheduling, searching, and
 installing plug-ins without a terminal, the installer that puts the tool
@@ -58,7 +58,7 @@ The plan is smaller than it looks, because most of the pieces are already in the
 - The [local Python MCP server](../extractium/mcp/server.py) already answers the protocol over standard input and output, and the [shared JavaScript](../examples/mcp/shared/mcp-http.js) already has the one-request-per-POST binding of Streamable HTTP. Stage 2 moved the first into the package, from `examples/mcp/local-python/`, and wrote the second in Python beside it.
 - The two prompts under [examples/wrappers/](../examples/wrappers/README.md) already tell an assistant how to use the search tool once connected. The connection card grows from them.
 - Field Station AI is one dependency-free HTML file that chats with a model in the browser or with Ollama when it finds one, searches a compendium, and loads any compendium named by `?compendium-url=`. It is the "Ask with AI" client, unchanged.
-- The build scripts already download the tool, make the virtual environment, and run `init` when there is no settings file. The page is one more thing they can start. Stage 4 moves the download and the environment into the installer and keeps the scripts as thin entry points.
+- The installer puts the tool on a computer with no admin rights, and the build scripts are thin entry points that find it or install it and run it. The page is one more thing they can start.
 
 
 ## Decisions this plan relies on
@@ -167,6 +167,8 @@ The first two stages change the engine and the clients and are useful on their o
 **Documentation.** The [installation guide](how-to/install.md) rewritten around the zip, the installer, and the developer checkout; the [README](../README.md) quick start; [running a build](usage.md); [how to use the local page](how-to/use-the-local-page.md) for the menu entry and the folder question; [how to run a weekly build](how-to/run-a-weekly-build.md) for the shim's path; [troubleshooting](troubleshooting.md) for the download mark Explorer's unzip copies onto the extracted files, a blocked uv, a proxy certificate, and a command not found before a new terminal; the [architecture](architecture.md) and [compliance](compliance.md) pages.
 
 **Done when** on a Michigan Medicine imaged Windows machine with no admin rights, the release zip unzipped into a folder runs `run.bat` to the page with no download; `install.bat` from that folder ends with `extractium --version` answering in a new terminal and "Extractium" in the Start menu opening the page, again with no download; a lone `install.sh` does the same on a Mac and on a Fedora or Debian machine; and a `run.bat` saved before this stage still builds.
+
+*Finished 2026-09-30 on branch `phase-ui-4-installer-and-portable-zip`. Built as written, with these choices where the text left room. The scripts do only what must happen before a Python exists, telling the situation apart, downloading uv and checking its hash, obtaining an interpreter, and downloading the release; everything after that runs in `extractium/install.py`, which imports only the standard library so it runs as a file from the release checkout before the package is installed and as a module afterwards. The release-tag lookup and the uv hash check therefore live in the scripts, text-tested as the run scripts were, plus one real run of `install.sh` against a fake `curl` for the wrong-hash refusal. A checkout installs as a plain copy unless `--editable` is passed, because a saved old `run.bat` downloads a checkout beside the person's data and the guide promises that download may be deleted afterwards. `extractium` with no arguments is a real subcommand, `start`, so it has `--config` and a help line, and the thin scripts keep honouring `CONFIG` through it. The page finds its folder in this order: `--folder`, a settings file in the working folder, the folder remembered under the home the shim names in `EXTRACTIUM_HOME`, and otherwise the welcome screen's fourth question; the Start menu shortcut's working directory is the Extractium folder itself, which never holds a settings file, so a menu launch goes to the memory. The managed Python is 3.12.12 and uv is 0.12.20, with the six archive hashes copied into the scripts. A folder built on a Python already on the machine carries a `not-portable.txt` mark, and the installer refuses to copy such a folder. The shim runs `python -I -X utf8 -m extractium.cli`: isolated mode keeps the working folder off the import path, which is what makes the module form safe here, and the utf8 switch stands in for the variable isolated mode would ignore. The release workflow attaches the four scripts beside the zip, so a lone `run.bat` can fetch the installer from the newest release, and falls back to the repository's copy while no release carries one. The checks owed are the three in the table below and the done-when runs on the three systems; on this machine the tests pass and the scripts were exercised by hand against a fake shim.*
 
 ### Stage 5: Builds, history, the schedule, and a way back
 
@@ -294,7 +296,7 @@ You now know what the local page is for, what it reuses, the decisions behind it
 * [Plug-in architecture](plugin-architecture.md): the three kinds, the tiers, and the pinned pip install the plug-ins page uses.
 * [How to connect an MCP client](how-to/connect-an-mcp-client.md): the servers and the config snippet the card grows from.
 * [How to run a weekly build](how-to/run-a-weekly-build.md): the cron and Task Scheduler lines the schedule switch writes.
-* [Installation guide](how-to/install.md): the build scripts as they work today, which the installer stage rewrites.
+* [Installation guide](how-to/install.md): the zip, the installer, and the folder it builds, as Stage 4 delivered them.
 * [uv](https://docs.astral.sh/uv/): the program the installer uses to bring its own Python and install the lock.
 * [Field Station AI](https://github.com/DepressionCenter/FieldStationAI): the in-browser client "Ask with AI" opens, and its `compendium-url` parameter.
 * [Issue #98, front-end needed](https://github.com/DepressionCenter/extractium/issues/98): the request this plan answers.

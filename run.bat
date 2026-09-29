@@ -34,6 +34,7 @@ set "HERE=%HERE:~0,-1%"
 
 REM Where the installer is fetched from when nothing is installed yet.
 if not defined EXTRACTIUM_REPO set "EXTRACTIUM_REPO=https://github.com/DepressionCenter/extractium"
+if not defined EXTRACTIUM_RAW set "EXTRACTIUM_RAW=https://raw.githubusercontent.com/DepressionCenter/extractium/main"
 
 REM The per-user install, used by its full path so this works before a
 REM new terminal has picked PATH up, and when PATH could not be changed.
@@ -83,7 +84,10 @@ exit /b %errorlevel%
 set "STAGING=%TEMP%\extractium-installer-%RANDOM%"
 mkdir "%STAGING%"
 echo Downloading the Extractium installer ...
+REM The newest release's own copy first; the repository's current copy
+REM when no release carries one yet.
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%EXTRACTIUM_REPO%/releases/latest/download/install.bat' -OutFile '%STAGING%\install.bat'"
+if errorlevel 1 powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%EXTRACTIUM_RAW%/install.bat' -OutFile '%STAGING%\install.bat'"
 if errorlevel 1 (
     echo The installer could not be downloaded. Check the network, or save install.bat from the
     echo releases page beside this script and run this script again.

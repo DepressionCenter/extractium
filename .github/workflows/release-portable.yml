@@ -90,13 +90,15 @@ jobs:
           "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       # The runner's own token attaches the files; no third-party action
-      # is given it.
-      - name: Attach the zip to the release
+      # is given it. The four scripts go up beside the zip, so a lone
+      # run.bat can fetch the installer from the newest release.
+      - name: Attach the zip and the scripts to the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload $env:TAG (Get-ChildItem release\*.zip, release\*.sha256 | ForEach-Object { $_.FullName }) --clobber
+          $files = @(Get-ChildItem release\*.zip, release\*.sha256 | ForEach-Object { $_.FullName }) + @("install.bat", "install.sh", "run.bat", "run.sh")
+          gh release upload $env:TAG $files --clobber
 
       - name: Add the hash to the release notes
         shell: pwsh
