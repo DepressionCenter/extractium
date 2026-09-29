@@ -5,8 +5,9 @@ portal's content selectors (#divMainContent, #questionsContent), the
 "Article - " and "Question Detail - " title prefix stripping, breadcrumb
 categories, and the portal's exclude patterns (login, print, file,
 person, tag, and category views, and narrowed question listings). It
-keeps the portal's tag strip and its feedback widget out of the indexed
-text, and names where the portal lists an article's attachments and
+keeps the portal's page furniture out of the indexed text: an article's
+tag strip and feedback widget, and a question's tag links, bylines,
+sign-in prompt, comment controls, and comment form. It names where the portal lists an article's attachments and
 the address a document reader fetches each one from. It is not a
 crawler: link discovery stays in extractium.sources.web. See
 docs/extractium-spec.md section 5.
@@ -77,17 +78,43 @@ TDX_FULL_TITLE_META = "og:title"
 TDX_TAG_STRIP_SELECTOR = 'div[id$="_divTags"]'
 TDX_TAG_LINKS_SELECTOR = f"{TDX_TAG_STRIP_SELECTOR} a"
 
-# Page furniture the portal places inside the article's content node,
-# removed before the node is sectioned. The tag strip travels in the
-# `tags` field, so left in place it would also open the article's first
-# section as a line of tag words. The feedback widget under the article
-# is a sign-in prompt, a review count, and two hidden postback links
-# whose text is "Blank"; every article's last section would otherwise
-# end with it.
+# A question page has no tag container: its tag links sit loose in the
+# body, each pointing at the question listing narrowed to that tag.
+TDX_QUESTION_TAG_LINKS_SELECTOR = 'a[href*="/Questions?TagID="]'
+TDX_TAG_LINKS_SELECTORS = (TDX_TAG_LINKS_SELECTOR, TDX_QUESTION_TAG_LINKS_SELECTOR)
+
+# The label the portal reads to screen readers before the tag links. On
+# an article it sits inside the tag strip; on a question it stands alone.
+TDX_TAG_LABEL = "Tags"
+TDX_SCREEN_READER_SELECTOR = "span.sr-only"
+
+# A link to a person page marks a byline: "Asked by <name> on <date>"
+# under a question, "<name> <date>" above an answer. The block holding
+# the link is dropped whole, so neither the name nor the timestamps
+# reach a section. A block that also holds a paragraph is body text
+# that happens to link a person, and is kept.
+TDX_PERSON_LINK_SELECTOR = 'a[href*="/People/Details"]'
+TDX_BYLINE_BLOCK = "div"
+TDX_BODY_TEXT_TAGS = ("p", "ul", "ol")
+
+# Page furniture the portal places inside the content node, removed
+# before the node is sectioned. On an article: the tag strip, which
+# travels in the `tags` field and would otherwise open the first
+# section as a line of tag words, and the feedback widget under the
+# article, a sign-in prompt, a review count, and two hidden postback
+# links whose text is "Blank". On a question: the tag links, the
+# sign-in prompt to answer, the "Show all comments" controls under the
+# question and under each answer, the "No feedback" count, and the
+# hidden comment form with its "Follow" and "Save" controls.
 TDX_FURNITURE_SELECTORS = (
     TDX_TAG_STRIP_SELECTOR,
     'div[id$="_divFeedback2"]',
     'div[id$="_upFeedbackGrid"]',
+    TDX_QUESTION_TAG_LINKS_SELECTOR,
+    'div.alert:has(a[href*="/Login.aspx"])',
+    "div.div-actions",
+    'span[id^="spnFeedbackDetails-"]',
+    "#divAddComment",
 )
 
 # The breadcrumb trail above an article: "Knowledge Base > Category >
@@ -244,31 +271,43 @@ def article_title(soup):
 
 def article_tags(soup):
     """
-    The tags the portal shows under the article's title, in page order.
+    The tags the portal shows under an article's title or a question's
+    body, in page order, each once.
 
     Args:
         soup (BeautifulSoup): the parsed page, before boilerplate is
-            stripped, because the tag strip sits beside the heading.
+            stripped, because an article's tag strip sits beside the
+            heading.
 
     Returns:
-        tuple[str, ...]: the tag texts; empty when the article has none.
+        tuple[str, ...]: the tag texts; empty when the page has none.
     """
-    tags = []
-    for link in soup.select(TDX_TAG_LINKS_SELECTOR):
-        text = link.get_text(" ", strip=True)
-        if text:
-            tags.append(text)
+    tags = {}
+    for selector in TDX_TAG_LINKS_SELECTORS:
+        for link in soup.select(selector):
+            text = link.get_text(" ", strip=True)
+            if text:
+                tags[text] = None
     return tuple(tags)
+
+
+def _is_byline(block):
+    """Whether a block holding a person link is a byline rather than body text that links a person."""
+    return block is not None and block.find(TDX_BODY_TEXT_TAGS) is None
 
 
 def strip_furniture(node):
     """
-    Removes the portal's tag strip and feedback widget from a content
-    node, in place, and returns the node.
+    Removes the portal's page furniture from a content node, in place,
+    and returns the node: the article's tag strip and feedback widget,
+    the question's tag links, sign-in prompt, comment controls, and
+    comment form, the "Tags" label read to screen readers, and every
+    byline, so an asker's or answerer's name and the timestamps beside
+    it never reach a section.
 
     Args:
-        node (bs4.Tag): the article's content node, after the tags have
-            been read from it.
+        node (bs4.Tag): the article's or question's content node, after
+            the tags have been read from it.
 
     Returns:
         bs4.Tag: the same node.
@@ -276,6 +315,13 @@ def strip_furniture(node):
     for selector in TDX_FURNITURE_SELECTORS:
         for element in node.select(selector):
             element.decompose()
+    for label in node.select(TDX_SCREEN_READER_SELECTOR):
+        if label.get_text(" ", strip=True) == TDX_TAG_LABEL:
+            label.decompose()
+    for link in node.select(TDX_PERSON_LINK_SELECTOR):
+        block = link.find_parent(TDX_BYLINE_BLOCK)
+        if _is_byline(block):
+            block.decompose()
     return node
 
 
@@ -406,9 +452,9 @@ class TdxHandler:
         The categories, the title, the tags, and the summary are all
         read before the body is stripped, because the breadcrumb trail,
         the article heading, and the tag strip can sit inside elements
-        the stripper removes, and the summary sits in the head. The tag
-        strip and the feedback widget are then removed from the body,
-        so neither reaches a section's text.
+        the stripper removes, and the summary sits in the head. The
+        portal's page furniture is then removed from the body, so no
+        tag line, byline, or sign-in prompt reaches a section's text.
         """
         categories = breadcrumb_categories(soup)
         title = article_title(soup)
