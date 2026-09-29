@@ -7,17 +7,18 @@ settings file, mounts the Model Context Protocol endpoint at /mcp over
 the compendium the settings file names, and serves the output folder
 under /dist/. The address it opens carries a random session token that
 every API request must present; every request must name the server's
-own address as its Host, and every write must come from the page's own
-origin, so a page from any other site, or a name that points at this
-machine, cannot reach it. It quits on its own when no page has checked
-in for ten minutes, when the page asks it to, or on Ctrl+C.
+own address as its Host, under either name of the loopback address,
+and every write must come from the page's own origin, so a page from
+any other site, or another name that points at this machine, cannot
+reach it. It quits on its own when no page has checked in for ten
+minutes, when the page asks it to, or on Ctrl+C.
 
 This file is part of Extractium™
 extractium/ui/server.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-28
+Last Modified: 2026-09-29
 Notes: See README file for documentation and full license information.
 """
 
@@ -36,7 +37,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-28"
+__date__ = "2026-09-29"
 
 import hmac
 import json
@@ -61,8 +62,11 @@ from extractium.ui import settings as settings_module
 ### Constants ###
 
 # The one address the server listens on. Nothing here is reachable from
-# another computer, and the page relies on that.
+# another computer, and the page relies on that. The loopback address
+# has two names a person types, and both are accepted in the Host and
+# Origin checks; the server still binds the numeric one only.
 HOST = "127.0.0.1"
+HOST_NAMES = (HOST, "localhost")
 
 # How long the server waits for a page to check in before it quits, so a
 # closed tab does not leave a process running for days. The page checks
@@ -206,13 +210,23 @@ class PageServer(ThreadingHTTPServer):
 
     @property
     def address(self):
-        """The one Host value accepted: the address the server listens on."""
+        """The address the server listens on, as the page is opened at it."""
         return f"{HOST}:{self.port}"
 
     @property
+    def addresses(self):
+        """Every Host value accepted: the loopback address under each of its names, with the port."""
+        return frozenset(f"{name}:{self.port}" for name in HOST_NAMES)
+
+    @property
     def origin(self):
-        """The one Origin a write may come from: the page's own."""
+        """The page's own origin, as it is opened."""
         return f"http://{self.address}"
+
+    @property
+    def origins(self):
+        """Every Origin a write may come from: the page under each of its names."""
+        return frozenset(f"http://{address}" for address in self.addresses)
 
     @property
     def page_url(self):
@@ -228,12 +242,12 @@ class PageServer(ThreadingHTTPServer):
         return hmac.compare_digest(presented.encode("utf-8"), self.token.encode("utf-8"))
 
     def host_matches(self, host):
-        """Whether a Host header names this server and nothing else."""
-        return isinstance(host, str) and host.strip().lower() == self.address
+        """Whether a Host header names this server, by either name of the loopback address."""
+        return isinstance(host, str) and host.strip().lower() in self.addresses
 
     def origin_matches(self, origin):
-        """Whether an Origin header is the page's own."""
-        return isinstance(origin, str) and origin.strip().lower() == self.origin
+        """Whether an Origin header is the page's own, under either name."""
+        return isinstance(origin, str) and origin.strip().lower() in self.origins
 
     ### Idle Watch ###
 
@@ -484,7 +498,7 @@ class PageHandler(BaseHTTPRequestHandler):
                 return
         answer = handle_http_request(
             method, self.path, dict(self.headers.items()), body, self.server.mcp,
-            path=MCP_PATH, origins=frozenset({self.server.origin}),
+            path=MCP_PATH, origins=self.server.origins,
         )
         self.send_response(answer.status)
         for name, value in answer.headers.items():

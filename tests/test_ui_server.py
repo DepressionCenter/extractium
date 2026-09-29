@@ -1,6 +1,7 @@
 """
 Summary: Tests for the local page's server: it listens on the loopback
-address only; a request with another Host, a write without the token
+address only and answers it under both of its names; a request with
+another Host, a write without the token
 or from another origin, a path with `..`, and a file outside the
 allowlist are all refused; the welcome screen writes a file the loader
 accepts with the page's outputs on and refuses to replace one; a saved
@@ -15,7 +16,7 @@ tests/test_ui_server.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-28
+Last Modified: 2026-09-29
 Notes: See README file for documentation and full license information.
 """
 
@@ -34,7 +35,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-28"
+__date__ = "2026-09-29"
 
 import argparse
 import http.client
@@ -169,11 +170,22 @@ def test_the_pages_own_files_come_from_the_allowlist_and_nothing_else_is_served(
 
 
 def test_a_request_with_another_host_is_refused_before_anything_else(page):
-    for host in (f"localhost:{page.server.port}", "127.0.0.1", f"127.0.0.1:{page.server.port + 1}",
-                 f"evil.example:{page.server.port}", ""):
+    for host in ("127.0.0.1", f"127.0.0.1:{page.server.port + 1}", f"localhost:{page.server.port + 1}",
+                 f"evil.example:{page.server.port}", f"localhost.evil.example:{page.server.port}", ""):
         status, _, body = page.call("GET", "/api/state", host=host)
         assert status == 403, host
         assert b"own address" in body
+
+
+def test_the_loopback_address_is_accepted_under_either_of_its_names(page):
+    # The server binds the numeric address only; a person may still type localhost.
+    assert page.server.server_address[0] == "127.0.0.1"
+    assert page.call("GET", "/api/state", host=f"localhost:{page.server.port}")[0] == 200
+    assert page.call("GET", "/api/state", host=f"LOCALHOST:{page.server.port}")[0] == 200
+    status, body = page.json("POST", "/api/welcome", {"name": "x", "seed_url": "https://example.edu/"},
+                             host=f"localhost:{page.server.port}",
+                             headers={"Origin": f"http://localhost:{page.server.port}"})
+    assert status == 200 and body["ok"]
 
 
 def test_a_call_without_the_token_is_refused(page):
@@ -185,7 +197,8 @@ def test_a_call_without_the_token_is_refused(page):
 
 
 def test_a_write_from_another_origin_or_from_none_is_refused(page):
-    for origin in ("http://evil.example", f"http://localhost:{page.server.port}", f"https://{page.server.address}"):
+    for origin in ("http://evil.example", f"http://localhost:{page.server.port + 1}", f"https://{page.server.address}",
+                   f"http://localhost.evil.example:{page.server.port}"):
         status, body = page.json("POST", "/api/welcome", {"name": "x", "seed_url": "https://example.edu/"},
                                  headers={"Origin": origin})
         assert status == 403, origin

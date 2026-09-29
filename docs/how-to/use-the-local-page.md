@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/use-the-local-page.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-28
-Last Modified: 2026-09-28
+Last Modified: 2026-09-29
 Summary: How to use the local page: starting it from the build script
 or the command line, answering the three setup questions in the
 browser, changing every setting from the form or the file's own text,
@@ -59,7 +59,7 @@ The Extractium page is at http://127.0.0.1:53211/#token=Zk3o…
 Keep this window open. Press Ctrl+C here, or Quit on the page, to stop it.
 ```
 
-Keep that terminal window open while you use the page. If no browser opens, copy the whole address, including the part after `#`, into one. That part is the session token; the page does not work without it, which is what keeps another program on your computer from using the page in your name.
+Keep that terminal window open while you use the page. If no browser opens, copy the whole address, including the part after `#`, into one. `localhost` works in place of `127.0.0.1` if you prefer to type it; the page is the same either way. That part is the session token; the page does not work without it, which is what keeps another program on your computer from using the page in your name.
 
 The first time, Windows may ask whether to allow Python through the firewall. The page listens on your own computer only, and Windows does not filter that traffic, so the page works whatever you answer. Allowing it opens nothing to the network, because the page never listens on a network address.
 
@@ -136,7 +136,7 @@ The build scripts pass no options; set `CONFIG` in the environment to point them
 ## How the page keeps to your computer
 
 - The server listens on `127.0.0.1` only. Nothing is reachable from another computer.
-- Every request must name the server's own address as its `Host`. A web page elsewhere that resolves some other name to your computer is refused before anything else happens.
+- Every request must name the server's own address as its `Host`, either `127.0.0.1` or `localhost` with the port. A web page elsewhere that resolves some other name to your computer is refused before anything else happens.
 - Every call the page makes carries the session token from the address, and a call that writes must also come from the page's own origin. A request without both is refused. The token travels only in the part of the address after `#`, which a browser never sends to any server.
 - The page loads scripts and styles from itself only, may not be shown inside another page, and sends no referrer.
 - The page reads nothing from your environment. `GITHUB_TOKEN`, `YOUTUBE_API_KEY`, and any other secret stay where they are, and the page has no field for them.
