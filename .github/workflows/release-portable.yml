@@ -48,6 +48,10 @@ concurrency:
 
 env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  # The folder the zip is packed from, outside the checkout: on a disk
+  # that ignores case, an Extractium folder inside the checkout would be
+  # the package folder itself.
+  PORTABLE: ${{ runner.temp }}\portable
 
 jobs:
   build:
@@ -68,23 +72,26 @@ jobs:
       # pyproject.toml and installs from it.
       - name: Build the Extractium folder with the installer
         shell: cmd
-        run: install.bat --portable --version %TAG%
+        run: install.bat --portable --version %TAG% --home "%PORTABLE%\Extractium"
 
       # The three models go into the folder's own cache, so a person
-      # who unzips it downloads nothing before the first build.
+      # who unzips it downloads nothing before the first build. The two
+      # scripts go beside the folder, as the zip holds them.
       - name: Warm the model cache
         shell: pwsh
         run: |
-          $python = Get-ChildItem -Path Extractium\python -Recurse -Filter python.exe | Select-Object -First 1
-          $env:HF_HOME = "$PWD\Extractium\cache"
+          Copy-Item run.bat, install.bat -Destination $env:PORTABLE
+          $python = Get-ChildItem -Path "$env:PORTABLE\Extractium\python" -Recurse -Filter python.exe | Select-Object -First 1
+          $env:HF_HOME = "$env:PORTABLE\Extractium\cache"
           & $python.FullName -I tools\warm_model_cache.py
 
       - name: Pack the zip and its hash
         id: pack
         shell: pwsh
         run: |
-          $python = Get-ChildItem -Path Extractium\python -Recurse -Filter python.exe | Select-Object -First 1
-          & $python.FullName -I tools\pack_portable.py --where . --out release --stem "extractium-$env:TAG-windows-portable" | Tee-Object -FilePath release\pack.txt
+          $python = Get-ChildItem -Path "$env:PORTABLE\Extractium\python" -Recurse -Filter python.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Force release | Out-Null
+          & $python.FullName -I tools\pack_portable.py --where $env:PORTABLE --out release --stem "extractium-$env:TAG-windows-portable" | Tee-Object -FilePath release\pack.txt
           "lines<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Get-Content release\pack.txt | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append

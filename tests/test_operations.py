@@ -349,6 +349,9 @@ def test_each_installer_pins_uv_by_version_and_hash(script):
     # The download is checked before it is unpacked or run.
     assert "does not match the SHA-256" in text
     if script == "install.bat":
+        # certutil ships with every Windows and needs no PowerShell
+        # module, which a locked-down image may lack.
+        assert 'certutil -hashfile "%~1" SHA256' in text
         assert "Get-FileHash -Algorithm SHA256" in text
     else:
         assert "sha256sum" in text and "shasum -a 256" in text
@@ -390,9 +393,12 @@ def test_each_installer_tells_the_three_situations_apart(script):
 def test_each_installer_routes_every_flag(script):
     text = script_text(script)
 
-    for flag in ("--portable", "--update", "--uninstall", "--version", "--editable", "--help"):
+    for flag in ("--portable", "--update", "--uninstall", "--version", "--editable", "--home", "--help"):
         assert flag in text, flag
     assert "install.py" in text and "finish" in text
+    # A portable build inside a checkout would land on the package folder
+    # on a disk that ignores case, so it must be told where to go.
+    assert "a portable build needs --home DIR" in text
     assert '" update ' in text
     assert "uninstall --home" in text
 
@@ -452,8 +458,10 @@ def test_the_windows_installer_downloads_through_powershell():
     text = script_text("install.bat")
 
     assert "Invoke-WebRequest" in text
-    assert "Expand-Archive" in text
     assert "SecurityProtocolType]::Tls12" in text
+    # tar ships with Windows 10 and later; Expand-Archive is the second try.
+    assert 'tar -xf "%~1" -C "%~2"' in text
+    assert "Expand-Archive" in text
 
 
 def test_the_posix_installer_downloads_through_curl_or_wget():
@@ -505,8 +513,9 @@ def test_the_posix_installer_refuses_a_uv_download_whose_hash_differs(tmp_path):
     for name in ("pyproject.toml", "requirements-lock.txt", "install.sh"):
         shutil.copy(REPO_ROOT / name, checkout / name)
 
+    target = tmp_path / "built" / "Extractium"
     result = subprocess.run(
-        [bash, str(checkout / "install.sh"), "--portable"],
+        [bash, str(checkout / "install.sh"), "--portable", "--home", str(target)],
         env={"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home), "FAKE_ARCHIVE": str(archive),
              "FAKE_RAN": str(ran), "PYTHON_EXE": "/no/such/python"},
         capture_output=True, text=True, cwd=tmp_path, timeout=120,
@@ -515,7 +524,7 @@ def test_the_posix_installer_refuses_a_uv_download_whose_hash_differs(tmp_path):
     assert result.returncode != 0
     assert "does not match the SHA-256" in result.stderr
     assert not ran.exists(), "the unverified uv must never run"
-    assert not (checkout / "Extractium" / "uv").exists()
+    assert not (target / "uv").exists()
 
 
 def test_the_lock_without_parsers_keeps_every_other_package_and_hash(lock_text):
@@ -750,6 +759,10 @@ def test_the_release_workflow_builds_with_the_installer_warms_the_cache_and_pack
     runs = "\n".join(str(step.get("run", "")) for step in job["steps"])
 
     assert "install.bat --portable --version" in runs
+    # The folder is built outside the checkout, where its name cannot
+    # collide with the package folder.
+    assert '--home "%PORTABLE%\\Extractium"' in runs
+    assert release_workflow["env"]["PORTABLE"].startswith("${{ runner.temp }}")
     assert "warm_model_cache.py" in runs and "HF_HOME" in runs
     assert "pack_portable.py" in runs and "--stem" in runs
     # The runner's own token attaches the files; no third-party action

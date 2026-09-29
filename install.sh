@@ -65,6 +65,7 @@ HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/extractium"
 MODE="install"
 PORTABLE=""
 EDITABLE=""
+HOME_GIVEN=""
 SOURCE=""
 RELEASE_STAGING=""
 UV=""
@@ -79,12 +80,14 @@ while [ "$#" -gt 0 ]; do
         --update) MODE="update" ;;
         --uninstall) MODE="uninstall" ;;
         --version) EXTRACTIUM_REF="${2:-}"; shift ;;
+        --home) HOME_GIVEN="${2:-}"; shift ;;
         --help|-h)
             cat <<'USAGE'
 Installs Extractium for your account, with no admin rights.
 
   ./install.sh                 Install, or copy the Extractium folder beside this script under your profile.
   ./install.sh --portable      Build the Extractium folder beside this script and change nothing else.
+  ./install.sh --home DIR      Put the Extractium folder there instead. A portable build inside a checkout needs it.
   ./install.sh --update        Move an existing install to the newest release.
   ./install.sh --version TAG   Install, or update to, that release instead of the newest.
   ./install.sh --editable      In a checkout, run the code in the checkout (for developers).
@@ -99,6 +102,18 @@ done
 
 if [ -n "$PORTABLE" ]; then
     HOME_DIR="$HERE/Extractium"
+fi
+if [ -n "$HOME_GIVEN" ]; then
+    HOME_DIR="$HOME_GIVEN"
+fi
+
+# Inside a checkout, a folder named Extractium beside this script is the
+# package folder itself on a disk that ignores case, as macOS does by
+# default, so a portable build there needs --home to say where it goes.
+if [ -n "$PORTABLE" ] && [ -z "$HOME_GIVEN" ] && [ -f "$HERE/pyproject.toml" ]; then
+    echo "Inside a checkout, a portable build needs --home DIR to say where the Extractium folder goes," >&2
+    echo "because a folder of that name beside this script would be the package folder on some disks." >&2
+    exit 2
 fi
 
 # Every uv call trusts the certificates this computer trusts, so a

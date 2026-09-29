@@ -117,6 +117,7 @@ Run the installer copy inside the folder, or a fresh download of it, with a flag
 | `install.bat --version v0.5`, `bash install.sh --version v0.5` | Installs, or updates to, that release rather than the newest. |
 | `install.bat --uninstall`, `bash install.sh --uninstall` | Asks, then removes the PATH entry, the command, the menu entry, and the folder. |
 | `install.bat --portable`, `bash install.sh --portable` | Builds the folder beside the script instead of under your profile, and changes nothing else. This is what the release workflow runs. |
+| `install.bat --home DIR`, `bash install.sh --home DIR` | Puts the folder there instead. Inside a checkout, a portable build needs it, because a folder named `Extractium` beside the script would be the package folder `extractium` itself on a disk that ignores case, as Windows and macOS do. |
 
 Set `EXTRACTIUM_REPO` in the environment to install from a fork.
 

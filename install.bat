@@ -77,6 +77,7 @@ REM ### Flags ###
 set "MODE=install"
 set "PORTABLE="
 set "EDITABLE="
+set "HOME_GIVEN="
 :flags
 if "%~1"=="" goto :flags_done
 if /i "%~1"=="--portable" set "PORTABLE=1"
@@ -87,6 +88,10 @@ if /i "%~1"=="--version" (
     set "EXTRACTIUM_REF=%~2"
     shift
 )
+if /i "%~1"=="--home" (
+    set "HOME_GIVEN=%~f2"
+    shift
+)
 if /i "%~1"=="--help" goto :help
 if /i "%~1"=="-h" goto :help
 shift
@@ -94,6 +99,16 @@ goto :flags
 :flags_done
 
 if defined PORTABLE set "HOME_DIR=%HERE%\Extractium"
+if defined HOME_GIVEN set "HOME_DIR=%HOME_GIVEN%"
+
+REM Inside a checkout, a folder named Extractium beside this script is
+REM the package folder itself on a disk that ignores case, so a portable
+REM build there needs --home to say where the folder goes.
+if defined PORTABLE if not defined HOME_GIVEN if exist "%HERE%\pyproject.toml" (
+    echo Inside a checkout, a portable build needs --home DIR to say where the Extractium folder goes,
+    echo because a folder of that name beside this script would be the package folder on this disk.
+    exit /b 2
+)
 
 REM Every uv call trusts the certificates this computer trusts, so a
 REM corporate proxy that inspects traffic does not stop the download,
@@ -309,8 +324,7 @@ if errorlevel 1 (
     rmdir /s /q "%UV_STAGING%"
     exit /b 1
 )
-set "GOT_SHA256="
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -Path '%UV_STAGING%\uv.zip').Hash.ToLower()"`) do set "GOT_SHA256=%%H"
+call :sha256_of "%UV_STAGING%\uv.zip"
 if /i not "%GOT_SHA256%"=="%UV_SHA256%" (
     echo The uv download does not match the SHA-256 this script expects, so it was not used.
     echo   expected %UV_SHA256%
@@ -318,7 +332,7 @@ if /i not "%GOT_SHA256%"=="%UV_SHA256%" (
     rmdir /s /q "%UV_STAGING%"
     exit /b 1
 )
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%UV_STAGING%\uv.zip' -DestinationPath '%UV_STAGING%\unpacked' -Force"
+call :unzip "%UV_STAGING%\uv.zip" "%UV_STAGING%\unpacked"
 if errorlevel 1 (
     echo The uv archive could not be unpacked.
     rmdir /s /q "%UV_STAGING%"
@@ -340,6 +354,25 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
+
+:sha256_of
+REM The SHA-256 of one file, lowercase, in GOT_SHA256. certutil ships
+REM with every Windows and needs no PowerShell module; PowerShell's own
+REM cmdlet is the second try, for a certutil that has been removed.
+set "GOT_SHA256="
+for /f "delims=" %%H in ('certutil -hashfile "%~1" SHA256 ^| findstr /v /i "hash CertUtil"') do if not defined GOT_SHA256 set "GOT_SHA256=%%H"
+if defined GOT_SHA256 set "GOT_SHA256=%GOT_SHA256: =%"
+if not defined GOT_SHA256 for /f "usebackq delims=" %%H in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -Path '%~1').Hash.ToLower()"`) do set "GOT_SHA256=%%H"
+goto :eof
+
+:unzip
+REM Unpacks a zip into a folder. tar ships with Windows 10 and later and
+REM needs no PowerShell module; Expand-Archive is the second try.
+if not exist "%~2" mkdir "%~2"
+tar -xf "%~1" -C "%~2" 2>nul
+if not errorlevel 1 goto :eof
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%~1' -DestinationPath '%~2' -Force"
+goto :eof
 
 :uv_with_machine_python
 REM When the managed Python download is refused, uv makes a virtual
@@ -411,7 +444,8 @@ set "ARCHIVE=%EXTRACTIUM_REPO%/archive/%EXTRACTIUM_REF%.zip"
 set "RELEASE_STAGING=%TEMP%\extractium-release-%RANDOM%"
 mkdir "%RELEASE_STAGING%"
 echo Downloading Extractium %EXTRACTIUM_REF% ...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%ARCHIVE%' -OutFile '%RELEASE_STAGING%\extractium.zip'; Expand-Archive -Path '%RELEASE_STAGING%\extractium.zip' -DestinationPath '%RELEASE_STAGING%' -Force"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%ARCHIVE%' -OutFile '%RELEASE_STAGING%\extractium.zip'"
+if not errorlevel 1 call :unzip "%RELEASE_STAGING%\extractium.zip" "%RELEASE_STAGING%"
 if errorlevel 1 (
     echo Extractium could not be downloaded from %ARCHIVE%. Check the network and --version.
     rmdir /s /q "%RELEASE_STAGING%"
@@ -436,6 +470,7 @@ echo Installs Extractium for your account, with no admin rights.
 echo.
 echo   install.bat                 Install, or copy the Extractium folder beside this script under your profile.
 echo   install.bat --portable      Build the Extractium folder beside this script and change nothing else.
+echo   install.bat --home DIR      Put the Extractium folder there instead. A portable build inside a checkout needs it.
 echo   install.bat --update        Move an existing install to the newest release.
 echo   install.bat --version TAG   Install, or update to, that release instead of the newest.
 echo   install.bat --editable      In a checkout, run the code in the checkout (for developers).
