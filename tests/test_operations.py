@@ -3,7 +3,8 @@ Summary: Tests for the pieces a scheduled or one-command build relies on:
 the pinned dependency list, the two run scripts, and the two GitHub
 Actions workflows. They check what can be checked without a runner --
 that every dependency is pinned and hashed, that the scripts install from
-the lock file and fail on the first error, and that each workflow runs
+the lock file, fail on the first error, route "ui" to the local page and
+ask where to set up on a first run, and that each workflow runs
 weekly, runs on a button press, caches the crawl, keeps least privilege,
 and publishes only through the official Pages actions.
 
@@ -12,7 +13,7 @@ tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-22
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +32,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-15"
+__date__ = "2026-09-28"
 
 import pathlib
 import re
@@ -285,6 +286,38 @@ def test_each_run_script_writes_a_first_settings_file_and_limits_the_first_build
 
     assert re.search(r'VENV_EXTRACTIUM%?" init', text)
     assert "--max-pages 25" in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_routes_ui_to_the_page_and_a_build_argument_to_the_build(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    # "ui" starts the page; any other argument still goes to the build.
+    assert re.search(r'VENV_EXTRACTIUM%?" ui --config', text)
+    if script == "run.bat":
+        assert 'if /i "%~1"=="ui" goto :page' in text
+        assert 'if not "%~1"=="" goto :build' in text
+        assert '"%VENV_EXTRACTIUM%" build %*' in text
+    else:
+        assert 'if [ "${1:-}" = "ui" ]; then' in text
+        assert '"$VENV_EXTRACTIUM" build "$@"' in text
+
+
+@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
+def test_each_run_script_asks_where_to_set_up_on_a_first_run_with_the_browser_as_the_default(script):
+    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+
+    assert "Set up in the browser or in the terminal? [browser]:" in text
+    # The terminal answer still runs init and the limited first build.
+    assert re.search(r'VENV_EXTRACTIUM%?" init --output', text)
+    assert "--max-pages 25" in text
+    if script == "run.bat":
+        assert 'set "SETUP=browser"' in text                # Enter keeps the default
+        assert 'if /i "%SETUP:~0,1%"=="t" goto :terminal_setup' in text
+    else:
+        assert 'if [ -t 0 ]; then' in text                  # no terminal, no browser
+        assert 'SETUP="${SETUP:-browser}"' in text
+        assert "[Tt]*)" in text
 
 
 @pytest.mark.parametrize("script", ["run.sh", "run.bat"])
