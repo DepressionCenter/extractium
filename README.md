@@ -3,7 +3,7 @@ This file is part of Extractium™
 README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-08-16
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: Provides an overview of the project, in Markdown format.
 Notes: See README file for documentation and full license information.
 
@@ -58,14 +58,14 @@ Extractium™ grew out of the indexing engine in [Field Station AI™](https://g
 ## Quick Start Guide
 + Install Python 3.10 or newer.
 + Save the build script for your operating system into an empty folder: [run.sh](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.sh) for macOS and Linux, or [run.bat](https://raw.githubusercontent.com/DepressionCenter/extractium/main/run.bat) for Windows. If you have git, you can clone this repository instead and run the script from the clone.
-+ Run the script. It downloads the latest release of Extractium™ (with git if you have it, otherwise as a plain download), installs everything it needs into a virtual environment, asks you for the name of your compendium, a short name for its files, and the website to crawl, then builds a first index limited to 25 pages:
++ Run the script. It downloads the latest release of Extractium™ (with git if you have it, otherwise as a plain download), installs everything it needs into a virtual environment, and asks whether to set up in the browser or in the terminal. Either way it asks you for the name of your compendium, a short name for its files, and the website to crawl. The terminal path then builds a first index limited to 25 pages; the browser path writes the settings file from the page, and the next run builds:
 
   ```bash
   ./run.sh       # macOS and Linux
   run.bat        # Windows
   ```
 
-+ Open `dist/llms.txt`, then the file it links to under `dist/llms/`, to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`. See `examples/config.efdc.yaml` for a complete example that uses every source type.
++ Open `dist/llms.txt`, then the file it links to under `dist/llms/`, to see which pages were indexed. When the list looks right, run the script again to build the whole site. To change what is crawled, edit `config.yaml`, or run `run.bat ui` (`./run.sh ui`) to change it from a page in your browser. See `examples/config.efdc.yaml` for a complete example that uses every source type.
 + To use a Python development environment instead of the script, clone the repository, run `pip install -e ".[dev,code,youtube,whisper,pdf,keywords]"`, then `python -m extractium.cli init` to write `config.yaml` and `python -m extractium.cli build --config config.yaml` to build.
 
 The first build downloads the embedding model, about 130 MB. Later builds reuse it.

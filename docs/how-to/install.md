@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/install.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-12
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Summary: How to install Extractium: the supported Python versions, the
 build script and the developer install, the optional extras and what
 each is for, what the lock file pins, what the first build downloads,
@@ -51,11 +51,11 @@ Use this option if you want to build a compendium, a searchable collection of wh
    run.bat                   # Windows
    ```
 
-3. Answer its three questions: the name of your compendium, a short name for its files (press Enter to accept the one it suggests), and the website to start crawling from.
+3. Choose where to answer its three questions. Press Enter for the browser, and the local page opens with the questions on it; type `terminal` to answer them where you are. Either way you give the name of your compendium, a short name for its files (leave it empty to take the one suggested), and the website to start crawling from.
 
 When the script is on its own, it first downloads the latest release of Extractium™ into a folder called `extractium-src` beside itself. The folder is named that way, and not `extractium`, because Python would otherwise mistake it for the installed package when you run a build from the folder above it. It uses git when git is installed. Otherwise it downloads the release archive, through `curl` or `wget` on macOS and Linux, through PowerShell on Windows, or through Python itself when none of those is present. To pin a release, set `EXTRACTIUM_REF` to its tag before running the script; to build with unreleased work, set it to a branch name such as `main`. [How to run a weekly build](run-a-weekly-build.md) lists that variable and the two beside it under "Building with a branch instead of a release".
 
-The script then creates a virtual environment in `.venv`, installs the exact package versions recorded in the lock file, installs Extractium™ into it, writes `config.yaml` from your answers, runs a first build limited to 25 pages, and prints what to do next. Running it again reuses the environment, skips the questions, and builds the whole site. See [how to run a weekly build](run-a-weekly-build.md) for the options the script accepts.
+The script then creates a virtual environment in `.venv`, installs the exact package versions recorded in the lock file, and installs Extractium™ into it. In the terminal it writes `config.yaml` from your answers, runs a first build limited to 25 pages, and prints what to do next. In the browser it writes the file from the page and stops when you quit the page; run the script again to build. Running it again reuses the environment, skips the questions, and builds the whole site. `run.bat ui` or `./run.sh ui` opens the page at any time, for changing the settings; [how to use the local page](use-the-local-page.md) describes it. See [how to run a weekly build](run-a-weekly-build.md) for the other options the script accepts.
 
 The script installs the runtime dependencies, the code parsers, and the caption library, so a build made this way indexes documentation, the structure of a repository's code, and what is said in a video. Fetching captions still has to happen on your own computer, because YouTube refuses caption requests from cloud-provider addresses; the `youtube` section of the [configuration reference](../configuration.md) explains what to commit so a scheduled build reads the stored copies.
 
@@ -81,7 +81,7 @@ Use this option if you will run the tests, change the code, or write a plug-in.
 
 Run the install from inside the cloned folder, not from an empty one, because `pip install -e .` reads the `pyproject.toml` in the folder you are in. Editable mode means a change to the code takes effect the next time you run the tool, with no reinstall.
 
-To write a first settings file, run `python -m extractium.cli init`. It asks the same three questions the build script asks and writes `config.yaml`. [Running a build](../usage.md) describes the command and its flags.
+To write a first settings file, run `python -m extractium.cli init`. It asks the same three questions the build script asks and writes `config.yaml`. [Running a build](../usage.md) describes the command and its flags. `python -m extractium.cli ui` asks the same questions on the local page in your browser instead, and lets you change every setting from a form afterwards.
 
 
 ## The optional extras
@@ -163,6 +163,7 @@ You can now install Extractium™ either way, choose the extras a build needs, a
 
 * [Extractium™ README](../../README.md): project overview and quick start.
 * [How to Crawl a Site](crawl-a-site.md): setting up and reading your first build.
+* [How to Use the Local Page](use-the-local-page.md): the settings page in your browser, started with the script's `ui` argument.
 * [How to Run a Weekly Build](run-a-weekly-build.md): what the build scripts accept, and the scheduled build.
 * [Running a Build](../usage.md): every command-line option and exit code.
 * [Troubleshooting](../troubleshooting.md): known failures, including the `PATH` fix for the short command form.

@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-22
+Last Modified: 2026-09-28
 Summary: How to keep a compendium current: the one-command build with
 run.sh or run.bat on your own computer or a server, how to put it on a
 timer there, the scheduled builds on GitHub Actions and on a GitLab
@@ -50,7 +50,7 @@ A GitHub-hosted runner has a few processor cores and no graphics card, so it emb
 
 You need Python 3.10 or newer and the script for your operating system, either on its own or inside a clone of this repository. [How to install](install.md) explains both.
 
-1. Run the script from the folder that holds your settings file, `config.yaml`. If there is no settings file yet, the script asks you three questions and writes one:
+1. Run the script from the folder that holds your settings file, `config.yaml`. If there is no settings file yet, the script asks whether to set up in the browser or in the terminal, then asks you three questions and writes one:
 
    ```
    ./run.sh                  # macOS and Linux
@@ -58,6 +58,8 @@ You need Python 3.10 or newer and the script for your operating system, either o
    ```
 
 2. Read the summary it prints, then follow the three lines it gives you to commit and push the result.
+
+With `ui` as its only argument, `./run.sh ui` or `run.bat ui`, the script opens the local page instead of building: a form for every setting, in your browser, on this computer only. [How to use the local page](use-the-local-page.md) describes it. A scheduled run passes no argument and never opens a page.
 
 The script downloads Extractium™ when it is on its own, creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium™ into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes, and it stops at 25 pages so you can check the page list in `dist/llms.txt` before building everything. Later runs reuse the environment and the model and build the whole site.
 
@@ -205,6 +207,7 @@ You can now rebuild your compendium on demand from your own computer, put that c
 
 * [Extractium™ README](../../README.md): project overview and quick start.
 * [Installation guide](install.md): the two ways to install, and what the lock file pins.
+* [How to Use the Local Page](use-the-local-page.md): what the script's `ui` argument opens.
 * [How to Deploy](deploy.md): the deployment choices side by side, and how each one is consumed.
 * [Running a Build](../usage.md): every command-line option, the summary, and the exit codes.
 * [Configuration Reference](../configuration.md): every setting in `config.yaml`.

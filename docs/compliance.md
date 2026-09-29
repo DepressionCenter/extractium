@@ -108,6 +108,13 @@ Extractium™ reads public documentation, turns it into a searchable file, and p
 | A downloaded index cannot decide where it is written | The same two files, `cache_paths` / `cachePaths` | The cached file is named by a SHA-256 digest of its address, so a URL carrying path separators or a parent-directory step lands in the cache folder like any other. Pinned in both suites. |
 | The search tool over HTTP takes one message per POST and nothing else | `extractium/mcp/http.py` | Every method but POST is refused, the body is capped, a mirrored header that disagrees with the body is refused, and an optional bearer token and origin allowlist gate the endpoint before any message is read. `tests/test_mcp_http.py` covers each refusal and holds the HTTP answer equal to the standard-input answer for the same query. |
 | The connection card names no token and no credential | `extractium/mcp/connect.py`, `checked_http_url` | The card is a function of the file path and an optional address; it reads nothing from the environment, and an address is accepted only on the loopback address with no user name, password, or query, which is where a token would otherwise land. `tests/test_mcp_connect.py` checks the card against secrets placed in the environment. |
+| The local page listens on this computer only, and answers its own address only | `extractium/ui/server.py`, `PageServer`, `host_matches` | The server binds `127.0.0.1` on a free port, and a request whose `Host` header is anything but that address and port is refused before its body is read, which is what stops a page elsewhere from reaching the server through a name it resolved to this machine. `tests/test_ui_server.py` checks the bound address and the refusal for `localhost`, another port, another host, and no host. |
+| A call to the page needs the session token, and a write needs the page's own origin | The same file, `token_matches`, `origin_matches` | The address the terminal prints carries a random 32-byte token in its fragment, which a browser never sends to a server; the page sends it in a header with every call, compared in constant time. A write must also carry the page's own `Origin`; another origin, or none, is refused. Tested with no token, a wrong token, a one-character-short token, a foreign origin, a loopback origin on another port, and no origin. |
+| The page serves its own files by name from an allowlist, and the output folder from inside itself only | The same file, `STATIC_FILES`, `_send_dist` | Three names are served from the package and nothing else; `..`, a percent-encoded `..`, a drive letter, an empty part, and a real location outside the folder each answer 404, and no folder is listed. Tested for each shape, with a file placed outside the folder to prove it stays unreachable. |
+| The page loads nothing from anywhere but itself | The same file, `CONTENT_SECURITY_POLICY` | `default-src 'none'` with scripts, styles, and calls allowed from the page's own origin only, no inline script, `X-Frame-Options: DENY`, no referrer, and `no-store` on every answer. Every value from the settings file is written into the page as text through the DOM, never as markup. The header is pinned in `tests/test_ui_server.py`. |
+| The page never shows a credential | `extractium/ui/settings.py`, `extractium/ui/server.py` | The form has no field for a token, and the page reads nothing from the environment. `tests/test_ui_server.py` plants values in `GITHUB_TOKEN` and `YOUTUBE_API_KEY` and checks that neither, nor the session token, appears in any answer the page gives. |
+| A settings save goes through the loader and keeps the previous file | `extractium/ui/settings.py`, `save_text`, `save_form` | Both the form and the file's text are checked through `config_from_mapping` before anything is written, so a refused value gets the loader's own message and the file is untouched. A save keeps the previous file beside the new one with a UTC date stamp, and writes the new one whole through a temporary file. A name that reads like YAML is written quoted and read back unchanged. Covered in `tests/test_ui_settings.py` and `tests/test_ui_server.py`. |
+| The page stops on its own | The same file, `_watch_idle` | The page checks in every 30 seconds while a tab is open, and the server stops ten minutes after the last check-in, on the Quit button, or on Ctrl+C, so a closed tab never leaves a listening process behind for days. `tests/test_ui_server.py` runs the timer with a short limit and checks that check-ins keep the server up. |
 | The Node search server's dependency tree resolves away from known advisories | `examples/mcp/local-node/package.json`, `overrides` | `@huggingface/transformers` reaches `sharp` and `adm-zip` through version ranges that stop short of the patched releases. Two `overrides` entries lift them to `sharp` 0.35.4 and `adm-zip` 0.6.1, the first versions outside every advisory range, and `package-lock.json` pins the result. `npm audit` reported four high-severity advisories on 2026-09-11 and reports none after the change. The embedding model was run end to end on the overridden tree to confirm the lift does not break it. |
 | A search server answers questions and writes nothing | The same two files | One tool, `search_kb`, which reads one static file. There is no tool that writes, deletes, or runs anything, and no path by which a model's output becomes a command. |
 | A failure tells the model what to do without exposing the machine | The same two files, `_search` / `search` | An index that cannot be loaded returns a tool error naming the step. The underlying message, which can hold a path from your disk, goes to the error stream only. Both suites check that a path in the failure does not reach the answer. |
@@ -138,7 +145,7 @@ These are real and current. None is hidden behind a setting.
 - Code records are not scanned by default either, for the same reason. A repository's source files are published material, so `phi_lint: local` leaves them out. Set `phi_lint: 'all'` on any build that reads code. Run that way against this project's own repository on 2026-09-10, the check reported 90 pattern matches in 34 of 1,945 documents: author names in file headers, synthetic examples, and hash digits in a lock file that look like identifiers. That is the check asking questions, which is what it is for.
 - No security scanning workflow runs in this repository, by decision. GitHub Actions use in the DepressionCenter organization is restricted for cost, so a scheduled audit workflow is not an option. GitHub's own dependency graph and security alerts still run on the repository without a workflow, which covers the dependency side. A code-scanning tool would have to be run by hand. The lock file and the two Node lock files were audited by hand on 2026-09-12 with `pip-audit` and `npm audit` and were clean.
 - The scheduled workflow has not been observed running. It is written and its shape is tested, but as of 2026-09-12 the tool repository's Actions history holds no run of it, and no data repository built from the template has reported one. Treat the first run as a check to perform, not a result to rely on.
-- Accessibility has been reviewed by hand only. See below.
+- Accessibility of the documentation has been reviewed by hand only, and the local page has had one automated scan and one scripted keyboard walk, with the screen reader pass still owed. See below.
 
 
 ## Handling research and health data
@@ -153,11 +160,29 @@ Assume any content you point the tool at may hold protected health information u
 
 ## Accessibility
 
-The tool has no graphical interface. What a person reads is the command-line output and this documentation.
+The tool has one graphical interface, the local page behind `extractium ui`. Everything else a person reads is the command-line output and this documentation.
 
-Target: WCAG 2.1 AA for the documentation, with the reading-level goal in the project's writing guidance.
+Target: WCAG 2.2 AA for the local page, WCAG 2.1 AA for the documentation, with the reading-level goal in the project's writing guidance.
 
-What has been done:
+What has been done for the local page:
+
+- The page is plain HTML with real structure: one `<h1>`, `<h2>` headings per view, `<h3>` for the sources and outputs lists, `<main>`, `<nav>`, `<fieldset>` and `<legend>` around each source, output, and settings group, and real `<button>` elements everywhere a press does something. A skip link comes first in the tab order.
+- Every control has a `<label>`, and every text field, select, and list field points at its help text through `aria-describedby`, so a screen reader hears what a setting does before a value is typed. Success and failure messages live in `role="status"` and `role="alert"` regions, and a refusal moves focus to the message.
+- Focus is visible everywhere: a 3 CSS pixel outline in a color that is not the text color. Every button and field is at least 44 CSS pixels tall; the one target under 24 pixels is a link inside a sentence of the footer, which the target-size rule exempts.
+- Text is `#1f1f1f` on white and help text `#4a4a4a` on white, both well past 4.5:1; buttons are white on `#00274c`, past 7:1. No color carries a meaning alone: a refusal is words in an alert region, and the pressed view button is underlined as well as filled.
+- The page has no animation, no time limit a person must meet, nothing that moves on its own, and no hover-only content. The idle stop is a property of the server, not of the page, and a fresh start brings the page back.
+- Text reflows at 320 CSS pixels with no horizontal scrolling. A long file path in a message breaks rather than widening the page.
+- Every value from the settings file is written into the page as text through the DOM, never as markup, so a name that holds markup is shown, not rendered.
+
+Checked on 2026-09-28, with the page served by `PageServer` in a headless Chromium through Playwright: `axe-core` 4.13.0 run with the WCAG 2.0, 2.1, and 2.2 A and AA rule sets and the best-practice rules reported no violation and nothing incomplete on the welcome screen, the settings form, and the advanced view; the welcome screen was filled and submitted with the keyboard alone, the tab order followed the reading order, and no control was found without a label or without help text; the document was no wider than the viewport at 320 and at 500 CSS pixels. The script that made those checks is not part of the repository.
+
+What still needs a person for the local page:
+
+- A screen reader pass through the welcome screen and the form, with NVDA or VoiceOver, to confirm the help text and the messages are read where expected.
+- Browser zoom at 200% in a real browser, and the Windows high-contrast mode, which a headless run does not exercise.
+- The keyboard walk in a real browser, since a headless one has no browser chrome to catch focus.
+
+What has been done for the documentation:
 
 - Documentation uses real headings in order, real lists, and pipe tables with header rows. No structure is conveyed by bold text alone.
 - Generated Markdown follows the same rules. Every file an Open Knowledge Format bundle holds carries one H1 and real H2 sections, and the index file is a real list of links with descriptive text, so a screen reader reads the folder as a document rather than as styling. `tests/test_adapter_okf.py` checks the headings.
@@ -170,7 +195,7 @@ What has not been done:
 - No automated accessibility scan has been run against the rendered documentation. There is no rendered site for this repository yet; the pages are read on GitHub, which supplies its own markup.
 - Contrast and zoom behavior are properties of whatever renders these files, not of the files themselves.
 
-Anyone publishing an interface over a compendium, a search page for instance, owns its accessibility. The clients impose nothing.
+Anyone publishing an interface over a compendium, a search page for instance, owns its accessibility. The clients impose nothing; the local page is the one interface this repository owns, and the checks above are its evidence.
 
 
 ## Dependencies and their licenses
@@ -218,7 +243,7 @@ Used by the examples only:
 
 ## Data retention
 
-Extractium™ keeps nothing of its own beyond the folders below, all under your control:
+Extractium™ keeps nothing of its own beyond the folders below, all under your control. The local page adds one kind of file: when it saves the settings file, it keeps the previous one beside it with a date stamp, `config.yaml.<time>.bak`, and never removes those copies; delete them when you like.
 
 | What | Where | How long |
 |---|---|---|

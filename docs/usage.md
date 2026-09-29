@@ -6,8 +6,8 @@ Created: 2026-09-08
 Last Modified: 2026-09-28
 Summary: How to run an Extractium build from the command line: the build
 command and each of its options, what lands in the output folder, what the
-summary tells you, the record every build leaves behind, what each exit code means, and how to try a small run
-before a full one.
+summary tells you, the record every build leaves behind, what each exit code means, how to try a small run
+before a full one, and the command that opens the local page.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -61,7 +61,7 @@ Next: python -m extractium.cli build --config config.yaml --max-pages 25
 
 The file it writes is the commented example that ships with the project, with those three values filled in, so every other setting is explained where you would change it. The one web source is labelled `Website`. Rename it in the file if you like.
 
-The build scripts `run.sh` and `run.bat` run this command for you when there is no `config.yaml`, then build with a page limit.
+The build scripts `run.sh` and `run.bat` run this command for you when there is no `config.yaml` and you choose the terminal, then build with a page limit. The local page, below, asks the same three questions in your browser and writes the same file, with three outputs switched on at the end.
 
 | Option | What it does |
 |---|---|
@@ -72,6 +72,23 @@ The build scripts `run.sh` and `run.bat` run this command for you when there is 
 | `--force` | Replace the file if it already exists. Without it, an existing file is left alone. |
 
 Give all three values as flags and the command asks nothing, which is the form for a script. It exits with code 2 for a value it cannot accept or a file it will not replace, and 4 when the file cannot be written.
+
+
+## The local page
+
+```
+python -m extractium.cli ui
+```
+
+This starts a small web page on your own computer, prints its address, and opens your browser at it. With no settings file in the folder, the page asks the three questions above and writes `config.yaml`. With one, it shows every setting as a form, and the file's own text in an advanced view, and saves either through the same checks a build applies. The build scripts start it with `./run.sh ui` or `run.bat ui`. The page does not run a build yet; you build from the terminal as below. [How to use the local page](how-to/use-the-local-page.md) walks through it.
+
+| Option | What it does |
+|---|---|
+| `--config FILE` | The settings file the page reads and writes. `config.yaml` by default. It need not exist yet. |
+| `--port N` | Listen on this port of `127.0.0.1`. A free port is taken when omitted. |
+| `--no-browser` | Print the address without opening a browser. |
+
+The page listens on this computer only, stops on its own ten minutes after its last tab was closed, and exits with code 2 when the port it was given is in use.
 
 
 ## The build command
@@ -268,6 +285,7 @@ You can now run a build, limit it for a trial, read what it produced, and tell f
 * [Extractium™ README](../README.md): project overview and quick start.
 * [Installation guide](how-to/install.md): the two ways to install, and the optional extras.
 * [How to crawl a site](how-to/crawl-a-site.md): choosing source types, tuning patterns, and reading what a build reports.
+* [How to use the local page](how-to/use-the-local-page.md): the settings page in your browser.
 * [Configuration reference](configuration.md): every setting in `config.yaml`.
 * [Data flow](data-flow.md): where content enters, how it is changed, and where it lands.
 * [Container format](container-format.md): the index file, byte by byte.

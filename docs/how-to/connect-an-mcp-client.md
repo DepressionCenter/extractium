@@ -90,7 +90,7 @@ This writes a folder named `extractium-search` holding one file, `SKILL.md`, and
 - One sentence per known assistant saying whether it can reach a tool on this computer, and where its configuration goes.
 - The rules about what an assistant may do with the text the tool returns.
 
-The card names no token and no credential. `--out` names another folder. `--url` adds a second entry for a client that connects to an address instead of starting a program, when a program on this computer serves the same tool over HTTP; the address has to be on this computer and carry no query.
+The card names no token and no credential. `--out` names another folder. `--url` adds a second entry for a client that connects to an address instead of starting a program, when a program on this computer serves the same tool over HTTP; the address has to be on this computer and carry no query. The local page is such a program: while `extractium ui` runs, it answers the same tool at `/mcp` on the address the terminal printed, over the compendium the settings file names, so `--url http://127.0.0.1:<port>/mcp` puts that address on the card. The entry works only while the page runs. See [how to use the local page](use-the-local-page.md).
 
 The folder is the shape a Claude skill takes, so you can copy it where your assistant looks for skills. The text also pastes into the instructions of any assistant that takes them.
 
@@ -179,6 +179,7 @@ You now have an assistant that can search your organization's documentation and 
 
 * [Extractium™ README](../../README.md): project overview and quick start.
 * [How to Install](install.md): the two ways to install, and how to check the command works.
+* [How to Use the Local Page](use-the-local-page.md): the page that also serves the tool at `/mcp` while it runs.
 * [Local Node MCP Server](../../examples/mcp/local-node/README.md): the same tool in JavaScript, and its settings.
 * [Local Python MCP Server](../../examples/mcp/local-python/README.md): where the earlier example went.
 * [How to Search a Compendium](search-a-compendium.md): the client library the tool is built on.

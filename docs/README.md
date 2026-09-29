@@ -29,6 +29,7 @@ This folder holds the detailed documentation for Extractium™. The pages are gr
 ## Getting started
 
 * [How to Install](how-to/install.md): the supported Python versions, the two ways to install, the optional extras, and how to check that the install worked.
+* [How to Use the Local Page](how-to/use-the-local-page.md): the page in your browser that writes a first settings file and lets you change every setting from a form.
 * [How to Crawl a Site](how-to/crawl-a-site.md): choosing a source type for each kind of content, running a small trial, tuning the URL patterns, and reading what a build reports.
 * [Running a Build](usage.md): the `extractium build` command, its options, the files it writes, and what each exit code means.
 * [Configuration Reference](configuration.md): every setting in `config.yaml`, its default, and how the URL patterns work.
