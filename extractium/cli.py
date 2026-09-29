@@ -16,14 +16,16 @@ as a search tool, and the `connect` subcommand, in
 extractium/mcp/connect.py, writes the card that tells an assistant how
 to reach it. The `ui` subcommand, in extractium/ui/server.py, serves
 the local page on this machine for setting up and changing the
-settings file in a browser.
+settings file in a browser. The `start` subcommand, which is also what
+`extractium` alone does, builds when there is a settings file and
+otherwise asks whether to set up in the browser or in the terminal.
 
 This file is part of Extractium™
 extractium/cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-08-17
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Notes: See README file for documentation and full license information.
 """
 
@@ -42,7 +44,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-28"
+__date__ = "2026-09-30"
 
 import argparse
 import dataclasses
@@ -758,6 +760,123 @@ def _run_build(args, recorder):
     return EXIT_OK
 
 
+### Start Command ###
+
+# The page limit of a first build in the terminal, so a pattern broader
+# than intended costs seconds rather than an afternoon.
+FIRST_RUN_PAGES = 25
+
+# The default settings file of `start`, the same as `init` writes.
+DEFAULT_START_CONFIG = init_command.DEFAULT_OUTPUT
+
+
+def build_arguments(config, max_pages=None):
+    """The `build` arguments for one settings file, as the parser would give them."""
+    return argparse.Namespace(config=str(config), out_dir=None, max_pages=max_pages, float32_vecs=False)
+
+
+def next_steps(config, first_run):
+    """
+    What to do after a build that finished, as lines for the terminal.
+
+    Args:
+        config (str): the settings file the build read.
+        first_run (bool): whether the build was the limited first one.
+
+    Returns:
+        list[str]
+    """
+    lines = ["", "Build finished. The summary above lists every file that was written.", ""]
+    if first_run:
+        lines += [
+            f"This first run stopped at {FIRST_RUN_PAGES} pages. Open dist/llms.txt, then the file it",
+            "links to under dist/llms/, to see which pages were indexed. When the list",
+            "looks right, run extractium again to build the whole site. To change what",
+            f"is crawled, edit {config}, or run extractium ui.",
+            "",
+        ]
+    lines += [
+        "To publish the result:",
+        "  1. Add those files to git:   git add <output folder>",
+        "  2. Commit them:              git commit -m \"Rebuild the compendium\"",
+        "  3. Push:                     git push",
+        "",
+        "Do not commit the .kb_cache folder or the runs folder. The cache only saves",
+        "time on the next run, and the runs folder is this machine's history of",
+        "builds; deleting either is always safe.",
+    ]
+    return lines
+
+
+def run_start(args, ask_line=None, say=print, is_tty=None):
+    """
+    Runs the `start` command, which is what `extractium` alone does.
+
+    With a settings file it builds from it. Without one it asks where to
+    set up: on the page in the browser, which is the default, or here in
+    the terminal, which asks the `init` questions and then builds with a
+    page limit. With no terminal attached, as on a scheduled run, the
+    terminal path is taken without asking, so the run fails fast rather
+    than waiting for a browser nobody will open.
+
+    Args:
+        args (argparse.Namespace): the parsed arguments, with `config`.
+        ask_line (Callable[[str], str] | None): reads one line; input()
+            outside tests.
+        say (Callable[[str], None]): prints one line.
+        is_tty (bool | None): whether a terminal is attached; read from
+            standard input when None.
+
+    Returns:
+        int: the exit code of the build, the page, or the setup.
+    """
+    config = args.config or DEFAULT_START_CONFIG
+    if os.path.isfile(config):
+        say(f"Building from {config} ...")
+        code = run_build(build_arguments(config))
+        if code == EXIT_OK:
+            for line in next_steps(config, first_run=False):
+                say(line)
+        return code
+
+    ask_line = ask_line or input
+    is_tty = sys.stdin.isatty() if is_tty is None else is_tty
+    say("")
+    say(f"There is no {config} yet.")
+    in_terminal = True
+    if is_tty:
+        try:
+            answer = ask_line("Set up in the browser or in the terminal? [browser]: ")
+        except EOFError:
+            answer = ""
+        in_terminal = answer.strip().lower().startswith("t")
+
+    if not in_terminal:
+        say("")
+        say("Opening the page in your browser. Answer its questions there, then run extractium again to build.")
+        code = ui_command.run_ui(argparse.Namespace(config=config, folder=None, port=0, no_browser=False), say=say)
+        if code == EXIT_OK and os.path.isfile(config):
+            say("")
+            say(f"Run extractium again to build from {config}.")
+        return code
+
+    say("")
+    say("A few questions first.")
+    code = init_command.run_init(
+        argparse.Namespace(name=None, slug=None, seed_url=None, output=config, force=False),
+        ask_line=ask_line, say=say, say_next=False,
+    )
+    if code != EXIT_OK:
+        return code
+    say("")
+    say(f"Building from {config}, limited to {FIRST_RUN_PAGES} pages for this first run ...")
+    code = run_build(build_arguments(config, max_pages=FIRST_RUN_PAGES))
+    if code == EXIT_OK:
+        for line in next_steps(config, first_run=True):
+            say(line)
+    return code
+
+
 ### Entry Point ###
 
 def build_parser():
@@ -767,7 +886,20 @@ def build_parser():
         description="Compile an organization's public documentation into one searchable static file.",
     )
     parser.add_argument("--version", action="version", version=f"extractium {__version__}")
-    subcommands = parser.add_subparsers(dest="command", required=True)
+    # No subcommand means `start`, so a double-clicked shim and a person
+    # who types the bare command both get the first-run question or a
+    # build, as the build scripts gave them.
+    parser.set_defaults(handler=run_start, config=DEFAULT_START_CONFIG)
+    subcommands = parser.add_subparsers(dest="command")
+
+    start = subcommands.add_parser(
+        "start", help="Build from the settings file, or set up first when there is none. "
+                      "The same as running extractium with no arguments."
+    )
+    start.add_argument("--config", default=DEFAULT_START_CONFIG, metavar="FILE",
+                       help=f"The settings file to build from, or to write. Defaults to {DEFAULT_START_CONFIG} "
+                            "in the current folder.")
+    start.set_defaults(handler=run_start)
 
     build = subcommands.add_parser("build", help="Build every configured output from a configuration file.")
     build.add_argument("--config", required=True, metavar="FILE",
@@ -820,6 +952,10 @@ def build_parser():
     ui.add_argument("--config", default=ui_command.DEFAULT_CONFIG, metavar="FILE",
                     help=f"The settings file the page reads and writes. Defaults to {ui_command.DEFAULT_CONFIG} "
                          "in the current folder; it need not exist yet.")
+    ui.add_argument("--folder", metavar="DIR",
+                    help="The compendium folder the page works in. Without it, the folder that holds the "
+                         "settings file is used, then the folder the page used last, and otherwise the "
+                         "welcome screen asks where the compendium should live.")
     ui.add_argument("--port", type=int, default=0, metavar="N",
                     help="Listen on this port of 127.0.0.1. A free port is taken when omitted.")
     ui.add_argument("--no-browser", action="store_true",

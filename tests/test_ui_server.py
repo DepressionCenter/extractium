@@ -4,19 +4,20 @@ address only and answers it under both of its names; a request with
 another Host, a write without the token
 or from another origin, a path with `..`, and a file outside the
 allowlist are all refused; the welcome screen writes a file the loader
-accepts with the page's outputs on and refuses to replace one; a saved
+accepts with the page's outputs on, in the folder it was asked for,
+refuses to replace one, and refuses a folder it cannot use; a saved
 form and a saved text round trip; the output folder is served under
 /dist/ and nothing outside it; the search tool answers at /mcp; the
 idle timer and the Quit button stop the server; and the `ui` command
-prints the address, opens the browser unless told not to, and exits
-when the page quits.
+finds its folder, prints the address, opens the browser unless told
+not to, and exits when the page quits.
 
 This file is part of Extractium™
 tests/test_ui_server.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-29
+Last Modified: 2026-09-30
 Notes: See README file for documentation and full license information.
 """
 
@@ -35,11 +36,13 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-29"
+__date__ = "2026-09-30"
 
 import argparse
 import http.client
 import json
+import os
+import pathlib
 import shutil
 import socket
 import threading
@@ -48,6 +51,7 @@ import time
 import pytest
 
 from extractium import cli
+from extractium import home
 from extractium.config import load_config
 from extractium.search import load_container
 from extractium.ui import server as ui
@@ -127,7 +131,7 @@ def page(tmp_path, monkeypatch, expectations):
 
 
 def ui_args(**values):
-    given = {"config": "config.yaml", "port": 0, "no_browser": True}
+    given = {"config": "config.yaml", "folder": None, "port": 0, "no_browser": True}
     given.update(values)
     return argparse.Namespace(**given)
 
@@ -243,6 +247,105 @@ def test_the_state_says_whether_there_is_a_settings_file(page):
     assert state["settingsExists"] is False and state["settingsError"] is None
     assert state["mcpPath"] == "/mcp" and state["pingSeconds"] == ui.PING_INTERVAL_SECONDS
     assert state["settingsFile"].endswith("config.yaml")
+    # No folder was chosen for this server, so the welcome screen offers
+    # the default one.
+    assert state["folder"] is None
+    assert state["defaultFolder"] == str(home.default_compendium_folder())
+
+
+def test_the_state_names_the_folder_the_server_was_started_for(tmp_path):
+    server = ui.PageServer(tmp_path / "config.yaml", folder=tmp_path)
+    try:
+        state = server.state()
+    finally:
+        server.server_close()
+
+    assert state["folder"] == str(tmp_path)
+    assert state["defaultFolder"] == str(tmp_path)
+
+
+def test_the_welcome_screen_writes_the_file_in_the_folder_it_is_given_and_moves_there(page, tmp_path, monkeypatch):
+    house = tmp_path / "home"
+    monkeypatch.setenv(home.HOME_VARIABLE, str(house))
+    chosen = tmp_path / "new" / "compendium"
+
+    status, body = page.json("POST", "/api/welcome", {
+        "name": "Moved KB", "slug": "", "seed_url": "https://example.edu/docs/", "folder": str(chosen),
+    })
+
+    assert status == 200, body
+    assert body["path"] == str(chosen / "config.yaml")
+    assert load_config(chosen / "config.yaml").name == "Moved KB"
+    assert not (tmp_path / "config.yaml").exists()
+    # The page now works in that folder, and remembers it under the home.
+    assert body["state"]["folder"] == str(chosen)
+    assert body["state"]["settingsFolder"] == str(chosen.resolve())
+    assert page.server.config_path == chosen / "config.yaml"
+    assert pathlib.Path.cwd() == chosen
+    assert home.remembered_folder() == chosen
+
+
+def test_the_welcome_screen_accepts_the_folder_it_already_works_in(page, tmp_path):
+    status, body = page.json("POST", "/api/welcome", {
+        "name": "Same KB", "seed_url": "https://example.edu/", "folder": str(tmp_path),
+    })
+
+    assert status == 200, body
+    assert load_config(tmp_path / "config.yaml").name == "Same KB"
+    assert pathlib.Path.cwd() == tmp_path
+
+
+def test_the_welcome_screen_refuses_a_folder_it_cannot_use_and_leaves_nothing_behind(page, tmp_path):
+    blocker = tmp_path / "a-file"
+    blocker.write_text("x", encoding="utf-8")
+
+    # A path that is a file.
+    status, body = page.json("POST", "/api/welcome",
+                             {"name": "x", "seed_url": "https://example.edu/", "folder": str(blocker)})
+    assert status == 400 and "is a file" in body["error"]
+
+    # A folder that cannot be created, because a file sits where its
+    # parent would be.
+    status, body = page.json("POST", "/api/welcome",
+                             {"name": "x", "seed_url": "https://example.edu/", "folder": str(blocker / "sub")})
+    assert status == 400 and "could not be created" in body["error"]
+    assert not (blocker / "sub").exists()
+
+    # A relative path, and a blank one.
+    status, body = page.json("POST", "/api/welcome",
+                             {"name": "x", "seed_url": "https://example.edu/", "folder": "somewhere"})
+    assert status == 400 and "full path" in body["error"]
+    status, body = page.json("POST", "/api/welcome",
+                             {"name": "x", "seed_url": "https://example.edu/", "folder": "  "})
+    assert status == 400 and "which folder" in body["error"]
+
+    # A refused value after the folder was made: the folder is removed again.
+    fresh = tmp_path / "fresh"
+    status, body = page.json("POST", "/api/welcome",
+                             {"name": "x", "seed_url": "not an address", "folder": str(fresh)})
+    assert status == 400 and "must start with http" in body["error"]
+    assert not fresh.exists()
+    assert pathlib.Path.cwd() == tmp_path
+    assert not (tmp_path / "config.yaml").exists()
+
+
+def test_the_welcome_screen_refuses_a_folder_that_already_holds_a_settings_file(page, tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "config.yaml").write_text("keep me\n", encoding="utf-8")
+
+    status, body = page.json("POST", "/api/welcome",
+                             {"name": "x", "seed_url": "https://example.edu/", "folder": str(other)})
+
+    assert status == 409 and "already exists" in body["error"]
+    assert (other / "config.yaml").read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_a_chosen_folder_expands_the_home_sign():
+    folder = ui.chosen_folder("~/Extractium")
+
+    assert folder.is_absolute()
+    assert folder == pathlib.Path.home() / "Extractium"
 
 
 def test_the_welcome_screen_writes_a_file_the_loader_accepts_with_both_outputs_on(page, tmp_path):
@@ -549,8 +652,123 @@ def test_the_command_exits_two_when_the_port_is_taken(tmp_path, monkeypatch):
 def test_the_command_line_knows_the_ui_command():
     parser = cli.build_parser()
 
-    args = parser.parse_args(["ui", "--port", "8123", "--no-browser", "--config", "other.yaml"])
+    args = parser.parse_args(["ui", "--port", "8123", "--no-browser", "--config", "other.yaml", "--folder", "here"])
 
     assert args.handler is ui.run_ui
-    assert (args.port, args.no_browser, args.config) == (8123, True, "other.yaml")
+    assert (args.port, args.no_browser, args.config, args.folder) == (8123, True, "other.yaml", "here")
     assert parser.parse_args(["ui"]).config == ui.DEFAULT_CONFIG
+    assert parser.parse_args(["ui"]).folder is None
+
+
+# ---------------------------------------------------------------------------
+# Which folder the command works in
+# ---------------------------------------------------------------------------
+
+def test_a_named_folder_wins(tmp_path, monkeypatch):
+    monkeypatch.delenv(home.HOME_VARIABLE, raising=False)
+    (tmp_path / "config.yaml").write_text(MINIMAL, encoding="utf-8")
+    named = tmp_path / "elsewhere"
+
+    folder, config = ui.folder_for(ui_args(folder=str(named)), cwd=tmp_path)
+
+    assert folder == named and config == named / "config.yaml"
+    # A relative folder is taken from the working folder.
+    folder, _ = ui.folder_for(ui_args(folder="sub"), cwd=tmp_path)
+    assert folder == tmp_path / "sub"
+
+
+def test_a_settings_file_in_the_working_folder_decides_before_the_memory(tmp_path, monkeypatch):
+    house = tmp_path / "home"
+    remembered = tmp_path / "remembered"
+    remembered.mkdir()
+    monkeypatch.setenv(home.HOME_VARIABLE, str(house))
+    home.remember_folder(remembered)
+    (tmp_path / "config.yaml").write_text(MINIMAL, encoding="utf-8")
+
+    folder, config = ui.folder_for(ui_args(), cwd=tmp_path)
+
+    assert folder == tmp_path and config == pathlib.Path("config.yaml")
+
+
+def test_the_remembered_folder_is_used_when_the_working_folder_has_no_settings_file(tmp_path, monkeypatch):
+    house = tmp_path / "home"
+    remembered = tmp_path / "remembered"
+    remembered.mkdir()
+    monkeypatch.setenv(home.HOME_VARIABLE, str(house))
+    home.remember_folder(remembered)
+
+    folder, config = ui.folder_for(ui_args(), cwd=tmp_path)
+
+    assert folder == remembered and config == remembered / "config.yaml"
+
+
+def test_with_nothing_to_go_on_there_is_no_folder_yet(tmp_path, monkeypatch):
+    monkeypatch.delenv(home.HOME_VARIABLE, raising=False)
+
+    folder, config = ui.folder_for(ui_args(), cwd=tmp_path)
+
+    assert folder is None and config == pathlib.Path("config.yaml")
+
+
+def test_an_absolute_settings_file_names_its_own_folder(tmp_path, monkeypatch):
+    monkeypatch.delenv(home.HOME_VARIABLE, raising=False)
+    named = tmp_path / "deep" / "other.yaml"
+
+    folder, config = ui.folder_for(ui_args(config=str(named)), cwd=tmp_path)
+
+    assert folder == named.parent and config == named
+
+
+def test_the_command_moves_into_its_folder_and_remembers_it(tmp_path, monkeypatch):
+    house = tmp_path / "home"
+    chosen = tmp_path / "chosen"
+    monkeypatch.setenv(home.HOME_VARIABLE, str(house))
+    monkeypatch.chdir(tmp_path)
+    opened = []
+
+    said, thread = run_command(ui_args(folder=str(chosen)), opened)
+
+    origin, token = address_from(said)
+    assert chosen.is_dir() and pathlib.Path.cwd() == chosen
+    assert home.remembered_folder() == chosen
+    assert any(kind == "say" and f"Working in {chosen}" in line for kind, line in said)
+    port = int(origin.rsplit(":", 1)[1])
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    connection.request("POST", "/api/quit", body=b"{}", headers={
+        "Host": f"127.0.0.1:{port}", "Origin": origin, ui.TOKEN_HEADER: token, "Content-Type": "application/json",
+    })
+    assert connection.getresponse().status == 200
+    thread.join(10)
+    assert ("exit", 0) in said
+
+
+def test_the_command_says_when_no_folder_is_chosen_yet(tmp_path, monkeypatch):
+    monkeypatch.delenv(home.HOME_VARIABLE, raising=False)
+    monkeypatch.chdir(tmp_path)
+    opened = []
+
+    said, thread = run_command(ui_args(), opened)
+
+    origin, token = address_from(said)
+    assert any(kind == "say" and "No compendium folder yet" in line for kind, line in said)
+    assert pathlib.Path.cwd() == tmp_path
+    port = int(origin.rsplit(":", 1)[1])
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    connection.request("POST", "/api/quit", body=b"{}", headers={
+        "Host": f"127.0.0.1:{port}", "Origin": origin, ui.TOKEN_HEADER: token, "Content-Type": "application/json",
+    })
+    assert connection.getresponse().status == 200
+    thread.join(10)
+
+
+def test_the_command_exits_two_when_its_folder_cannot_be_made(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    blocker = tmp_path / "a-file"
+    blocker.write_text("x", encoding="utf-8")
+    said = []
+
+    code = ui.run_ui(ui_args(folder=str(blocker / "sub")), open_browser=lambda url: True,
+                     say=lambda line: said.append(line), err=lambda line: said.append(line))
+
+    assert code == 2
+    assert any("cannot be used" in line for line in said)

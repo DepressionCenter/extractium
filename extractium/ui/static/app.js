@@ -3,12 +3,13 @@ This file is part of Extractium™
 extractium/ui/static/app.js
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: The local page's script. Reads the session token from the
 address the terminal printed, asks the server what state the settings
-file is in, and shows one of three views: the welcome screen that
-writes a first file, the settings form built from the description the
-server sends, or the file's own text. Every value shown comes from the
+file is in, names the folder the page works in, and shows one of three
+views: the welcome screen that writes a first file in the folder it
+asks for, the settings form built from the description the server
+sends, or the file's own text. Every value shown comes from the
 settings file and is written into the page as text, never as markup.
 The page checks in with the server while it is open, so the server
 knows to keep running, and asks it to quit on the Quit button.
@@ -486,10 +487,21 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
   }
 
   function showWelcome() {
-    byId("welcome-folder").textContent = state.settingsFolder;
+    var folder = byId("welcome-folder");
+    if (!folder.value.trim()) {
+      folder.value = state.folder || state.defaultFolder || "";
+    }
     byId("welcome-docs").href = state.docsUrl;
     updateWelcomeCommand();
     show("welcome");
+  }
+
+  // The header names the folder the page works in: the one it was
+  // started for, or, once the welcome screen has written a file, the
+  // one that holds it.
+  function showFolder() {
+    var folder = state.folder || (settings && settings.exists ? state.settingsFolder : null);
+    byId("page-folder").textContent = folder ? "Working in " + folder : "No compendium folder chosen yet.";
   }
 
   function updateWelcomeCommand() {
@@ -523,6 +535,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
       state = answer.body.state;
       byId("version").textContent = state.version;
       byId("footer-docs").href = state.docsUrl;
+      showFolder();
       return settings;
     });
   }
@@ -594,7 +607,8 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
     var payload = {
       name: byId("welcome-name").value,
       slug: byId("welcome-slug").value,
-      seed_url: byId("welcome-seed").value
+      seed_url: byId("welcome-seed").value,
+      folder: byId("welcome-folder").value
     };
     api("POST", "/api/welcome", payload).then(function (answer) {
       busy(button, false);
@@ -604,7 +618,8 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
       }
       settings = answer.body;
       state = answer.body.state;
-      showSettings("Wrote " + answer.body.path + ". To build, run the build script in that folder; "
+      showFolder();
+      showSettings("Wrote " + answer.body.path + ". To build, run extractium in that folder; "
         + "every setting can be changed here first.");
     }).catch(function (error) {
       busy(button, false);

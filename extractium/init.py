@@ -14,7 +14,7 @@ extractium/init.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-14
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-28"
+__date__ = "2026-09-30"
 
 import json
 import pathlib
@@ -359,7 +359,7 @@ def write_settings(values, output, force=False, example_path=EXAMPLE_CONFIG, out
     return path
 
 
-def run_init(args, ask_line=None, say=print, err=None):
+def run_init(args, ask_line=None, say=print, err=None, say_next=True):
     """
     Runs the `init` command.
 
@@ -369,6 +369,8 @@ def run_init(args, ask_line=None, say=print, err=None):
             when the command runs.
         err (Callable[[str], None] | None): prints one line of error text;
             standard error outside tests.
+        say_next (bool): whether to end with the build command to run
+            next; off when the caller builds right away.
 
     Returns:
         int: 0 when the file was written, 2 for a refused value or an
@@ -388,5 +390,6 @@ def run_init(args, ask_line=None, say=print, err=None):
         return 4
     say("")
     say(f"Wrote {path}. Every setting is explained in its comments; add more sources or outputs there.")
-    say(f"Next: python -m extractium.cli build --config {path} --max-pages 25")
+    if say_next:
+        say(f"Next: python -m extractium.cli build --config {path} --max-pages 25")
     return 0

@@ -11,14 +11,18 @@ own address as its Host, under either name of the loopback address,
 and every write must come from the page's own origin, so a page from
 any other site, or another name that points at this machine, cannot
 reach it. It quits on its own when no page has checked in for ten
-minutes, when the page asks it to, or on Ctrl+C.
+minutes, when the page asks it to, or on Ctrl+C. The page works in one
+compendium folder: the one named on the command line, the one that
+holds a settings file, the one it used last when the shim set a home,
+or, on a first run with none of those, the folder the welcome screen
+asks for.
 
 This file is part of Extractium™
 extractium/ui/server.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-29
+Last Modified: 2026-09-30
 Notes: See README file for documentation and full license information.
 """
 
@@ -37,10 +41,11 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-29"
+__date__ = "2026-09-30"
 
 import hmac
 import json
+import os
 import pathlib
 import secrets
 import shutil
@@ -52,6 +57,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from extractium import __version__
+from extractium import home
 from extractium.adapters.container import full_container_file_name
 from extractium.config import ConfigError, load_config
 from extractium.mcp.http import DEFAULT_MCP_PATH, MAX_BODY_BYTES, handle_http_request
@@ -156,6 +162,10 @@ class PageServer(ThreadingHTTPServer):
     Args:
         config_path (str | pathlib.Path): the settings file the page
             reads and writes; it need not exist yet.
+        folder (str | pathlib.Path | None): the compendium folder the
+            page works in, when one is known. None on a first run with
+            no folder chosen yet: the welcome screen then asks for one,
+            and the page moves there once the settings file is written.
         port (int): the port to listen on; 0 takes a free one.
         idle_seconds (float): how long to wait for a page to check in
             before quitting.
@@ -172,9 +182,10 @@ class PageServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, config_path, port=0, idle_seconds=IDLE_SECONDS, token=None, log=None,
-                 open_embedder=None):
+                 open_embedder=None, folder=None):
         super().__init__((HOST, port), PageHandler)
         self.config_path = pathlib.Path(config_path)
+        self.folder = pathlib.Path(folder) if folder is not None else None
         self.token = token or secrets.token_urlsafe(TOKEN_BYTES)
         self.idle_seconds = idle_seconds
         self.log = log or (lambda message: None)
@@ -362,6 +373,8 @@ class PageServer(ThreadingHTTPServer):
             "version": __version__,
             "settingsFile": str(self.config_path),
             "settingsFolder": str(self.config_path.resolve().parent),
+            "folder": str(self.folder) if self.folder is not None else None,
+            "defaultFolder": str(self.folder if self.folder is not None else home.default_compendium_folder()),
             "settingsExists": exists,
             "settingsError": error,
             "outDir": out_dir,
@@ -371,6 +384,50 @@ class PageServer(ThreadingHTTPServer):
             "idleSeconds": self.idle_seconds,
             "docsUrl": DOCS_URL,
         }
+
+    ### The Folder ###
+
+    def move_to(self, folder):
+        """
+        Makes a folder the one the page works in: the process's working
+        folder, so every relative path in the settings file resolves
+        there as it does for a build run from it, and the folder the
+        settings file is read from. The folder is remembered under the
+        home when there is one.
+
+        Args:
+            folder (pathlib.Path): the compendium folder, which exists.
+
+        Raises:
+            OSError: if the process cannot move into the folder.
+        """
+        folder = pathlib.Path(folder)
+        os.chdir(folder)
+        self.folder = folder
+        self.config_path = folder / self.config_path.name
+        home.remember_folder(folder)
+
+
+def chosen_folder(text):
+    """
+    The folder a person typed on the welcome screen, as a path.
+
+    Args:
+        text (str): the answer, with `~` allowed for the home folder.
+
+    Returns:
+        pathlib.Path: the absolute path.
+
+    Raises:
+        ValueError: if the answer is blank or not a full path, because a
+            relative one would land wherever the server happens to be.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("Say which folder the compendium should live in.")
+    folder = pathlib.Path(text.strip()).expanduser()
+    if not folder.is_absolute():
+        raise ValueError("Give the folder's full path, such as C:\\Users\\you\\Extractium or /home/you/Extractium.")
+    return folder
 
 
 ### The Handler ###
@@ -580,20 +637,66 @@ class PageHandler(BaseHTTPRequestHandler):
                               **self._settings_payload()})
 
     def _write_first_settings(self, payload):
-        """Writes the welcome screen's first settings file."""
+        """
+        Writes the welcome screen's first settings file.
+
+        The screen may name the folder the compendium should live in.
+        A folder other than the page's own is created when it does not
+        exist, the file is written there, and the page moves into it;
+        a folder that cannot be made or written is refused and nothing
+        is left behind. Without a folder in the payload the file goes
+        where the page already works, as it always has.
+        """
         path = self.server.config_path
+        folder = None
+        if "folder" in payload:
+            try:
+                folder = chosen_folder(payload.get("folder"))
+            except ValueError as error:
+                self._send_json(400, {"error": str(error)})
+                return
+            if folder.exists() and not folder.is_dir():
+                self._send_json(400, {"error": f"{folder} is a file, not a folder."})
+                return
+            path = folder / self.server.config_path.name
         if path.exists():
             self._send_json(409, {"error": f"{path} already exists. Change it on the settings page instead."})
             return
+        made = False
+        if folder is not None and not folder.exists():
+            try:
+                folder.mkdir(parents=True)
+                made = True
+            except OSError as error:
+                self._send_json(400, {"error": f"{folder} could not be created ({error.strerror or error})."})
+                return
         try:
             settings_module.write_first_settings(payload, path)
         except settings_module.SettingsError as error:
+            self._forget_folder(folder, made)
             self._send_json(400, {"error": str(error)})
             return
         except OSError as error:
-            self._send_json(500, {"error": f"the settings file could not be written ({error.strerror or error})."})
+            self._forget_folder(folder, made)
+            self._send_json(400, {"error": f"the settings file could not be written in {path.parent} "
+                                           f"({error.strerror or error})."})
             return
+        if folder is not None:
+            try:
+                self.server.move_to(folder)
+            except OSError as error:
+                self._send_json(500, {"error": f"the page could not move into {folder} ({error.strerror or error})."})
+                return
         self._send_json(200, {"ok": True, "path": str(path), **self._settings_payload()})
+
+    @staticmethod
+    def _forget_folder(folder, made):
+        """Removes a folder this request made and then could not use."""
+        if made:
+            try:
+                folder.rmdir()
+            except OSError:
+                pass
 
     ### Reading And Writing ###
 
@@ -684,6 +787,43 @@ class PageHandler(BaseHTTPRequestHandler):
 
 ### Running ###
 
+def folder_for(args, cwd=None):
+    """
+    The compendium folder the `ui` command works in, and the settings
+    file inside it.
+
+    `--folder` wins. Else a settings file in the working folder, or the
+    one `--config` names, decides. Else the folder the page used last,
+    when the shim set a home. Else there is no folder yet, and the
+    welcome screen asks for one.
+
+    Args:
+        args (argparse.Namespace): the parsed `ui` arguments.
+        cwd (pathlib.Path | None): the working folder; the process's
+            own when None.
+
+    Returns:
+        tuple[pathlib.Path | None, pathlib.Path]: the folder, or None,
+        and the settings file path.
+    """
+    cwd = pathlib.Path.cwd() if cwd is None else pathlib.Path(cwd)
+    config = pathlib.Path(getattr(args, "config", None) or DEFAULT_CONFIG)
+    named = getattr(args, "folder", None)
+    if named:
+        folder = pathlib.Path(named).expanduser()
+        if not folder.is_absolute():
+            folder = cwd / folder
+        return folder, config if config.is_absolute() else folder / config.name
+    if config.is_absolute():
+        return config.parent, config
+    if (cwd / config).is_file():
+        return cwd, config
+    remembered = home.remembered_folder()
+    if remembered is not None:
+        return remembered, remembered / config.name
+    return None, config
+
+
 def run_ui(args, open_browser=None, say=print, err=None):
     """
     Runs the `ui` command: starts the server, prints its address, opens
@@ -691,7 +831,7 @@ def run_ui(args, open_browser=None, say=print, err=None):
 
     Args:
         args (argparse.Namespace): the parsed `ui` arguments: `config`,
-            `port`, and `no_browser`.
+            `folder`, `port`, and `no_browser`.
         open_browser (Callable[[str], bool] | None): opens an address in
             the browser; the standard library's when None.
         say (Callable[[str], None]): prints one line to the person.
@@ -704,11 +844,24 @@ def run_ui(args, open_browser=None, say=print, err=None):
     """
     err = err or (lambda line: print(line, file=sys.stderr, flush=True))
     open_browser = open_browser or webbrowser.open
+    folder, config_path = folder_for(args)
+    if folder is not None:
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            os.chdir(folder)
+        except OSError as error:
+            err(f"extractium ui: the folder {folder} cannot be used ({error.strerror or error}).")
+            return EXIT_CONFIG
+        home.remember_folder(folder)
     try:
-        server = PageServer(args.config, port=args.port or 0, log=err)
+        server = PageServer(config_path, port=args.port or 0, log=err, folder=folder)
     except OSError as error:
         err(f"extractium ui: the page could not listen on port {args.port or 'any'} ({error}).")
         return EXIT_CONFIG
+    if folder is not None:
+        say(f"Working in {folder}")
+    else:
+        say("No compendium folder yet. The page asks where it should live.")
     say(f"The Extractium page is at {server.page_url}")
     say("Keep this window open. Press Ctrl+C here, or Quit on the page, to stop it.")
     if not args.no_browser:
