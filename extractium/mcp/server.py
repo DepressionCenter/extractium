@@ -1,18 +1,20 @@
 """
-Summary: A local Model Context Protocol (MCP) server that lets an AI
-assistant on this machine search a published Extractium compendium. It
-speaks JSON-RPC over standard input and output, downloads and caches the
-container from its published URL, embeds the query with the model the
-container names, and exposes one tool, `search_kb`, over
-extractium.search. Both eras of the protocol are answered: the stateless
-per-request form and the older `initialize` handshake.
+Summary: The local Model Context Protocol (MCP) server behind the
+`extractium mcp` command. It lets an AI assistant on this machine search
+one compendium: it speaks JSON-RPC over standard input and output, reads
+the container from a file on disk or downloads and caches it from a
+published address, embeds the query with the model the container names,
+and exposes one tool, `search_kb`, over extractium.search. Both eras of
+the protocol are answered: the stateless per-request form and the older
+`initialize` handshake. The protocol core here is what the HTTP binding
+in extractium.mcp.http mounts as well.
 
 This file is part of Extractium™
-examples/mcp/local-python/server.py
+extractium/mcp/server.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-16
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -31,7 +33,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-16"
+__date__ = "2026-09-28"
 
 import hashlib
 import json
@@ -42,14 +44,20 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from extractium import __version__
 from extractium.search import ContainerError, load_container
 
 ### Constants ###
 
 # Identity this server reports. It is self-reported and unverified, so it
 # is for display and logging only.
-SERVER_NAME = "extractium-local-python"
-SERVER_VERSION = "0.2"
+SERVER_NAME = "extractium"
+SERVER_VERSION = __version__
+
+# The exit code of a server started with no compendium to search, or with
+# an address it will not fetch. It matches the build command's code for
+# a bad configuration.
+EXIT_CONFIG = 2
 
 # The one tool this server exposes.
 TOOL_NAME = "search_kb"
@@ -86,11 +94,18 @@ MAX_RESULTS = 10
 # a mistake or an attempt to push text into the answer.
 MAX_QUERY_CHARS = 1000
 
-# Where the container comes from. One of the two is required; the path
-# wins when both are set, because a local file needs no network at all.
+# Where the container comes from when the command line does not say: a
+# client configuration written for the earlier example server named it
+# in the environment, and those settings still work. The path wins when
+# both are set, because a local file needs no network at all.
 INDEX_URL_ENV = "EXTRACTIUM_INDEX_URL"
 INDEX_PATH_ENV = "EXTRACTIUM_INDEX_PATH"
 CACHE_DIR_ENV = "EXTRACTIUM_CACHE_DIR"
+
+# The address schemes that mean "download it". Anything else given as an
+# index is a path on this machine, so a Windows drive letter is never
+# mistaken for a scheme.
+ADDRESS_SCHEMES = frozenset({"http", "https"})
 
 # Folder the downloaded container is kept in, under the user's home
 # directory unless CACHE_DIR_ENV names another.
@@ -198,22 +213,63 @@ TOOL_DEFINITION = {
 ### Configuration ###
 
 class ConfigurationError(ValueError):
-    """Raised when the environment does not say which container to search."""
+    """Raised when nothing says which container to search, or the address given is refused."""
 
 
-def cache_root(environ=None):
+def is_address(value):
+    """
+    Whether an index names a place to download from rather than a file.
+
+    Args:
+        value (str): the index as given.
+
+    Returns:
+        bool: True for an `http://` or `https://` address.
+    """
+    return urllib.parse.urlparse(value).scheme.lower() in ADDRESS_SCHEMES
+
+
+def index_source(named=None, environ=None):
+    """
+    Which compendium to search: the one named on the command line, else
+    the one the environment names.
+
+    Args:
+        named (str | None): the `--index` value, a path or an address.
+        environ (Mapping[str, str] | None): the environment to read;
+            os.environ by default.
+
+    Returns:
+        str: a path on this machine or an address, not yet checked.
+
+    Raises:
+        ConfigurationError: if nothing names a compendium.
+    """
+    environ = os.environ if environ is None else environ
+    for candidate in (named, environ.get(INDEX_PATH_ENV), environ.get(INDEX_URL_ENV)):
+        if candidate:
+            return candidate
+    raise ConfigurationError(
+        "give --index the path of a built compendium on this machine or its published "
+        f"https:// address (or set {INDEX_PATH_ENV} or {INDEX_URL_ENV})."
+    )
+
+
+def cache_root(environ=None, named=None):
     """
     Folder the downloaded container is kept in.
 
     Args:
         environ (Mapping[str, str] | None): the environment to read;
             os.environ by default.
+        named (str | None): a folder given on the command line, which
+            wins over the environment.
 
     Returns:
         pathlib.Path: the folder, which may not exist yet.
     """
     environ = os.environ if environ is None else environ
-    named = environ.get(CACHE_DIR_ENV)
+    named = named or environ.get(CACHE_DIR_ENV)
     if named:
         return pathlib.Path(named)
     return pathlib.Path.home() / ".cache" / CACHE_FOLDER_NAME
@@ -243,8 +299,8 @@ def checked_url(raw):
     if parsed.scheme == "http" and host in LOOPBACK_HOSTS:
         return raw
     raise ConfigurationError(
-        f"{INDEX_URL_ENV} must be an https:// address (http:// is allowed only on "
-        f"localhost); {raw!r} is not."
+        f"the index address must be https:// (http:// is allowed only on localhost); "
+        f"{raw!r} is not."
     )
 
 
@@ -347,12 +403,16 @@ def container_bytes(url, root, opener=urllib.request.urlopen, log=None):
         raise
 
 
-def index_from_environment(environ=None, opener=urllib.request.urlopen, log=None):
+def index_from_source(source, cache_dir=None, opener=urllib.request.urlopen, log=None):
     """
-    Loads the configured compendium and returns it ready to search.
+    Loads one compendium, from a file on this machine or from a published
+    address, and returns it ready to search.
 
     Args:
-        environ (Mapping[str, str] | None): the environment to read.
+        source (str): a path, read directly and never fetched, or an
+            `http://` or `https://` address, downloaded through the cache.
+        cache_dir (pathlib.Path | None): where a downloaded container is
+            kept; the default cache folder when None.
         opener (Callable): urlopen, or a stand-in that behaves like it.
         log (Callable[[str], None] | None): where to write progress.
 
@@ -360,27 +420,16 @@ def index_from_environment(environ=None, opener=urllib.request.urlopen, log=None
         extractium.search.SearchIndex: the loaded compendium.
 
     Raises:
-        ConfigurationError: if neither address nor path is configured, or
-            the address is not one this server will fetch.
+        ConfigurationError: if the address is not one this server will fetch.
         ContainerError: if the file is not a readable compendium.
         OSError: if the file cannot be read or fetched.
     """
-    environ = os.environ if environ is None else environ
-    local_path = environ.get(INDEX_PATH_ENV)
-    if local_path:
-        if log:
-            log(f"reading the index from {local_path}")
-        return load_container(local_path)
-
-    url = environ.get(INDEX_URL_ENV)
-    if not url:
-        raise ConfigurationError(
-            f"set {INDEX_URL_ENV} to the published index address, or {INDEX_PATH_ENV} to "
-            "a built index on this machine."
-        )
     if log:
-        log(f"reading the index from {url}")
-    return load_container(container_bytes(checked_url(url), cache_root(environ), opener, log))
+        log(f"reading the index from {source}")
+    if not is_address(source):
+        return load_container(source)
+    root = cache_root() if cache_dir is None else pathlib.Path(cache_dir)
+    return load_container(container_bytes(checked_url(source), root, opener, log))
 
 
 def sentence_transformer_embedder(model_name):
@@ -729,40 +778,58 @@ def serve(stream_in, stream_out, server):
     return 0
 
 
-def main(argv=None, environ=None):
+def _utf8(stream):
     """
-    Starts the server on standard input and output.
+    The standard stream set to UTF-8, which is what the protocol's
+    standard-input transport carries. A console on Windows would
+    otherwise write the section text in the console's own code page,
+    and a client reading UTF-8 would meet bytes it cannot decode.
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8")
+    return stream
+
+
+def run_mcp(args, environ=None, stream_in=None, stream_out=None):
+    """
+    Runs the `mcp` command: the server on standard input and output.
+
+    An address that this server will not fetch is refused before the
+    server waits for a client, so a mistyped configuration fails at
+    once in the client's log rather than at the first search.
 
     Args:
-        argv (list[str] | None): unused; the server takes no options, so
-            that a client configuration is one command and a few
-            environment variables.
+        args (argparse.Namespace): the parsed `mcp` arguments: `index`,
+            a path or address or None, and `cache_dir` or None.
         environ (Mapping[str, str] | None): the environment to read.
+        stream_in, stream_out (IO[str] | None): the client's messages and
+            where the answers go; standard input and output by default.
 
     Returns:
-        int: 0 on a clean shutdown, 2 when the environment does not say
-        which index to search.
+        int: 0 on a clean shutdown, 2 when nothing names a compendium or
+        the address is one this server will not fetch.
     """
     environ = os.environ if environ is None else environ
+    stream_in = _utf8(sys.stdin) if stream_in is None else stream_in
+    stream_out = _utf8(sys.stdout) if stream_out is None else stream_out
 
     def log(message):
         print(f"{SERVER_NAME}: {message}", file=sys.stderr, flush=True)
 
-    if not environ.get(INDEX_PATH_ENV) and not environ.get(INDEX_URL_ENV):
-        log(
-            f"set {INDEX_URL_ENV} to the published index address, or {INDEX_PATH_ENV} to a "
-            "built index on this machine."
-        )
-        return 2
+    try:
+        source = index_source(getattr(args, "index", None), environ)
+        if is_address(source):
+            checked_url(source)
+    except ConfigurationError as error:
+        log(str(error))
+        return EXIT_CONFIG
+    cache_dir = cache_root(environ, getattr(args, "cache_dir", None))
 
     server = KbServer(
-        open_index=lambda: index_from_environment(environ, log=log),
+        open_index=lambda: index_from_source(source, cache_dir, log=log),
         open_embedder=lambda index: sentence_transformer_embedder(index.embedding["model"]),
         log=log,
     )
     log("ready; waiting for requests on standard input.")
-    return serve(sys.stdin, sys.stdout, server)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return serve(stream_in, stream_out, server)
