@@ -52,6 +52,23 @@ CHATGPT.md
 *.cache
 __pycache__/
 .venv/
+# What a portable install builds beside the installer, named piece by
+# piece rather than as the whole folder, because git on Windows matches
+# names without regard to case and "Extractium/" would hide the package
+/Extractium/uv
+/Extractium/uv.exe
+/Extractium/python/
+/Extractium/venv/
+/Extractium/bin/
+/Extractium/cache/
+/Extractium/installed-version.txt
+/Extractium/not-portable.txt
+/Extractium/last-folder.txt
+/Extractium/install.bat
+/Extractium/install.sh
+# The zip the release workflow packs that folder into
+*-portable*.zip
+*-portable*.zip.sha256
 
 # Ignore Extractium build/test artifacts
 .kb_cache/

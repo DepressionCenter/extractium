@@ -358,6 +358,9 @@ def copy_folder(source, home):
     home = pathlib.Path(home)
     if source.resolve() == home.resolve():
         raise InstallError(f"{source} is already the folder to install into.")
+    if not is_portable(source):
+        raise InstallError(f"{source} cannot be copied: its Python is a virtual environment made on this "
+                           "computer's own Python. Run the installer on its own instead.")
     try:
         if home.exists():
             shutil.rmtree(home)

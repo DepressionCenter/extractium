@@ -285,6 +285,12 @@ def test_copying_replaces_an_older_folder_and_refuses_the_same_folder(tmp_path):
     with pytest.raises(install.InstallError, match="already the folder"):
         install.copy_folder(home, home)
 
+    # A folder whose Python is a virtual environment cannot move.
+    venv_home, _ = make_home(tmp_path / "v", venv=True)
+    install.write_marks(venv_home, portable=False)
+    with pytest.raises(install.InstallError, match="cannot be copied"):
+        install.copy_folder(venv_home, tmp_path / "elsewhere")
+
 
 # ---------------------------------------------------------------------------
 # PATH

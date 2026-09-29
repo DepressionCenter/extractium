@@ -1,19 +1,23 @@
 """
 Summary: Tests for the pieces a scheduled or one-command build relies on:
-the pinned dependency list, the two run scripts, and the two GitHub
-Actions workflows. They check what can be checked without a runner --
-that every dependency is pinned and hashed, that the scripts install from
-the lock file, fail on the first error, route "ui" to the local page and
-ask where to set up on a first run, and that each workflow runs
-weekly, runs on a button press, caches the crawl, keeps least privilege,
-and publishes only through the official Pages actions.
+the pinned dependency list, the two thin run scripts, the two install
+scripts, and the GitHub Actions workflows. They check what can be checked
+without a runner: that every dependency is pinned and hashed; that the
+run scripts find the folder beside them, then the per-user install, then
+the installer, and route "ui", no argument, and a build argument; that
+the installers pin uv by version and hash, keep it inside the folder,
+tell the three situations apart, route every flag, pipe nothing into a
+shell, run no admin step on their own, and stop saying what to ask for;
+and that each workflow runs weekly, runs on a button press, caches the
+crawl, keeps least privilege, and publishes only through the official
+Pages actions.
 
 This file is part of Extractium™
 tests/test_operations.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Notes: See README file for documentation and full license information.
 """
 
@@ -32,7 +36,7 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-28"
+__date__ = "2026-09-30"
 
 import pathlib
 import re
@@ -145,7 +149,7 @@ def test_the_lock_file_pins_the_pdf_reader(lock_text):
 
 
 # ---------------------------------------------------------------------------
-# The run scripts
+# The scripts
 # ---------------------------------------------------------------------------
 
 def test_the_lock_file_pins_the_caption_library(lock_text):
@@ -227,7 +231,18 @@ def _working_bash():
     return None
 
 
-def test_the_posix_script_is_valid_shell():
+POSIX_SCRIPTS = ("run.sh", "install.sh")
+WINDOWS_SCRIPTS = ("run.bat", "install.bat")
+INSTALLERS = ("install.sh", "install.bat")
+RUN_SCRIPTS = ("run.sh", "run.bat")
+
+
+def script_text(name):
+    return (REPO_ROOT / name).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("script", POSIX_SCRIPTS)
+def test_each_posix_script_is_valid_shell(script):
     bash = _working_bash()
     if bash is None:
         pytest.skip("no working bash on this machine")
@@ -238,181 +253,268 @@ def test_the_posix_script_is_valid_shell():
     # Sent as bytes so the line endings reach bash exactly as committed:
     # text mode would rewrite them for Windows, and a shell block ending
     # in a carriage return does not parse.
-    result = subprocess.run(
-        [bash, "-n"],
-        input=(REPO_ROOT / "run.sh").read_bytes(),
-        capture_output=True,
-    )
+    result = subprocess.run([bash, "-n"], input=(REPO_ROOT / script).read_bytes(), capture_output=True)
 
     assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
 
 
-def test_the_posix_script_has_unix_line_endings():
+@pytest.mark.parametrize("script", POSIX_SCRIPTS)
+def test_each_posix_script_has_unix_line_endings_and_stops_at_the_first_failure(script):
     # A carriage return at the end of a line is part of the command on
     # macOS and Linux, so a script saved the Windows way does not run
     # there at all.
-    assert b"\r\n" not in (REPO_ROOT / "run.sh").read_bytes()
+    assert b"\r\n" not in (REPO_ROOT / script).read_bytes()
+    assert "set -euo pipefail" in script_text(script)
 
 
-def test_the_posix_script_stops_at_the_first_failure():
-    text = (REPO_ROOT / "run.sh").read_text(encoding="utf-8")
+@pytest.mark.parametrize("script", POSIX_SCRIPTS + WINDOWS_SCRIPTS)
+def test_each_script_hard_codes_no_developer_path(script):
+    text = script_text(script)
 
-    assert "set -euo pipefail" in text
-
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_installs_the_locked_versions_only(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
-
-    assert "requirements-lock.txt" in text
-    assert "--require-hashes" in text
-    # The project itself goes in without dependencies, so pip cannot
-    # quietly resolve something the lock file did not name.
-    assert "--no-deps" in text
+    assert "C:\\Users" not in text
+    assert "/home/" not in text
+    assert "/Users/" not in text
 
 
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_builds_and_says_what_to_commit(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+# The thin entry points ------------------------------------------------------
 
-    assert re.search(r'VENV_EXTRACTIUM%?" build', text)
-    assert "git add" in text
-    assert ".kb_cache" in text
+@pytest.mark.parametrize("script", RUN_SCRIPTS)
+def test_each_run_script_prefers_the_folder_beside_it_then_the_per_user_install_then_installs(script):
+    text = script_text(script)
 
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_writes_a_first_settings_file_and_limits_the_first_build(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
-
-    assert re.search(r'VENV_EXTRACTIUM%?" init', text)
-    assert "--max-pages 25" in text
-
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_routes_ui_to_the_page_and_a_build_argument_to_the_build(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
-
-    # "ui" starts the page; any other argument still goes to the build.
-    assert re.search(r'VENV_EXTRACTIUM%?" ui --config', text)
     if script == "run.bat":
-        assert 'if /i "%~1"=="ui" goto :page' in text
-        assert 'if not "%~1"=="" goto :build' in text
-        assert '"%VENV_EXTRACTIUM%" build %*' in text
+        assert 'if exist "%HERE%\\Extractium\\bin\\extractium.cmd" set "SHIM=' in text
+        assert 'set "USER_SHIM=%LOCALAPPDATA%\\Extractium\\bin\\extractium.cmd"' in text
+        assert 'if exist "%HERE%\\install.bat"' in text
+        assert "/releases/latest/download/install.bat" in text
+    else:
+        assert 'if [ -x "$HERE/Extractium/bin/extractium" ]; then' in text
+        assert 'USER_SHIM="${XDG_DATA_HOME:-$HOME/.local/share}/extractium/bin/extractium"' in text
+        assert 'if [ -f "$HERE/install.sh" ]; then' in text
+        assert "/releases/latest/download/install.sh" in text
+    # The order is beside, then the profile, then the installer.
+    if script == "run.bat":
+        beside, profile = 'if exist "%HERE%\\Extractium\\bin', 'if exist "%USER_SHIM%"'
+    else:
+        beside, profile = 'if [ -x "$HERE/Extractium/bin/extractium" ]', 'elif [ -x "$USER_SHIM" ]'
+    assert text.index(beside) < text.index(profile) < text.index("/releases/latest/download/")
+
+
+@pytest.mark.parametrize("script", RUN_SCRIPTS)
+def test_each_run_script_routes_ui_no_argument_and_a_build_argument(script):
+    text = script_text(script)
+
+    if script == "run.bat":
+        assert 'if /i "%~1"=="ui" (' in text
+        assert '"%SHIM%" ui %CONFIG_ARGS%' in text
+        assert '"%SHIM%" start %CONFIG_ARGS%' in text
+        assert '"%SHIM%" build %*' in text
     else:
         assert 'if [ "${1:-}" = "ui" ]; then' in text
-        assert '"$VENV_EXTRACTIUM" build "$@"' in text
+        assert 'exec "$SHIM" ui "${CONFIG_ARGS[@]}" "$@"' in text
+        assert 'exec "$SHIM" start "${CONFIG_ARGS[@]}"' in text
+        assert 'exec "$SHIM" build "$@"' in text
+    # CONFIG still names another settings file.
+    assert "CONFIG" in text
 
 
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_asks_where_to_set_up_on_a_first_run_with_the_browser_as_the_default(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+@pytest.mark.parametrize("script", RUN_SCRIPTS)
+def test_each_run_script_installs_nothing_itself(script):
+    text = script_text(script)
 
-    assert "Set up in the browser or in the terminal? [browser]:" in text
-    # The terminal answer still runs init and the limited first build.
-    assert re.search(r'VENV_EXTRACTIUM%?" init --output', text)
-    assert "--max-pages 25" in text
-    if script == "run.bat":
-        assert 'set "SETUP=browser"' in text                # Enter keeps the default
-        assert 'if /i "%SETUP:~0,1%"=="t" goto :terminal_setup' in text
-    else:
-        assert 'if [ -t 0 ]; then' in text                  # no terminal, no browser
-        assert 'SETUP="${SETUP:-browser}"' in text
-        assert "[Tt]*)" in text
-
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_runs_the_installed_command_and_not_the_module(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
-
-    # The interpreter's -m flag puts the folder the script was run from at
-    # the front of the import path. The checkout sits in that folder, so
-    # the module form imports the checkout's outer folder as the package
-    # and every build fails on the first import.
+    # The install, the environment, and the interpreter search all live
+    # in the installer now; the entry point only finds and runs the shim.
+    assert "pip install" not in text
+    assert "venv" not in text
     assert "-m extractium.cli" not in text
-    assert re.search(r"Scripts[/\\]extractium\.exe", text)
+    assert "requirements-lock" not in text
 
 
-# Where each script sets the folder the download lands in, by default.
-DOWNLOAD_FOLDER = {
-    "run.sh": r"EXTRACTIUM_DIR:-\$HERE/([^\"}]+)",
-    "run.bat": r"EXTRACTIUM_DIR=%HERE%[/\\]([^\"]+)",
-}
+# The installers ---------------------------------------------------------------
+
+UV_HASH_LINE = re.compile(r'UV_SHA256_[A-Z0-9_]+="?([0-9a-f]{64})"?', re.M)
 
 
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_downloads_into_a_folder_that_cannot_shadow_the_package(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_pins_uv_by_version_and_hash(script):
+    text = script_text(script)
 
-    found = re.search(DOWNLOAD_FOLDER[script], text)
-    assert found, "the script must set a default download folder"
-    # The download lands beside the settings file, which is where a build
-    # is started from. A folder named "extractium" there would be imported
-    # in place of the installed package.
-    assert not found.group(1).isidentifier()
+    assert re.search(r'UV_VERSION="?\d+\.\d+\.\d+"?', text)
+    hashes = UV_HASH_LINE.findall(text)
+    # Two Windows archives; two macOS and two Linux ones.
+    assert len(hashes) == (2 if script == "install.bat" else 4)
+    assert len(set(hashes)) == len(hashes)
+    assert "releases/download/" in text and "astral-sh/uv" in text
+    # The download is checked before it is unpacked or run.
+    assert "does not match the SHA-256" in text
+    if script == "install.bat":
+        assert "Get-FileHash -Algorithm SHA256" in text
+    else:
+        assert "sha256sum" in text and "shasum -a 256" in text
 
 
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_downloads_the_tool_when_run_on_its_own(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_keeps_uv_inside_the_folder_and_trusts_the_machines_certificates(script):
+    text = script_text(script)
 
-    # The newest published release by default, looked up through the
-    # redirect GitHub serves, so the script never names a version.
-    assert re.search(r"EXTRACTIUM_REF[=:]?\s*\S*latest", text)
+    assert "UV_NATIVE_TLS=1" in text
+    assert "UV_LINK_MODE=copy" in text
+    assert "UV_PYTHON_INSTALL_DIR=" in text
+    assert "UV_CACHE_DIR=" in text
+    assert re.search(r'PYTHON_VERSION="?3\.\d+\.\d+"?', text)
+    assert "python install" in text and "--install-dir" in text
+
+
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_tells_the_three_situations_apart(script):
+    text = script_text(script)
+
+    if script == "install.bat":
+        assert 'if exist "%HERE%\\Extractium\\bin\\extractium.cmd"' in text
+        assert 'if exist "%HERE%\\pyproject.toml"' in text
+        assert "extractium.install copy --from" in text
+    else:
+        assert 'if [ -x "$HERE/Extractium/bin/extractium" ]' in text
+        assert 'if [ -f "$HERE/pyproject.toml" ]; then' in text
+        assert "extractium.install copy --from" in text
+    # On its own: the newest release through the redirect, then the archive.
     assert "/releases/latest" in text
     assert "/releases/tag/" in text
-    # git first, then the release archive with no tool beyond Python.
-    assert "clone --quiet --depth 1 --branch" in text
     assert "/archive/" in text
-    assert "urllib.request" in text
-    assert "pyproject.toml" in text, "the script tells a checkout from a lone copy of itself by the project file"
+    # git is not used to fetch the tool any more.
+    assert "git clone" not in text
 
 
-def test_the_posix_script_downloads_through_curl_or_wget_before_python():
-    text = (REPO_ROOT / "run.sh").read_text(encoding="utf-8")
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_routes_every_flag(script):
+    text = script_text(script)
+
+    for flag in ("--portable", "--update", "--uninstall", "--version", "--editable", "--help"):
+        assert flag in text, flag
+    assert "install.py" in text and "finish" in text
+    assert '" update ' in text
+    assert "uninstall --home" in text
+
+
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_hands_over_with_the_lock_and_never_a_shell_string(script):
+    text = script_text(script)
+
+    # The packages are installed by install.py from the lock, which the
+    # script names; the script itself never calls pip on the lock.
+    assert "requirements-lock.txt" in text
+    assert "--require-hashes" not in text
+    # Nothing downloaded is piped into a shell.
+    for forbidden in ("| sh", "| bash", "|sh", "|bash", "iex", "Invoke-Expression"):
+        assert forbidden not in text, forbidden
+
+
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_runs_no_admin_step_and_never_truncates_path(script):
+    text = script_text(script)
+
+    assert "setx" not in text
+    assert "runas" not in text.lower()
+    if script == "install.bat":
+        assert "sudo" not in text
+        assert "winget install" in text
+    else:
+        # A packager command that needs sudo is printed and run only
+        # after a yes, inside the one helper that asks.
+        offering = text[text.index("offer_command() {"):]
+        helper = offering[:offering.index("\n}\n")]
+        assert 'read -r -p "Run it now? [y/N]: "' in helper
+        for line in text.splitlines():
+            if "sudo" in line:
+                assert "offer_command" in line, line
+        assert "dnf install" in text and "apt-get install python3-venv" in text and "brew install" in text
+
+
+@pytest.mark.parametrize("script", INSTALLERS)
+def test_each_installer_stops_and_says_what_to_ask_for(script):
+    text = script_text(script)
+
+    assert "Ask IT for" in text
+    assert "cannot be moved" in text                    # the machine-Python fallback is not portable
+    assert "Py_GIL_DISABLED" in text                    # a standard build is preferred
+    assert "sys.version_info >= (3, 10)" in text
+
+
+def test_the_windows_installer_pauses_when_double_clicked_and_asks_before_removing():
+    text = script_text("install.bat")
+
+    assert "%cmdcmdline%" in text and "pause" in text
+    assert "[y/N]" in text and "rmdir /s /q \"%HOME_DIR%\"" in text
+
+
+def test_the_windows_installer_downloads_through_powershell():
+    text = script_text("install.bat")
+
+    assert "Invoke-WebRequest" in text
+    assert "Expand-Archive" in text
+    assert "SecurityProtocolType]::Tls12" in text
+
+
+def test_the_posix_installer_downloads_through_curl_or_wget():
+    text = script_text("install.sh")
 
     assert "curl -fsSL" in text
     assert "wget -q" in text
 
 
-def test_the_windows_script_downloads_through_powershell_before_python():
-    text = (REPO_ROOT / "run.bat").read_text(encoding="utf-8")
+FAKE_CURL = """#!/bin/sh
+# Serves the same small archive for every address, so the hash never
+# matches what the installer expects.
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o) out="$2"; shift ;;
+    esac
+    shift
+done
+cp "$FAKE_ARCHIVE" "$out"
+"""
 
-    assert "Invoke-WebRequest" in text
-    assert "Expand-Archive" in text
 
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_prefers_a_standard_python_and_checks_the_one_it_was_given(script):
+def test_the_posix_installer_refuses_a_uv_download_whose_hash_differs(tmp_path):
     """
-    Every parser grammar ships abi3 wheels only, which a free-threaded
-    Python cannot use, so pip falls back to a source archive that does not
-    build. A machine whose default Python is the free-threaded build must
-    still get a working environment, and PYTHON must be checked when it
-    is set, because it may name that build too.
+    A real run of install.sh with a fake curl on the path: the archive it
+    serves holds a fake uv, and its hash is not the one pinned in the
+    script, so the install must stop at step 1 without running it.
     """
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
+    bash = _working_bash()
+    if bash is None:
+        pytest.skip("no working bash on this machine")
+    if sys.platform == "win32":
+        pytest.skip("the fake path and uname of a Windows bash do not stand in for macOS or Linux")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    archive_root = tmp_path / "archive" / "uv-fake"
+    archive_root.mkdir(parents=True)
+    (archive_root / "uv").write_text("#!/bin/sh\necho 'uv ran' > \"$FAKE_RAN\"\n", encoding="utf-8")
+    (archive_root / "uv").chmod(0o755)
+    archive = tmp_path / "uv.tar.gz"
+    subprocess.run(["tar", "-czf", str(archive), "-C", str(tmp_path / "archive"), "uv-fake"], check=True)
+    (fake_bin / "curl").write_text(FAKE_CURL, encoding="utf-8")
+    (fake_bin / "curl").chmod(0o755)
+    home = tmp_path / "profile"
+    ran = tmp_path / "ran.txt"
+    # A checkout beside the script, so nothing but uv is downloaded.
+    checkout = tmp_path / "checkout"
+    shutil.copytree(REPO_ROOT / "extractium", checkout / "extractium")
+    for name in ("pyproject.toml", "requirements-lock.txt", "install.sh"):
+        shutil.copy(REPO_ROOT / name, checkout / name)
 
-    assert "Py_GIL_DISABLED" in text
-    assert "sys.version_info >= (3, 10)" in text
-    assert "FREE_THREADED_ONLY" in text
-    assert "Making it again with" in text            # a wrong environment is remade, not refused
-    if script == "run.bat":
-        assert "if defined PYTHON call :try_python %PYTHON%" in text
-        assert '"py -3.10"' in text and '"python"' in text
-    else:
-        assert 'if [ -n "$PYTHON" ] && is_standard_python "$PYTHON"' in text
-        assert "python3.10" in text
+    result = subprocess.run(
+        [bash, str(checkout / "install.sh"), "--portable"],
+        env={"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home), "FAKE_ARCHIVE": str(archive),
+             "FAKE_RAN": str(ran), "PYTHON_EXE": "/no/such/python"},
+        capture_output=True, text=True, cwd=tmp_path, timeout=120,
+    )
 
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_installs_without_the_parsers_on_a_free_threaded_python(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
-
-    assert "lock_without_parsers.py" in text
-    assert "requirements-lock-without-parsers.txt" in text
-    assert "Installing without them" in text
-    # Whichever list is used, pip still checks every hash.
-    assert re.search(r'--require-hashes -r "?(%LOCK%|\$LOCK)"?', text), text
+    assert result.returncode != 0
+    assert "does not match the SHA-256" in result.stderr
+    assert not ran.exists(), "the unverified uv must never run"
+    assert not (checkout / "Extractium" / "uv").exists()
 
 
 def test_the_lock_without_parsers_keeps_every_other_package_and_hash(lock_text):
@@ -436,15 +538,6 @@ def test_the_lock_without_parsers_keeps_every_other_package_and_hash(lock_text):
     )
     assert kept_hashes == lock_text.count("--hash=") - parser_hashes
     assert filtered.startswith(lock_text[:200])          # the license header survives
-
-
-@pytest.mark.parametrize("script", ["run.sh", "run.bat"])
-def test_each_run_script_hard_codes_no_developer_path(script):
-    text = (REPO_ROOT / script).read_text(encoding="utf-8")
-
-    assert "C:\\Users" not in text
-    assert "/home/" not in text
-    assert "/Users/" not in text
 
 
 # ---------------------------------------------------------------------------
