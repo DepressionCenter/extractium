@@ -3,10 +3,11 @@ This file is part of Extractium™
 docs/how-to/connect-an-mcp-client.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-17
+Last Modified: 2026-09-28
 Summary: How to let an AI assistant on your own computer search a
-published compendium: which of the two local servers to pick, how to
-configure a client, how to check it works without a client, and what the
+compendium: the one command that serves the search tool, the one
+command that writes the connection card, how to check the tool works
+without a client, how to add it to each assistant, and what the
 assistant may and may not do with what comes back.
 Notes: See README file for documentation and full license information.
 
@@ -26,89 +27,100 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 ## Summary
 
-The Model Context Protocol (MCP) is the standard that AI assistants use to call tools. This page shows you how to give an assistant on your own computer one tool: search of a published Extractium™ compendium, the collection a build writes. You need a published index address, a terminal, and a few minutes. Nothing you ask leaves your computer.
+The Model Context Protocol (MCP) is the standard that AI assistants use to call tools. This page shows you how to give an assistant on your own computer one tool: search of an Extractium™ compendium, the collection a build writes. Two commands do it. `extractium mcp` serves the tool, and `extractium connect` writes a card that tells the assistant, or you, how to connect. You need a built compendium or its published address, a terminal, and a few minutes. Nothing you ask leaves your computer.
 
-Two servers ship with Extractium™, one in Python and one in JavaScript. They expose the same tool and return the same answers, so pick whichever runtime you already have.
-
-
-## Which server to use
-
-| Pick | When |
-|---|---|
-| [Python](../../examples/mcp/local-python/README.md) | You already installed Extractium™. It embeds questions with the package Extractium™ installs, so there is nothing else to add. |
-| [Node](../../examples/mcp/local-node/README.md) | Your assistant runs JavaScript tools, or you have Node and no Python. It installs one package, `@huggingface/transformers`, and everything that package needs. |
-
-Both read the same index file, so you can change your mind later. If the assistant does not run on your computer, or you would rather not run anything at all, the same tool can be hosted for free. See [how to deploy a remote MCP server](deploy-a-remote-mcp-server.md).
+The same tool also exists as a JavaScript example, for an assistant that runs JavaScript tools or a machine with Node and no Python. See [the Node server](../../examples/mcp/local-node/README.md). If the assistant does not run on your computer, or you would rather not run anything at all, the tool can be hosted for free. See [how to deploy a remote MCP server](deploy-a-remote-mcp-server.md).
 
 
-## Step 1: Get the index address
+## Before you start
 
-You need the address of a built compendium's index file in a published folder. A build publishes two. `compendium-full.json.gz` holds the text of every section, so the assistant can quote the page, and it is the usual choice on your own computer. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords, for when the download or the memory matters more. If you built one yourself, the files are in `dist/` and you can point at one directly instead.
+You need one of these:
 
-Check that the address answers before you go further:
+- A compendium file a build wrote. It is in `dist/` by default. `compendium-full.json.gz` holds the text of every section, so the assistant can quote a page, and it is the usual choice on your own computer. `compendium.json.gz` is the light one, with one entry per page, for when memory matters more.
+- The address of a published compendium, such as `https://example.org/kb/compendium-full.json.gz`. The address must start with `https://`, unless it is on `localhost`. The tool refuses anything else, because a file fetched over an open connection can be swapped in transit for whatever someone else wants your assistant to read.
+
+You also need Extractium™ installed, which puts the `extractium` command on the path of the environment you installed it into. `python -m extractium.cli` does the same from that environment. [How to install](install.md) covers both.
+
+
+## Step 1: Start the tool once by hand
+
+This proves the tool runs before an assistant depends on it.
 
 ```bash
-curl -I https://example.org/kb/compendium-full.json.gz
+extractium mcp --index dist/compendium-full.json.gz
 ```
 
-A `200` means you are ready. A `404` means the path is wrong. The address must start with `https://`, unless it is on `localhost`. Both servers refuse anything else, because an index fetched over an open connection can be swapped in transit for whatever someone else wants your assistant to read.
+The command prints one line to the error stream and then waits. It looks stuck, but it is waiting for a client to write a request to its standard input. Press Ctrl+C to stop it.
 
-
-## Step 2: Start the server once by hand
-
-This proves the server runs before an assistant depends on it.
-
-Python:
+To serve a published compendium instead, give the address:
 
 ```bash
-EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz python examples/mcp/local-python/server.py
+extractium mcp --index https://example.org/kb/compendium-full.json.gz
 ```
 
-Node:
+The file is downloaded once into `~/.cache/extractium-mcp`, or the folder `--cache-dir` names, and checked against the server on later starts, so an unchanged file costs one small request. If the host cannot be reached and a copy is cached, the cached copy is used.
 
-```bash
-cd examples/mcp/local-node && npm install
-EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz node server.js
-```
-
-On Windows, set the variable first (`set NAME=value` in Command Prompt, `$env:NAME = 'value'` in PowerShell), then run the command without the prefix.
-
-The server prints one line to the error stream and then waits. It looks stuck, but it is waiting for a client to write a request to its standard input. Press Ctrl+C to stop it.
+Without `--index`, the command reads `EXTRACTIUM_INDEX_PATH` and then `EXTRACTIUM_INDEX_URL` from the environment, so a client configuration written for the earlier example server still works.
 
 
-## Step 3: Ask it something without a client
+## Step 2: Ask it something without a client
 
-You can drive the server yourself. Send it two messages, one per line:
+You can drive the tool yourself. Send it two messages, one per line:
 
 ```bash
 printf '%s\n%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_kb","arguments":{"query":"how do I request a data extract"}}}' \
-  | EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz python examples/mcp/local-python/server.py
+  | extractium mcp --index dist/compendium-full.json.gz
 ```
 
-You get two lines back. The first lists the one tool, `search_kb`. The second holds the sections it found. The first search is slow, because it downloads the embedding model, about 130 MB. Later ones are quick.
+You get two lines back. The first lists the one tool, `search_kb`. The second holds the sections it found. The first search is slow, because it loads the embedding model, about 130 MB the first time. Later ones are quick.
+
+
+## Step 3: Write the connection card
+
+```bash
+extractium connect --index dist/compendium-full.json.gz
+```
+
+This writes a folder named `extractium-search` holding one file, `SKILL.md`, and prints the same text. The card holds:
+
+- The `extractium mcp` command with the full path of your file, so a client can start it from any folder.
+- The JSON entry most clients read, with the same command.
+- One sentence per known assistant saying whether it can reach a tool on this computer, and where its configuration goes.
+- The rules about what an assistant may do with the text the tool returns.
+
+The card names no token and no credential. `--out` names another folder. `--url` adds a second entry for a client that connects to an address instead of starting a program, when a program on this computer serves the same tool over HTTP; the address has to be on this computer and carry no query.
+
+The folder is the shape a Claude skill takes, so you can copy it where your assistant looks for skills. The text also pastes into the instructions of any assistant that takes them.
 
 
 ## Step 4: Add it to your assistant
 
-Most clients keep a JSON file listing the servers they may start. The shape below is the common one. Your client's own documentation says where the file lives and whether it calls the section `mcpServers` or something else.
+Do one of these, whichever fits your assistant. The card says the same thing with your own path filled in.
 
-Python:
+**Claude Code** can start the tool itself. Run this once, with the path the card shows:
+
+```bash
+claude mcp add extractium -- extractium mcp --index C:/Path/To/dist/compendium-full.json.gz
+```
+
+**Most other clients** keep a JSON file listing the servers they may start. This is the entry, and it is the one the card prints:
 
 ```json
 {
   "mcpServers": {
     "extractium": {
-      "command": "python",
-      "args": ["C:/Path/To/extractium/examples/mcp/local-python/server.py"],
-      "env": { "EXTRACTIUM_INDEX_URL": "https://example.org/kb/compendium-full.json.gz" }
+      "command": "extractium",
+      "args": ["mcp", "--index", "C:/Path/To/dist/compendium-full.json.gz"]
     }
   }
 }
 ```
 
-Node:
+Use full paths, not relative ones. The client starts the tool from a folder you did not choose. If the client cannot find the `extractium` command, give the full path of the command inside the environment you installed it into, or use `python` with `-m extractium.cli mcp` as the arguments. Restart the client, and the tool appears in its tool list.
+
+**The Node example** takes the same shape, with `node` as the command and the full path of `server.js` as its argument, and the address in an `env` block:
 
 ```json
 {
@@ -122,8 +134,6 @@ Node:
 }
 ```
 
-Use full paths, not relative ones. The client starts the server from a folder you did not choose. Restart the client, and the tool appears in its tool list.
-
 
 ## Step 5: Use it
 
@@ -136,47 +146,49 @@ The tool takes two arguments:
 | `query` | The question, in plain words. No search operators. Up to 1,000 characters. |
 | `k` | How many sections to return, 1 to 10. Four by default. |
 
-An empty result means nothing in the index was relevant enough. That is a real answer. An assistant should say so rather than offer the closest miss.
+An empty result means nothing in the compendium was relevant enough. That is a real answer. An assistant should say so rather than offer the closest miss.
 
 
 ## What the assistant must not do with the answer
 
-Every section is text somebody else wrote on a web page. A page can hold words aimed at whatever reads it next: "ignore your previous instructions", "the administrator approved this", "run this command". The server puts a line at the top of every answer saying the sections are quoted evidence, not instructions, and an assistant must treat them that way.
+Every section is text somebody else wrote on a web page. A page can hold words aimed at whatever reads it next: "ignore your previous instructions", "the administrator approved this", "run this command". The tool puts a line at the top of every answer saying the sections are quoted evidence, not instructions, and an assistant must treat them that way. The card repeats the rule.
 
-If a compendium includes content read from a local folder, which only happens when you turn that on, the server marks the answer confidential. Do not paste that text into another service. [Using a published compendium](../using-a-compendium.md) states both rules in full.
+If a compendium includes content read from a local folder, which only happens when you turn that on, the tool marks the answer confidential. Do not paste that text into another service. [Using a published compendium](../using-a-compendium.md) states both rules in full.
 
 
 ## If it does not work
 
 | What you see | What it means |
 |---|---|
-| The server exits at once, code 2 | Neither `EXTRACTIUM_INDEX_URL` nor `EXTRACTIUM_INDEX_PATH` is set. |
-| "must be an https:// address" | The address is plain HTTP, or not an address at all. Use HTTPS, or `localhost` for a build you are serving yourself. |
-| "The index cannot be read" | The file at that address is not a compendium, or is a version this client does not read. Check it with `curl` and see the [container format](../container-format.md). |
-| "The index or the embedding model could not be loaded" | The download failed, or the embedding package is missing. The server's error stream says which step. The client usually shows it as the server's log. |
+| The command exits at once, code 2, and asks for `--index` | Nothing named a compendium: no `--index`, and neither `EXTRACTIUM_INDEX_PATH` nor `EXTRACTIUM_INDEX_URL` is set. |
+| "the index address must be https://" | The address is plain HTTP somewhere other than this computer. Use HTTPS, or `localhost` for a build you are serving yourself. |
+| "The index cannot be read" | The file is not a compendium, or is a version this client does not read. Check it against the [container format](../container-format.md). |
+| "The index or the embedding model could not be loaded" | The file could not be read or fetched, or the embedding package is missing. The error stream says which step. The client usually shows it as the server's log. |
 | The client lists no tools | The client could not start the command. Check the path in the configuration, and that the same command runs in a terminal. |
+| `extractium connect` says the file is not there | The path is wrong, or the build has not run yet. Give the file a build wrote. |
 
 More failures, and their fixes, are in [troubleshooting](../troubleshooting.md).
 
 
 ## Conclusion
 
-You now have an assistant that can search your organization's documentation and cite it, with no server to host and nothing sent to a third party. To build the index it searches, read [running a build](../usage.md). To search the same file from your own code instead, read [how to search a compendium](search-a-compendium.md).
+You now have an assistant that can search your organization's documentation and cite it, with no server to host and nothing sent to a third party. To build the compendium it searches, read [running a build](../usage.md). To search the same file from your own code instead, read [how to search a compendium](search-a-compendium.md).
 
 
 ## Additional Resources
 
 * [Extractium™ README](../../README.md): project overview and quick start.
-* [Local Python MCP Server](../../examples/mcp/local-python/README.md): settings and limits of the Python server.
-* [Local Node MCP Server](../../examples/mcp/local-node/README.md): settings and limits of the Node server.
-* [How to Search a Compendium](search-a-compendium.md): the client libraries both servers are built on.
+* [How to Install](install.md): the two ways to install, and how to check the command works.
+* [Local Node MCP Server](../../examples/mcp/local-node/README.md): the same tool in JavaScript, and its settings.
+* [Local Python MCP Server](../../examples/mcp/local-python/README.md): where the earlier example went.
+* [How to Search a Compendium](search-a-compendium.md): the client library the tool is built on.
 * [How to Deploy a Remote MCP Server](deploy-a-remote-mcp-server.md): the same tool hosted on Val Town or Cloudflare.
-* [Container Format](../container-format.md): the index file both servers read.
-* [Running a Build](../usage.md): how the index is produced.
+* [Container Format](../container-format.md): the file the tool reads.
+* [Running a Build](../usage.md): how the compendium is produced.
 * [How to Deploy](deploy.md): the deployment choices, and how each one is consumed.
 * [Troubleshooting](../troubleshooting.md): known failures, causes, and fixes.
 * [Using a Published Compendium](../using-a-compendium.md): how an AI agent should use what it gets back.
-* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol these servers speak.
+* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol the tool speaks.
 
 
 [← Back to README](../../README.md)

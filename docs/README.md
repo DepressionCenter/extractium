@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-22
+Last Modified: 2026-09-28
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -41,7 +41,7 @@ This folder holds the detailed documentation for Extractium™. The pages are gr
 * [How to Run a Weekly Build](how-to/run-a-weekly-build.md): the one-command build on your own computer or a server, put on a timer, and the scheduled builds on a GitLab runner or on GitHub.
 * [How to Publish to GitHub Pages](how-to/publish-to-github-pages.md): turning Pages on, what gets published, and what publishing means.
 * [How to Search a Compendium](how-to/search-a-compendium.md): searching a built index from Python or JavaScript.
-* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md): letting an AI assistant on your own computer search a published index.
+* [How to Connect an MCP Client](how-to/connect-an-mcp-client.md): serving the search tool with one command and writing the card that connects an AI assistant on your own computer to it.
 * [How to Deploy a Remote MCP Server](how-to/deploy-a-remote-mcp-server.md): hosting that search on Val Town or Cloudflare so an assistant anywhere can use it.
 * [Using a Published Compendium](using-a-compendium.md): how an AI agent should use the published files, cite an answer, and treat retrieved text.
 
