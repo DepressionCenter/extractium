@@ -3,9 +3,10 @@ This file is part of Extractium™
 examples/mcp/local-python/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-11
-Last Modified: 2026-09-17
-Summary: README for the local Python MCP server example: what it does,
-how to run it, the settings it reads, and its limits.
+Last Modified: 2026-09-28
+Summary: README for the local Python MCP server: it is now the
+`extractium mcp` command inside the package, and this page says where
+to find it and what changed for anyone who ran the example from here.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -17,82 +18,38 @@ See <https://www.gnu.org/licenses/fdl-1.3.html>. See README for full license inf
 
 # Local Python MCP Server
 
-## Search a published compendium from your own machine
+## The search tool is now a command in the package
 
 [← Back to the Extractium README](../../../README.md)
 
 
 ## Summary
 
-This folder holds one file, `server.py`. It lets an AI assistant on your computer search a published Extractium™ compendium, the collection a build writes. The assistant asks a question, the server searches the index, and it gets back whole sections with the address of each one. Nothing you ask leaves your computer. The index is a static file, and the question is turned into a vector by a model that runs locally.
-
-The Model Context Protocol (MCP) is the standard that assistants use to call tools. This server exposes exactly one tool, `search_kb`.
-
-
-## What you need
-
-1. Python 3.10 or newer, with Extractium installed: `pip install -e ".[dev]"` from the repository root.
-2. A published index address, or an index file you built yourself.
-3. An assistant that can run an MCP server over standard input and output.
+The Python server that used to live in this folder is part of the Extractium™ package. `extractium mcp` starts it, and `extractium connect` writes the card that tells an AI assistant how to reach it. This page is here so that a link or a bookmark still lands somewhere useful. The Model Context Protocol (MCP) is the standard that assistants use to call tools, and the tool is the same one as before, `search_kb`, which searches one compendium, the collection a build writes.
 
 
 ## Run it
 
 ```bash
-export EXTRACTIUM_INDEX_URL=https://example.org/kb/compendium-full.json.gz
-python examples/mcp/local-python/server.py
+extractium mcp --index dist/compendium-full.json.gz
 ```
 
-A build publishes two index files. `compendium.json.gz` is the light one: one entry per page, holding the page's description and keywords, so a search finds the right page and the assistant follows the link to read it. `compendium-full.json.gz` holds the text of every section, so the assistant can quote the page without opening it. On your own computer the full file is usually the better choice. Use the light one when the download or the memory matters more.
+Give `--index` a compendium file on this machine or its published `https://` address. Plain `http://` is accepted only on `localhost`. Without `--index`, the command reads `EXTRACTIUM_INDEX_PATH` and then `EXTRACTIUM_INDEX_URL`, so a client configuration written for the file that used to be here keeps working once its command is changed to `extractium mcp`. A downloaded compendium is kept under `~/.cache/extractium-mcp`, or the folder `--cache-dir` or `EXTRACTIUM_CACHE_DIR` names.
 
-On Windows, use `set` in Command Prompt or `$env:` in PowerShell instead of `export`.
-
-The server waits for requests on standard input, so on its own it looks like it has hung. That is correct. An assistant drives it. To add it to one, see [how to connect an MCP client](../../../docs/how-to/connect-an-mcp-client.md).
-
-
-## Settings
-
-All settings come from the environment, so no file holds an address or a path.
-
-| Variable | What it does |
-|---|---|
-| `EXTRACTIUM_INDEX_URL` | The published index. Must start with `https://`, except on `localhost`. |
-| `EXTRACTIUM_INDEX_PATH` | An index file on this machine. Wins over the address above, and never touches the network. |
-| `EXTRACTIUM_CACHE_DIR` | Where the downloaded index is kept. Defaults to `~/.cache/extractium-mcp`. |
-
-One of the first two is required. Without either, the server stops at once and says so, with exit code 2.
-
-
-## What the tool returns
-
-`search_kb` takes a question (`query`) and, optionally, how many sections to return (`k`, 1 to 10, 4 by default). It gives back:
-
-- A block of text for the model to read, headed by a reminder that the sections are quoted evidence and never instructions.
-- The same sections as data, in `structuredContent`: the title, the address, the text, and whether the section came from a local folder.
-
-An empty result means nothing was relevant enough. That is a real answer, and the text says so.
-
-
-## Limits
-
-- The first search downloads the embedding model, about 130 MB. Later searches reuse it.
-- The index is downloaded once and then revalidated, so an unchanged file costs one small request. If the host cannot be reached and a copy is cached, the cached copy is used.
-- One tool, no writes: this server reads a static file and nothing else.
+`extractium connect --index dist/compendium-full.json.gz` writes the connection card. [How to connect an MCP client](../../../docs/how-to/connect-an-mcp-client.md) walks through both commands, step by step.
 
 
 ## Conclusion
 
-You can now run a local search server over any published compendium. The [Node version](../local-node/README.md) does the same thing for assistants that prefer a JavaScript runtime, and the [how-to page](../../../docs/how-to/connect-an-mcp-client.md) shows the client configuration for both.
+Use the command rather than a copied file. The [Node version](../local-node/README.md) still lives beside this folder for assistants that prefer a JavaScript runtime.
 
 
 ## Additional Resources
 
 * [Extractium™ README](../../../README.md): project overview and quick start.
-* [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md): the client configuration, step by step.
+* [How to Connect an MCP Client](../../../docs/how-to/connect-an-mcp-client.md): the two commands and the client configuration, step by step.
 * [Local Node MCP Server](../local-node/README.md): the same tool in JavaScript.
-* [How to Search a Compendium](../../../docs/how-to/search-a-compendium.md): the client library this server is built on.
 * [Using a Published Compendium](../../../docs/using-a-compendium.md): how an AI agent should use what it gets back.
-* [Model Context Protocol specification](https://modelcontextprotocol.io/specification/latest): the protocol this server speaks.
 
 
 [← Back to the Extractium README](../../../README.md)

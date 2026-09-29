@@ -1,18 +1,20 @@
 """
-Summary: Tests for the two local MCP servers under examples/mcp/. The
-Python server is driven message by message and over its own stream, with
-one tool call round trip against the committed golden compendium; the
-protocol handshake, the refusal of an unknown revision, the tool's
+Summary: Tests for the two local MCP servers: the one in the package,
+behind `extractium mcp`, and the Node example under examples/mcp/. The
+package server is driven message by message and over its own stream,
+with one tool call round trip against the committed golden compendium;
+the protocol handshake, the refusal of an unknown revision, the tool's
 argument checks, the rules about which index addresses may be fetched,
-and the download cache are all covered here. The Node server's own suite
-is run from the last test, so one command checks both runtimes.
+the download cache, and the command itself, in process and as a child
+process, are all covered here. The Node server's own suite is run from
+the last test, so one command checks both runtimes.
 
 This file is part of Extractium™
 tests/test_mcp_local_servers.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-11
-Last Modified: 2026-09-12
+Last Modified: 2026-09-28
 Notes: See README file for documentation and full license information.
 """
 
@@ -33,28 +35,32 @@ __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
 __date__ = "2026-09-11"
 
-import importlib.util
+import argparse
 import io
 import json
 import pathlib
 import shutil
 import subprocess
+import sys
 import urllib.error
 
 import pytest
 
+from extractium import __version__
+from extractium.mcp import server as server_module
 from extractium.search import load_container
 from tests.contract_fixture import CONTAINER_FILE, QUERY_FILE
 
 # The repository root, from which the Node suite is run.
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Where the two example servers live.
-PYTHON_SERVER_PATH = REPO_ROOT / "examples" / "mcp" / "local-python" / "server.py"
+# Where the Node example server lives.
 NODE_SERVER_DIR = REPO_ROOT / "examples" / "mcp" / "local-node"
 
-# How long the Node run may take before it is treated as a failure.
+# How long the Node run, and the child-process run of the command, may
+# take before either is treated as a failure.
 NODE_TEST_TIMEOUT_SECONDS = 300
+COMMAND_TIMEOUT_SECONDS = 120
 
 # The metadata a modern request carries. A request without it is a legacy
 # one, which this server answers too.
@@ -65,25 +71,6 @@ MODERN_META = {
         "io.modelcontextprotocol/clientCapabilities": {},
     }
 }
-
-
-### Loading the example ###
-
-def _load_server_module():
-    """
-    Imports the example server from its path.
-
-    The examples are not part of the installed package, on purpose: they
-    are programs an operator copies and runs, not modules the library
-    imports. Loading it by path is how a test reaches one.
-    """
-    spec = importlib.util.spec_from_file_location("extractium_local_mcp_server", PYTHON_SERVER_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-server_module = _load_server_module()
 
 
 ### Fixtures ###
@@ -112,11 +99,25 @@ def golden_server(golden_index, expectations):
     )
 
 
+@pytest.fixture
+def recorded_embedder(expectations, monkeypatch):
+    """The command's embedder replaced by the recorded query vector."""
+    monkeypatch.setattr(
+        server_module, "sentence_transformer_embedder",
+        lambda model_name: (lambda text: expectations["queryVector"]),
+    )
+
+
 def ask(server, method, params=None, request_id=1):
     """One request, answered."""
     return server.handle({
         "jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {},
     })
+
+
+def mcp_args(index=None, cache_dir=None):
+    """The parsed arguments of one `extractium mcp` command."""
+    return argparse.Namespace(index=index, cache_dir=cache_dir)
 
 
 class FakeResponse:
@@ -146,7 +147,9 @@ def test_discovery_names_the_tool_capability_and_every_revision_the_server_speak
     assert result["resultType"] == "complete"
     assert "2026-07-28" in result["supportedVersions"]
     assert result["capabilities"]["tools"] == {"listChanged": False}
-    assert result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "extractium-local-python"
+    assert result["_meta"]["io.modelcontextprotocol/serverInfo"] == {
+        "name": "extractium", "version": __version__,
+    }
 
 
 def test_a_legacy_client_keeps_the_revision_it_opened_with(golden_server):
@@ -392,6 +395,17 @@ def test_an_insecure_or_unreadable_address_is_refused(url):
         server_module.checked_url(url)
 
 
+@pytest.mark.parametrize("value, expected", [
+    ("https://example.org/kb/compendium.json", True),
+    ("HTTP://localhost:8000/compendium.json", True),
+    ("C:/Builds/dist/compendium-full.json.gz", False),
+    ("dist/compendium.json.gz", False),
+    ("file:///C:/Builds/compendium.json", False),
+])
+def test_only_a_web_address_is_downloaded_so_a_drive_letter_is_never_a_scheme(value, expected):
+    assert server_module.is_address(value) is expected
+
+
 def test_a_hostile_address_cannot_decide_where_the_cached_file_lands(tmp_path):
     body_path, meta_path = server_module.cache_paths(
         "https://example.org/../../../etc/passwd?a=/b", tmp_path
@@ -466,22 +480,52 @@ def test_an_index_past_the_size_cap_is_refused(tmp_path, monkeypatch):
 
 def test_an_index_path_is_read_without_touching_the_network(golden_dir):
     def refuse(request, timeout=None):
-        raise AssertionError("a configured path must never be fetched over the network")
+        raise AssertionError("a path must never be fetched over the network")
 
-    index = server_module.index_from_environment(
-        {"EXTRACTIUM_INDEX_PATH": str(golden_dir / CONTAINER_FILE)}, refuse
-    )
+    index = server_module.index_from_source(str(golden_dir / CONTAINER_FILE), opener=refuse)
 
     assert index.name == "Example Org"
 
 
-def test_an_environment_naming_no_index_is_a_configuration_error():
+def test_an_index_address_is_fetched_through_the_cache(golden_dir, tmp_path):
+    url = "https://example.org/kb/compendium.json"
+    container = (golden_dir / CONTAINER_FILE).read_bytes()
+
+    index = server_module.index_from_source(
+        url, cache_dir=tmp_path, opener=lambda request, timeout=None: FakeResponse(container)
+    )
+
+    body_path, _ = server_module.cache_paths(url, tmp_path)
+    assert index.name == "Example Org"
+    assert body_path.read_bytes() == container
+
+
+def test_a_plain_http_address_off_this_machine_is_refused_before_anything_is_fetched(tmp_path):
+    def refuse(request, timeout=None):
+        raise AssertionError("a refused address must never be fetched")
+
     with pytest.raises(server_module.ConfigurationError):
-        server_module.index_from_environment({})
+        server_module.index_from_source("http://example.org/compendium.json", tmp_path, refuse)
 
 
-def test_the_cache_folder_follows_the_environment(tmp_path):
+def test_the_index_named_on_the_command_line_wins_over_the_environment():
+    environ = {"EXTRACTIUM_INDEX_PATH": "C:/Other/compendium.json", "EXTRACTIUM_INDEX_URL": "https://example.org/kb.json"}
+
+    assert server_module.index_source("dist/compendium.json.gz", environ) == "dist/compendium.json.gz"
+    assert server_module.index_source(None, environ) == "C:/Other/compendium.json"
+    assert server_module.index_source(None, {"EXTRACTIUM_INDEX_URL": "https://example.org/kb.json"}) == (
+        "https://example.org/kb.json"
+    )
+
+
+def test_nothing_naming_an_index_is_a_configuration_error_that_names_the_flag():
+    with pytest.raises(server_module.ConfigurationError, match="--index"):
+        server_module.index_source(None, {})
+
+
+def test_the_cache_folder_follows_the_flag_then_the_environment(tmp_path):
     assert server_module.cache_root({"EXTRACTIUM_CACHE_DIR": str(tmp_path)}) == tmp_path
+    assert server_module.cache_root({"EXTRACTIUM_CACHE_DIR": str(tmp_path)}, "named") == pathlib.Path("named")
     assert server_module.cache_root({}).name == "extractium-mcp"
 
 
@@ -510,11 +554,99 @@ def test_the_server_answers_over_the_stream_a_client_actually_speaks(golden_serv
     assert len(written) == 2
 
 
-def test_a_server_started_with_no_index_configured_stops_with_a_usable_message(capsys):
-    code = server_module.main(environ={})
+### The command ###
+
+def test_the_command_answers_a_search_from_a_file_on_this_machine(
+    golden_dir, golden_index, expectations, recorded_embedder, capsys
+):
+    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+        "name": "search_kb", "arguments": {"query": expectations["query"], "k": expectations["k"]},
+    }}
+    stream_out = io.StringIO()
+
+    code = server_module.run_mcp(
+        mcp_args(index=str(golden_dir / CONTAINER_FILE)), environ={},
+        stream_in=io.StringIO(json.dumps(request) + "\n"), stream_out=stream_out,
+    )
+
+    assert code == 0
+    (answer,) = [json.loads(line) for line in stream_out.getvalue().strip().split("\n")]
+    returned = [record["url"] for record in answer["result"]["structuredContent"]["results"]]
+    by_id = {parent["id"]: parent["u"] for parent in golden_index.parents}
+    assert returned == [by_id[parent_id] for parent_id in expectations["relevantParentIds"]]
+    # Progress goes to the error stream; standard output carries protocol messages only.
+    assert "ready" in capsys.readouterr().err
+
+
+def test_the_command_reads_the_environment_when_no_index_is_given(golden_dir, capsys):
+    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+    stream_out = io.StringIO()
+
+    code = server_module.run_mcp(
+        mcp_args(), environ={"EXTRACTIUM_INDEX_PATH": str(golden_dir / CONTAINER_FILE)},
+        stream_in=io.StringIO(json.dumps(request) + "\n"), stream_out=stream_out,
+    )
+
+    assert code == 0
+    assert json.loads(stream_out.getvalue())["result"]["tools"][0]["name"] == "search_kb"
+
+
+def test_the_command_speaks_utf8_on_the_standard_streams_whatever_the_console_uses(
+    golden_dir, recorded_embedder, monkeypatch
+):
+    # A Windows console hands a pipe to a program in its own code page; a
+    # client on the other end reads the protocol as UTF-8.
+    console_in = io.TextIOWrapper(io.BytesIO(b'{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}\n'), encoding="cp1252")
+    console_out = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdin", console_in)
+    monkeypatch.setattr(sys, "stdout", console_out)
+
+    code = server_module.run_mcp(mcp_args(index=str(golden_dir / CONTAINER_FILE)), environ={})
+
+    assert code == 0
+    assert console_in.encoding.lower().replace("-", "") == "utf8"
+    assert console_out.encoding.lower().replace("-", "") == "utf8"
+    console_out.seek(0)
+    assert json.loads(console_out.read())["result"] == {}
+
+
+class NeverRead(io.StringIO):
+    """A stream a refused server must never get as far as reading."""
+
+    def __iter__(self):
+        raise AssertionError("the server read its input after refusing its configuration")
+
+
+def test_a_command_with_nothing_to_search_stops_with_exit_two_and_names_the_flag(capsys):
+    code = server_module.run_mcp(mcp_args(), environ={}, stream_in=NeverRead(), stream_out=io.StringIO())
 
     assert code == 2
-    assert "EXTRACTIUM_INDEX_URL" in capsys.readouterr().err
+    assert "--index" in capsys.readouterr().err
+
+
+def test_a_command_given_a_plain_http_address_off_this_machine_stops_before_it_listens(capsys):
+    code = server_module.run_mcp(
+        mcp_args(index="http://example.org/kb/compendium.json"), environ={},
+        stream_in=NeverRead(), stream_out=io.StringIO(),
+    )
+
+    assert code == 2
+    assert "https://" in capsys.readouterr().err
+
+
+def test_the_console_command_lists_the_tool_over_a_child_process(golden_dir):
+    request = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+
+    result = subprocess.run(
+        [sys.executable, "-m", "extractium.cli", "mcp", "--index", str(golden_dir / CONTAINER_FILE)],
+        input=request + "\n", capture_output=True, text=True, encoding="utf-8",
+        cwd=REPO_ROOT, timeout=COMMAND_TIMEOUT_SECONDS,
+    )
+
+    assert result.returncode == 0, result.stderr
+    (line,) = result.stdout.strip().splitlines()
+    assert json.loads(line)["result"]["tools"][0]["name"] == "search_kb"
+    assert "ready" in result.stderr
 
 
 ### The Node package's dependency pins ###
