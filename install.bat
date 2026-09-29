@@ -53,6 +53,10 @@ REM Where this script lives, with no trailing backslash.
 set "HERE=%~dp0"
 set "HERE=%HERE:~0,-1%"
 
+REM This script's own full path, taken here because %~f0 inside a called
+REM label no longer names the script.
+set "SELF=%~f0"
+
 REM Where the folder goes for a per-user install. A portable install puts
 REM it beside this script instead.
 set "HOME_DIR=%LOCALAPPDATA%\Extractium"
@@ -216,7 +220,7 @@ exit /b 1
 :finish
 REM ### Install the packages and finish ###
 
-set "FINISH_ARGS=--home "%HOME_DIR%" --python "%PYTHON%" --source "%SOURCE%" --lock "%LOCK%" --installer "%~f0""
+set "FINISH_ARGS=--home "%HOME_DIR%" --python "%PYTHON%" --source "%SOURCE%" --lock "%LOCK%" --installer "%SELF%""
 if defined UV set "FINISH_ARGS=%FINISH_ARGS% --uv "%UV%""
 if defined PORTABLE set "FINISH_ARGS=%FINISH_ARGS% --portable"
 if defined EDITABLE set "FINISH_ARGS=%FINISH_ARGS% --editable"
@@ -237,7 +241,7 @@ if not exist "%PYTHON%" (
     exit /b 1
 )
 echo Copying %HERE%\Extractium to %HOME_DIR% ...
-"%PYTHON%" -I -m extractium.install copy --from "%HERE%\Extractium" --home "%HOME_DIR%" --installer "%~f0"
+"%PYTHON%" -I -m extractium.install copy --from "%HERE%\Extractium" --home "%HOME_DIR%" --installer "%SELF%"
 exit /b %errorlevel%
 
 :update

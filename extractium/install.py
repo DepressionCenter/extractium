@@ -342,8 +342,11 @@ def copy_installer(installer, home):
         return None
     installer = pathlib.Path(installer)
     target = pathlib.Path(home) / installer.name
-    if installer.resolve() != target.resolve():
-        shutil.copyfile(installer, target)
+    try:
+        if installer.resolve() != target.resolve():
+            shutil.copyfile(installer, target)
+    except OSError as error:
+        raise InstallError(f"the installer could not be copied from {installer} into the folder ({error}).")
     return target
 
 
