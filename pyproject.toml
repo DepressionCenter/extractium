@@ -2,7 +2,7 @@
 # pyproject.toml
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-08-17
-# Last Modified: 2026-09-16
+# Last Modified: 2026-09-28
 # Notes: See README file for documentation and full license information.
 # Summary: Build/packaging configuration for the extractium PyPI package
 # (single package; runtime deps, dev/code/youtube/pdf/keywords extras,
@@ -179,6 +179,9 @@ include = ["extractium*"]
 # installed copy parses nothing: every query file would be missing.
 [tool.setuptools.package-data]
 "extractium.code" = ["queries/*.scm"]
+# The local page's own files, served by extractium/ui/server.py from an
+# allowlist of these names. Without this an installed copy has no page.
+"extractium.ui" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
