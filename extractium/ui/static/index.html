@@ -4,12 +4,13 @@ This file is part of Extractium™
 extractium/ui/static/index.html
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: The local page. One document with three views the script shows
 one at a time: a notice when the page was opened without its session
-token, the welcome screen that writes a first settings file, and the
-settings view with a form and the file's own text. Everything the form
-holds is built by app.js from the description the server sends.
+token, the welcome screen that writes a first settings file in the
+folder it asks for, and the settings view with a form and the file's
+own text. The header names the folder the page works in. Everything
+the form holds is built by app.js from the description the server sends.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -38,6 +39,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
     <div class="page-title">
       <h1>Extractium</h1>
       <p class="tagline">The local page for your compendium, on this computer only.</p>
+      <p class="folder-line" id="page-folder"></p>
     </div>
     <nav aria-label="Page actions">
       <button type="button" id="quit-button" class="secondary">Quit</button>
@@ -57,8 +59,8 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 
     <section id="welcome" hidden aria-labelledby="welcome-heading">
       <h2 id="welcome-heading" tabindex="-1">Set up your first build</h2>
-      <p>There is no settings file in <span id="welcome-folder"></span> yet. Answer these three
-        questions and the page writes one. You can change every setting afterwards.</p>
+      <p>There is no settings file yet. Answer these four questions and the page writes one in the
+        folder you choose. You can change every setting afterwards.</p>
       <form id="welcome-form" novalidate>
         <div class="field">
           <label for="welcome-name">Name of your compendium</label>
@@ -75,7 +77,14 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
           <input id="welcome-seed" name="seed_url" type="url" autocomplete="off" required aria-describedby="welcome-seed-help" placeholder="https://example.edu/docs/">
           <p id="welcome-seed-help" class="help">The page the crawl starts from. It stays inside that site.</p>
         </div>
-        <p class="help">The terminal does the same with this command, run in the same folder:</p>
+        <div class="field">
+          <label for="welcome-folder">Where should the compendium live?</label>
+          <input id="welcome-folder" name="folder" type="text" autocomplete="off" required aria-describedby="welcome-folder-help">
+          <p id="welcome-folder-help" class="help">The folder the settings file and every build go in, as a full path. It is created
+            if it does not exist. The suggested one is a folder named Extractium under your home folder, rather than Documents,
+            which some computers copy to a cloud drive.</p>
+        </div>
+        <p class="help">The terminal does the same with this command, run in that folder:</p>
         <pre class="command" aria-live="polite"><code id="welcome-command">extractium init</code></pre>
         <div class="actions">
           <button type="submit" id="welcome-submit">Write the settings file</button>

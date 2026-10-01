@@ -3,11 +3,11 @@ This file is part of Extractium™
 docs/troubleshooting.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-28
-Summary: Failures seen while building and publishing with Extractium:
-what each looks like, what causes it, and how to fix it. Covers the run
-scripts, the crawl, the scheduled build, publishing, the search
-clients, and the local page.
+Last Modified: 2026-09-30
+Summary: Failures seen while installing, building, and publishing with Extractium:
+what each looks like, what causes it, and how to fix it. Covers the
+installer, the run scripts, the crawl, the scheduled build, publishing,
+the search clients, and the local page.
 Notes: See README file for documentation and full license information.
 
 Copyright © 2026 The Regents of the University of Michigan
@@ -47,72 +47,96 @@ If you already made an empty folder, delete it or clone into it with `git clone 
 
 ### `extractium: command not found`, or `The term 'extractium' is not recognized`
 
-**Cause.** The install worked, but the folder pip put the `extractium` command in is not on your `PATH`. It happens after a user install, which pip does automatically when it cannot write to the system Python folder. You will have seen `Defaulting to user installation because normal site-packages is not writeable` earlier in the output.
+**Cause.** After the installer, one of three things. The terminal was open before the install, so it has the old `PATH`. On macOS or Linux, `~/.local/bin` is not on your `PATH`, which the installer said at the end and printed the line for. Or, in a pip development install, the folder pip put the command in is not on your `PATH`, which happens after a user install.
 
-**Fix.** Run it as a module instead. This always works, whatever your `PATH` says, and it is the same program:
-
-```
-python -m extractium.cli build --config config.yaml
-```
-
-If you would rather have the short command, add the folder to your `PATH`. To find it:
+**Fix.** Open a new terminal first. If the command is still not found, run it by its full path, which always works:
 
 ```
-python -c "import sysconfig, os; print(sysconfig.get_path('scripts', os.name + '_user'))"
+%LOCALAPPDATA%\Extractium\bin\extractium.cmd build --config config.yaml    # Windows
+~/.local/share/extractium/bin/extractium build --config config.yaml       # macOS and Linux
 ```
 
-On Windows that is usually `%APPDATA%\Python\Python3xx\Scripts`; on macOS and Linux, usually `~/.local/bin`.
+On macOS and Linux, add `~/.local/bin` to your `PATH` in your shell profile, `~/.bashrc` or `~/.zshrc`, with the line the installer printed, then open a new terminal. In a pip development environment run the module form instead, `python -m extractium.cli build --config config.yaml`, which is the same program.
+
+### "Windows protected your PC" when you double-click `run.bat`
+
+**Cause.** Windows marks a downloaded file, and Explorer copies that mark onto every file it unzips, so the scripts inside the zip look like downloads to SmartScreen.
+
+**Fix.** Press "More info", then "Run anyway"; the prompt appears once per script. To avoid it, right-click the zip before unzipping, open Properties, tick "Unblock" on the General tab, and press OK. Nothing in the zip is changed by either answer.
+
+### The installer says uv `could not start`, or stops at step 1
+
+**Cause.** A policy on the computer refuses to run programs from a user folder, which is where the installer puts uv and its Python. The installer then tries a Python already on the computer, and stops when there is none.
+
+**Fix.** Ask IT for one of the two things the installer names at the end: permission to run programs from your profile folder, or a standard Python 3.10 or newer installed for you. With the second, run the installer again and it uses that Python; the install then cannot be moved, which the installer says. On Windows, the release zip is the other way around this, because the zip carries everything.
+
+### The installer says the uv download `does not match the SHA-256`
+
+**Cause.** What was downloaded is not the archive the installer expects. Usually a proxy or a captive network answered with a sign-in page in place of the file; rarely, the release was replaced.
+
+**Fix.** Check that a browser on the same computer can open `https://github.com/astral-sh/uv/releases` without a sign-in, and run the installer again. If the mismatch stays, do not use the download; report it, with both hashes the installer printed.
+
+### The installer fails to download with a certificate error
+
+**Cause.** A corporate proxy that inspects traffic signs it with its own certificate. Every uv call the installer makes trusts the certificates the computer trusts, so this only happens when that certificate is not in the system store either, or when the download is made by a tool that reads a different store.
+
+**Fix.** Ask IT for the proxy's certificate and where the computer keeps it. On Windows the release zip needs no download at all.
+
+### On Debian or Ubuntu, `The virtual environment was not created successfully` or `ensurepip is not available`
+
+**Cause.** Debian and Ubuntu ship Python without the `venv` module, which the installer's third step needs.
+
+**Fix.** The installer prints `sudo apt-get install python3-venv` and asks whether to run it. Answer yes, or run it yourself and then run the installer again. The first two steps, which use uv, do not need the module.
+
+### The installer says `No Extractium install was found`
+
+**Cause.** `--update` or `--uninstall` looked beside the script and under your profile and found no install in either place.
+
+**Fix.** Run the copy of the installer that sits inside the Extractium folder, or run it from the folder that holds the `Extractium` folder.
 
 
 ### `ImportError: cannot import name '__version__' from 'extractium' (unknown location)`
 
 **Cause.** Python found a folder named `extractium` where it expected the installed package. `python -m extractium.cli` looks in the folder you are standing in before it looks anywhere else, and a folder with that name wins, even though the real package is one level further down inside it.
 
-You see this after an early version of the build script, which downloaded the tool into a folder called `extractium` next to your settings file. The script now downloads into `extractium-src`, and it runs the installed `extractium` command rather than the module.
+You see this after an early version of the build script, which downloaded the tool into a folder called `extractium` next to your settings file, and only when you run the module form yourself. The `extractium` command the installer writes starts the tool in Python's isolated mode, which keeps the folder you are standing in off the import path, so it cannot pick that folder up.
 
-**Fix.** Delete the old download folder and run the build script again:
+**Fix.** Delete the old download folder, or run the installed command instead of the module form:
 
 ```
 rm -rf extractium          # macOS and Linux
 rmdir /s /q extractium     # Windows
 ```
 
-The script downloads the tool again, into `extractium-src` this time, and builds.
-
-To run a build by hand in the meantime, use the command the install put in the virtual environment, which does not search the folder you are standing in:
-
-```
-.venv/bin/extractium build --config config.yaml        # macOS and Linux
-.venv\Scripts\extractium build --config config.yaml    # Windows
-```
-
-The same rule holds anywhere: do not name a folder after a Python package you have installed, or run a build from the folder above one.
+The same rule holds in a development environment: do not name a folder after a Python package you have installed, or run the module form from the folder above one.
 
 
-### The build script fails while installing, with "Failed to build 'tree-sitter-..."
+### The install fails with "Failed to build 'tree-sitter-..."
 
-**Cause.** The environment was created with a free-threaded Python, the build the launcher lists as `3.13t` or `3.14t`. The python.org installer for 3.14 offers it as an optional part, and once it is installed the launcher picks it by default. Every code parser publishes compiled `abi3` wheels only, which a free-threaded interpreter cannot use, so pip fell back to the parser's source archive, which does not build.
+**Cause.** The packages are being installed into a free-threaded Python, the build the launcher lists as `3.13t` or `3.14t`. The python.org installer for 3.14 offers it as an optional part, and once it is installed the launcher picks it by default. Every code parser publishes compiled `abi3` wheels only, which a free-threaded interpreter cannot use, so pip fell back to the parser's source archive, which does not build. The Python uv installs for the installer is a standard build, so this happens only when the installer falls back to a Python already on the computer, or in a pip development install.
 
-**Fix.** Run the script again. It checks the Python it was given, looks for a standard build when that one is free-threaded, and remakes an environment that was created with the wrong one. On a machine that has only a free-threaded Python, it installs everything except the parsers and says so; code files are then recorded by name, language, and length, but what they define is not read. Install a standard build from python.org, or set `PYTHON` to the path of one, to get the parsers:
+**Fix.** The installer looks for a standard build and skips a free-threaded one; set `PYTHON_EXE` to the path of a standard build to have it tried first, then run the installer again:
 
 ```
-set PYTHON="C:\Program Files\Python314\python.exe"
+set PYTHON_EXE=C:\Program Files\Python314\python.exe
 ```
+
+In a development environment, make the virtual environment with a standard build, or install without the parsers from the copy of the lock that `tools/lock_without_parsers.py` writes; code files are then recorded by name, language, and length, but what they define is not read.
 
 
 ## Running the build
 
-### The script says `No published release was found`
+### The installer says `No published release was found`
 
-**Cause.** The script downloads the latest release of Extractium™ by asking GitHub where `releases/latest` leads, and GitHub answered with the releases page rather than a release. Either no release has been published yet, or the network answered with something other than GitHub.
+**Cause.** The installer downloads the newest release of Extractium™ by asking GitHub where `releases/latest` leads, and GitHub answered with the releases page rather than a release. Either no release has been published yet, or the network answered with something other than GitHub.
 
-**Fix.** Set `EXTRACTIUM_REF` to a tag or branch name before running the script, for example `EXTRACTIUM_REF=main ./run.sh`, or clone the repository and run the script from inside the clone, which downloads nothing.
+**Fix.** Pass a tag with `--version`, for example `bash install.sh --version v0.4`, or clone the repository and run the installer from inside the clone, which downloads no release.
 
-### The script says `Extractium could not be downloaded`
+### The installer says `Extractium could not be downloaded`
 
-**Cause.** Neither git nor a plain download reached GitHub. Usually the computer is offline, or a proxy is in the way.
+**Cause.** The download of the release archive did not reach GitHub. Usually the computer is offline, or a proxy is in the way.
 
-**Fix.** Check that a browser on the same computer can open `https://github.com/DepressionCenter/extractium`. If it can, download the repository as a ZIP file from that page, unpack it, and run the script from inside the unpacked folder.
+**Fix.** Check that a browser on the same computer can open `https://github.com/DepressionCenter/extractium`. If it can, download the repository as a ZIP file from that page, unpack it, and run the installer from inside the unpacked folder. On Windows the release zip needs no download beyond itself.
 
 ### `run.sh` stops with `$'\r': command not found`
 
@@ -492,7 +516,13 @@ That line is not an error. It is telling you the index has that repository's doc
 
 **Cause.** No tab of the page has checked in for ten minutes. The page stops itself so a forgotten tab does not leave a program running for days.
 
-**Fix.** Start it again with `run.bat ui`, `./run.sh ui`, or `python -m extractium.cli ui`.
+**Fix.** Start it again from the menu entry, with `extractium ui`, `run.bat ui`, or `./run.sh ui`, or with `python -m extractium.cli ui` in a development environment.
+
+### The page opened in the wrong folder
+
+**Cause.** The page works in the folder `--folder` names, else the current folder when it holds a settings file, else the folder it used last. The menu entry has no current folder, so it opens the last one.
+
+**Fix.** Run `extractium ui --folder <the folder>` once from a terminal, or run `extractium ui` inside the folder that holds the settings file. The page remembers the folder it was last opened in.
 
 ### Saving says a build would refuse the file
 

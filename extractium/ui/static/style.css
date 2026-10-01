@@ -3,7 +3,7 @@ This file is part of Extractium™
 extractium/ui/static/style.css
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-28
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: The local page's styles: a system font, generous line height,
 left-aligned text on a narrow measure, visible focus, pointer targets
 of at least 24 by 24 pixels, and colors that keep 4.5:1 contrast. No
@@ -130,6 +130,12 @@ pre.command {
 
 .tagline {
   color: var(--muted);
+}
+
+.folder-line {
+  margin-top: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
 .page-footer {

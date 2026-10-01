@@ -11,7 +11,7 @@ tests/test_cli.py
 
 Author(s): Gabriel Mongefranco.
 Created: 2026-09-08
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Notes: See README file for documentation and full license information.
 """
 
@@ -30,8 +30,9 @@ Notes: See README file for documentation and full license information.
 __author__ = "Gabriel Mongefranco, University of Michigan."
 __copyright__ = "Copyright (C) 2026 The Regents of the University of Michigan"
 __license__ = "GPLv3 or later"
-__date__ = "2026-09-28"
+__date__ = "2026-09-30"
 
+import argparse
 import gzip
 import hashlib
 import json
@@ -840,6 +841,113 @@ def test_version_flag_reports_the_package_version(capsys):
 
     assert exit_info.value.code == 0
     assert capsys.readouterr().out.startswith("extractium ")
+
+
+### The Start Command ###
+
+MINIMAL_START_CONFIG = """
+    name: Start Test
+    sources:
+      - type: fixed
+        label: Fixed
+    outputs:
+      - type: llmstxt
+"""
+
+
+def test_no_arguments_and_start_both_build_when_there_is_a_settings_file(build_workspace, capsys):
+    write_config(build_workspace, MINIMAL_START_CONFIG)
+
+    assert cli.main([]) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "Building from config.yaml" in out
+    assert "Build finished" in out and "git add" in out and ".kb_cache" in out
+    assert "stopped at 25 pages" not in out
+    assert (build_workspace / "dist" / "llms.txt").exists()
+
+    assert cli.main(["start"]) == cli.EXIT_OK
+
+
+def test_start_honours_its_config_flag(build_workspace, capsys):
+    write_config(build_workspace, MINIMAL_START_CONFIG, name="other.yaml")
+
+    assert cli.main(["start", "--config", "other.yaml"]) == cli.EXIT_OK
+    assert "Building from other.yaml" in capsys.readouterr().out
+
+
+def test_start_with_no_file_asks_and_the_browser_answer_opens_the_page(build_workspace, monkeypatch):
+    from extractium.ui import server as ui_server
+
+    calls = []
+    monkeypatch.setattr(ui_server, "run_ui", lambda args, **kw: calls.append(args) or 0)
+    said = []
+
+    code = cli.run_start(argparse.Namespace(config="config.yaml"), ask_line=lambda prompt: said.append(prompt) or "",
+                         say=said.append, is_tty=True)
+
+    assert code == 0
+    assert any("Set up in the browser or in the terminal? [browser]" in line for line in said)
+    (args,) = calls
+    assert args.config == "config.yaml" and args.no_browser is False and args.folder is None
+    assert any("Opening the page" in line for line in said)
+
+
+def test_start_with_the_terminal_answer_asks_the_questions_and_builds_with_a_page_limit(build_workspace, monkeypatch):
+    builds = []
+    monkeypatch.setattr(cli, "run_build", lambda args: builds.append(args) or cli.EXIT_OK)
+    answers = iter(["terminal", "Asked KB", "", "https://example.edu/docs/"])
+    said = []
+
+    code = cli.run_start(argparse.Namespace(config="config.yaml"), ask_line=lambda prompt: next(answers),
+                         say=said.append, is_tty=True)
+
+    assert code == 0
+    assert load_config(build_workspace / "config.yaml").name == "Asked KB"
+    (args,) = builds
+    assert args.config == "config.yaml" and args.max_pages == cli.FIRST_RUN_PAGES
+    assert any("stopped at 25 pages" in line for line in said)
+    # The init command's own closing hint is left out, because the build
+    # ran right away.
+    assert not any("Next: python -m extractium.cli build" in line for line in said)
+
+
+def test_start_without_a_terminal_sets_up_in_the_terminal_without_asking(build_workspace, monkeypatch, capsys):
+    builds = []
+    monkeypatch.setattr(cli, "run_build", lambda args: builds.append(args) or cli.EXIT_OK)
+    answers = iter(["Quiet KB", "", "https://example.edu/"])
+    asked = []
+
+    def ask_line(prompt):
+        asked.append(prompt)
+        return next(answers)
+
+    code = cli.run_start(argparse.Namespace(config="config.yaml"), ask_line=ask_line, say=lambda line: None,
+                         is_tty=False)
+
+    assert code == 0
+    assert not any("browser or in the terminal" in prompt for prompt in asked)
+    assert len(builds) == 1
+
+
+def test_a_refused_setup_answer_ends_start_with_the_init_exit_code(build_workspace, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "run_build", lambda args: pytest.fail("no build should run"))
+    answers = iter(["terminal"] + ["x"] * 10)
+
+    code = cli.run_start(argparse.Namespace(config="config.yaml"), ask_line=lambda prompt: next(answers),
+                         say=lambda line: None, is_tty=True)
+
+    assert code == 2
+    assert not (build_workspace / "config.yaml").exists()
+
+
+def test_the_parser_routes_no_subcommand_and_start_to_the_same_handler():
+    parser = cli.build_parser()
+
+    bare = parser.parse_args([])
+    start = parser.parse_args(["start", "--config", "other.yaml"])
+
+    assert bare.handler is cli.run_start and bare.config == cli.DEFAULT_START_CONFIG
+    assert start.handler is cli.run_start and start.config == "other.yaml"
 
 
 ### Links Found While Crawling ###

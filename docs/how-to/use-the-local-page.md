@@ -3,10 +3,11 @@ This file is part of Extractium™
 docs/how-to/use-the-local-page.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-28
-Last Modified: 2026-09-29
-Summary: How to use the local page: starting it from the build script
-or the command line, answering the three setup questions in the
-browser, changing every setting from the form or the file's own text,
+Last Modified: 2026-09-30
+Summary: How to use the local page: opening it from the menu entry or
+the command line, answering the four setup questions in the browser,
+including where the compendium should live, changing every setting
+from the form or the file's own text,
 stopping the page, the options the command takes, and how the page
 keeps to your own computer.
 Notes: See README file for documentation and full license information.
@@ -34,47 +35,52 @@ Today the page writes a first settings file and lets you change every setting af
 
 ## Before you start
 
-You need Extractium™ installed, either through the build script or in a Python environment. [How to install](install.md) covers both. The page needs no other software: it runs on the Python that Extractium™ runs on, and it opens in whatever browser you use.
+You need Extractium™ installed, from the release zip, with the installer, or in a Python development environment. [How to install](install.md) covers all three. The page needs no other software: it runs on the Python that Extractium™ runs on, and it opens in whatever browser you use.
 
 
 ## Step 1: Start the page
 
-From the folder that holds your settings file, or the folder where you want one, run the build script with `ui`:
+After the installer, open Extractium from the Start menu, from Launchpad or `~/Applications`, or from the applications menu. The page opens in the compendium folder it used last, or asks where the compendium should live when there is none yet. On Windows the entry leaves a minimized window open for the page's server; on macOS and Linux there is no window, and the page's lines go to `extractium-ui.log` in the Extractium folder.
+
+From a terminal, run the command in the folder that holds your settings file, or the folder where you want one. `run.bat ui` and `./run.sh ui` do the same from the zip's folder:
 
 ```
-./run.sh ui               # macOS and Linux
-run.bat ui                # Windows
+extractium ui
 ```
 
-In a Python environment, the command is:
+In a Python development environment, the command is:
 
 ```
 python -m extractium.cli ui
 ```
 
-The terminal prints one line with the page's address and opens your browser at it. The address looks like this, with a different port and a different token each time:
+The terminal names the folder the page works in, prints one line with the page's address, and opens your browser at it. The address looks like this, with a different port and a different token each time:
 
 ```
+Working in C:\Users\you\Extractium
 The Extractium page is at http://127.0.0.1:53211/#token=Zk3o…
 Keep this window open. Press Ctrl+C here, or Quit on the page, to stop it.
 ```
+
+The page's header names the same folder. `--folder DIR` makes the page work in another folder, and creates it if it does not exist.
 
 Keep that terminal window open while you use the page. If no browser opens, copy the whole address, including the part after `#`, into one. `localhost` works in place of `127.0.0.1` if you prefer to type it; the page is the same either way. That part is the session token; the page does not work without it, which is what keeps another program on your computer from using the page in your name.
 
 The first time, Windows may ask whether to allow Python through the firewall. The page listens on your own computer only, and Windows does not filter that traffic, so the page works whatever you answer. Allowing it opens nothing to the network, because the page never listens on a network address.
 
 
-## Step 2: Answer the three questions
+## Step 2: Answer the four questions
 
-When the folder has no settings file, the page shows the welcome screen. It asks the same three questions the terminal asks:
+When the folder has no settings file, the page shows the welcome screen. It asks the three questions the terminal asks, and one more:
 
 1. The name of your compendium, the collection the build writes. Leave it empty for "Compendium".
 2. A short name for the output files, made of lowercase letters, digits, and hyphens. Leave it empty and the page derives one from the name.
 3. The website to start crawling from, such as `https://example.edu/docs/`.
+4. Where the compendium should live, as a full path. The field starts with the folder the page was opened in, or, when the page was opened from the menu with no folder yet, with a folder named `Extractium` under your home folder. That default is not under Documents, because some computers copy Documents to a cloud drive and would upload every build. The folder is created if it does not exist, and the page refuses one it cannot create or write.
 
-Beside the form the page shows the terminal command that does the same, `extractium init` with your answers filled in, so you can see there is nothing the page does that the terminal cannot.
+Beside the form the page shows the terminal command that does the same, `extractium init` with your answers filled in, run in that folder, so you can see there is nothing the page does that the terminal cannot.
 
-Press "Write the settings file". The page writes `config.yaml` in the folder and switches to the settings view. The file is the commented example that ships with the project, with your three answers filled in, and with three outputs switched on at the end: the compressed search index, the `llms.txt` files, and the Markdown folder the page will show search results from. The terminal command writes only the first two, which are the defaults.
+Press "Write the settings file". The page writes `config.yaml` in the folder you chose, moves to that folder, and switches to the settings view. The file is the commented example that ships with the project, with your three answers filled in, and with three outputs switched on at the end: the compressed search index, the `llms.txt` files, and the Markdown folder the page will show search results from. The terminal command writes only the first two, which are the defaults.
 
 The page refuses to replace a settings file that already exists. To start over, rename or delete the file first.
 
@@ -126,11 +132,12 @@ While the page runs, the same program answers two more addresses on the same por
 
 | Option | What it does |
 |---|---|
-| `--config FILE` | The settings file the page reads and writes. `config.yaml` in the current folder by default. It need not exist yet. |
+| `--folder DIR` | The compendium folder the page works in. Without it the page uses the current folder when it holds a settings file, then the folder it used last, and otherwise asks. |
+| `--config FILE` | The settings file the page reads and writes. `config.yaml` in the folder by default. It need not exist yet. |
 | `--port N` | Listen on this port of `127.0.0.1`. A free port is taken when omitted, which is the usual choice. |
 | `--no-browser` | Print the address without opening a browser. |
 
-The build scripts pass no options; set `CONFIG` in the environment to point them at another settings file, as [how to run a weekly build](run-a-weekly-build.md) describes.
+The run scripts pass `ui` and any options after it through; set `CONFIG` in the environment to point them at another settings file, as [how to run a weekly build](run-a-weekly-build.md) describes.
 
 
 ## How the page keeps to your computer
@@ -158,10 +165,10 @@ You can now start the page, write a first settings file from it, change any sett
 ## Additional Resources
 
 * [Extractium™ README](../../README.md): project overview and quick start.
-* [How to install](install.md): the build script and the Python environment.
+* [How to install](install.md): the zip, the installer, the menu entry, and the Python environment.
 * [Running a build](../usage.md): the build command, the terminal setup command, and the files a build writes.
 * [Configuration reference](../configuration.md): every setting the form shows, with its default.
-* [How to run a weekly build](run-a-weekly-build.md): the build scripts, their `ui` argument, and putting a build on a timer.
+* [How to run a weekly build](run-a-weekly-build.md): the run scripts, their `ui` argument, and putting a build on a timer.
 * [How to connect an MCP client](connect-an-mcp-client.md): the search tool the page also serves, and the connection card.
 * [How to search a compendium](search-a-compendium.md): searching a built index from Python or JavaScript.
 * [Troubleshooting](../troubleshooting.md): known failures, with the cause and the fix for each.

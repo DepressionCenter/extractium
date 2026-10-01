@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/README.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-04
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: Index of the Extractium documentation folder; one line per page.
 Notes: See README file for documentation and full license information.
 
@@ -28,7 +28,7 @@ This folder holds the detailed documentation for Extractium™. The pages are gr
 
 ## Getting started
 
-* [How to Install](how-to/install.md): the supported Python versions, the two ways to install, the optional extras, and how to check that the install worked.
+* [How to Install](how-to/install.md): the release zip, the installer and what it does when your computer stops it, the developer checkout, the optional extras, and how to check that the install worked.
 * [How to Use the Local Page](how-to/use-the-local-page.md): the page in your browser that writes a first settings file and lets you change every setting from a form.
 * [How to Crawl a Site](how-to/crawl-a-site.md): choosing a source type for each kind of content, running a small trial, tuning the URL patterns, and reading what a build reports.
 * [Running a Build](usage.md): the `extractium build` command, its options, the files it writes, and what each exit code means.

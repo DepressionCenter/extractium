@@ -52,6 +52,12 @@ CHATGPT.md
 *.cache
 __pycache__/
 .venv/
+# The zip the release workflow packs the portable folder into. The
+# folder itself is never built inside the checkout: git on Windows
+# matches names without regard to case, so "Extractium/" would be the
+# package folder, and the installer refuses to build it there.
+*-portable*.zip
+*-portable*.zip.sha256
 
 # Ignore Extractium build/test artifacts
 .kb_cache/

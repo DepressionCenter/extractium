@@ -3,7 +3,7 @@ This file is part of Extractium™
 docs/how-to/run-a-weekly-build.md
 Author(s): Gabriel Mongefranco
 Created: 2026-09-08
-Last Modified: 2026-09-28
+Last Modified: 2026-09-30
 Summary: How to keep a compendium current: the one-command build with
 run.sh or run.bat on your own computer or a server, how to put it on a
 timer there, the scheduled builds on GitHub Actions and on a GitLab
@@ -48,56 +48,35 @@ A GitHub-hosted runner has a few processor cores and no graphics card, so it emb
 
 ## Build on your own computer
 
-You need Python 3.10 or newer and the script for your operating system, either on its own or inside a clone of this repository. [How to install](install.md) explains both.
+You need Extractium™ installed, from the release zip or with the installer, as [how to install](install.md) explains. Either gives you the `extractium` command; the zip also gives you `run.bat` beside its folder.
 
-1. Run the script from the folder that holds your settings file, `config.yaml`. If there is no settings file yet, the script asks whether to set up in the browser or in the terminal, then asks you three questions and writes one:
+1. Run the command from the folder that holds your settings file, `config.yaml`. If there is no settings file yet, it asks whether to set up in the browser or in the terminal, then asks you the questions and writes one:
 
    ```
-   ./run.sh                  # macOS and Linux
-   run.bat                   # Windows
+   extractium                # from a terminal, on any system
+   run.bat                   # from the zip's folder on Windows, or double-click it
+   ./run.sh                  # the same script on macOS and Linux
    ```
 
 2. Read the summary it prints, then follow the three lines it gives you to commit and push the result.
 
-With `ui` as its only argument, `./run.sh ui` or `run.bat ui`, the script opens the local page instead of building: a form for every setting, in your browser, on this computer only. [How to use the local page](use-the-local-page.md) describes it. A scheduled run passes no argument and never opens a page.
+With `ui` as the argument, `extractium ui`, `run.bat ui`, or `./run.sh ui`, the local page opens instead of a build: a form for every setting, in your browser, on this computer only. [How to use the local page](use-the-local-page.md) describes it. A scheduled run passes no argument and never opens a page.
 
-The script downloads Extractium™ when it is on its own, creates a virtual environment in `.venv`, installs the exact package versions recorded in `requirements-lock.txt`, installs Extractium™ into it, and runs the build. The first run downloads the embedding model, about 130 MB, and takes several minutes, and it stops at 25 pages so you can check the page list in `dist/llms.txt` before building everything. Later runs reuse the environment and the model and build the whole site.
+The run scripts are entry points and install nothing themselves. Each uses the `Extractium` folder beside it, as the zip unpacks it, else the install under your profile, and when there is neither it runs the installer once. The first build downloads the embedding model, about 130 MB, unless the install came from the zip, and takes several minutes, and the terminal path of a first run stops at 25 pages so you can check the page list in `dist/llms.txt` before building everything. Later runs reuse everything and build the whole site.
 
-The lock file carries the runtime dependencies and four optional extras: the code parsers, the caption library, the PDF reader, and the keyword extractor. A build made this way therefore analyzes code, reads stored transcripts, reads PDF files, and names every section with keywords. To regenerate the lock file after changing a dependency, run the command recorded in its header:
-
-```bash
-uv pip compile pyproject.toml --universal --python-version 3.11 --generate-hashes --extra code --extra youtube --extra pdf --extra keywords -o requirements-lock.txt
-```
-
-Keep the header at the top of the file when you do. The command that produced the list is recorded on the line below it.
+The installer installs from `requirements-lock.txt`, which carries the runtime dependencies and five optional extras: the code parsers, the caption library, the audio transcription packages, the PDF reader, and the keyword extractor. A build made this way therefore analyzes code, reads stored transcripts, transcribes refused videos, reads PDF files, and names every section with keywords. [How to install](install.md) says how to regenerate the lock file after changing a dependency.
 
 ### Changing what it builds
 
-The script builds from `config.yaml` unless you say otherwise:
+The command builds from `config.yaml` unless you say otherwise:
 
 ```
-CONFIG=other-settings.yaml ./run.sh          # macOS and Linux
-set CONFIG=other-settings.yaml && run.bat    # Windows
+extractium build --config other-settings.yaml   # any system
+CONFIG=other-settings.yaml ./run.sh             # the scripts read CONFIG
+set CONFIG=other-settings.yaml && run.bat
 ```
 
-### Building with a branch instead of a release
-
-When the script is saved on its own, it downloads the newest published release of Extractium™ into `extractium-src` beside itself. Three variables change that. Set them before running the script, the way `CONFIG` is set above.
-
-| Variable | Default | What it does |
-|---|---|---|
-| `EXTRACTIUM_REF` | `latest` | Which version to download. `latest` is looked up as the newest published release. A tag such as `v0.2` pins one release. A branch name such as `main` builds with work that has not been released yet, which is how you try a fix before it ships, or test a plug-in against the current code. |
-| `EXTRACTIUM_REPO` | `https://github.com/DepressionCenter/extractium` | Where to download from. Point it at a fork to build with your own changes. |
-| `EXTRACTIUM_DIR` | `extractium-src` beside the script | Where the download lands. |
-
-```
-EXTRACTIUM_REF=main ./run.sh          # macOS and Linux
-set EXTRACTIUM_REF=main && run.bat    # Windows
-```
-
-The script downloads only when that folder does not already hold Extractium™. To move from a release to a branch, or from one branch to a newer copy of it, delete the folder first, or set `EXTRACTIUM_DIR` to a fresh one. A script run from inside a checkout of the repository downloads nothing and uses the checkout, whatever these variables say.
-
-Anything you pass as an argument goes straight to the build command, and the script then asks no questions, so a limited trial run looks like this:
+Anything else you pass to a run script goes straight to the build command, so a limited trial run looks like this:
 
 ```
 ./run.sh --config config.yaml --max-pages 25 --out-dir trial
@@ -105,23 +84,34 @@ Anything you pass as an argument goes straight to the build command, and the scr
 
 [Running a build](../usage.md) lists every option.
 
+### Choosing a release
+
+The installer installs the newest published release. Its `--version` flag pins another one, and `--update` moves an existing install forward:
+
+```
+bash install.sh --version v0.4       # macOS and Linux
+install.bat --update                 # Windows
+```
+
+Set `EXTRACTIUM_REPO` in the environment before running the installer to install from a fork. To build with work that has not been released yet, clone the repository and run the installer inside the clone with `--editable`, which is the developer path in [how to install](install.md).
+
 ### Putting it on a timer
 
 The script runs the same way from a scheduler as from your keyboard, so a weekly build on your own computer or on a small server is one scheduled task. The computer has to be on at the time; a laptop that is asleep runs nothing.
 
-On Linux or macOS, add one line to your user's crontab with `crontab -e`. This runs every Monday at 06:17 in the machine's own time zone and keeps a log of every run:
+On Linux or macOS, add one line to your user's crontab with `crontab -e`. This runs every Monday at 06:17 in the machine's own time zone and keeps a log of every run. The command is named by its full path, because a scheduled job does not read your shell profile and may not have `~/.local/bin` on its PATH:
 
 ```
-17 6 * * 1  cd /path/to/your/compendium && ./run.sh >> build.log 2>&1
+17 6 * * 1  cd /path/to/your/compendium && ~/.local/share/extractium/bin/extractium build --config config.yaml >> build.log 2>&1
 ```
 
-On Windows, create a task from a command prompt opened in the folder that holds your settings file. This runs `run.bat` every Monday at 06:17:
+On Windows, create a task from a command prompt opened in the folder that holds your settings file. This runs the command every Monday at 06:17; from the zip's folder, `run.bat` in place of the full path does the same:
 
 ```
-schtasks /Create /TN "Extractium weekly build" /SC WEEKLY /D MON /ST 06:17 /TR "cmd /c cd /d %CD% && run.bat >> build.log 2>&1"
+schtasks /Create /TN "Extractium weekly build" /SC WEEKLY /D MON /ST 06:17 /TR "cmd /c cd /d %CD% && %LOCALAPPDATA%\Extractium\bin\extractium.cmd build --config config.yaml >> build.log 2>&1"
 ```
 
-Run the task once by hand, from the Task Scheduler window or with `schtasks /Run /TN "Extractium weekly build"`, and read `build.log` before trusting the schedule. A scheduled run has no one at the keyboard, so the settings file must already be in place. With none, the script would stop waiting for answers to its questions.
+Run the task once by hand, from the Task Scheduler window or with `schtasks /Run /TN "Extractium weekly build"`, and read `build.log` before trusting the schedule. A scheduled run has no one at the keyboard, so the settings file must already be in place. With none, the command would stop waiting for answers to its questions.
 
 The build writes its outputs to `dist/`, or wherever `out_dir` points. To publish them, add the copy step your host needs to the same line, after the script, as [how to deploy](deploy.md) describes for a static host.
 
@@ -192,7 +182,7 @@ Deleting the cache is always safe. It costs time, never correctness.
 
 ## Checking that it worked
 
-- On your own computer or a server, `build.log` ends with the summary: how many sections, how many windows, how many pages, and every file written. A run that stopped early ends with the error instead, and the script's exit code is not zero.
+- On your own computer or a server, `build.log` ends with the summary: how many sections, how many windows, how many pages, and every file written. A run that stopped early ends with the error instead, and the command's exit code is not zero.
 - On GitLab, the **Pipelines** page shows a green check mark, the `build` job's log holds the same summary, and the job's artifact holds the files.
 - On GitHub, the **Actions** tab shows a green check mark and the log holds the summary. A failed run sends an email to the person who owns the repository.
 - Wherever the files are published, `llms.txt` starts with the build time. If that time is old, the last run failed or the schedule is off. [Troubleshooting](../troubleshooting.md) lists the known failures.
@@ -206,7 +196,7 @@ You can now rebuild your compendium on demand from your own computer, put that c
 ## Additional Resources
 
 * [Extractium™ README](../../README.md): project overview and quick start.
-* [Installation guide](install.md): the two ways to install, and what the lock file pins.
+* [Installation guide](install.md): the zip, the installer, the developer checkout, and what the lock file pins.
 * [How to Use the Local Page](use-the-local-page.md): what the script's `ui` argument opens.
 * [How to Deploy](deploy.md): the deployment choices side by side, and how each one is consumed.
 * [Running a Build](../usage.md): every command-line option, the summary, and the exit codes.

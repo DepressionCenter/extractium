@@ -2,7 +2,7 @@
 # examples/data-repo/.gitignore
 # Author(s): Gabriel Mongefranco.
 # Created: 2026-09-08
-# Last Modified: 2026-09-28
+# Last Modified: 2026-09-30
 # Summary: What a data repository must not commit: the crawl cache, the
 # local virtual environment, and the build output when it is published by
 # the workflow rather than committed.
@@ -29,6 +29,10 @@ runs/
 
 # A local build environment, when you build on your own machine.
 .venv/
+
+# The portable Extractium folder, when it was unzipped beside the
+# settings file. It holds the tool, not your content.
+Extractium/
 
 # The previous settings file, kept with a date stamp each time the local
 # page saves a new one. Delete these copies whenever you like.
